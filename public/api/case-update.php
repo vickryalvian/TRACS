@@ -1,0 +1,17 @@
+<?php require '_bootstrap.php';
+$id    = (int)($body['id'] ?? 0);
+$title = trim($body['title'] ?? '');
+if (!$id)    fail('ID required');
+if (!$title) fail('Title required');
+$status   = in_array($body['status']??'',['active','pending','stuck','completed']) ? $body['status'] : 'active';
+$priority = in_array($body['priority']??'',['low','medium','high','critical']) ? $body['priority'] : 'medium';
+$next     = !empty($body['next_check_at']) ? date('Y-m-d H:i:s', strtotime($body['next_check_at'])) : null;
+$notes    = $body['notes'] ?? '';
+$stmt = $conn->prepare("UPDATE tracs_cases SET title=?,status=?,priority=?,next_check_at=?,notes=?,updated_at=NOW() WHERE id=? AND user_id=?");
+$stmt->bind_param('sssssii', $title,$status,$priority,$next,$notes,$id,$uid);
+if (!$stmt->execute()) fail('Database error');
+if ($stmt->affected_rows === 0) fail('Case not found or not yours', 404);
+$stmt->close();
+logAct($conn,$uid,'updated','Cases',"Updated case: {$title}",$id);
+tickerEvent($conn, $uid, "Case #{$id} updated: {$title}", 'info', 'cases', $id);
+ok(null,'Case updated');

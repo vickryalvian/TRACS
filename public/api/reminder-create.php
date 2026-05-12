@@ -1,0 +1,15 @@
+<?php require '_bootstrap.php';
+$title = trim($body['title'] ?? '');
+$due   = trim($body['due_date'] ?? '');
+if (!$title) fail('Title required');
+if (!$due)   fail('Due date required');
+$priority = in_array($body['priority']??'',['low','medium','high','critical']) ? $body['priority'] : 'medium';
+$desc     = $body['description'] ?? '';
+$due_fmt  = date('Y-m-d H:i:s', strtotime($due));
+$stmt = $conn->prepare("INSERT INTO tracs_reminders (user_id,title,description,due_date,priority,is_completed,created_at) VALUES (?,?,?,?,?,0,NOW())");
+$stmt->bind_param('issss',$uid,$title,$desc,$due_fmt,$priority);
+if (!$stmt->execute()) fail('Database error: '.$conn->error);
+$id=$stmt->insert_id; $stmt->close();
+logAct($conn,$uid,'created','Reminders',"Created reminder: {$title}",$id);
+tickerEvent($conn, $uid, "New reminder scheduled: {$title}", 'info', 'reminders', $id);
+ok(['id'=>$id],'Reminder created');

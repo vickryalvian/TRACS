@@ -1,0 +1,14 @@
+<?php require '_bootstrap.php';
+$note=trim($body['note']??''); if(!$note) fail('Note required');
+$amount=(float)($body['amount']??0); if($amount<=0) fail('Amount must be > 0');
+$dir=in_array($body['direction']??'',['in','out'])?$body['direction']:'out';
+$status=in_array($body['status']??'',['completed','pending','failed'])?$body['status']:'pending';
+$from=$body['from_account']??''; $to=$body['to_account']??'';
+$dt=!empty($body['transfer_date'])?date('Y-m-d H:i:s',strtotime($body['transfer_date'])):date('Y-m-d H:i:s');
+$conn->query("CREATE TABLE IF NOT EXISTS tracs_finance_transfers (id INT AUTO_INCREMENT PRIMARY KEY,user_id INT NOT NULL,note VARCHAR(500) NOT NULL,from_account VARCHAR(200),to_account VARCHAR(200),amount DECIMAL(18,2) NOT NULL DEFAULT 0,direction ENUM('in','out') DEFAULT 'out',status ENUM('completed','pending','failed') DEFAULT 'pending',transfer_date DATETIME DEFAULT NOW(),created_at DATETIME DEFAULT NOW(),INDEX(user_id))");
+$stmt=$conn->prepare("INSERT INTO tracs_finance_transfers (user_id,note,from_account,to_account,amount,direction,status,transfer_date) VALUES (?,?,?,?,?,?,?,?)");
+$stmt->bind_param('isssdsss',$uid,$note,$from,$to,$amount,$dir,$status,$dt);
+if(!$stmt->execute()) fail('DB error: '.$conn->error);
+$id=$stmt->insert_id; $stmt->close();
+logAct($conn,$uid,'created','Finance',"Transfer logged: {$note} Rp ".number_format($amount,0,',','.'),$id);
+ok(['id'=>$id],'Transfer saved');

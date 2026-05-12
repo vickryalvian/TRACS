@@ -1,0 +1,15 @@
+<?php require '_bootstrap.php';
+$conn->query("CREATE TABLE IF NOT EXISTS tracs_domains (id INT AUTO_INCREMENT PRIMARY KEY,user_id INT NOT NULL,domain VARCHAR(253) NOT NULL,registrar VARCHAR(200),expires_at DATE,ssl_active TINYINT(1) DEFAULT 0,auto_renew TINYINT(1) DEFAULT 0,notes VARCHAR(500),created_at DATETIME DEFAULT NOW(),updated_at DATETIME DEFAULT NOW(),INDEX(user_id))");
+$id=(int)($body['id']??0); if(!$id) fail('ID required');
+$domain=trim($body['domain']??''); if(!$domain) fail('Domain required');
+$registrar=$body['registrar']??'';
+$expires=$body['expires_at']?date('Y-m-d',strtotime($body['expires_at'])):null;
+$ssl=(int)(bool)($body['ssl_active']??0); $auto=(int)(bool)($body['auto_renew']??0);
+$notes=$body['notes']??'';
+$stmt=$conn->prepare("UPDATE tracs_domains SET domain=?,registrar=?,expires_at=?,ssl_active=?,auto_renew=?,notes=?,updated_at=NOW() WHERE id=? AND user_id=?");
+$stmt->bind_param('sssiiiii',$domain,$registrar,$expires,$ssl,$auto,$notes,$id,$uid);
+if(!$stmt->execute()||$stmt->affected_rows===0) fail('Not found',404);
+$stmt->close();
+logAct($conn,$uid,'updated','Domains',"Updated domain: {$domain}",$id);
+tickerEvent($conn, $uid, "Domain updated: {$domain}", 'info', 'domains', $id);
+ok(null,'Updated');

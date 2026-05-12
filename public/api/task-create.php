@@ -1,0 +1,10 @@
+<?php require '_bootstrap.php';
+$title=trim($body['title']??''); if(!$title) fail('Title required');
+$desc=$body['description']??'';
+$stmt=$conn->prepare("INSERT INTO tracs_side_tasks (user_id,title,description,is_completed,created_at,updated_at) VALUES (?,?,?,0,NOW(),NOW())");
+$stmt->bind_param('iss',$uid,$title,$desc);
+if(!$stmt->execute()) fail('Database error: '.$conn->error);
+$id=$stmt->insert_id; $stmt->close();
+logAct($conn,$uid,'created','Checklist',"Added task: {$title}",$id);
+tickerEvent($conn, $uid, "Checklist updated: {$title}", 'info', 'checklist', $id);
+ok(['id'=>$id],'Task created');

@@ -1,0 +1,10 @@
+<?php require '_bootstrap.php';
+$id=(int)($body['id']??0); if(!$id) fail('ID required');
+$done=(int)(bool)($body['is_completed']??0);
+$stmt=$conn->prepare("UPDATE tracs_side_tasks SET is_completed=?,updated_at=NOW() WHERE id=? AND user_id=?");
+$stmt->bind_param('iii',$done,$id,$uid);
+if(!$stmt->execute()||$stmt->affected_rows===0) fail('Not found',404);
+$stmt->close();
+logAct($conn,$uid,($done?'completed':'updated'),'Checklist',"Task marked ".($done?'complete':'incomplete'),$id);
+if ($done) tickerEvent($conn, $uid, "Daily task completed: task #{$id}", 'success', 'checklist', $id);
+ok(null,'Updated');
