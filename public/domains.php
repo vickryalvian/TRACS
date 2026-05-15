@@ -4,7 +4,8 @@
    Domain Transfer Monitoring & Operational Tracking
    CS / Operations Team · Domain Transfer Log
    ───────────────────────────────────────────────────────────── */
-if (session_status() === PHP_SESSION_NONE) session_start();
+require_once __DIR__ . '/../core/security/csrf.php';
+tracs_start_session();
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/auth/auth_check.php';
 require_once __DIR__ . '/../modules/alert-ticker/controller.php';
@@ -108,6 +109,7 @@ function domain_ticker_class(string $status): string {
 /* ── AJAX / POST handler ────────────────────────────────────── */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     header('Content-Type: application/json');
+    verify_csrf();
     $raw    = file_get_contents('php://input');
     $data   = json_decode($raw, true) ?? [];
     $action = $data['action'] ?? '';
@@ -577,11 +579,24 @@ include 'includes/header.php';
 <div class="panel panel-mt">
   <div class="panel-head">
     <span class="panel-title">Transfer Records</span>
-    <span class="panel-meta">
-      <?= $total_rows ?> record<?= $total_rows !== 1 ? 's' : '' ?>
-      <?= $q ? ' · "' . esc($q) . '"' : '' ?>
-      <?= $month ? ' · ' . esc($month) : '' ?>
-    </span>
+    <div class="panel-right">
+      <span class="panel-meta">
+        <?= $total_rows ?> record<?= $total_rows !== 1 ? 's' : '' ?>
+        <?= $q ? ' · "' . esc($q) . '"' : '' ?>
+        <?= $month ? ' · ' . esc($month) : '' ?>
+      </span>
+      <details class="report-export-menu">
+        <summary class="btn btn-ghost btn-icon report-export-trigger" title="Export CSV" aria-label="Export CSV" data-tooltip="Export CSV"><i data-lucide="download" class="icon-sm"></i></summary>
+        <form method="get" action="/api/export-domains.php" class="report-export-popover">
+          <input type="hidden" name="s" value="<?= esc($filter_status) ?>">
+          <input type="hidden" name="m" value="<?= esc($month) ?>">
+          <input type="hidden" name="q" value="<?= esc($q) ?>">
+          <label>From Date<input type="date" name="from" class="form-input"></label>
+          <label>To Date<input type="date" name="to" class="form-input"></label>
+          <button type="submit" class="btn btn-primary"><i data-lucide="download" class="icon-sm"></i>Export CSV</button>
+        </form>
+      </details>
+    </div>
   </div>
 
   <!-- ── Inline Quick-Entry Form ────────────────────────────── -->

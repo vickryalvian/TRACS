@@ -1,5 +1,6 @@
 <?php
-if (session_status() === PHP_SESSION_NONE) session_start();
+require_once __DIR__.'/../../core/security/csrf.php';
+tracs_start_session();
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 
@@ -7,6 +8,10 @@ if (empty($_SESSION['user_id'])) {
     http_response_code(401);
     echo json_encode(['success'=>false,'message'=>'Unauthorized']);
     exit;
+}
+
+if (in_array($_SERVER['REQUEST_METHOD'] ?? 'GET', ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
+    verify_csrf();
 }
 
 require_once __DIR__.'/../../config/database.php';
@@ -30,7 +35,7 @@ function logAct(mysqli $conn, int $uid, string $action, string $module, string $
         $AC->logActivity($action, $module, $desc, $ref);
     } catch(Exception $e) { /* non-fatal */ }
 }
-function tickerEvent(mysqli $conn, int $uid, string $msg, string $type='info', string $module=null, int $ref=null): void {
+function tickerEvent(mysqli $conn, int $uid, string $msg, string $type='info', ?string $module=null, ?int $ref=null): void {
     try {
         require_once __DIR__.'/../../modules/ticker-events/controller.php';
         (new TickerEventController($conn))->create($uid, $msg, $type, $module, $ref);

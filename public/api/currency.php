@@ -3,10 +3,8 @@
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
-require_once __DIR__ . '/../../config/database.php';
+require '_bootstrap.php';
 require_once __DIR__ . '/../../modules/currency/service.php';
-
-header('Content-Type: application/json');
 
 $from = $_GET['from'] ?? '';
 $to = $_GET['to'] ?? '';

@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/model.php';
+require_once __DIR__ . '/SmartTickerEngine.php';
 
 class AlertTickerController {
     private $model;
@@ -43,42 +44,7 @@ class AlertTickerController {
     }
 
     public function formatAlertsForTicker(): array {
-        $alerts  = $this->model->getAlerts($this->user_id) ?: [];
-        $custom  = $this->getCustomMessages();
-        $items   = [];
-
-        foreach ($alerts as $a) {
-            if ($a['priority'] === 'critical') { $cls='critical'; $pre='CRITICAL:'; }
-            elseif ($a['status'] === 'stuck')  { $cls='critical'; $pre='STUCK:'; }
-            else                               { $cls='urgent';   $pre='OVERDUE:'; }
-            $items[] = ['text' => $pre.' '.($a['title']??''), 'class' => $cls];
-        }
-
-        $stats = $this->getAlertStats();
-        if ($stats['critical'] > 0 || $stats['stuck'] > 0 || $stats['overdue'] > 0) {
-            $parts = [];
-            if ($stats['critical'] > 0) $parts[] = $stats['critical'].' critical';
-            if ($stats['stuck'] > 0)    $parts[] = $stats['stuck'].' stuck';
-            if ($stats['overdue'] > 0)  $parts[] = $stats['overdue'].' overdue';
-            $items[] = ['text' => 'Attention required: '.implode(' · ',$parts), 'class' => 'urgent'];
-        }
-
-        foreach ($custom as $c) {
-            $items[] = ['id'=>$c['id'], 'text' => $c['text'], 'class' => $c['class']];
-        }
-
-        // Add auto-expiring ticker events
-        require_once __DIR__ . '/../ticker-events/controller.php';
-        $events = (new TickerEventController($this->conn))->getActive($this->user_id);
-        foreach ($events as $ev) {
-            $items[] = ['text' => $ev['message'], 'class' => $ev['type']];
-        }
-
-        if (empty($items)) {
-            $items[] = ['text' => 'All systems operational — No active alerts', 'class' => 'normal'];
-        }
-
-        return $items;
+        return (new SmartTickerEngine($this->conn, (int)$this->user_id))->formatForTicker();
     }
 
     public function getTickerMessage(): string {

@@ -3,11 +3,9 @@
  * TRACS — API: Feedback List
  */
 header('Content-Type: application/json');
-require_once __DIR__ . '/../../config/database.php';
-require_once __DIR__ . '/../auth/auth_check.php';
+require '_bootstrap.php';
 require_once __DIR__ . '/../../modules/cancellation-feedback/controller.php';
 
-$uid = $_SESSION['user_id'] ?? 0;
 $controller = new CancellationFeedbackController($conn, $uid);
 
 $limit = intval($_GET['limit'] ?? 50);

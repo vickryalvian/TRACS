@@ -1,12 +1,14 @@
 <?php
 
-if (session_status() === PHP_SESSION_NONE) session_start();
+require_once __DIR__ . '/../../core/security/csrf.php';
+tracs_start_session();
 require_once __DIR__ . '/../../config/database.php';
 
 /**
  * HANDLE LOGIN POST ONLY
  */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    verify_csrf();
 
     $email    = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';

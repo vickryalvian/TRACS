@@ -1,5 +1,6 @@
 <?php
-if(session_status()===PHP_SESSION_NONE)session_start();
+require_once __DIR__ . '/../core/security/csrf.php';
+tracs_start_session();
 require_once __DIR__.'/../config/database.php';
 require_once __DIR__.'/auth/auth_check.php';
 require_once __DIR__.'/../modules/activity-log/controller.php';
@@ -35,18 +36,21 @@ include 'includes/header.php';
 
 <div class="topbar">
   <div><div class="page-title">Activity Log</div><div class="page-sub"><?=count($acts)?> entries · <?=$today_count?> today</div></div>
-  <div class="topbar-right">
-    <form method="get" style="display:flex;gap:7px">
-      <select name="module" class="form-select" style="width:130px;padding:5px 10px;font-size:11.5px" onchange="this.form.submit()">
-        <?php foreach($modules as $m):?><option value="<?=esc($m)?>" <?=$module_filter===$m?'selected':''?>><?=$m?:'All Modules'?></option><?php endforeach;?>
-      </select>
-      <input type="hidden" name="limit" value="<?=$limit?>">
-    </form>
-    <form method="get" class="search-form-wrap" style="width:200px">
-      <i data-lucide="search" class="search-ic icon-sm"></i>
-      <input type="text" class="search-input" placeholder="Search…" oninput="filterActs(this)">
-    </form>
-  </div>
+</div>
+
+<div class="filter-search-row">
+  <form method="get" class="filter-group-wrap">
+    <select name="module" class="form-select compact-select" onchange="this.form.submit()" style="width:130px">
+      <?php foreach($modules as $m):?><option value="<?=esc($m)?>" <?=$module_filter===$m?'selected':''?>><?=$m?:'All Modules'?></option><?php endforeach;?>
+    </select>
+    <input type="hidden" name="limit" value="<?=$limit?>">
+  </form>
+  <form method="get" class="search-form-wrap">
+    <input type="hidden" name="module" value="<?=esc($module_filter)?>">
+    <input type="hidden" name="limit" value="<?=$limit?>">
+    <i data-lucide="search" class="search-ic icon-sm"></i>
+    <input type="text" name="q" class="search-input" placeholder="Search…" value="<?=esc($q)?>" oninput="filterActs(this);document.getElementById('activityExportQ').value=this.value">
+  </form>
 </div>
 
 <div class="stat-strip">
@@ -58,6 +62,17 @@ include 'includes/header.php';
   <div class="panel-head">
     <span class="panel-title">Recent Activity</span>
     <div class="panel-right">
+      <details class="report-export-menu">
+        <summary class="btn btn-ghost btn-icon report-export-trigger" title="Export CSV" aria-label="Export CSV" data-tooltip="Export CSV"><i data-lucide="download" class="icon-sm"></i></summary>
+        <form method="get" action="/api/export-activity.php" class="report-export-popover">
+          <input type="hidden" name="module" value="<?=esc($module_filter)?>">
+          <input type="hidden" name="q" id="activityExportQ" value="<?=esc($q)?>">
+          <input type="hidden" name="limit" value="<?=$limit?>">
+          <label>From Date<input type="date" name="from" class="form-input"></label>
+          <label>To Date<input type="date" name="to" class="form-input"></label>
+          <button type="submit" class="btn btn-primary"><i data-lucide="download" class="icon-sm"></i>Export CSV</button>
+        </form>
+      </details>
       <?php foreach([25,50,100] as $lv):?>
       <a href="?limit=<?=$lv?>&module=<?=urlencode($module_filter)?>" class="btn btn-ghost btn-sm <?=$limit===$lv?'active':''?>" style="<?=$limit===$lv?'background:var(--blue-lt);color:var(--blue);border-color:var(--blue-bd)':''?>"><?=$lv?></a>
       <?php endforeach;?>

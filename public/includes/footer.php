@@ -34,49 +34,49 @@
     <button
       type="button"
       class="quick-time-btn"
-      onclick="setQuickTime('1h')">
+      onclick="setQuickTime('1h', this)">
       +1H
     </button>
 
     <button
       type="button"
       class="quick-time-btn"
-      onclick="setQuickTime('2h')">
+      onclick="setQuickTime('2h', this)">
       +2H
     </button>
 
     <button
       type="button"
       class="quick-time-btn"
-      onclick="setQuickTime('4h')">
+      onclick="setQuickTime('4h', this)">
       +4H
     </button>
 
     <button
       type="button"
       class="quick-time-btn"
-      onclick="setQuickTime('1d')">
+      onclick="setQuickTime('1d', this)">
       Tomorrow
     </button>
 
     <button
       type="button"
       class="quick-time-btn"
-      onclick="setQuickTime('3d')">
+      onclick="setQuickTime('3d', this)">
       +3D
     </button>
 
     <button
       type="button"
       class="quick-time-btn"
-      onclick="setQuickTime('1w')">
+      onclick="setQuickTime('1w', this)">
       +1W
     </button>
 
     <button
       type="button"
       class="quick-time-btn"
-      onclick="setQuickTime('1m')">
+      onclick="setQuickTime('1m', this)">
       +1M
     </button>
 
@@ -121,13 +121,13 @@
       </div>
       <input type="hidden" class="quick-datetime" id="remDue">
       <div class="quick-time-wrap">
-        <button type="button" class="quick-time-btn" onclick="setQuickTime('1h')">+1H</button>
-        <button type="button" class="quick-time-btn" onclick="setQuickTime('2h')">+2H</button>
-        <button type="button" class="quick-time-btn" onclick="setQuickTime('4h')">+4H</button>
-        <button type="button" class="quick-time-btn" onclick="setQuickTime('1d')">Tomorrow</button>
-        <button type="button" class="quick-time-btn" onclick="setQuickTime('3d')">+3D</button>
-        <button type="button" class="quick-time-btn" onclick="setQuickTime('1w')">+1W</button>
-        <button type="button" class="quick-time-btn" onclick="setQuickTime('1m')">+1M</button>
+        <button type="button" class="quick-time-btn" onclick="setQuickTime('1h', this)">+1H</button>
+        <button type="button" class="quick-time-btn" onclick="setQuickTime('2h', this)">+2H</button>
+        <button type="button" class="quick-time-btn" onclick="setQuickTime('4h', this)">+4H</button>
+        <button type="button" class="quick-time-btn" onclick="setQuickTime('1d', this)">Tomorrow</button>
+        <button type="button" class="quick-time-btn" onclick="setQuickTime('3d', this)">+3D</button>
+        <button type="button" class="quick-time-btn" onclick="setQuickTime('1w', this)">+1W</button>
+        <button type="button" class="quick-time-btn" onclick="setQuickTime('1m', this)">+1M</button>
       </div>
     </div>
     <div class="form-group"><label class="form-label">Description</label><textarea class="form-textarea" id="remDesc" placeholder="Optional notes or context…" style="min-height:64px"></textarea></div>
@@ -240,8 +240,20 @@
 
 <!-- CONFIRM MODAL -->
 <div class="modal-overlay hidden" id="confirmModal">
-...
-</div></div>
+<div class="modal modal-sm">
+  <div class="modal-head">
+    <div><div class="modal-title" id="c-title">Confirm</div><div class="modal-sub">Please review this action</div></div>
+    <button class="modal-close" onclick="closeModal('confirm')"><i data-lucide="x"></i></button>
+  </div>
+  <div class="modal-body">
+    <p id="c-msg" style="margin:0;color:var(--tx2);line-height:1.5"></p>
+  </div>
+  <div class="modal-foot">
+    <button class="btn btn-ghost" onclick="closeModal('confirm')">Cancel</button>
+    <button class="btn btn-danger" id="c-ok"><i data-lucide="check" class="icon-sm"></i>Confirm</button>
+  </div>
+</div>
+</div>
 
 <!-- FEEDBACK MODAL -->
 <div class="modal-overlay hidden" id="feedbackModal">
@@ -291,10 +303,105 @@
   </div>
 </div></div>
 
+<?php if(in_array(($active_page??''), ['mom','dashboard'], true)): ?>
+<!-- MOM MODALS -->
+<div class="modal-overlay hidden" id="momFormModal"><div class="modal">
+  <div class="modal-head">
+    <div><div class="modal-title" id="momModalTitle">Add New Meeting</div><div class="modal-sub" id="momModalSub">Schedule operational coordination</div></div>
+    <button class="modal-close" onclick="closeModal('momForm')"><i data-lucide="x"></i></button>
+  </div>
+  <div class="modal-body">
+    <input type="hidden" id="momFormId">
+    <div class="form-group"><label class="form-label">Title *</label><input type="text" class="form-input" id="momFormTitle" placeholder="e.g. Weekly Operations Sync" autocomplete="off"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Type</label><select class="form-select" id="momFormType"><option value="weekly">Weekly</option><option value="training">Training</option><option value="coordination">Coordination</option><option value="urgent">Urgent</option></select></div>
+      <div class="form-group"><label class="form-label">Date</label><input type="date" class="form-input" id="momFormDate"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Time</label><input type="time" class="form-input" id="momFormTime"></div>
+      <div class="form-group"><label class="form-label">Quick Time</label><div class="mom-quick-times"><button type="button" class="mom-quick-btn" data-mom-quick-hours="0">Now</button><button type="button" class="mom-quick-btn" data-mom-quick-hours="1">+1H</button><button type="button" class="mom-quick-btn" data-mom-quick-hours="24">Tomorrow</button></div></div>
+    </div>
+    <div class="form-group"><label class="form-label">Objective</label><textarea class="form-textarea" id="momFormObjective" placeholder="Meeting purpose..."></textarea></div>
+    <div class="form-group"><label class="form-label">Meeting URL</label><input type="url" class="form-input" id="momFormUrl" placeholder="https://meet.google.com/... or https://zoom.us/..." autocomplete="off"></div>
+    <div class="form-group"><label class="form-label">Participants</label><input type="text" class="form-input" id="momFormParticipants" placeholder="John, Sarah, Mike..." autocomplete="off"></div>
+    <?php if(!empty($weekly_suggestions ?? [])): ?>
+    <div class="form-group" id="momSuggestedCasesWrap">
+      <label class="form-label">Suggested Cases To Discuss</label>
+      <div class="mom-suggestion-list">
+        <?php foreach(array_slice($weekly_suggestions, 0, 6) as $s):
+          $sid=(int)($s['case_id']??0);
+          $sprio=esc($s['priority']??'low');
+          $sreason=esc(ucfirst(str_replace('_',' ', $s['suggestion_reason']??'unresolved')));
+        ?>
+        <button type="button" class="mom-suggestion-item" data-case-id="<?=$sid?>" onclick="toggleMOMSuggestedCase(this)">
+          <span class="mom-suggestion-check"><i data-lucide="plus" class="icon-sm"></i></span>
+          <span class="mom-suggestion-body">
+            <span class="mom-suggestion-title">#<?=$sid?> <?=esc($s['title']??'Untitled case')?></span>
+            <span class="mom-suggestion-meta"><span class="badge b-<?=$sprio?>"><?=ucfirst($sprio)?></span> <?=$sreason?></span>
+          </span>
+        </button>
+        <?php endforeach; ?>
+      </div>
+    </div>
+    <?php endif; ?>
+  </div>
+  <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('momForm')">Cancel</button><button class="btn btn-primary" onclick="saveMOM()"><i data-lucide="check" class="icon-sm"></i>Schedule Meeting</button></div>
+</div></div>
+
+<div class="modal-overlay hidden" id="momActionFormModal"><div class="modal">
+  <div class="modal-head">
+    <div><div class="modal-title" id="momActionModalTitle">New Action Item</div><div class="modal-sub">Add actionable task from meeting</div></div>
+    <button class="modal-close" onclick="closeModal('momActionForm')"><i data-lucide="x"></i></button>
+  </div>
+  <div class="modal-body">
+    <input type="hidden" id="momActionFormId">
+    <div class="form-group"><label class="form-label">Action Title *</label><input type="text" class="form-input" id="momActionFormTitle" placeholder="Action title" autocomplete="off"></div>
+    <div class="form-group"><label class="form-label">Description</label><textarea class="form-textarea" id="momActionFormDesc" placeholder="Additional context..."></textarea></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Assigned To</label><input type="text" class="form-input" id="momActionFormAssignee" placeholder="Name or initials" autocomplete="off"></div>
+      <div class="form-group"><label class="form-label">Priority</label><select class="form-select" id="momActionFormPriority"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option><option value="critical">Critical</option></select></div>
+    </div>
+    <div class="form-group"><label class="form-label">Due Date</label><input type="date" class="form-input" id="momActionFormDueDate"></div>
+  </div>
+  <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('momActionForm')">Cancel</button><button class="btn btn-primary" onclick="saveActionItem()"><i data-lucide="check" class="icon-sm"></i>Save Action</button></div>
+</div></div>
+
+<div class="modal-overlay hidden" id="momNoteFormModal"><div class="modal">
+  <div class="modal-head">
+    <div><div class="modal-title" id="momNoteModalTitle">Add Discussion Note</div><div class="modal-sub">Capture meeting discussion</div></div>
+    <button class="modal-close" onclick="closeModal('momNoteForm')"><i data-lucide="x"></i></button>
+  </div>
+  <div class="modal-body">
+    <input type="hidden" id="momNoteFormId">
+    <div class="form-group"><label class="form-label">Note Type</label><select class="form-select" id="momNoteFormType"><option value="discussion">Discussion</option><option value="decision">Decision</option><option value="action">Action</option><option value="insight">Insight</option></select></div>
+    <div class="form-group"><label class="form-label">Content *</label><textarea class="form-textarea" id="momNoteFormContent" placeholder="Write your note..." style="min-height:100px"></textarea></div>
+  </div>
+  <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('momNoteForm')">Cancel</button><button class="btn btn-primary" onclick="saveDiscussionNote()"><i data-lucide="check" class="icon-sm"></i>Save Note</button></div>
+</div></div>
+
+<div class="modal-overlay hidden" id="momDecisionFormModal"><div class="modal">
+  <div class="modal-head">
+    <div><div class="modal-title" id="momDecisionModalTitle">Add Decision</div><div class="modal-sub">Log meeting decision with context</div></div>
+    <button class="modal-close" onclick="closeModal('momDecisionForm')"><i data-lucide="x"></i></button>
+  </div>
+  <div class="modal-body">
+    <input type="hidden" id="momDecisionFormId">
+    <div class="form-group"><label class="form-label">Decision *</label><textarea class="form-textarea" id="momDecisionFormText" placeholder="What was decided?" style="min-height:60px"></textarea></div>
+    <div class="form-group"><label class="form-label">Rationale</label><textarea class="form-textarea" id="momDecisionFormRationale" placeholder="Why this decision?" style="min-height:60px"></textarea></div>
+    <div class="form-group"><label class="form-label">Owner</label><input type="text" class="form-input" id="momDecisionFormOwner" placeholder="Person responsible" autocomplete="off"></div>
+  </div>
+  <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('momDecisionForm')">Cancel</button><button class="btn btn-primary" onclick="saveDecision()"><i data-lucide="check" class="icon-sm"></i>Save Decision</button></div>
+</div></div>
+<?php endif; ?>
 
 </div><!-- /body-row -->
 </div><!-- /shell -->
-<script src="assets/tracs.js"></script>
+<?php $_tracs_js_v = @filemtime(__DIR__.'/../assets/tracs.js') ?: time(); ?>
+<script src="assets/tracs.js?v=<?=$_tracs_js_v?>"></script>
+<?php if(in_array(($active_page??''), ['mom','dashboard'], true)): ?>
+<?php $_mom_js_v = @filemtime(__DIR__.'/../assets/mom-functions.js') ?: time(); ?>
+<script src="assets/mom-functions.js?v=<?=$_mom_js_v?>"></script>
+<?php endif; ?>
 <script>
   lucide.createIcons();
 </script>

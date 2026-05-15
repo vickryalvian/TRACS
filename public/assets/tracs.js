@@ -3,6 +3,23 @@
 /* ── BASE API ─────────────────────────────────────────── */
 /* ── API CONFIG ───────────────────────────────────────── */
 const API_BASE = '/api/';
+const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+const csrfMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+const nativeFetch = window.fetch.bind(window);
+
+window.fetch = function(input, init = {}) {
+  const method = String(init.method || input?.method || 'GET').toUpperCase();
+  if (!csrfToken || !csrfMethods.has(method)) {
+    return nativeFetch(input, init);
+  }
+
+  const headers = new Headers(init.headers || input?.headers || {});
+  if (!headers.has('X-CSRF-Token')) {
+    headers.set('X-CSRF-Token', csrfToken);
+  }
+
+  return nativeFetch(input, { ...init, headers });
+};
 
 const API = {
 
@@ -68,13 +85,13 @@ setInterval(_clock,1000); _clock();
 
 /* ── Toast ────────────────────────────────────────────── */
 const _dock=(()=>{const d=document.createElement('div');d.className='toast-dock';document.body.appendChild(d);return d;})();
-function toast(msg,type='info',ms=3200){
+function toast(msg,type='info',ms=4600){
   const t=document.createElement('div');
-  const ic={success:'✓',error:'✕',info:'ℹ'}[type]||'•';
+  const ic={success:'✓',error:'!',info:'i'}[type]||'i';
   t.className=`toast ${type}`;
-  t.innerHTML=`<span class="toast-icon">${ic}</span><span class="toast-msg">${msg}</span>`;
+  t.innerHTML=`<span class="toast-radar"><span class="toast-icon">${ic}</span></span><span class="toast-msg">${msg}</span>`;
   _dock.appendChild(t);
-  setTimeout(()=>{t.style.animation='t-out .2s var(--ease) forwards';setTimeout(()=>t.remove(),220);},ms);
+  setTimeout(()=>{t.classList.add('is-leaving');setTimeout(()=>t.remove(),240);},ms);
 }
 
 /* ── Modal system ─────────────────────────────────────── */
@@ -306,11 +323,24 @@ async function deleteReminder(id){
   });
 }
 async function toggleReminder(id,checked){
+  const row=document.querySelector(`[data-rid="${id}"]`);
+  setCheckablePending(row, true);
   const d=await api(API.REMINDER.TOGGLE,{id,is_completed:checked?1:0});
   if(d.success){
-    const row=document.querySelector(`[data-rid="${id}"]`);
     row?.querySelector('.rem-title')?.classList.toggle('done',checked);
-  }else toast('Error updating reminder','error');
+    moveCheckableRow(row, checked);
+  }else{
+    if(row){
+      const box=row.querySelector('.rem-check');
+      if(box) box.checked=!checked;
+    }
+    toast('Error updating reminder','error');
+  }
+  setCheckablePending(row, false);
+}
+
+function completeReminder(id){
+  toggleReminder(id, true);
 }
 
 /* ── TASK CRUD ────────────────────────────────────────── */
@@ -346,13 +376,52 @@ async function deleteTask(id){
   });
 }
 async function toggleTask(id,checked){
+  const row=document.querySelector(`[data-tid="${id}"]`);
+  setCheckablePending(row, true);
   const d=await api(API.TASK.TOGGLE,{id,is_completed:checked?1:0});
   if(d.success){
-    const row=document.querySelector(`[data-tid="${id}"]`);
     row?.querySelector('.task-title')?.classList.toggle('done',checked);
+    moveCheckableRow(row, checked);
     _updateProgress();
-  }else toast('Error updating task','error');
+  }else{
+    if(row){
+      const box=row.querySelector('.task-chk');
+      if(box) box.checked=!checked;
+    }
+    toast('Error updating task','error');
+  }
+  setCheckablePending(row, false);
 }
+
+function setCheckablePending(row, pending){
+  if(!row)return;
+  row.classList.toggle('is-updating', !!pending);
+  const box=row.querySelector('.rem-check');
+  if(box) box.disabled=!!pending;
+}
+
+function moveCheckableRow(row, checked){
+  if(!row || !row.parentElement)return;
+  const parent=row.parentElement;
+  row.dataset.completed=checked?'1':'0';
+  row.classList.toggle('is-completed', checked);
+  row.classList.add('checkable-moving');
+
+  window.requestAnimationFrame(()=>{
+    if(checked){
+      parent.appendChild(row);
+    }else{
+      const firstDone=[...parent.children].find(el=>el!==row && el.dataset?.completed==='1');
+      if(firstDone) parent.insertBefore(row, firstDone);
+      else parent.insertBefore(row, parent.firstElementChild);
+    }
+    window.requestAnimationFrame(()=>{
+      row.classList.add('checkable-landed');
+      window.setTimeout(()=>row.classList.remove('checkable-moving','checkable-landed'), 380);
+    });
+  });
+}
+
 function _updateProgress(){
   const boxes=document.querySelectorAll('.task-chk');
   const total=boxes.length,done=[...boxes].filter(b=>b.checked).length;
@@ -368,8 +437,10 @@ function _updateProgress(){
   const pending = total - done;
   const badgeContainer = document.getElementById('notif-badge-container');
   if (badgeContainer) {
-    if (pending > 0) {
-      badgeContainer.innerHTML = `<span class="bell-badge">${pending}</span>`;
+    const extra = parseInt(badgeContainer.dataset.staticExtra || '0', 10) || 0;
+    const count = pending + extra;
+    if (count > 0) {
+      badgeContainer.innerHTML = `<span class="bell-badge">${count}</span>`;
     } else {
       badgeContainer.innerHTML = '';
     }
@@ -655,6 +726,36 @@ window.saveOpsStatus = saveOpsStatus;
 window.archiveOpsStatus = archiveOpsStatus;
 
 let activeQuickTimeInput = null;
+let pendingQuickTimeInput = null;
+
+function resolveQuickTimeTarget(btn) {
+  const group = btn?.closest?.('.form-group') || btn?.closest?.('.fb-inline-col');
+  if (!group) return activeQuickTimeInput;
+  return group.querySelector('.split-date') ||
+    group.querySelector('.split-time') ||
+    group.querySelector('.quick-datetime') ||
+    activeQuickTimeInput;
+}
+
+function formatDateDisplay(value) {
+  const [y, m, d] = String(value).split('-');
+  return y && m && d ? `${d}/${m}/${y}` : value;
+}
+
+function setDateLikeInput(el, value, displayValue = value) {
+  if (!el) return;
+  if (el._flatpickr) {
+    el._flatpickr.setDate(value, true);
+  }
+  el.value = value;
+  if (el._flatpickr?.altInput) {
+    el._flatpickr.altInput.value = displayValue;
+    el._flatpickr.altInput.dispatchEvent(new Event('input', { bubbles: true }));
+    el._flatpickr.altInput.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+}
 
 function bindQuickDatetimeInputs() {
 
@@ -671,21 +772,21 @@ function bindQuickDatetimeInputs() {
       });
     });
 
-  document.addEventListener('click', e => {
-    const btn = e.target.closest?.('.quick-time-btn');
-    if (!btn) return;
-    const group = btn.closest('.form-group') || btn.closest('.fb-inline-col');
-    if (!group) return;
-    
-    // Find either the original input or the flatpickr-enabled input in this group
-    const input = group.querySelector('.quick-datetime') || group.querySelector('.split-date');
-    if (input) activeQuickTimeInput = input;
-  }, true);
+	  document.addEventListener('click', e => {
+	    const btn = e.target.closest?.('.quick-time-btn');
+	    if (!btn) return;
+	    const input = resolveQuickTimeTarget(btn);
+	    if (input) {
+	      activeQuickTimeInput = input;
+	      pendingQuickTimeInput = input;
+	    }
+	  }, true);
 }
 
-function setQuickTime(type) {
+function setQuickTime(type, sourceBtn = null) {
 
-  const input = activeQuickTimeInput;
+	  const input = sourceBtn ? resolveQuickTimeTarget(sourceBtn) : (pendingQuickTimeInput || activeQuickTimeInput);
+	  pendingQuickTimeInput = null;
 
   if (!input) return;
 
@@ -734,11 +835,15 @@ function setQuickTime(type) {
     const dateInp = document.querySelector(`[data-sync="${targetId}"].split-date`);
     const timeInp = document.querySelector(`[data-sync="${targetId}"].split-time`);
 
-    if (dateInp && dateInp._flatpickr) dateInp._flatpickr.setDate(dVal, true);
-    if (timeInp && timeInp._flatpickr) timeInp._flatpickr.setDate(tVal, true);
-    if (mainInput) mainInput.value = fullVal;
-    return;
-  }
+	    setDateLikeInput(dateInp, dVal, formatDateDisplay(dVal));
+	    setDateLikeInput(timeInp, tVal, tVal);
+	    if (mainInput) {
+	      mainInput.value = fullVal;
+	      mainInput.dispatchEvent(new Event('input', { bubbles: true }));
+	      mainInput.dispatchEvent(new Event('change', { bubbles: true }));
+	    }
+	    return;
+	  }
 
   if (input._flatpickr) {
     const dateVal = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
@@ -747,6 +852,27 @@ function setQuickTime(type) {
     input.value = fullVal;
     input.dispatchEvent(new Event('change', { bubbles: true }));
   }
+}
+
+function bindSidebarTooltips() {
+  const hosts = document.querySelectorAll('.sidebar .nav-item, .sidebar .user-avatar, .sidebar .theme-toggle');
+  if (!hosts.length) return;
+
+  const placeTip = (host) => {
+    const tip = host.querySelector('.nav-tip');
+    const sidebar = host.closest('.sidebar');
+    if (!tip || !sidebar) return;
+
+    const hostRect = host.getBoundingClientRect();
+    const sideRect = sidebar.getBoundingClientRect();
+    tip.style.setProperty('--nav-tip-left', `${sideRect.right + 10}px`);
+    tip.style.setProperty('--nav-tip-top', `${hostRect.top + hostRect.height / 2}px`);
+  };
+
+  hosts.forEach((host) => {
+    host.addEventListener('mouseenter', () => placeTip(host));
+    host.addEventListener('focusin', () => placeTip(host));
+  });
 }
 
 const email = document.querySelector('input[name="email"]');
@@ -783,6 +909,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   bindQuickDatetimeInputs();
   bindOpsStatusControls();
+  bindSidebarTooltips();
 
   /* ── Currency Converter ───────────────────── */
 

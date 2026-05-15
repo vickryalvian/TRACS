@@ -1,8 +1,6 @@
 <?php
-require_once __DIR__ . '/../config/database.php';
-require_once __DIR__ . '/../modules/currency/service.php';
-
-header('Content-Type: application/json');
+require '_bootstrap.php';
+require_once __DIR__ . '/../../modules/currency/service.php';
 
 $from = $_GET['from'] ?? '';
 $to = $_GET['to'] ?? '';
@@ -16,4 +14,4 @@ if (!$from || !$to || !$amount) {
     exit;
 }
 
-echo json_encode(convertCurrency($from, $to, $amount, $pdo));
+echo json_encode(convertCurrency($conn, $from, $to, $amount));

@@ -1,5 +1,6 @@
 <?php
-if(session_status()===PHP_SESSION_NONE)session_start();
+require_once __DIR__ . '/../core/security/csrf.php';
+tracs_start_session();
 require_once __DIR__.'/../config/database.php';
 require_once __DIR__.'/auth/auth_check.php';
 require_once __DIR__.'/../modules/reminder/controller.php';
@@ -36,12 +37,6 @@ include 'includes/header.php';
 
 <div class="topbar">
   <div><div class="page-title">Reminders</div><div class="page-sub"><?=$total?> total · <?=$overdue?> overdue · <?=$today?> today</div></div>
-  <div class="topbar-right">
-    <button class="btn btn-primary" onclick="openNewReminder()">
-      <i data-lucide="plus-circle" class="icon-sm"></i>
-      New Reminder
-    </button>
-  </div>
 </div>
 
 <div class="stat-strip">
@@ -62,6 +57,10 @@ include 'includes/header.php';
     <i data-lucide="search" class="search-ic icon-sm"></i>
     <input type="text" name="q" class="search-input" placeholder="Search reminders…" value="<?=esc($q)?>">
   </form>
+  <button class="btn btn-primary toolbar-add-btn" onclick="openNewReminder()">
+    <i data-lucide="plus-circle" class="icon-sm"></i>
+    Add Reminder
+  </button>
 </div>
 
 <div class="panel">
@@ -97,10 +96,10 @@ include 'includes/header.php';
         $rdue_dt=safe_dt_local($rdue_raw);
         $scls=rem_status_class($rstat);$pb=prio_badge($rprio);
       ?>
-      <tr data-rid="<?=$rid?>" data-title="<?=esc($r['title']??'')?>" data-priority="<?=esc($rprio)?>" data-due="<?=$rdue_dt?>" data-desc="<?=esc($r['description']??'')?>">
+      <tr class="checkable-row <?=$rdone?'is-completed':''?>" data-rid="<?=$rid?>" data-completed="<?=$rdone?'1':'0'?>" data-title="<?=esc($r['title']??'')?>" data-priority="<?=esc($rprio)?>" data-due="<?=$rdue_dt?>" data-desc="<?=esc($r['description']??'')?>">
         <td style="text-align:center"><input type="checkbox" class="rem-check" <?=$rdone?'checked':''?> onchange="toggleReminder(<?=$rid?>,this.checked)"></td>
         <td style="max-width:300px">
-          <div style="font-weight:500;color:var(--tx1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" class="<?=$rdone?'done':''?>"><?=$rtit?></div>
+          <div style="font-weight:500;color:var(--tx1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" class="rem-title <?=$rdone?'done':''?>"><?=$rtit?></div>
           <?php if($rdesc):?><div class="rem-desc-inline" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="<?=$rdesc?>"><?=$rdesc?></div><?php endif;?>
         </td>
         <td><span class="badge <?=$pb?>"><?=ucfirst($rprio)?></span></td>

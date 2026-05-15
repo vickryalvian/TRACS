@@ -1,5 +1,6 @@
 <?php
-if(session_status()===PHP_SESSION_NONE)session_start();
+require_once __DIR__ . '/../core/security/csrf.php';
+tracs_start_session();
 require_once __DIR__.'/../config/database.php';
 require_once __DIR__.'/auth/auth_check.php';
 require_once __DIR__.'/../modules/checklist/controller.php';
@@ -31,12 +32,6 @@ include 'includes/header.php';
 
 <div class="topbar">
   <div><div class="page-title">Checklist</div><div class="page-sub"><?=$total?> tasks · <?=$pending?> pending · <?=$pct?>% complete</div></div>
-  <div class="topbar-right">
-    <button class="btn btn-primary" onclick="openNewTask()">
-      <i data-lucide="plus-circle" class="icon-sm"></i>
-      New Task
-    </button>
-  </div>
 </div>
 
 <div class="stat-strip">
@@ -48,7 +43,13 @@ include 'includes/header.php';
 
 <!-- Progress bar -->
 <div class="panel">
-  <div class="panel-head"><span class="panel-title">Overall Progress</span><span class="panel-meta" id="prog-lbl"><?=$done_count?> / <?=$total?></span></div>
+  <div class="panel-head checklist-progress-head">
+    <span class="panel-title">Completion</span>
+    <div class="checklist-progress-meta">
+      <span class="panel-meta" id="prog-lbl"><?=$done_count?> / <?=$total?></span>
+      <span class="panel-title">Overall Progress</span>
+    </div>
+  </div>
   <div class="prog-wrap" style="padding-bottom:10px">
     <div class="prog-track"><div class="prog-fill" id="prog-fill" style="width:<?=$pct?>%"></div></div>
     <div class="prog-info"><span>Completion</span><span id="prog-pct"><?=$pct?>%</span></div>
@@ -66,6 +67,10 @@ include 'includes/header.php';
     <i data-lucide="search" class="search-ic icon-sm"></i>
     <input type="text" name="q" class="search-input" placeholder="Search tasks…" value="<?=esc($q)?>">
   </form>
+  <button class="btn btn-primary toolbar-add-btn" onclick="openNewTask()">
+    <i data-lucide="plus-circle" class="icon-sm"></i>
+    Add New Task
+  </button>
 </div>
 
 <div class="panel">
@@ -90,10 +95,10 @@ include 'includes/header.php';
         $tdate=esc($t['created_at']??'');
         $tdate_fmt=$tdate?date('d M Y',strtotime($tdate)):'';
       ?>
-      <tr data-tid="<?=$tid?>" data-title="<?=esc($t['title']??'')?>" data-desc="<?=esc($t['description']??'')?>">
+      <tr class="checkable-row <?=$tdone?'is-completed':''?>" data-tid="<?=$tid?>" data-completed="<?=$tdone?'1':'0'?>" data-title="<?=esc($t['title']??'')?>" data-desc="<?=esc($t['description']??'')?>">
         <td style="text-align:center"><input type="checkbox" class="rem-check task-chk" <?=$tdone?'checked':''?> onchange="toggleTask(<?=$tid?>,this.checked)"></td>
         <td style="max-width:300px">
-          <div style="font-weight:500;color:var(--tx1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" class="<?=$tdone?'done':''?>"><?=$ttit?></div>
+          <div style="font-weight:500;color:var(--tx1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" class="task-title <?=$tdone?'done':''?>"><?=$ttit?></div>
           <?php if($tdesc):?><div class="task-sub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="<?=$tdesc?>"><?=$tdesc?></div><?php endif;?>
         </td>
         <td><?php if($tdate_fmt):?><span class="task-date-cell"><?=$tdate_fmt?></span><?php endif;?></td>

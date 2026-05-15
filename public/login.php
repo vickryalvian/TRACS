@@ -1,9 +1,11 @@
 <?php
-if(session_status()===PHP_SESSION_NONE)session_start();
+require_once __DIR__ . '/../core/security/csrf.php';
+tracs_start_session();
 $error=$_SESSION['login_error']??''; unset($_SESSION['login_error']);
 ?><!DOCTYPE html>
 <html lang="en" data-theme="dark"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<?= csrf_meta_tag() ?>
 <title>TRACS — Sign In</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -23,6 +25,7 @@ $error=$_SESSION['login_error']??''; unset($_SESSION['login_error']);
     <div class="login-body">
       <?php if($error):?><div class="err-box"><?=htmlspecialchars($error)?></div><?php endif;?>
       <form action="/auth/login.php" method="POST" class="login-body" style="padding:0">
+        <?= csrf_input() ?>
         <div class="form-group">
           <label class="form-label">Email Address</label>
           <input type="email" name="email" class="form-input" placeholder="operator@domain.com" required autofocus>

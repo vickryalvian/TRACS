@@ -4,7 +4,8 @@ ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
-if(session_status()===PHP_SESSION_NONE)session_start();
+require_once __DIR__ . '/../core/security/csrf.php';
+tracs_start_session();
 
 require_once __DIR__.'/../config/database.php';
 require_once __DIR__.'/auth/auth_check.php';
@@ -16,6 +17,7 @@ require_once __DIR__.'/../modules/alert-ticker/controller.php';
 require_once __DIR__.'/../modules/activity-log/controller.php';
 require_once __DIR__.'/../modules/ops-status/controller.php';
 require_once __DIR__.'/../modules/shift-reports/controller.php';
+require_once __DIR__.'/../modules/mom/controller.php';
 
 require_once __DIR__.'/includes/page_helpers.php';
 
@@ -28,6 +30,7 @@ $KC = new ChecklistController($conn,$uid);
 $TC = new AlertTickerController($conn,$uid);
 $AC = new ActivityLogController($conn,$uid);
 $SC = new ShiftReportController($conn,$uid);
+$MC = new MOMController($conn,$uid);
 
 $opsStatus = getOpsStatus($conn);
 $shift_reports = $SC->getTodayByShift();
@@ -39,6 +42,17 @@ $tasks      = $KC->getTasks()?:[];
 $activities = [];
 foreach($AC->getRecentActivity(8)?:[] as $a){try{$activities[]=$AC->formatActivity($a);}catch(Exception $e){}}
 $ticker_items = $TC->formatAlertsForTicker();
+$mom_dashboard = [];
+$weekly_suggestions = [];
+if($MC->isInstalled()){
+  $weekly_suggestions = $MC->getWeeklySuggestions()?:[];
+  foreach($MC->getMOMs('all', 8)?:[] as $m){
+    try{
+      $fm = $MC->formatMOM($m);
+      if(in_array($fm['status']??'', ['upcoming','ongoing'], true)) $mom_dashboard[] = $fm;
+    }catch(Exception $e){}
+  }
+}
 
 $total_cases    = count($cases);
 $critical_cases = count(array_filter($cases,fn($c)=>($c['priority']??'')==='critical'));
@@ -50,6 +64,39 @@ $critical_count = $critical_cases + $overdue_rem;
 $total_tasks = count($tasks);
 $done_tasks  = count(array_filter($tasks,fn($t)=>!empty($t['is_completed'])));
 $pct         = $total_tasks>0?round($done_tasks/$total_tasks*100):0;
+$unchecked_tasks = array_values(array_filter($tasks, fn($t)=>empty($t['is_completed'])));
+$undone_reminders = array_values(array_filter($reminders, fn($r)=>empty($r['is_completed'])));
+$scheduled_meetings = array_values(array_filter($mom_dashboard, fn($m)=>($m['status']??'') === 'upcoming'));
+$notification_items = [];
+foreach($scheduled_meetings as $m){
+  $when = safe_dt($m['meeting_at']??($m['created_at']??null), 'd M, H:i');
+  $notification_items[] = [
+    'status' => 'meeting',
+    'title' => 'Scheduled meeting: '.($m['title']??'Untitled'),
+    'meta' => $when,
+    'href' => 'mom.php?mom_id='.(int)($m['id']??0),
+  ];
+}
+foreach($unchecked_tasks as $t){
+  $notification_items[] = [
+    'status' => 'checklist',
+    'title' => 'Unchecked checklist: '.($t['title']??'Untitled'),
+    'meta' => 'Checklist pending',
+    'href' => 'checklist.php',
+  ];
+}
+foreach($undone_reminders as $r){
+  $r_status = $r['status']??'Pending';
+  if (strpos($r_status, 'in ') === 0 || $r_status === 'Tomorrow') $r_status = 'Upcoming';
+  $notification_items[] = [
+    'status' => strtolower($r_status),
+    'title' => 'Reminder: '.($r['title']??'Untitled'),
+    'meta' => ($r['status']??'Pending') . (!empty($r['due_date']) ? ' · '.date('d M, H:i', strtotime($r['due_date'])) : ''),
+    'href' => 'reminders.php',
+  ];
+}
+$notification_items = array_slice($notification_items, 0, 9);
+$notification_static_extra = count($scheduled_meetings) + count($undone_reminders);
 
 // Shift Logic
 $hour = (int)date('H');
@@ -82,7 +129,7 @@ include 'includes/header.php';
     </div>
 
     <!-- OPS STATUS MARQUEE -->
-    <div class="ops-marquee">
+    <div class="ops-marquee" id="ops-window">
       <button class="ops-arrow" id="opsPrev">‹</button>
       <div class="ops-window">
         <div class="ops-track" id="opsTrack">
@@ -118,11 +165,11 @@ include 'includes/header.php';
 
       <div class="notif-bell-btn" title="View Reminders">
         <i data-lucide="bell" class="icon-md"></i>
-        <div id="notif-badge-container">
+        <div id="notif-badge-container" data-static-extra="<?=$notification_static_extra?>">
           <?php 
-          $pending_tasks = $total_tasks - $done_tasks;
-          if($pending_tasks > 0): ?>
-          <span class="bell-badge"><?= $pending_tasks ?></span>
+          $notif_count = count($scheduled_meetings) + count($unchecked_tasks) + count($undone_reminders);
+          if($notif_count > 0): ?>
+          <span class="bell-badge"><?= $notif_count ?></span>
           <?php endif; ?>
         </div>
 
@@ -133,22 +180,16 @@ include 'includes/header.php';
             <a href="reminders.php" class="notif-drop-link">View All</a>
           </div>
           <div class="notif-drop-body">
-            <?php 
-            $active_rems = array_filter($reminders, fn($r) => in_array($r['status'], ['Overdue', 'Today', 'Upcoming', 'Tomorrow']) || strpos($r['status'], 'in ') === 0);
-            $active_rems = array_slice($active_rems, 0, 6); // Show top 6
-            if(empty($active_rems)): ?>
+            <?php if(empty($notification_items)): ?>
             <div class="notif-drop-empty">No active reminders</div>
-            <?php else: foreach($active_rems as $r): 
-              $r_status = $r['status'];
-              if (strpos($r_status, 'in ') === 0 || $r_status === 'Tomorrow') $r_status = 'Upcoming';
-            ?>
-            <div class="notif-drop-item">
-              <div class="notif-drop-status status-<?= strtolower($r_status) ?>"></div>
+            <?php else: foreach($notification_items as $n): ?>
+            <a class="notif-drop-item" href="<?=esc($n['href'])?>">
+              <div class="notif-drop-status status-<?= esc($n['status']) ?>"></div>
               <div class="notif-drop-info">
-                <div class="notif-drop-text"><?= esc($r['title']) ?></div>
-                <div class="notif-drop-meta"><?= esc($r['status']) ?> · <?= date('d M, H:i', strtotime($r['due_date'] ?? 'now')) ?></div>
+                <div class="notif-drop-text"><?= esc($n['title']) ?></div>
+                <div class="notif-drop-meta"><?= esc($n['meta']) ?></div>
               </div>
-            </div>
+            </a>
             <?php endforeach; endif; ?>
           </div>
         </div>
@@ -200,7 +241,7 @@ include 'includes/header.php';
     <div class="col-left">
 
       <!-- CASES PANEL -->
-      <div class="panel">
+      <div class="panel dashboard-case-panel">
         <div class="panel-head">
           <span class="panel-title">Cases</span>
           <div class="panel-right">
@@ -331,8 +372,9 @@ include 'includes/header.php';
             $tdesc = esc($t['description']??'');
             $tdone = !empty($t['is_completed']);
           ?>
-          <div class="task-row"
+          <div class="task-row checkable-row <?=$tdone?'is-completed':''?>"
             data-tid="<?=$tid?>"
+            data-completed="<?=$tdone?'1':'0'?>"
             data-title="<?=esc($t['title']??'')?>"
             data-desc="<?=esc($t['description']??'')?>">
 
@@ -445,12 +487,12 @@ include 'includes/header.php';
           </div>
         </div>
 
-        <?php if(empty($reminders)): ?>
+        <?php if(empty($undone_reminders)): ?>
         <div class="empty">
           <div class="empty-ic"><i data-lucide="bell"></i></div>
-          <div class="empty-t">No reminders</div>
+          <div class="empty-t">No undone reminders</div>
         </div>
-        <?php else: foreach(array_slice($reminders,0,7) as $r):
+        <?php else: foreach(array_slice($undone_reminders,0,7) as $r):
           $rid   = intval($r['id']??0);
           $rtit  = esc($r['title']??'Untitled');
           $rstat = $r['status']??'—';
@@ -460,14 +502,14 @@ include 'includes/header.php';
           $scls  = rem_status_class($rstat);
           $pb    = prio_badge($rprio);
         ?>
-        <div class="rem-row"
+        <div class="rem-row checkable-row <?=$rdone?'is-completed':''?>"
           data-rid="<?=$rid?>"
+          data-completed="<?=$rdone?'1':'0'?>"
           data-title="<?=esc($r['title']??'')?>"
           data-priority="<?=esc($rprio)?>"
           data-due="<?=$rdue?>"
           data-desc="<?=esc($r['description']??'')?>">
 
-          <input type="checkbox" class="rem-check" <?=$rdone?'checked':''?> onchange="toggleReminder(<?=$rid?>,this.checked)">
           <div class="flex1">
             <div class="rem-title <?=$rdone?'done':''?>"><?=$rtit?></div>
             <div class="rem-meta">
@@ -476,6 +518,9 @@ include 'includes/header.php';
             </div>
           </div>
           <div class="rem-acts">
+            <button class="btn btn-primary btn-sm rem-done-btn" onclick="completeReminder(<?=$rid?>)" title="Mark done">
+              <i data-lucide="check" class="icon-xs"></i>Done
+            </button>
             <button class="btn btn-ghost btn-icon" onclick="openEditReminder(<?=$rid?>)" title="Edit">
               <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
             </button>
@@ -487,13 +532,53 @@ include 'includes/header.php';
         <?php endforeach; endif; ?>
       </div><!-- /reminders -->
 
-      <!-- ACTIVITY LOG PANEL -->
+      <!-- MOM SCHEDULE PANEL -->
       <div class="panel">
+        <div class="panel-head">
+          <span class="panel-title">MOM Schedule</span>
+          <div class="panel-right">
+            <span class="panel-meta"><?=count($mom_dashboard)?> active</span>
+            <a href="mom.php" class="btn btn-ghost btn-sm">All →</a>
+            <button class="btn btn-primary btn-sm" onclick="openNewMOM()"><i data-lucide="plus-circle" class="icon-sm"></i>Add</button>
+          </div>
+        </div>
+
+        <?php if(empty($mom_dashboard)): ?>
+        <div class="empty">
+          <div class="empty-ic"><i data-lucide="clipboard-list"></i></div>
+          <div class="empty-t">No scheduled meetings</div>
+        </div>
+        <?php else: foreach(array_slice($mom_dashboard,0,5) as $m):
+          $mid = intval($m['id']??0);
+          $mtitle = esc($m['title']??'Untitled');
+          $mtype = strtolower($m['type']??'weekly');
+          $mstatus = strtolower($m['status']??'upcoming');
+          $mstatus_badge = $mstatus === 'ongoing' ? 'b-high' : 'b-pending';
+          $mtype_badge = $mtype === 'urgent' ? 'b-critical' : ($mtype === 'training' ? 'b-info' : 'b-active');
+          $mwhen = safe_dt($m['meeting_at']??($m['created_at']??null), 'M d H:i');
+        ?>
+        <a class="rem-row" href="mom.php?mom_id=<?=$mid?>" style="text-decoration:none">
+          <div class="act-ic" style="color:var(--tx3);display:flex;align-items:center"><i data-lucide="calendar-clock" class="icon-sm"></i></div>
+          <div class="flex1">
+            <div class="rem-title"><?=$mtitle?></div>
+            <div class="rem-meta">
+              <span class="badge <?=$mtype_badge?>" style="font-size:8px;padding:1px 5px"><?=ucfirst($mtype)?></span>
+              <span class="badge <?=$mstatus_badge?>" style="font-size:8px;padding:1px 5px"><?=ucfirst($mstatus)?></span>
+            </div>
+          </div>
+          <div class="rem-meta" style="font-family:var(--mono);color:var(--tx3)"><?=$mwhen?></div>
+        </a>
+        <?php endforeach; endif; ?>
+      </div><!-- /mom schedule -->
+
+      <!-- ACTIVITY LOG PANEL -->
+      <div class="panel dashboard-activity-panel">
         <div class="panel-head">
           <span class="panel-title">Activity Log</span>
           <a href="activity.php" class="btn btn-ghost btn-sm">All →</a>
         </div>
 
+        <div class="dashboard-activity-scroll">
         <?php if(empty($activities)): ?>
         <div class="empty">
           <div class="empty-ic"><i data-lucide="activity"></i></div>
@@ -512,6 +597,7 @@ include 'includes/header.php';
           </div>
         </div>
         <?php endforeach; endif; ?>
+        </div>
       </div><!-- /activity -->
 
     </div><!-- /col-right -->

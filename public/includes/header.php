@@ -1,6 +1,7 @@
 <?php
 /* TRACS — Header Include
    Requires: $page_title, $active_page, $user_email, $ticker_items, $critical_count */
+require_once __DIR__ . '/../../core/security/csrf.php';
 $_un  = explode('@',$user_email??'op@tracs',2)[0];
 $_av  = strtoupper(substr($_un,0,1));
 $_cnt = (int)($critical_count??0);
@@ -16,10 +17,14 @@ $_css_v = @filemtime(__DIR__.'/../assets/tracs.css') ?: time();
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<?= csrf_meta_tag() ?>
 <title>TRACS — <?=htmlspecialchars($page_title??'Dashboard')?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/tracs.css?v=<?=$_css_v?>">
+<?php if(in_array(($active_page??''), ['mom','dashboard'], true)): $_mom_css_v = @filemtime(__DIR__.'/../assets/mom-styles.css') ?: time(); ?>
+<link rel="stylesheet" href="assets/mom-styles.css?v=<?=$_mom_css_v?>">
+<?php endif; ?>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
@@ -67,26 +72,35 @@ $_css_v = @filemtime(__DIR__.'/../assets/tracs.css') ?: time();
       <i data-lucide="list-checks" class="icon-md"></i>
       <span class="nav-tip">Checklist</span>
     </a>
-    <a href="activity.php" class="nav-item <?=$active_page==='activity'?'active':''?>">
-      <i data-lucide="activity" class="icon-md"></i>
-      <span class="nav-tip">Activity Log</span>
-    </a>
-    <div class="nav-div"></div>
     <a href="shift-reports.php" class="nav-item <?=$active_page==='shift-reports'?'active':''?>">
       <i data-lucide="clipboard-list" class="icon-md"></i>
       <span class="nav-tip">Shift Reports</span>
-    </a>
-    <a href="finance.php" class="nav-item <?=$active_page==='finance'?'active':''?>">
-      <i data-lucide="circle-dollar-sign" class="icon-md"></i>
-      <span class="nav-tip">Finance</span>
     </a>
     <a href="domains.php" class="nav-item <?=$active_page==='domains'?'active':''?>">
       <i data-lucide="globe" class="icon-md"></i>
       <span class="nav-tip">Domains</span>
     </a>
+    <a href="finance.php" class="nav-item <?=$active_page==='finance'?'active':''?>">
+      <i data-lucide="circle-dollar-sign" class="icon-md"></i>
+      <span class="nav-tip">Finance</span>
+    </a>
+    <div class="nav-div"></div>
+    <a href="mom.php" class="nav-item <?=$active_page==='mom'?'active':''?>">
+      <i data-lucide="calendar-days" class="icon-md"></i>
+      <span class="nav-tip">Meetings / MoM</span>
+    </a>
     <a href="cancellation_feedback.php" class="nav-item <?=$active_page==='feedback'?'active':''?>">
       <i data-lucide="message-square" class="icon-md"></i>
       <span class="nav-tip">Feedback</span>
+    </a>
+    <button type="button" class="nav-item" onclick="openModal('ticker')" title="Ticker / Alerts">
+      <i data-lucide="megaphone" class="icon-md"></i>
+      <span class="nav-tip">Ticker / Alerts</span>
+    </button>
+    <div class="nav-div"></div>
+    <a href="activity.php" class="nav-item <?=$active_page==='activity'?'active':''?>">
+      <i data-lucide="activity" class="icon-md"></i>
+      <span class="nav-tip">Activity Log</span>
     </a>
   </nav>
   <div class="sidebar-bottom">
@@ -106,4 +120,3 @@ $_css_v = @filemtime(__DIR__.'/../assets/tracs.css') ?: time();
     </a>
   </div>
 </aside>
-

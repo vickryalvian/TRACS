@@ -1,5 +1,6 @@
 <?php
-if(session_status()===PHP_SESSION_NONE)session_start();
+require_once __DIR__ . '/../core/security/csrf.php';
+tracs_start_session();
 require_once __DIR__.'/../config/database.php';
 require_once __DIR__.'/auth/auth_check.php';
 require_once __DIR__.'/../modules/case/controller.php';
@@ -30,9 +31,6 @@ include 'includes/header.php';
 
 <div class="topbar">
   <div><div class="page-title">Cases</div><div class="page-sub"><?=$total?> total · <?=$critical?> critical · <?=$stuck?> stuck</div></div>
-  <div class="topbar-right">
-    <button class="btn btn-primary" onclick="openNewCase()"><i data-lucide="plus-circle" class="icon-sm"></i>New Case</button>
-  </div>
 </div>
 
 <div class="stat-strip">
@@ -53,10 +51,26 @@ include 'includes/header.php';
     <i data-lucide="search" class="search-ic icon-sm"></i>
     <input type="text" name="q" class="search-input" placeholder="Search cases…" value="<?=esc($q)?>">
   </form>
+  <button class="btn btn-primary toolbar-add-btn" onclick="openNewCase()"><i data-lucide="plus-circle" class="icon-sm"></i>Add New Case</button>
 </div>
 
 <div class="panel">
-  <div class="panel-head"><span class="panel-title">Case List</span><span class="panel-meta"><?=count($cases)?> shown</span></div>
+  <div class="panel-head">
+    <span class="panel-title">Case List</span>
+    <div class="panel-right">
+      <span class="panel-meta"><?=count($cases)?> shown</span>
+      <details class="report-export-menu">
+        <summary class="btn btn-ghost btn-icon report-export-trigger" title="Export CSV" aria-label="Export CSV" data-tooltip="Export CSV"><i data-lucide="download" class="icon-sm"></i></summary>
+        <form method="get" action="/api/export-cases.php" class="report-export-popover">
+          <input type="hidden" name="f" value="<?=esc($f)?>">
+          <input type="hidden" name="q" value="<?=esc($q)?>">
+          <label>From Date<input type="date" name="from" class="form-input"></label>
+          <label>To Date<input type="date" name="to" class="form-input"></label>
+          <button type="submit" class="btn btn-primary"><i data-lucide="download" class="icon-sm"></i>Export CSV</button>
+        </form>
+      </details>
+    </div>
+  </div>
   <?php if(empty($cases)):?>
   <div class="empty"><div class="empty-ic"><i data-lucide="briefcase"></i></div><div class="empty-t">No cases found</div><div class="empty-s">Try a different filter or create a new case</div></div>
   <?php else: ?>
