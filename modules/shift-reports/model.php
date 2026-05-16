@@ -12,7 +12,7 @@ class ShiftReportModel {
 
     public function getTodayReports() {
         $query = "
-            SELECT r.*, u.email as creator_email 
+            SELECT r.*, u.email AS creator_email, COALESCE(NULLIF(r.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name
             FROM tracs_shift_reports r
             LEFT JOIN tracs_users u ON r.created_by = u.id
             WHERE r.active_date = CURDATE()
@@ -59,7 +59,7 @@ class ShiftReportModel {
         $whereClause = implode(" AND ", $where);
         
         $query = "
-            SELECT r.*, u.email as creator_email 
+            SELECT r.*, u.email AS creator_email, COALESCE(NULLIF(r.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name
             FROM tracs_shift_reports r
             LEFT JOIN tracs_users u ON r.created_by = u.id
             WHERE $whereClause
@@ -89,20 +89,23 @@ class ShiftReportModel {
     public function create($data, $uid) {
         $stmt = $this->conn->prepare("
             INSERT INTO tracs_shift_reports 
-            (shift_name, title, details, priority, active_date, status, created_by, created_at, updated_at) 
-            VALUES (?, ?, ?, ?, ?, 'active', ?, NOW(), NOW())
+            (shift_name, title, details, priority, active_date, status, created_by, created_by_name, created_at, updated_at) 
+            VALUES (?, ?, ?, ?, ?, 'active', ?, ?, NOW(), NOW())
         ");
         if (!$stmt) return false;
 
         $date = !empty($data['active_date']) ? $data['active_date'] : date('Y-m-d');
 
-        $stmt->bind_param('sssssi', 
+        $creatorName = $data['created_by_name'] ?? '';
+
+        $stmt->bind_param('sssssis', 
             $data['shift_name'], 
             $data['title'], 
             $data['details'], 
             $data['priority'],
             $date,
-            $uid
+            $uid,
+            $creatorName
         );
         $success = $stmt->execute();
         $id = $success ? $stmt->insert_id : false;

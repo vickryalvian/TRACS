@@ -19,6 +19,7 @@ $_css_v = @filemtime(__DIR__.'/../assets/tracs.css') ?: time();
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <?= csrf_meta_tag() ?>
 <title>TRACS — <?=htmlspecialchars($page_title??'Dashboard')?></title>
+<?php include __DIR__ . '/theme_bootstrap.php'; ?>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/tracs.css?v=<?=$_css_v?>">
@@ -28,13 +29,6 @@ $_css_v = @filemtime(__DIR__.'/../assets/tracs.css') ?: time();
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-<script>
-// Apply saved theme immediately to avoid flash
-(function(){
-  var t = localStorage.getItem('tracs-theme') || 'light';
-  document.documentElement.setAttribute('data-theme', t);
-})();
-</script>
 </head>
 <body>
 <div class="shell">
@@ -108,13 +102,30 @@ $_css_v = @filemtime(__DIR__.'/../assets/tracs.css') ?: time();
       <?=$_av?>
       <span class="nav-tip"><?=htmlspecialchars($user_email??'')?></span>
     </div>
-    <button class="theme-toggle" id="themeToggle" title="Toggle theme" onclick="tracsToggleTheme()">
-      <!-- Sun icon (shown in dark mode) -->
-      <i data-lucide="sun" class="icon-md ic-sun"></i>
-      <!-- Moon icon (shown in light mode) -->
-      <i data-lucide="moon" class="icon-md ic-moon"></i>
-      <span class="nav-tip" style="white-space:nowrap" id="themeTip">Switch to Dark</span>
-    </button>
+    <div class="theme-menu-wrap" id="themeMenuWrap">
+      <button class="theme-toggle" id="themeToggle" type="button" title="Theme" aria-label="Theme" aria-haspopup="menu" aria-expanded="false">
+        <i data-lucide="sun" class="icon-md ic-sun"></i>
+        <i data-lucide="moon" class="icon-md ic-moon"></i>
+        <span class="nav-tip" style="white-space:nowrap" id="themeTip">Theme</span>
+      </button>
+      <div class="theme-menu" id="themeMenu" role="menu" aria-label="Theme preference">
+        <button type="button" class="theme-option" role="menuitemradio" aria-checked="false" data-theme-choice="light">
+          <i data-lucide="sun" class="icon-sm"></i>
+          <span>Light Mode</span>
+          <i data-lucide="check" class="icon-sm theme-option-check"></i>
+        </button>
+        <button type="button" class="theme-option" role="menuitemradio" aria-checked="false" data-theme-choice="dark">
+          <i data-lucide="moon" class="icon-sm"></i>
+          <span>Dark Mode</span>
+          <i data-lucide="check" class="icon-sm theme-option-check"></i>
+        </button>
+        <button type="button" class="theme-option" role="menuitemradio" aria-checked="false" data-theme-choice="auto">
+          <i data-lucide="monitor" class="icon-sm"></i>
+          <span>System Default</span>
+          <i data-lucide="check" class="icon-sm theme-option-check"></i>
+        </button>
+      </div>
+    </div>
     <a href="../auth/logout.php" class="logout-btn" title="Sign out">
       <i data-lucide="log-out" class="icon-md"></i>
     </a>

@@ -15,22 +15,26 @@ class TickerEventController {
     /**
      * Create a new ticker event with 1-hour expiry
      */
-    public function create(int $uid, string $message, string $type = 'info', string $module = null, int $ref_id = null): bool {
+    public function create(int $uid, string $message, string $type = 'info', ?string $module = null, ?int $ref_id = null): bool {
         // Only run if table exists
         $test = $this->conn->query("SHOW TABLES LIKE 'tracs_ticker_events'");
         if (!$test || $test->num_rows === 0) return false;
+        if (function_exists('tracs_ensure_creator_columns')) {
+            tracs_ensure_creator_columns($this->conn, 'tracs_ticker_events', 'user_id');
+        }
 
         $expires = date('Y-m-d H:i:s', strtotime('+1 hour'));
+        $creatorName = function_exists('tracs_current_user_display') ? tracs_current_user_display($this->conn) : '';
         
         $stmt = $this->conn->prepare("
             INSERT INTO tracs_ticker_events 
-            (user_id, message, type, module, reference_id, expires_at) 
-            VALUES (?, ?, ?, ?, ?, ?)
+            (user_id, message, type, module, reference_id, expires_at, created_by, created_by_name) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ");
         
         if (!$stmt) return false;
         
-        $stmt->bind_param('isssis', $uid, $message, $type, $module, $ref_id, $expires);
+        $stmt->bind_param('isssisis', $uid, $message, $type, $module, $ref_id, $expires, $uid, $creatorName);
         $result = $stmt->execute();
         $stmt->close();
         

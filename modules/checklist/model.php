@@ -17,15 +17,19 @@ class ChecklistModel {
     public function getTasksByUser($user_id) {
         $query = "
             SELECT 
-                id,
-                title,
-                description,
-                is_completed,
-                created_at,
-                updated_at
-            FROM tracs_side_tasks
-            WHERE user_id = ?
-            ORDER BY is_completed ASC, created_at DESC
+                t.id,
+                t.title,
+                t.description,
+                t.is_completed,
+                t.created_at,
+                t.updated_at,
+                t.created_by,
+                t.created_by_name,
+                COALESCE(NULLIF(t.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name
+            FROM tracs_side_tasks t
+            LEFT JOIN tracs_users u ON t.created_by = u.id
+            WHERE t.user_id = ?
+            ORDER BY t.is_completed ASC, t.created_at DESC
         ";
         
         $stmt = $this->conn->prepare($query);
@@ -51,8 +55,10 @@ class ChecklistModel {
      */
     public function getTaskById($task_id, $user_id) {
         $query = "
-            SELECT * FROM tracs_side_tasks
-            WHERE id = ? AND user_id = ?
+            SELECT t.*, COALESCE(NULLIF(t.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name
+            FROM tracs_side_tasks t
+            LEFT JOIN tracs_users u ON t.created_by = u.id
+            WHERE t.id = ? AND t.user_id = ?
         ";
         
         $stmt = $this->conn->prepare($query);
@@ -76,14 +82,18 @@ class ChecklistModel {
     public function getIncompleteTasks($user_id) {
         $query = "
             SELECT 
-                id,
-                title,
-                description,
-                is_completed
-            FROM tracs_side_tasks
-            WHERE user_id = ?
-            AND is_completed = 0
-            ORDER BY created_at ASC
+                t.id,
+                t.title,
+                t.description,
+                t.is_completed,
+                t.created_by,
+                t.created_by_name,
+                COALESCE(NULLIF(t.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name
+            FROM tracs_side_tasks t
+            LEFT JOIN tracs_users u ON t.created_by = u.id
+            WHERE t.user_id = ?
+            AND t.is_completed = 0
+            ORDER BY t.created_at ASC
         ";
         
         $stmt = $this->conn->prepare($query);

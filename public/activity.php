@@ -49,7 +49,7 @@ include 'includes/header.php';
     <input type="hidden" name="module" value="<?=esc($module_filter)?>">
     <input type="hidden" name="limit" value="<?=$limit?>">
     <i data-lucide="search" class="search-ic icon-sm"></i>
-    <input type="text" name="q" class="search-input" placeholder="Search…" value="<?=esc($q)?>" oninput="filterActs(this);document.getElementById('activityExportQ').value=this.value">
+    <input type="text" name="q" class="search-input" placeholder="Search activity module, action, reference ID, or details" value="<?=esc($q)?>" oninput="filterActs(this);document.getElementById('activityExportQ').value=this.value">
   </form>
 </div>
 
@@ -63,14 +63,18 @@ include 'includes/header.php';
     <span class="panel-title">Recent Activity</span>
     <div class="panel-right">
       <details class="report-export-menu">
-        <summary class="btn btn-ghost btn-icon report-export-trigger" title="Export CSV" aria-label="Export CSV" data-tooltip="Export CSV"><i data-lucide="download" class="icon-sm"></i></summary>
+        <summary class="btn btn-ghost btn-icon report-export-trigger" title="More actions" aria-label="More actions" data-tooltip="More actions"><i data-lucide="more-vertical" class="icon-sm"></i></summary>
         <form method="get" action="/api/export-activity.php" class="report-export-popover">
           <input type="hidden" name="module" value="<?=esc($module_filter)?>">
           <input type="hidden" name="q" id="activityExportQ" value="<?=esc($q)?>">
           <input type="hidden" name="limit" value="<?=$limit?>">
+          <div class="report-export-title">
+            <i data-lucide="download" class="icon-xs"></i>
+            Export CSV
+          </div>
           <label>From Date<input type="date" name="from" class="form-input"></label>
           <label>To Date<input type="date" name="to" class="form-input"></label>
-          <button type="submit" class="btn btn-primary"><i data-lucide="download" class="icon-sm"></i>Export CSV</button>
+          <button type="submit" class="btn btn-primary"><i data-lucide="download" class="icon-sm"></i>Download CSV</button>
         </form>
       </details>
       <?php foreach([25,50,100] as $lv):?>
@@ -93,7 +97,7 @@ include 'includes/header.php';
     <div class="flex1">
       <div class="act-text"><strong><?=$action?></strong><span>· <?=$module?></span></div>
       <div class="act-desc" title="<?=$desc?>"><?=$desc?></div>
-      <div class="act-time"><?=$time?><?php if($full_time):?> · <?=$full_time?><?php endif;?></div>
+      <div class="act-time"><?=$time?><?php if($full_time):?> · <?=$full_time?><?php endif;?> · <?=tracs_creator_meta($a, $a['created_at'] ?? null, false)?></div>
     </div>
   </div>
   <?php endforeach;endif;?>

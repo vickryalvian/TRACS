@@ -5,6 +5,7 @@
 header('Content-Type: application/json');
 require '_bootstrap.php';
 require_once __DIR__ . '/../../modules/cancellation-feedback/controller.php';
+tracs_ensure_creator_columns($conn, 'tracs_cancellation_feedback', null);
 
 $controller = new CancellationFeedbackController($conn, $uid);
 

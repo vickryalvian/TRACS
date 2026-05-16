@@ -85,12 +85,28 @@ setInterval(_clock,1000); _clock();
 
 /* ── Toast ────────────────────────────────────────────── */
 const _dock=(()=>{const d=document.createElement('div');d.className='toast-dock';document.body.appendChild(d);return d;})();
+function toastIconFor(msg,type){
+  const text = String(msg || '').toLowerCase();
+  if(type === 'error') return 'alert-triangle';
+  if(text.includes('delete') || text.includes('deleted')) return 'trash-2';
+  if(text.includes('archive') || text.includes('archived')) return 'archive';
+  if(text.includes('resolve') || text.includes('resolved')) return 'check-circle-2';
+  if(text.includes('create') || text.includes('created') || text.includes('added') || text.includes('recorded')) return 'plus-circle';
+  if(text.includes('update') || text.includes('updated') || text.includes('saved') || text.includes('set')) return 'refresh-cw';
+  if(text.includes('transfer')) return 'arrow-right-left';
+  if(text.includes('domain')) return 'globe';
+  if(text.includes('reminder')) return 'bell';
+  if(text.includes('case')) return 'briefcase';
+  if(text.includes('task')) return 'list-checks';
+  return type === 'success' ? 'check-circle-2' : 'info';
+}
 function toast(msg,type='info',ms=4600){
   const t=document.createElement('div');
-  const ic={success:'✓',error:'!',info:'i'}[type]||'i';
+  const ic=toastIconFor(msg,type);
   t.className=`toast ${type}`;
-  t.innerHTML=`<span class="toast-radar"><span class="toast-icon">${ic}</span></span><span class="toast-msg">${msg}</span>`;
+  t.innerHTML=`<span class="toast-radar"><i data-lucide="${ic}" class="toast-icon"></i></span><span class="toast-msg">${msg}</span>`;
   _dock.appendChild(t);
+  if(window.lucide) lucide.createIcons({ nodes: [t.querySelector('[data-lucide]')] });
   setTimeout(()=>{t.classList.add('is-leaving');setTimeout(()=>t.remove(),240);},ms);
 }
 
@@ -100,6 +116,18 @@ function closeModal(id){const el=document.getElementById(id+'Modal');if(el)el.cl
 function closeAllModals(){document.querySelectorAll('.modal-overlay:not(.hidden)').forEach(o=>o.classList.add('hidden'));}
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeAllModals();});
 document.addEventListener('click',e=>{if(e.target.classList.contains('modal-overlay'))closeAllModals();});
+
+/* ── Report export menu ───────────────────────────────── */
+document.addEventListener('click', e => {
+  const activeMenu = e.target.closest('.report-export-menu');
+  document.querySelectorAll('.report-export-menu[open]').forEach(menu => {
+    if (menu !== activeMenu) menu.removeAttribute('open');
+  });
+});
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  document.querySelectorAll('.report-export-menu[open]').forEach(menu => menu.removeAttribute('open'));
+});
 
 /* ── Confirm dialog ───────────────────────────────────── */
 let _cb=null;
@@ -111,6 +139,72 @@ function confirm(msg,cb,title='Confirm Delete'){
 }
 document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('c-ok')?.addEventListener('click',()=>{closeModal('confirm');if(_cb){_cb();_cb=null;}});
+});
+
+/* ── Stat card cursor glow ───────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', () => {
+  const statCards = document.querySelectorAll('.stat-card');
+  const statStoreKey = `tracs-stat-values:${location.pathname}`;
+  let previousValues = {};
+  try { previousValues = JSON.parse(sessionStorage.getItem(statStoreKey) || '{}') || {}; }
+  catch(e) { previousValues = {}; }
+  const currentValues = {};
+
+  const statValueFor = card => card.querySelector('.stat-num')?.textContent.trim() || card.textContent.trim();
+  const statKeyFor = (card, index) => {
+    const label = card.querySelector('.stat-label')?.textContent.trim() || `card-${index}`;
+    return `${index}:${label}`;
+  };
+  const playStatRadar = card => {
+    card.classList.remove('is-stat-updated');
+    void card.offsetWidth;
+    card.classList.add('is-stat-updated');
+    window.setTimeout(() => card.classList.remove('is-stat-updated'), 1250);
+  };
+
+  statCards.forEach((card, index) => {
+    if (!card.querySelector('.stat-glow')) {
+      const glow = document.createElement('div');
+      glow.className = 'stat-glow';
+      card.prepend(glow);
+    }
+
+    const syncMaskPosition = e => {
+      const rect = card.getBoundingClientRect();
+      card.style.setProperty('--stat-mask-x', `${e.clientX - rect.left}px`);
+      card.style.setProperty('--stat-mask-y', `${e.clientY - rect.top}px`);
+    };
+
+    card.addEventListener('pointerenter', e => {
+      syncMaskPosition(e);
+      card.classList.add('is-stat-hovering');
+    });
+    card.addEventListener('pointermove', syncMaskPosition);
+    card.addEventListener('pointerleave', () => card.classList.remove('is-stat-hovering'));
+
+    const key = statKeyFor(card, index);
+    const value = statValueFor(card);
+    currentValues[key] = value;
+    if (previousValues[key] !== undefined && previousValues[key] !== value) {
+      window.setTimeout(() => playStatRadar(card), 180 + index * 70);
+    }
+
+    const valueEl = card.querySelector('.stat-num');
+    if (valueEl) {
+      let lastValue = value;
+      new MutationObserver(() => {
+        const nextValue = statValueFor(card);
+        if (nextValue === lastValue) return;
+        lastValue = nextValue;
+        playStatRadar(card);
+      }).observe(valueEl, { childList: true, characterData: true, subtree: true });
+    }
+  });
+
+  if (statCards.length) {
+    try { sessionStorage.setItem(statStoreKey, JSON.stringify(currentValues)); }
+    catch(e) {}
+  }
 });
 
 /* ── API helper ───────────────────────────────────────── */
@@ -328,7 +422,14 @@ async function toggleReminder(id,checked){
   const d=await api(API.REMINDER.TOGGLE,{id,is_completed:checked?1:0});
   if(d.success){
     row?.querySelector('.rem-title')?.classList.toggle('done',checked);
+    const badgeContainer = document.getElementById('notif-badge-container');
+    if (badgeContainer) {
+      const current = parseInt(badgeContainer.dataset.staticExtra || '0', 10) || 0;
+      badgeContainer.dataset.staticExtra = String(Math.max(0, current + (checked ? -1 : 1)));
+    }
+    if (checked) row?.querySelector('.rem-done-btn')?.remove();
     moveCheckableRow(row, checked);
+    _updateProgress();
   }else{
     if(row){
       const box=row.querySelector('.rem-check');
@@ -371,7 +472,15 @@ async function saveTask(){
 async function deleteTask(id){
   confirm('Delete this task?',async()=>{
     const d=await api(API.TASK.DELETE,{id});
-    if(d.success){toast('Task deleted','success');removeRow(`[data-tid="${id}"]`);_updateProgress();}
+    if(d.success){
+      const row=document.querySelector(`[data-tid="${id}"]`);
+      const badgeContainer = document.getElementById('notif-badge-container');
+      if (badgeContainer && row?.dataset.completed !== '1') {
+        const current = parseInt(badgeContainer.dataset.uncheckedChecklist || '0', 10) || 0;
+        badgeContainer.dataset.uncheckedChecklist = String(Math.max(0, current - 1));
+      }
+      toast('Task deleted','success');removeRow(`[data-tid="${id}"]`);_updateProgress();
+    }
     else toast(d.message||'Error','error');
   });
 }
@@ -381,6 +490,11 @@ async function toggleTask(id,checked){
   const d=await api(API.TASK.TOGGLE,{id,is_completed:checked?1:0});
   if(d.success){
     row?.querySelector('.task-title')?.classList.toggle('done',checked);
+    const badgeContainer = document.getElementById('notif-badge-container');
+    if (badgeContainer) {
+      const current = parseInt(badgeContainer.dataset.uncheckedChecklist || '0', 10) || 0;
+      badgeContainer.dataset.uncheckedChecklist = String(Math.max(0, current + (checked ? -1 : 1)));
+    }
     moveCheckableRow(row, checked);
     _updateProgress();
   }else{
@@ -438,7 +552,8 @@ function _updateProgress(){
   const badgeContainer = document.getElementById('notif-badge-container');
   if (badgeContainer) {
     const extra = parseInt(badgeContainer.dataset.staticExtra || '0', 10) || 0;
-    const count = pending + extra;
+    const checklistCount = parseInt(badgeContainer.dataset.uncheckedChecklist || String(pending), 10) || 0;
+    const count = checklistCount + extra;
     if (count > 0) {
       badgeContainer.innerHTML = `<span class="bell-badge">${count}</span>`;
     } else {
@@ -1244,7 +1359,7 @@ async function quickSaveBt() {
   const receiver_type = val('nReceiverType');
 
   if (!amount || amount <= 0) { toast('Amount is required', 'error'); document.getElementById('nAmount').focus(); return; }
-  if (!admin_name)            { toast('Admin name is required', 'error'); document.getElementById('nAdmin').focus(); return; }
+  if (!admin_name)            { toast('Operator is required', 'error'); document.getElementById('nAdmin').focus(); return; }
 
   const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const sender_email    = val('nSenderEmail').trim();
@@ -1310,7 +1425,7 @@ async function saveEditBt() {
 
   if (!id)                    { toast('Invalid record', 'error'); return; }
   if (!amount || amount <= 0) { toast('Amount is required', 'error'); return; }
-  if (!admin_name)            { toast('Admin name is required', 'error'); return; }
+  if (!admin_name)            { toast('Operator is required', 'error'); return; }
 
   const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const sender_email   = val('btSenderEmail').trim();
@@ -1369,24 +1484,165 @@ function filterActs(inp) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   THEME TOGGLE
+   THEME MEMORY
 ═══════════════════════════════════════════════════════════════ */
 
-function tracsToggleTheme() {
-  var html = document.documentElement;
-  var current = html.getAttribute('data-theme') || 'light';
-  var next = current === 'dark' ? 'light' : 'dark';
-  html.setAttribute('data-theme', next);
-  localStorage.setItem('tracs-theme', next);
-  var tip = document.getElementById('themeTip');
-  if (tip) tip.textContent = next === 'dark' ? 'Switch to Light' : 'Switch to Dark';
+const TRACS_THEME_KEY = 'tracs_theme_preference';
+const TRACS_THEME_LEGACY_KEY = 'tracs-theme';
+const TRACS_THEME_CHOICES = new Set(['light', 'dark', 'auto']);
+
+function tracsAutoThemeForDate(date = new Date()) {
+  const hour = date.getHours();
+  return hour >= 6 && hour < 18 ? 'light' : 'dark';
 }
-/* Sync tip text on load */
-(function(){
-  var tip = document.getElementById('themeTip');
-  var t = localStorage.getItem('tracs-theme') || 'light';
-  if (tip) tip.textContent = t === 'dark' ? 'Switch to Light' : 'Switch to Dark';
-})();
+
+function tracsBrowserTheme() {
+  return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+function tracsNormalizeThemePreference(value) {
+  if (value === 'system') return 'auto';
+  return TRACS_THEME_CHOICES.has(value) ? value : '';
+}
+
+function tracsGetThemePreference() {
+  const stored = tracsNormalizeThemePreference(localStorage.getItem(TRACS_THEME_KEY));
+  if (stored) return stored;
+
+  const legacy = tracsNormalizeThemePreference(localStorage.getItem(TRACS_THEME_LEGACY_KEY));
+  if (legacy) {
+    localStorage.setItem(TRACS_THEME_KEY, legacy);
+    return legacy;
+  }
+
+  return '';
+}
+
+function tracsResolveTheme(preference = tracsGetThemePreference()) {
+  if (preference === 'light' || preference === 'dark') return preference;
+  if (preference === 'auto') return tracsAutoThemeForDate();
+  return tracsBrowserTheme() || 'light';
+}
+
+function tracsApplyTheme(preference = tracsGetThemePreference()) {
+  const normalized = tracsNormalizeThemePreference(preference);
+  const applied = tracsResolveTheme(normalized);
+  const html = document.documentElement;
+
+  html.setAttribute('data-theme', applied);
+  html.setAttribute('data-theme-preference', normalized || 'browser');
+  html.setAttribute('data-applied-theme', applied);
+  tracsSyncThemeMenu(normalized, applied);
+
+  document.querySelectorAll('.flatpickr-calendar').forEach(calendar => {
+    calendar.classList.toggle('tracs-flatpickr-dark', applied === 'dark');
+    calendar.classList.toggle('tracs-flatpickr-light', applied === 'light');
+  });
+
+  return applied;
+}
+
+function tracsSetThemePreference(preference) {
+  const normalized = tracsNormalizeThemePreference(preference) || 'auto';
+  localStorage.setItem(TRACS_THEME_KEY, normalized);
+  localStorage.setItem(TRACS_THEME_LEGACY_KEY, normalized);
+  tracsApplyTheme(normalized);
+}
+
+function tracsSyncThemeMenu(preference = tracsGetThemePreference(), applied = tracsResolveTheme(preference)) {
+  const selected = preference || '';
+  const tip = document.getElementById('themeTip');
+  const toggle = document.getElementById('themeToggle');
+  const label = selected === 'auto'
+    ? `Theme: Auto (${applied === 'dark' ? 'Dark' : 'Light'})`
+    : selected === 'dark'
+      ? 'Theme: Dark'
+      : selected === 'light'
+        ? 'Theme: Light'
+        : `Theme: Browser (${applied === 'dark' ? 'Dark' : 'Light'})`;
+
+  if (tip) tip.textContent = label;
+  if (toggle) toggle.setAttribute('aria-label', label);
+
+  document.querySelectorAll('[data-theme-choice]').forEach(option => {
+    const isActive = option.getAttribute('data-theme-choice') === selected;
+    option.classList.toggle('is-active', isActive);
+    option.setAttribute('aria-checked', isActive ? 'true' : 'false');
+  });
+}
+
+function tracsOpenThemeMenu() {
+  const wrap = document.getElementById('themeMenuWrap');
+  const toggle = document.getElementById('themeToggle');
+  if (!wrap || !toggle) return;
+  wrap.classList.add('is-open');
+  toggle.setAttribute('aria-expanded', 'true');
+}
+
+function tracsCloseThemeMenu() {
+  const wrap = document.getElementById('themeMenuWrap');
+  const toggle = document.getElementById('themeToggle');
+  if (!wrap || !toggle) return;
+  wrap.classList.remove('is-open');
+  toggle.setAttribute('aria-expanded', 'false');
+}
+
+function tracsToggleThemeMenu() {
+  const wrap = document.getElementById('themeMenuWrap');
+  if (wrap?.classList.contains('is-open')) tracsCloseThemeMenu();
+  else tracsOpenThemeMenu();
+}
+
+function tracsToggleTheme() {
+  tracsToggleThemeMenu();
+}
+
+function tracsInitThemeMemory() {
+  tracsApplyTheme();
+
+  const toggle = document.getElementById('themeToggle');
+  const wrap = document.getElementById('themeMenuWrap');
+  const menu = document.getElementById('themeMenu');
+
+  toggle?.addEventListener('click', event => {
+    event.stopPropagation();
+    tracsToggleThemeMenu();
+  });
+
+  menu?.addEventListener('click', event => {
+    const option = event.target.closest('[data-theme-choice]');
+    if (!option) return;
+    tracsSetThemePreference(option.getAttribute('data-theme-choice'));
+    tracsCloseThemeMenu();
+  });
+
+  document.addEventListener('click', event => {
+    if (wrap && !wrap.contains(event.target)) tracsCloseThemeMenu();
+  });
+
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') tracsCloseThemeMenu();
+  });
+
+  setInterval(() => {
+    if (tracsGetThemePreference() === 'auto') tracsApplyTheme('auto');
+  }, 120000);
+
+  const darkQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+  darkQuery?.addEventListener?.('change', () => {
+    if (!tracsGetThemePreference()) tracsApplyTheme('');
+  });
+
+  window.addEventListener('storage', event => {
+    if (event.key === TRACS_THEME_KEY || event.key === TRACS_THEME_LEGACY_KEY) tracsApplyTheme();
+  });
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', tracsInitThemeMemory);
+} else {
+  tracsInitThemeMemory();
+}
 
 /* ── Calendar Initialization (Flatpickr) ── */
 document.addEventListener('DOMContentLoaded', () => {

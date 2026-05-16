@@ -19,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    $stmt = $conn->prepare('SELECT id, email, password FROM tracs_users WHERE email = ? LIMIT 1');
+    $stmt = $conn->prepare('SELECT id, email, name, password FROM tracs_users WHERE email = ? LIMIT 1');
     $stmt->bind_param('s', $email);
     $stmt->execute();
     $user = $stmt->get_result()->fetch_assoc();
@@ -30,6 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         session_regenerate_id(true);
         $_SESSION['user_id']    = $user['id'];
         $_SESSION['user_email'] = $user['email'];
+        $_SESSION['user_name']  = trim((string)($user['name'] ?? '')) ?: $user['email'];
 
         header('Location: /index.php');
         exit;

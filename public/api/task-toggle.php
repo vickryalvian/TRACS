@@ -24,7 +24,7 @@ function taskColumnExists(mysqli $conn, string $column): bool {
 $sets=["is_completed=?","updated_at=NOW()"];
 if(taskColumnExists($conn,'completed_at')) $sets[]=$done ? "completed_at=NOW()" : "completed_at=NULL";
 if(taskColumnExists($conn,'archived_at')) $sets[]=$done ? "archived_at=NOW()" : "archived_at=NULL";
-if(taskColumnExists($conn,'reset_at')) $sets[]=$done ? "reset_at=DATE_ADD(CURDATE(), INTERVAL 1 DAY)" : "reset_at=NULL";
+if(taskColumnExists($conn,'reset_at')) $sets[]="reset_at=NULL";
 if(taskColumnExists($conn,'completed_by')) $sets[]=$done ? "completed_by={$uid}" : "completed_by=NULL";
 
 $taskTitle = "task #{$id}";

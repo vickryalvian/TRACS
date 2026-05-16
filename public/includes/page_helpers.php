@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../../core/creator_tracking.php';
+
 /* Shared formatting helpers for all pages */
 function prio_bar(string $p): string {
     return match($p){

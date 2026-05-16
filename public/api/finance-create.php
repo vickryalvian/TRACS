@@ -6,8 +6,9 @@ $status=in_array($body['status']??'',['completed','pending','failed'])?$body['st
 $from=$body['from_account']??''; $to=$body['to_account']??'';
 $dt=!empty($body['transfer_date'])?date('Y-m-d H:i:s',strtotime($body['transfer_date'])):date('Y-m-d H:i:s');
 $conn->query("CREATE TABLE IF NOT EXISTS tracs_finance_transfers (id INT AUTO_INCREMENT PRIMARY KEY,user_id INT NOT NULL,note VARCHAR(500) NOT NULL,from_account VARCHAR(200),to_account VARCHAR(200),amount DECIMAL(18,2) NOT NULL DEFAULT 0,direction ENUM('in','out') DEFAULT 'out',status ENUM('completed','pending','failed') DEFAULT 'pending',transfer_date DATETIME DEFAULT NOW(),created_at DATETIME DEFAULT NOW(),INDEX(user_id))");
-$stmt=$conn->prepare("INSERT INTO tracs_finance_transfers (user_id,note,from_account,to_account,amount,direction,status,transfer_date) VALUES (?,?,?,?,?,?,?,?)");
-$stmt->bind_param('isssdsss',$uid,$note,$from,$to,$amount,$dir,$status,$dt);
+tracs_ensure_creator_columns($conn, 'tracs_finance_transfers', 'user_id');
+$stmt=$conn->prepare("INSERT INTO tracs_finance_transfers (user_id,note,from_account,to_account,amount,direction,status,transfer_date,created_by,created_by_name) VALUES (?,?,?,?,?,?,?,?,?,?)");
+$stmt->bind_param('isssdsssis',$uid,$note,$from,$to,$amount,$dir,$status,$dt,$uid,$creator_name);
 if(!$stmt->execute()) fail('DB error: '.$conn->error);
 $id=$stmt->insert_id; $stmt->close();
 logAct($conn,$uid,'created','Finance',"Transfer logged: {$note} Rp ".number_format($amount,0,',','.'),$id);

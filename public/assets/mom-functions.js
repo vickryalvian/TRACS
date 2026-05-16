@@ -798,8 +798,29 @@ function saveMOMSidebarScreenshots(mom_id) {
 function filterMOMHistory(value) {
   const needle = String(value || '').trim().toLowerCase();
   document.querySelectorAll('[data-mom-history-row]').forEach(row => {
-    row.style.display = !needle || (row.dataset.momSearch || '').includes(needle) ? '' : 'none';
+    const visible = !needle || (row.dataset.momSearch || '').includes(needle);
+    row.style.display = visible ? '' : 'none';
+    const preview = document.querySelector(`[data-mom-preview-row][data-preview-for="${row.dataset.mid}"]`);
+    if(preview) {
+      preview.style.display = visible && !preview.classList.contains('hidden') ? '' : 'none';
+    }
   });
+}
+
+function toggleMOMPreview(mom_id, button) {
+  if(button?.disabled) return;
+  const row = document.getElementById(`momPreview${mom_id}`);
+  if(!row) return;
+  const willOpen = row.classList.contains('hidden');
+  const sourceRow = button?.closest('tr');
+  row.classList.toggle('hidden', !willOpen);
+  row.style.display = willOpen ? '' : 'none';
+  sourceRow?.classList.toggle('is-preview-open', willOpen);
+  button?.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+  button?.classList.toggle('is-active', willOpen);
+  const icon = button?.querySelector('[data-lucide]');
+  if(icon) icon.setAttribute('data-lucide', willOpen ? 'chevron-up' : 'chevron-down');
+  lucide.createIcons();
 }
 
 // ═══════════════════════════════════════════════════════════════

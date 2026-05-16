@@ -8,7 +8,7 @@
   </div>
   <div class="modal-body">
     <input type="hidden" id="caseId">
-    <div class="form-group"><label class="form-label">Title *</label><input type="text" class="form-input" id="caseTitle" placeholder="e.g. PT Maju Sejahtera — Contract Dispute" autocomplete="off"></div>
+    <div class="form-group"><label class="form-label">Case Title *</label><input type="text" class="form-input" id="caseTitle" placeholder="Case title, e.g. Hosting issue follow-up" autocomplete="off"></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Status</label>
         <select class="form-select" id="caseStatus"><option value="active">Active</option><option value="pending">Pending</option><option value="stuck">Stuck</option><option value="completed">Completed</option></select>
@@ -84,7 +84,7 @@
 
 </div>
 
-    <div class="form-group"><label class="form-label">Notes</label><textarea class="form-textarea" id="caseNotes" placeholder="Case context, related documents, action items…"></textarea></div>
+    <div class="form-group"><label class="form-label">Internal Notes</label><textarea class="form-textarea" id="caseNotes" placeholder="Add internal notes, investigation result, or next action"></textarea></div>
   </div>
   <div class="modal-foot">
     <button class="btn btn-ghost" onclick="closeModal('case')">Cancel</button>
@@ -101,7 +101,7 @@
   </div>
   <div class="modal-body">
     <input type="hidden" id="remId">
-    <div class="form-group"><label class="form-label">Title *</label><input type="text" class="form-input" id="remTitle" placeholder="e.g. Send somasi letter to opposing counsel" autocomplete="off"></div>
+    <div class="form-group"><label class="form-label">Reminder Title *</label><input type="text" class="form-input" id="remTitle" placeholder="Reminder title, e.g. Follow up unresolved hosting ticket" autocomplete="off"></div>
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">Priority</label>
@@ -130,7 +130,7 @@
         <button type="button" class="quick-time-btn" onclick="setQuickTime('1m', this)">+1M</button>
       </div>
     </div>
-    <div class="form-group"><label class="form-label">Description</label><textarea class="form-textarea" id="remDesc" placeholder="Optional notes or context…" style="min-height:64px"></textarea></div>
+    <div class="form-group"><label class="form-label">Reminder Details</label><textarea class="form-textarea" id="remDesc" placeholder="Add reminder context, customer impact, or follow-up notes" style="min-height:64px"></textarea></div>
   </div>
   <div class="modal-foot">
     <button class="btn btn-ghost" onclick="closeModal('rem')">Cancel</button>
@@ -147,8 +147,8 @@
   </div>
   <div class="modal-body">
     <input type="hidden" id="taskId">
-    <div class="form-group"><label class="form-label">Title *</label><input type="text" class="form-input" id="taskTitle" placeholder="e.g. Prepare BAP for mediation session" autocomplete="off"></div>
-    <div class="form-group"><label class="form-label">Description</label><textarea class="form-textarea" id="taskDesc" placeholder="Optional notes…" style="min-height:60px"></textarea></div>
+    <div class="form-group"><label class="form-label">Task Title *</label><input type="text" class="form-input" id="taskTitle" placeholder="Task title, e.g. Verify pending customer escalation" autocomplete="off"></div>
+    <div class="form-group"><label class="form-label">Task Details</label><textarea class="form-textarea" id="taskDesc" placeholder="Add internal notes, checklist context, or next action" style="min-height:60px"></textarea></div>
   </div>
   <div class="modal-foot">
     <button class="btn btn-ghost" onclick="closeModal('task')">Cancel</button>
@@ -165,7 +165,7 @@
   </div>
   <div class="modal-body">
     <input type="hidden" id="shiftId">
-    <div class="form-group"><label class="form-label">Title *</label><input type="text" class="form-input" id="shiftTitle" placeholder="e.g. Server reboot pending" autocomplete="off"></div>
+    <div class="form-group"><label class="form-label">Shift Report Title *</label><input type="text" class="form-input" id="shiftTitle" placeholder="Shift report title, e.g. VPS node monitoring required" autocomplete="off"></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Work Date *</label>
         <input type="date" class="form-input" id="shiftDate" value="<?=date('Y-m-d')?>">
@@ -189,7 +189,7 @@
       </div>
       <div class="form-group" style="visibility:hidden"></div>
     </div>
-    <div class="form-group"><label class="form-label">Details</label><textarea class="form-textarea" id="shiftDetails" placeholder="Handover context, steps taken, next actions..." style="min-height:100px"></textarea></div>
+    <div class="form-group"><label class="form-label">Handover Details</label><textarea class="form-textarea" id="shiftDetails" placeholder="Describe handover context, steps taken, customer impact, and next actions" style="min-height:100px"></textarea></div>
   </div>
   <div class="modal-foot">
     <button class="btn btn-ghost" onclick="closeModal('shift')">Cancel</button>
@@ -206,7 +206,7 @@
   </div>
   <div class="modal-body">
     <div style="display:flex;gap:7px;align-items:flex-end">
-      <div class="form-group" style="flex:1"><label class="form-label">New Message</label><input type="text" class="form-input" id="newTickerText" placeholder="Announcement text…" onkeydown="if(event.key==='Enter')addTickerMsg()"></div>
+      <div class="form-group" style="flex:1"><label class="form-label">Announcement Message</label><input type="text" class="form-input" id="newTickerText" placeholder="Operational announcement for the CS team" onkeydown="if(event.key==='Enter')addTickerMsg()"></div>
       <div class="form-group" style="width:105px"><label class="form-label">Type</label>
         <select class="form-select" id="newTickerCls"><option value="normal">Normal</option><option value="info">Info</option><option value="urgent">Urgent</option><option value="critical">Critical</option></select>
       </div>
@@ -265,8 +265,8 @@
   <div class="modal-body">
     <input type="hidden" id="feedbackId">
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Submitter *</label><input type="text" class="form-input" id="feedbackSubmitter" placeholder="Your name" autocomplete="off"></div>
-      <div class="form-group"><label class="form-label">Email Address</label><input type="email" class="form-input" id="feedbackEmail" placeholder="customer@email.com" autocomplete="off"></div>
+      <div class="form-group"><label class="form-label">Submitter *</label><input type="text" class="form-input" id="feedbackSubmitter" placeholder="CS operator name or team initials" autocomplete="off"></div>
+      <div class="form-group"><label class="form-label">Customer Email</label><input type="email" class="form-input" id="feedbackEmail" placeholder="Customer email, e.g. client@domain.com" autocomplete="off"></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Cancelled Service *</label>
@@ -286,7 +286,7 @@
         </select>
       </div>
     </div>
-    <div class="form-group"><label class="form-label">WHMCS Reference / Domain / Hostname</label><input type="text" class="form-input" id="feedbackReference" placeholder="e.g. example.com or INV-123" autocomplete="off"></div>
+    <div class="form-group"><label class="form-label">WHMCS Reference, Domain, or Hostname</label><input type="text" class="form-input" id="feedbackReference" placeholder="Domain, invoice, or service reference, e.g. exampledomain.com" autocomplete="off"></div>
     <div class="form-group"><label class="form-label">Payment Resolution</label>
       <select class="form-select" id="feedbackResolution">
         <option value="">Select Resolution</option>
@@ -295,7 +295,7 @@
         <?php endforeach; ?>
       </select>
     </div>
-    <div class="form-group"><label class="form-label">Additional Details</label><textarea class="form-textarea" id="feedbackDetails" placeholder="Customer comments, context, retention efforts..." style="min-height:100px"></textarea></div>
+    <div class="form-group"><label class="form-label">Additional Details</label><textarea class="form-textarea" id="feedbackDetails" placeholder="Add customer comments, cancellation context, retention effort, or follow-up action" style="min-height:100px"></textarea></div>
   </div>
   <div class="modal-foot">
     <button class="btn btn-ghost" onclick="closeModal('feedback')">Cancel</button>
@@ -312,7 +312,7 @@
   </div>
   <div class="modal-body">
     <input type="hidden" id="momFormId">
-    <div class="form-group"><label class="form-label">Title *</label><input type="text" class="form-input" id="momFormTitle" placeholder="e.g. Weekly Operations Sync" autocomplete="off"></div>
+    <div class="form-group"><label class="form-label">Meeting Title *</label><input type="text" class="form-input" id="momFormTitle" placeholder="Meeting title, e.g. Weekly CS Coordination" autocomplete="off"></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Type</label><select class="form-select" id="momFormType"><option value="weekly">Weekly</option><option value="training">Training</option><option value="coordination">Coordination</option><option value="urgent">Urgent</option></select></div>
       <div class="form-group"><label class="form-label">Date</label><input type="date" class="form-input" id="momFormDate"></div>
@@ -321,9 +321,9 @@
       <div class="form-group"><label class="form-label">Time</label><input type="time" class="form-input" id="momFormTime"></div>
       <div class="form-group"><label class="form-label">Quick Time</label><div class="mom-quick-times"><button type="button" class="mom-quick-btn" data-mom-quick-hours="0">Now</button><button type="button" class="mom-quick-btn" data-mom-quick-hours="1">+1H</button><button type="button" class="mom-quick-btn" data-mom-quick-hours="24">Tomorrow</button></div></div>
     </div>
-    <div class="form-group"><label class="form-label">Objective</label><textarea class="form-textarea" id="momFormObjective" placeholder="Meeting purpose..."></textarea></div>
-    <div class="form-group"><label class="form-label">Meeting URL</label><input type="url" class="form-input" id="momFormUrl" placeholder="https://meet.google.com/... or https://zoom.us/..." autocomplete="off"></div>
-    <div class="form-group"><label class="form-label">Participants</label><input type="text" class="form-input" id="momFormParticipants" placeholder="John, Sarah, Mike..." autocomplete="off"></div>
+    <div class="form-group"><label class="form-label">Meeting Objective</label><textarea class="form-textarea" id="momFormObjective" placeholder="Describe the meeting objective, operational scope, or expected outcome"></textarea></div>
+    <div class="form-group"><label class="form-label">Meeting URL</label><input type="url" class="form-input" id="momFormUrl" placeholder="Meeting URL or service link, e.g. https://meet.google.com/..." autocomplete="off"></div>
+    <div class="form-group"><label class="form-label">Participants</label><input type="text" class="form-input" id="momFormParticipants" placeholder="Participant names or teams, e.g. CS L1, Billing, Domain Ops" autocomplete="off"></div>
     <?php if(!empty($weekly_suggestions ?? [])): ?>
     <div class="form-group" id="momSuggestedCasesWrap">
       <label class="form-label">Suggested Cases To Discuss</label>
@@ -355,10 +355,10 @@
   </div>
   <div class="modal-body">
     <input type="hidden" id="momActionFormId">
-    <div class="form-group"><label class="form-label">Action Title *</label><input type="text" class="form-input" id="momActionFormTitle" placeholder="Action title" autocomplete="off"></div>
-    <div class="form-group"><label class="form-label">Description</label><textarea class="form-textarea" id="momActionFormDesc" placeholder="Additional context..."></textarea></div>
+    <div class="form-group"><label class="form-label">Action Title *</label><input type="text" class="form-input" id="momActionFormTitle" placeholder="Action title, e.g. Update escalation owner in WHMCS" autocomplete="off"></div>
+    <div class="form-group"><label class="form-label">Action Details</label><textarea class="form-textarea" id="momActionFormDesc" placeholder="Add action context, owner notes, expected outcome, or next step"></textarea></div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Assigned To</label><input type="text" class="form-input" id="momActionFormAssignee" placeholder="Name or initials" autocomplete="off"></div>
+      <div class="form-group"><label class="form-label">Assigned To</label><input type="text" class="form-input" id="momActionFormAssignee" placeholder="Operator, team, or role, e.g. CS Billing" autocomplete="off"></div>
       <div class="form-group"><label class="form-label">Priority</label><select class="form-select" id="momActionFormPriority"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option><option value="critical">Critical</option></select></div>
     </div>
     <div class="form-group"><label class="form-label">Due Date</label><input type="date" class="form-input" id="momActionFormDueDate"></div>
@@ -374,7 +374,7 @@
   <div class="modal-body">
     <input type="hidden" id="momNoteFormId">
     <div class="form-group"><label class="form-label">Note Type</label><select class="form-select" id="momNoteFormType"><option value="discussion">Discussion</option><option value="decision">Decision</option><option value="action">Action</option><option value="insight">Insight</option></select></div>
-    <div class="form-group"><label class="form-label">Content *</label><textarea class="form-textarea" id="momNoteFormContent" placeholder="Write your note..." style="min-height:100px"></textarea></div>
+    <div class="form-group"><label class="form-label">Note Content *</label><textarea class="form-textarea" id="momNoteFormContent" placeholder="Capture discussion details, customer impact, decisions, or follow-up actions" style="min-height:100px"></textarea></div>
   </div>
   <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('momNoteForm')">Cancel</button><button class="btn btn-primary" onclick="saveDiscussionNote()"><i data-lucide="check" class="icon-sm"></i>Save Note</button></div>
 </div></div>
@@ -386,9 +386,9 @@
   </div>
   <div class="modal-body">
     <input type="hidden" id="momDecisionFormId">
-    <div class="form-group"><label class="form-label">Decision *</label><textarea class="form-textarea" id="momDecisionFormText" placeholder="What was decided?" style="min-height:60px"></textarea></div>
-    <div class="form-group"><label class="form-label">Rationale</label><textarea class="form-textarea" id="momDecisionFormRationale" placeholder="Why this decision?" style="min-height:60px"></textarea></div>
-    <div class="form-group"><label class="form-label">Owner</label><input type="text" class="form-input" id="momDecisionFormOwner" placeholder="Person responsible" autocomplete="off"></div>
+    <div class="form-group"><label class="form-label">Decision *</label><textarea class="form-textarea" id="momDecisionFormText" placeholder="Summarize the decision, e.g. Prioritize stuck domain transfer cases" style="min-height:60px"></textarea></div>
+    <div class="form-group"><label class="form-label">Rationale</label><textarea class="form-textarea" id="momDecisionFormRationale" placeholder="Add operational context, customer impact, or reason for the decision" style="min-height:60px"></textarea></div>
+    <div class="form-group"><label class="form-label">Owner</label><input type="text" class="form-input" id="momDecisionFormOwner" placeholder="Decision owner, e.g. CS Supervisor" autocomplete="off"></div>
   </div>
   <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('momDecisionForm')">Cancel</button><button class="btn btn-primary" onclick="saveDecision()"><i data-lucide="check" class="icon-sm"></i>Save Decision</button></div>
 </div></div>

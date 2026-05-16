@@ -25,13 +25,13 @@
       >
 
       <div class="form-group">
-        <label class="form-label">Message</label>
+        <label class="form-label">Operational Message</label>
 
         <input
           type="text"
           id="ops-message"
           class="form-input"
-          placeholder="Status message"
+          placeholder="Ops status update, e.g. WHMCS ticket queue under monitoring"
         >
       </div>
 

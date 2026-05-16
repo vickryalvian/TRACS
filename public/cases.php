@@ -8,6 +8,7 @@ require_once __DIR__.'/../modules/alert-ticker/controller.php';
 require_once __DIR__.'/includes/page_helpers.php';
 
 $uid=$_SESSION['user_id']??0; $user_email=$_SESSION['user_email']??'operator@tracs.local';
+tracs_ensure_creator_columns($conn, 'tracs_cases', 'user_id');
 $CC=new CaseController($conn,$uid); $TC=new AlertTickerController($conn,$uid);
 $ticker_items=$TC->formatAlertsForTicker();
 
@@ -49,7 +50,7 @@ include 'includes/header.php';
   <form method="get" class="search-form-wrap">
     <input type="hidden" name="f" value="<?=esc($f)?>">
     <i data-lucide="search" class="search-ic icon-sm"></i>
-    <input type="text" name="q" class="search-input" placeholder="Search cases…" value="<?=esc($q)?>">
+    <input type="text" name="q" class="search-input" placeholder="Search case title, status, priority, or notes" value="<?=esc($q)?>">
   </form>
   <button class="btn btn-primary toolbar-add-btn" onclick="openNewCase()"><i data-lucide="plus-circle" class="icon-sm"></i>Add New Case</button>
 </div>
@@ -60,13 +61,17 @@ include 'includes/header.php';
     <div class="panel-right">
       <span class="panel-meta"><?=count($cases)?> shown</span>
       <details class="report-export-menu">
-        <summary class="btn btn-ghost btn-icon report-export-trigger" title="Export CSV" aria-label="Export CSV" data-tooltip="Export CSV"><i data-lucide="download" class="icon-sm"></i></summary>
+        <summary class="btn btn-ghost btn-icon report-export-trigger" title="More actions" aria-label="More actions" data-tooltip="More actions"><i data-lucide="more-vertical" class="icon-sm"></i></summary>
         <form method="get" action="/api/export-cases.php" class="report-export-popover">
           <input type="hidden" name="f" value="<?=esc($f)?>">
           <input type="hidden" name="q" value="<?=esc($q)?>">
+          <div class="report-export-title">
+            <i data-lucide="download" class="icon-xs"></i>
+            Export CSV
+          </div>
           <label>From Date<input type="date" name="from" class="form-input"></label>
           <label>To Date<input type="date" name="to" class="form-input"></label>
-          <button type="submit" class="btn btn-primary"><i data-lucide="download" class="icon-sm"></i>Export CSV</button>
+          <button type="submit" class="btn btn-primary"><i data-lucide="download" class="icon-sm"></i>Download CSV</button>
         </form>
       </details>
     </div>
@@ -100,6 +105,7 @@ include 'includes/header.php';
         <td class="tracs-rownum"><?=$cid?></td>
         <td style="max-width:300px">
           <div style="font-weight:500;color:var(--tx1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="<?=$title?>"><?=$title?></div>
+          <?=tracs_creator_meta($c)?>
         </td>
         <td><span class="badge <?=$sb?>"><span class="badge-dot"></span><?=$sl?></span></td>
         <td><span class="badge <?=$pb?>"><?=ucfirst($pr)?></span></td>

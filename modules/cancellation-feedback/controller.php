@@ -11,8 +11,10 @@ class CancellationFeedbackController {
     private $activityLogger;
     private $ticker;
     private $userId;
+    private $db;
 
     public function __construct($db, $userId = 0) {
+        $this->db = $db;
         $this->model = new CancellationFeedbackModel($db);
         $this->activityLogger = new ActivityLogController($db, $userId);
         $this->ticker = new TickerEventController($db);
@@ -20,6 +22,8 @@ class CancellationFeedbackController {
     }
 
     public function createFeedback($data) {
+        $data['created_by'] = $this->userId;
+        $data['created_by_name'] = function_exists('tracs_current_user_display') ? tracs_current_user_display($this->db) : '';
         $id = $this->model->create($data);
         if ($id) {
             $msg = "Added new cancellation feedback for " . $data['cancelled_service'] . " — Reason: " . $data['cancellation_reason'];

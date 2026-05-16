@@ -8,6 +8,7 @@ require_once __DIR__.'/../modules/alert-ticker/controller.php';
 require_once __DIR__.'/includes/page_helpers.php';
 
 $uid=$_SESSION['user_id']??0; $user_email=$_SESSION['user_email']??'operator@tracs.local';
+tracs_ensure_creator_columns($conn, 'tracs_reminders', 'user_id');
 $RC=new ReminderController($conn,$uid);
 $TC=new AlertTickerController($conn,$uid);
 $ticker_items=$TC->formatAlertsForTicker();
@@ -15,19 +16,27 @@ $ticker_items=$TC->formatAlertsForTicker();
 $all=[];
 foreach($RC->getReminders()?:[] as $r){try{$all[]=$RC->formatReminder($r);}catch(Exception $e){}}
 
+function reminder_completed_recently(array $reminder): bool {
+  if(empty($reminder['is_completed'])) return false;
+  $completed_at = $reminder['completed_at'] ?? $reminder['archived_at'] ?? $reminder['updated_at'] ?? null;
+  if(empty($completed_at)) return false;
+  return strtotime((string)$completed_at) >= strtotime('-24 hours');
+}
+
 $f=$_GET['f']??'all'; $q=strtolower(trim($_GET['q']??''));
-$rems=$all;
+$visible_reminders=array_values(array_filter($all, fn($r)=>empty($r['is_completed']) || reminder_completed_recently($r)));
+$rems=$visible_reminders;
 if($f!=='all') $rems=array_filter($rems,fn($r)=>match($f){
   'overdue'=>($r['status']??'')==='Overdue','today'=>($r['status']??'')==='Today',
   'upcoming'=>(($r['status']??'')!=='Overdue'&&($r['status']??'')!=='Today'&&!($r['is_completed']??0)),'done'=>!empty($r['is_completed']),default=>true});
 if($q) $rems=array_filter($rems,fn($r)=>str_contains(strtolower($r['title']??''),$q));
 $rems=array_values($rems);
 
-$total=count($all);
-$overdue=count(array_filter($all,fn($r)=>($r['status']??'')==='Overdue'));
-$today=count(array_filter($all,fn($r)=>($r['status']??'')==='Today'));
-$upcoming=count(array_filter($all,fn($r)=>($r['status']??'')!=='Overdue'&&($r['status']??'')!=='Today'&&!($r['is_completed']??0)));
-$done=count(array_filter($all,fn($r)=>!empty($r['is_completed'])));
+$total=count($visible_reminders);
+$overdue=count(array_filter($visible_reminders,fn($r)=>($r['status']??'')==='Overdue'));
+$today=count(array_filter($visible_reminders,fn($r)=>($r['status']??'')==='Today'));
+$upcoming=count(array_filter($visible_reminders,fn($r)=>($r['status']??'')!=='Overdue'&&($r['status']??'')!=='Today'&&!($r['is_completed']??0)));
+$done=count(array_filter($visible_reminders,fn($r)=>!empty($r['is_completed'])));
 $critical_count=$overdue;
 
 $page_title='Reminders'; $active_page='reminders';
@@ -55,7 +64,7 @@ include 'includes/header.php';
   <form method="get" class="search-form-wrap">
     <input type="hidden" name="f" value="<?=esc($f)?>">
     <i data-lucide="search" class="search-ic icon-sm"></i>
-    <input type="text" name="q" class="search-input" placeholder="Search reminders…" value="<?=esc($q)?>">
+    <input type="text" name="q" class="search-input" placeholder="Search reminder title, priority, due date, or notes" value="<?=esc($q)?>">
   </form>
   <button class="btn btn-primary toolbar-add-btn" onclick="openNewReminder()">
     <i data-lucide="plus-circle" class="icon-sm"></i>
@@ -101,6 +110,7 @@ include 'includes/header.php';
         <td style="max-width:300px">
           <div style="font-weight:500;color:var(--tx1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" class="rem-title <?=$rdone?'done':''?>"><?=$rtit?></div>
           <?php if($rdesc):?><div class="rem-desc-inline" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="<?=$rdesc?>"><?=$rdesc?></div><?php endif;?>
+          <?=tracs_creator_meta($r)?>
         </td>
         <td><span class="badge <?=$pb?>"><?=ucfirst($rprio)?></span></td>
         <td><span class="<?=$scls?>"><?=esc($rstat)?></span></td>

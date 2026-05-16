@@ -11,6 +11,7 @@ require_once __DIR__.'/../modules/alert-ticker/controller.php';
 require_once __DIR__.'/includes/page_helpers.php';
 
 $uid = $_SESSION['user_id'] ?? 0;
+tracs_ensure_creator_columns($conn, 'tracs_cancellation_feedback', null);
 $controller = new CancellationFeedbackController($conn, $uid);
 $ticker = new AlertTickerController($conn, $uid);
 $ticker_items = $ticker->formatAlertsForTicker();
@@ -176,7 +177,7 @@ include 'includes/header.php';
         <input type="hidden" name="df" value="<?=esc($filters['date_from'])?>">
         <input type="hidden" name="dt" value="<?=esc($filters['date_to'])?>">
         <i data-lucide="search" class="search-ic icon-sm"></i>
-        <input type="text" name="q" class="search-input" placeholder="Search email, domain, reference..." value="<?=esc($filters['q'])?>" onchange="this.form.submit()">
+        <input type="text" name="q" class="search-input" placeholder="Search customer email, domain, service reference, or notes" value="<?=esc($filters['q'])?>" onchange="this.form.submit()">
       </form>
     </div>
   </div>
@@ -185,7 +186,25 @@ include 'includes/header.php';
   <div class="panel">
     <div class="panel-head">
       <span class="panel-title">Feedback Records</span>
-      <span class="panel-meta"><?= $total_count ?> records found</span>
+      <div class="panel-right">
+        <span class="panel-meta"><?= $total_count ?> records found</span>
+        <details class="report-export-menu">
+          <summary class="btn btn-ghost btn-icon report-export-trigger" title="More actions" aria-label="More actions" data-tooltip="More actions"><i data-lucide="more-vertical" class="icon-sm"></i></summary>
+          <form method="get" action="/api/export-feedback.php" class="report-export-popover">
+            <input type="hidden" name="service" value="<?=esc($filters['service'])?>">
+            <input type="hidden" name="reason" value="<?=esc($filters['reason'])?>">
+            <input type="hidden" name="resolution" value="<?=esc($filters['resolution'])?>">
+            <input type="hidden" name="q" value="<?=esc($filters['q'])?>">
+            <div class="report-export-title">
+              <i data-lucide="download" class="icon-xs"></i>
+              Export CSV
+            </div>
+            <label>From Date<input type="date" name="from" class="form-input" value="<?=esc($filters['date_from'])?>"></label>
+            <label>To Date<input type="date" name="to" class="form-input" value="<?=esc($filters['date_to'])?>"></label>
+            <button type="submit" class="btn btn-primary"><i data-lucide="download" class="icon-sm"></i>Download CSV</button>
+          </form>
+        </details>
+      </div>
     </div>
 
     <!-- ── Inline Quick-Entry Form ────────────────────────────── -->
@@ -197,7 +216,7 @@ include 'includes/header.php';
       <div class="fb-inline-grid">
         <div class="dt-inline-group">
           <label class="fb-inline-lbl">Submitter <span class="req-star">*</span></label>
-          <input type="text" class="form-input fb-inline-input" id="inSubmitter" placeholder="Name" autocomplete="off">
+          <input type="text" class="form-input fb-inline-input" id="inSubmitter" placeholder="CS operator name or team initials" autocomplete="off">
         </div>
         <div class="dt-inline-group">
           <label class="fb-inline-lbl">Service <span class="req-star">*</span></label>
@@ -215,11 +234,11 @@ include 'includes/header.php';
         </div>
         <div class="dt-inline-group">
           <label class="fb-inline-lbl">Reference</label>
-          <input type="text" class="form-input fb-inline-input" id="inRef" placeholder="e.g. example.com" autocomplete="off">
+          <input type="text" class="form-input fb-inline-input" id="inRef" placeholder="Domain, invoice, or service reference, e.g. exampledomain.com" autocomplete="off">
         </div>
         <div class="dt-inline-group">
-          <label class="fb-inline-lbl">Email</label>
-          <input type="text" class="form-input fb-inline-input" id="inEmail" placeholder="customer@email.com" autocomplete="off">
+          <label class="fb-inline-lbl">Customer Email</label>
+          <input type="text" class="form-input fb-inline-input" id="inEmail" placeholder="Customer email, e.g. client@domain.com" autocomplete="off">
         </div>
         <div class="dt-inline-group">
           <label class="fb-inline-lbl">Resolution</label>
@@ -232,7 +251,7 @@ include 'includes/header.php';
       <div class="fb-inline-grid-row-2">
         <div class="dt-inline-group">
           <label class="fb-inline-lbl">Additional Details / Context</label>
-          <input type="text" class="form-input fb-inline-input" id="inDetails" placeholder="Customer comments, context, retention efforts..." autocomplete="off">
+          <input type="text" class="form-input fb-inline-input" id="inDetails" placeholder="Add cancellation context, retention effort, or follow-up action" autocomplete="off">
         </div>
         <div class="fb-inline-action">
           <button class="btn btn-primary" onclick="quickSaveFeedback()" style="height:30px; width:100%; font-size:11px; padding:0 20px">
@@ -278,6 +297,7 @@ include 'includes/header.php';
                 <div class="avatar"><?= $initials ?></div>
                 <div class="user-info">
                   <div class="user-name"><?= esc($f['submitter_name']) ?></div>
+                  <?=tracs_creator_meta($f)?>
                 </div>
               </div>
             </td>

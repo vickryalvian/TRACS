@@ -76,7 +76,21 @@ class ReminderController {
      * Format reminder for display
      */
     public function formatReminder($reminder) {
-        if (empty($reminder['due_date'])) return array_merge($reminder, ['status'=>'—','status_class'=>'','priority_class'=>'','description'=>$reminder['description']??'']);
+        if (empty($reminder['due_date'])) {
+            return array_merge($reminder, [
+                'status'=>'—',
+                'status_class'=>'',
+                'priority_class'=>'',
+                'description'=>$reminder['description']??'',
+                'created_at' => $reminder['created_at'] ?? null,
+                'updated_at' => $reminder['updated_at'] ?? null,
+                'completed_at' => $reminder['completed_at'] ?? null,
+                'archived_at' => $reminder['archived_at'] ?? null,
+                'created_by' => $reminder['created_by'] ?? null,
+                'created_by_name' => $reminder['created_by_name'] ?? null,
+                'creator_name' => $reminder['creator_name'] ?? null,
+            ]);
+        }
         $dueDate = new DateTime($reminder['due_date']);
         $now = new DateTime();
         
@@ -107,6 +121,13 @@ class ReminderController {
             'due_date' => $reminder['due_date'],
             'priority' => $reminder['priority'],
             'is_completed' => $reminder['is_completed'],
+            'created_at' => $reminder['created_at'] ?? null,
+            'updated_at' => $reminder['updated_at'] ?? null,
+            'completed_at' => $reminder['completed_at'] ?? null,
+            'archived_at' => $reminder['archived_at'] ?? null,
+            'created_by' => $reminder['created_by'] ?? null,
+            'created_by_name' => $reminder['created_by_name'] ?? null,
+            'creator_name' => $reminder['creator_name'] ?? null,
             'status' => $status,
             'status_class' => $statusClass,
             'priority_class' => $priorityClass,

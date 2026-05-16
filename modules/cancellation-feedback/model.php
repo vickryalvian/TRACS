@@ -11,18 +11,20 @@ class CancellationFeedbackModel {
 
     public function create($data) {
         $sql = "INSERT INTO tracs_cancellation_feedback 
-                (submitter_name, cancelled_service, cancellation_reason, additional_details, whmcs_reference, email_address, payment_resolution) 
-                VALUES (?, ?, ?, ?, ?, ?, ?)";
+                (submitter_name, cancelled_service, cancellation_reason, additional_details, whmcs_reference, email_address, payment_resolution, created_by, created_by_name) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param("sssssss", 
+        $stmt->bind_param("sssssssis", 
             $data['submitter_name'], 
             $data['cancelled_service'], 
             $data['cancellation_reason'], 
             $data['additional_details'], 
             $data['whmcs_reference'], 
             $data['email_address'], 
-            $data['payment_resolution']
+            $data['payment_resolution'],
+            $data['created_by'],
+            $data['created_by_name']
         );
         
         if ($stmt->execute()) {
@@ -32,7 +34,12 @@ class CancellationFeedbackModel {
     }
 
     public function getById($id) {
-        $sql = "SELECT * FROM tracs_cancellation_feedback WHERE id = ?";
+        $sql = "
+            SELECT f.*, COALESCE(NULLIF(f.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name
+            FROM tracs_cancellation_feedback f
+            LEFT JOIN tracs_users u ON f.created_by = u.id
+            WHERE f.id = ?
+        ";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param("i", $id);
         $stmt->execute();
@@ -41,48 +48,53 @@ class CancellationFeedbackModel {
     }
 
     public function list($filters = [], $limit = 50, $offset = 0) {
-        $sql = "SELECT * FROM tracs_cancellation_feedback WHERE 1=1";
+        $sql = "
+            SELECT f.*, COALESCE(NULLIF(f.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name
+            FROM tracs_cancellation_feedback f
+            LEFT JOIN tracs_users u ON f.created_by = u.id
+            WHERE 1=1
+        ";
         $params = [];
         $types = "";
 
         if (!empty($filters['q'])) {
-            $sql .= " AND (email_address LIKE ? OR whmcs_reference LIKE ? OR submitter_name LIKE ? OR cancelled_service LIKE ?)";
+            $sql .= " AND (f.email_address LIKE ? OR f.whmcs_reference LIKE ? OR f.submitter_name LIKE ? OR f.cancelled_service LIKE ? OR f.created_by_name LIKE ? OR u.name LIKE ? OR u.email LIKE ?)";
             $q = "%" . $filters['q'] . "%";
-            $params = array_merge($params, [$q, $q, $q, $q]);
-            $types .= "ssss";
+            $params = array_merge($params, [$q, $q, $q, $q, $q, $q, $q]);
+            $types .= "sssssss";
         }
 
         if (!empty($filters['service'])) {
-            $sql .= " AND cancelled_service = ?";
+            $sql .= " AND f.cancelled_service = ?";
             $params[] = $filters['service'];
             $types .= "s";
         }
 
         if (!empty($filters['reason'])) {
-            $sql .= " AND cancellation_reason = ?";
+            $sql .= " AND f.cancellation_reason = ?";
             $params[] = $filters['reason'];
             $types .= "s";
         }
 
         if (!empty($filters['resolution'])) {
-            $sql .= " AND payment_resolution = ?";
+            $sql .= " AND f.payment_resolution = ?";
             $params[] = $filters['resolution'];
             $types .= "s";
         }
 
         if (!empty($filters['date_from'])) {
-            $sql .= " AND created_at >= ?";
+            $sql .= " AND f.created_at >= ?";
             $params[] = $filters['date_from'] . " 00:00:00";
             $types .= "s";
         }
 
         if (!empty($filters['date_to'])) {
-            $sql .= " AND created_at <= ?";
+            $sql .= " AND f.created_at <= ?";
             $params[] = $filters['date_to'] . " 23:59:59";
             $types .= "s";
         }
 
-        $sql .= " ORDER BY created_at DESC LIMIT ? OFFSET ?";
+        $sql .= " ORDER BY f.created_at DESC LIMIT ? OFFSET ?";
         $params[] = $limit;
         $params[] = $offset;
         $types .= "ii";
@@ -97,21 +109,28 @@ class CancellationFeedbackModel {
     }
 
     public function count($filters = []) {
-        $sql = "SELECT COUNT(*) as total FROM tracs_cancellation_feedback WHERE 1=1";
+        $sql = "
+            SELECT COUNT(*) as total
+            FROM tracs_cancellation_feedback f
+            LEFT JOIN tracs_users u ON f.created_by = u.id
+            WHERE 1=1
+        ";
         $params = [];
         $types = "";
 
         if (!empty($filters['q'])) {
-            $sql .= " AND (email_address LIKE ? OR whmcs_reference LIKE ? OR submitter_name LIKE ? OR cancelled_service LIKE ?)";
+            $sql .= " AND (f.email_address LIKE ? OR f.whmcs_reference LIKE ? OR f.submitter_name LIKE ? OR f.cancelled_service LIKE ? OR f.created_by_name LIKE ? OR u.name LIKE ? OR u.email LIKE ?)";
             $q = "%" . $filters['q'] . "%";
-            $params = array_merge($params, [$q, $q, $q, $q]);
-            $types .= "ssss";
+            $params = array_merge($params, [$q, $q, $q, $q, $q, $q, $q]);
+            $types .= "sssssss";
         }
 
         // ... repeat filters as above ...
-        if (!empty($filters['service'])) { $sql .= " AND cancelled_service = ?"; $params[] = $filters['service']; $types .= "s"; }
-        if (!empty($filters['reason'])) { $sql .= " AND cancellation_reason = ?"; $params[] = $filters['reason']; $types .= "s"; }
-        if (!empty($filters['resolution'])) { $sql .= " AND payment_resolution = ?"; $params[] = $filters['resolution']; $types .= "s"; }
+        if (!empty($filters['service'])) { $sql .= " AND f.cancelled_service = ?"; $params[] = $filters['service']; $types .= "s"; }
+        if (!empty($filters['reason'])) { $sql .= " AND f.cancellation_reason = ?"; $params[] = $filters['reason']; $types .= "s"; }
+        if (!empty($filters['resolution'])) { $sql .= " AND f.payment_resolution = ?"; $params[] = $filters['resolution']; $types .= "s"; }
+        if (!empty($filters['date_from'])) { $sql .= " AND f.created_at >= ?"; $params[] = $filters['date_from'] . " 00:00:00"; $types .= "s"; }
+        if (!empty($filters['date_to'])) { $sql .= " AND f.created_at <= ?"; $params[] = $filters['date_to'] . " 23:59:59"; $types .= "s"; }
 
         $stmt = $this->db->prepare($sql);
         if ($params) { $stmt->bind_param($types, ...$params); }

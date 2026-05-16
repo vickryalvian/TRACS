@@ -17,15 +17,18 @@ class ActivityLogModel {
     public function getActivityByUser($user_id, $limit = 10) {
         $query = "
             SELECT 
-                id,
-                action,
-                description,
-                module,
-                reference_id,
-                created_at
-            FROM tracs_activity_logs
-            WHERE user_id = ?
-            ORDER BY created_at DESC
+                l.id,
+                l.action,
+                l.description,
+                l.module,
+                l.reference_id,
+                l.created_at,
+                l.user_id AS created_by,
+                COALESCE(NULLIF(u.name,''), u.email, 'System') AS creator_name
+            FROM tracs_activity_logs l
+            LEFT JOIN tracs_users u ON l.user_id = u.id
+            WHERE l.user_id = ?
+            ORDER BY l.created_at DESC
             LIMIT ?
         ";
         
@@ -53,13 +56,18 @@ class ActivityLogModel {
     public function getActivityByModule($user_id, $module, $limit = 10) {
         $query = "
             SELECT 
-                id,
-                action,
-                description,
-                created_at
-            FROM tracs_activity_logs
-            WHERE user_id = ? AND module = ?
-            ORDER BY created_at DESC
+                l.id,
+                l.action,
+                l.description,
+                l.module,
+                l.reference_id,
+                l.created_at,
+                l.user_id AS created_by,
+                COALESCE(NULLIF(u.name,''), u.email, 'System') AS creator_name
+            FROM tracs_activity_logs l
+            LEFT JOIN tracs_users u ON l.user_id = u.id
+            WHERE l.user_id = ? AND l.module = ?
+            ORDER BY l.created_at DESC
             LIMIT ?
         ";
         

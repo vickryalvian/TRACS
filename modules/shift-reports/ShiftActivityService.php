@@ -371,6 +371,7 @@ class ShiftActivityService {
             'description' => $description,
             'status' => $status,
             'created_at' => $createdAt ?: date('Y-m-d H:i:s'),
+            'creator_name' => function_exists('tracs_current_user_display') ? tracs_current_user_display($this->conn) : 'System',
         ];
     }
 

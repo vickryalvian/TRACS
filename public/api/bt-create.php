@@ -63,22 +63,23 @@ $conn->query("CREATE TABLE IF NOT EXISTS `balance_transfers` (
   INDEX `idx_receiver_email` (`receiver_email`(64)),
   INDEX `idx_status`         (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+tracs_ensure_creator_columns($conn, 'balance_transfers', null);
 
 // ── Insert ────────────────────────────────────────────────────
 $stmt = $conn->prepare("
   INSERT INTO balance_transfers
     (transfer_date, sender_email, sender_user_id, sender_type,
      receiver_email, receiver_user_id, receiver_type,
-     amount, status, admin_name, ticket_id)
-  VALUES (?,?,?,?,?,?,?,?,?,?,?)
+     amount, status, admin_name, ticket_id, created_by, created_by_name)
+  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
 ");
 
 $stmt->bind_param(
-  'sssssssdsss',
+  'sssssssdsssis',
   $dt,
   $sender_email, $sender_user_id, $sender_type,
   $receiver_email, $receiver_user_id, $receiver_type,
-  $amount, $status, $admin_name, $ticket_id
+  $amount, $status, $admin_name, $ticket_id, $uid, $creator_name
 );
 
 if (!$stmt->execute()) fail('Database error: ' . $stmt->error);

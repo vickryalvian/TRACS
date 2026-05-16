@@ -28,7 +28,7 @@
             type="number"
             id="currency-amount"
             class="tracs-input"
-            placeholder="Enter amount"
+            placeholder="Transfer amount"
             value="1000000"
         >
 

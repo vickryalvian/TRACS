@@ -12,6 +12,7 @@ require_once __DIR__.'/includes/page_helpers.php';
 
 $uid = (int)($_SESSION['user_id']??0);
 $user_email = $_SESSION['user_email']??'operator@tracs.local';
+tracs_ensure_creator_columns($conn, 'tracs_shift_reports', 'created_by');
 $SC = new ShiftReportController($conn, $uid);
 $TC = new AlertTickerController($conn, $uid);
 $ticker_items = $TC->formatAlertsForTicker();
@@ -169,6 +170,7 @@ include 'includes/header.php';
             <div>
               <div class="shift-activity-title"><?=esc($item['title'])?></div>
               <?php if(!empty($item['description'])): ?><div class="shift-activity-desc"><?=esc($item['description'])?></div><?php endif; ?>
+              <?=tracs_creator_meta($item, $item['created_at'] ?? null, false)?>
             </div>
             <time><?=esc(safe_dt($item['created_at'], 'H:i'))?></time>
           </div>
@@ -198,6 +200,7 @@ include 'includes/header.php';
             <div>
               <div class="shift-activity-title"><?=esc($item['title'])?></div>
               <?php if(!empty($item['description'])): ?><div class="shift-activity-desc"><?=esc($item['description'])?></div><?php endif; ?>
+              <?=tracs_creator_meta($item, $item['created_at'] ?? null, false)?>
             </div>
             <time><?=esc(safe_dt($item['created_at'], 'H:i'))?></time>
           </div>
@@ -262,7 +265,7 @@ include 'includes/header.php';
         <input type="hidden" name="status" value="<?=esc($filters['status'])?>">
         <input type="hidden" name="priority" value="<?=esc($filters['priority'])?>">
         <i data-lucide="search" class="search-ic icon-sm"></i>
-        <input type="text" id="liveSearchInput" name="q" class="search-input" placeholder="Search reports..." oninput="liveSearch(this,'.shift-tr','.search-text');document.getElementById('shiftExportQ').value=this.value">
+        <input type="text" id="liveSearchInput" name="q" class="search-input" placeholder="Search shift title, handover details, status, or priority" oninput="liveSearch(this,'.shift-tr','.search-text');document.getElementById('shiftExportQ').value=this.value">
       </form>
 
       <!-- Action -->
@@ -280,16 +283,20 @@ include 'includes/header.php';
       <div class="panel-right">
         <span class="panel-meta"><?=count($history)?> shown</span>
         <details class="report-export-menu">
-          <summary class="btn btn-ghost btn-icon report-export-trigger" title="Export CSV" aria-label="Export CSV" data-tooltip="Export CSV"><i data-lucide="download" class="icon-sm"></i></summary>
+          <summary class="btn btn-ghost btn-icon report-export-trigger" title="More actions" aria-label="More actions" data-tooltip="More actions"><i data-lucide="more-vertical" class="icon-sm"></i></summary>
           <form method="get" action="/api/export-shift-reports.php" class="report-export-popover">
             <input type="hidden" name="date" value="<?=esc($filters['date'])?>">
             <input type="hidden" name="shift" value="<?=esc($filters['shift'])?>">
             <input type="hidden" name="status" value="<?=esc($filters['status'])?>">
             <input type="hidden" name="priority" value="<?=esc($filters['priority'])?>">
             <input type="hidden" name="q" id="shiftExportQ" value="">
+            <div class="report-export-title">
+              <i data-lucide="download" class="icon-xs"></i>
+              Export CSV
+            </div>
             <label>From Date<input type="date" name="from" class="form-input"></label>
             <label>To Date<input type="date" name="to" class="form-input"></label>
-            <button type="submit" class="btn btn-primary"><i data-lucide="download" class="icon-sm"></i>Export CSV</button>
+            <button type="submit" class="btn btn-primary"><i data-lucide="download" class="icon-sm"></i>Download CSV</button>
           </form>
         </details>
       </div>
@@ -329,6 +336,7 @@ include 'includes/header.php';
           <td style="max-width:300px">
             <div class="search-text" style="font-weight:500;color:var(--tx1);<?=$status==='resolved'?'text-decoration:line-through;color:var(--tx3)':''?>"><?=$title?></div>
             <?php if($details):?><div style="font-size:10px;color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="<?=$details?>"><?=$details?></div><?php endif;?>
+            <?=tracs_creator_meta($r)?>
           </td>
           <td><span class="badge <?=$pb?>"><?=ucfirst($prio)?></span></td>
           <td><span class="badge <?=$sb?>"><?=ucfirst($status)?></span></td>

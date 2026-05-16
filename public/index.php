@@ -23,6 +23,10 @@ require_once __DIR__.'/includes/page_helpers.php';
 
 $uid        = (int)($_SESSION['user_id']??0);
 $user_email = $_SESSION['user_email']??'operator@tracs.local';
+tracs_ensure_creator_columns($conn, 'tracs_cases', 'user_id');
+tracs_ensure_creator_columns($conn, 'tracs_reminders', 'user_id');
+tracs_ensure_creator_columns($conn, 'tracs_side_tasks', 'user_id');
+tracs_ensure_creator_columns($conn, 'tracs_shift_reports', 'created_by');
 
 $CC = new CaseController($conn,$uid);
 $RC = new ReminderController($conn,$uid);
@@ -64,8 +68,145 @@ $critical_count = $critical_cases + $overdue_rem;
 $total_tasks = count($tasks);
 $done_tasks  = count(array_filter($tasks,fn($t)=>!empty($t['is_completed'])));
 $pct         = $total_tasks>0?round($done_tasks/$total_tasks*100):0;
+
+function tracs_period_window(string $period, int $offset = 0): array {
+  $now = new DateTimeImmutable('now');
+  if($period === 'month'){
+    $start = $now->modify('first day of this month')->setTime(0, 0, 0)->modify(($offset * 1).' month');
+    $end = $offset === 0 ? $now : $start->modify('first day of next month');
+    return [$start, $end];
+  }
+  $end = $offset === 0 ? $now : $now->modify(($offset * 7).' days');
+  $start = $end->modify('-7 days');
+  return [$start, $end];
+}
+
+function tracs_date_in_window($value, DateTimeImmutable $start, DateTimeImmutable $end): bool {
+  if(empty($value)) return false;
+  try { $date = new DateTimeImmutable((string)$value); }
+  catch(Throwable $e){ return false; }
+  return $date >= $start && $date < $end;
+}
+
+function tracs_count_window(array $items, callable $filter, string $date_key, DateTimeImmutable $start, DateTimeImmutable $end): int {
+  return count(array_filter($items, fn($item) => $filter($item) && tracs_date_in_window($item[$date_key]??null, $start, $end)));
+}
+
+function tracs_count_before(array $items, callable $filter, string $date_key, DateTimeImmutable $end): int {
+  return count(array_filter($items, function($item) use ($filter, $date_key, $end){
+    if(!$filter($item) || empty($item[$date_key])) return false;
+    try { $date = new DateTimeImmutable((string)$item[$date_key]); }
+    catch(Throwable $e){ return false; }
+    return $date < $end;
+  }));
+}
+
+function tracs_count_on_day(array $items, callable $filter, string $date_key, DateTimeImmutable $day): int {
+  $start = $day->setTime(0, 0, 0);
+  return tracs_count_window($items, $filter, $date_key, $start, $start->modify('+1 day'));
+}
+
+function tracs_rate_before(array $items, callable $filter, string $date_key, DateTimeImmutable $end): int {
+  $window_items = array_values(array_filter($items, function($item) use ($date_key, $end){
+    if(empty($item[$date_key])) return false;
+    try { $date = new DateTimeImmutable((string)$item[$date_key]); }
+    catch(Throwable $e){ return false; }
+    return $date < $end;
+  }));
+  $total = count($window_items);
+  if($total === 0) return 0;
+  $matched = count(array_filter($window_items, $filter));
+  return (int)round($matched / $total * 100);
+}
+
+function tracs_delta_meta(int $current, int $previous, string $period_label): array {
+  $diff = $current - $previous;
+  $pct = $previous > 0 ? (int)round(($diff / $previous) * 100) : ($current > 0 ? 100 : 0);
+  $state = $diff > 0 ? 'up' : ($diff < 0 ? 'down' : 'flat');
+  $prefix = $pct > 0 ? '+' : '';
+  return [
+    'state' => $state,
+    'value' => $prefix.$pct.'%',
+    'detail' => $current.' vs '.$previous.' '.$period_label,
+  ];
+}
+
+[$week_start] = tracs_period_window('week');
+[$month_start] = tracs_period_window('month');
+
+$stat_cards = [
+  [
+    'color' => 'red',
+    'value' => $critical_cases,
+    'label' => 'Critical',
+    'trend' => tracs_delta_meta(
+      $critical_cases,
+      tracs_count_before($cases, fn($c)=>($c['priority']??'')==='critical', 'created_at', $week_start),
+      'last week'
+    ),
+  ],
+  [
+    'color' => 'purple',
+    'value' => $stuck_cases,
+    'label' => 'Stuck',
+    'trend' => tracs_delta_meta(
+      $stuck_cases,
+      tracs_count_before($cases, fn($c)=>($c['status']??'')==='stuck', 'created_at', $week_start),
+      'last week'
+    ),
+  ],
+  [
+    'color' => 'amber',
+    'value' => $overdue_rem,
+    'label' => 'Overdue',
+    'trend' => tracs_delta_meta(
+      $overdue_rem,
+      tracs_count_before($reminders, fn($r)=>empty($r['is_completed']), 'due_date', $week_start),
+      'last week'
+    ),
+  ],
+  [
+    'color' => 'cyan',
+    'value' => $today_rem,
+    'label' => 'Due Today',
+    'trend' => tracs_delta_meta(
+      $today_rem,
+      tracs_count_on_day($reminders, fn($r)=>empty($r['is_completed']), 'due_date', $week_start),
+      'last week'
+    ),
+  ],
+  [
+    'color' => 'blue',
+    'value' => $total_cases,
+    'label' => 'Total Cases',
+    'trend' => tracs_delta_meta(
+      $total_cases,
+      tracs_count_before($cases, fn($c)=>true, 'created_at', $week_start),
+      'last week'
+    ),
+  ],
+  [
+    'color' => 'green',
+    'value' => $pct.'%',
+    'label' => 'Tasks Done',
+    'trend' => tracs_delta_meta(
+      $pct,
+      tracs_rate_before($tasks, fn($t)=>!empty($t['is_completed']), 'created_at', $month_start),
+      'last month'
+    ),
+  ],
+];
 $unchecked_tasks = array_values(array_filter($tasks, fn($t)=>empty($t['is_completed'])));
-$undone_reminders = array_values(array_filter($reminders, fn($r)=>empty($r['is_completed'])));
+$unchecked_reminders = array_values(array_filter($reminders, fn($r)=>empty($r['is_completed'])));
+$recent_checked_reminders = array_values(array_filter($reminders, function($r) {
+  if (empty($r['is_completed'])) return false;
+  $completed_at = $r['completed_at'] ?? $r['archived_at'] ?? $r['updated_at'] ?? null;
+  if (empty($completed_at)) return false;
+  return strtotime((string)$completed_at) >= strtotime('-24 hours');
+}));
+usort($unchecked_reminders, fn($a, $b) => strtotime($b['created_at'] ?? '1970-01-01') <=> strtotime($a['created_at'] ?? '1970-01-01'));
+usort($recent_checked_reminders, fn($a, $b) => strtotime(($b['completed_at'] ?? $b['archived_at'] ?? $b['updated_at'] ?? '1970-01-01')) <=> strtotime(($a['completed_at'] ?? $a['archived_at'] ?? $a['updated_at'] ?? '1970-01-01')));
+$dashboard_reminders = array_merge($unchecked_reminders, $recent_checked_reminders);
 $scheduled_meetings = array_values(array_filter($mom_dashboard, fn($m)=>($m['status']??'') === 'upcoming'));
 $notification_items = [];
 foreach($scheduled_meetings as $m){
@@ -85,7 +226,7 @@ foreach($unchecked_tasks as $t){
     'href' => 'checklist.php',
   ];
 }
-foreach($undone_reminders as $r){
+foreach($unchecked_reminders as $r){
   $r_status = $r['status']??'Pending';
   if (strpos($r_status, 'in ') === 0 || $r_status === 'Tomorrow') $r_status = 'Upcoming';
   $notification_items[] = [
@@ -96,7 +237,7 @@ foreach($undone_reminders as $r){
   ];
 }
 $notification_items = array_slice($notification_items, 0, 9);
-$notification_static_extra = count($scheduled_meetings) + count($undone_reminders);
+$notification_static_extra = count($scheduled_meetings) + count($unchecked_reminders);
 
 // Shift Logic
 $hour = (int)date('H');
@@ -165,9 +306,9 @@ include 'includes/header.php';
 
       <div class="notif-bell-btn" title="View Reminders">
         <i data-lucide="bell" class="icon-md"></i>
-        <div id="notif-badge-container" data-static-extra="<?=$notification_static_extra?>">
+        <div id="notif-badge-container" data-static-extra="<?=$notification_static_extra?>" data-unchecked-checklist="<?=count($unchecked_tasks)?>">
           <?php 
-          $notif_count = count($scheduled_meetings) + count($unchecked_tasks) + count($undone_reminders);
+          $notif_count = count($scheduled_meetings) + count($unchecked_tasks) + count($unchecked_reminders);
           if($notif_count > 0): ?>
           <span class="bell-badge"><?= $notif_count ?></span>
           <?php endif; ?>
@@ -200,36 +341,20 @@ include 'includes/header.php';
 
   <!-- ── STAT STRIP ── -->
   <div class="stat-strip">
-    <div class="stat-card red">
+    <?php foreach($stat_cards as $card): ?>
+    <div class="stat-card <?=esc($card['color'])?>">
       <div class="stat-glow"></div>
-      <div class="stat-num"><?=$critical_cases?></div>
-      <div class="stat-label">Critical</div>
+      <div class="stat-label"><?=esc($card['label'])?></div>
+      <div class="stat-main">
+        <div class="stat-num"><?=esc((string)$card['value'])?></div>
+        <div class="stat-trend <?=esc($card['trend']['state'])?>" title="<?=esc($card['trend']['detail'])?>">
+          <span class="stat-trend-arrow"></span>
+          <span><?=esc($card['trend']['value'])?></span>
+        </div>
+      </div>
+      <div class="stat-compare"><?=esc($card['trend']['detail'])?></div>
     </div>
-    <div class="stat-card purple">
-      <div class="stat-glow"></div>
-      <div class="stat-num"><?=$stuck_cases?></div>
-      <div class="stat-label">Stuck</div>
-    </div>
-    <div class="stat-card amber">
-      <div class="stat-glow"></div>
-      <div class="stat-num"><?=$overdue_rem?></div>
-      <div class="stat-label">Overdue</div>
-    </div>
-    <div class="stat-card cyan">
-      <div class="stat-glow"></div>
-      <div class="stat-num"><?=$today_rem?></div>
-      <div class="stat-label">Due Today</div>
-    </div>
-    <div class="stat-card blue">
-      <div class="stat-glow"></div>
-      <div class="stat-num"><?=$total_cases?></div>
-      <div class="stat-label">Total Cases</div>
-    </div>
-    <div class="stat-card green">
-      <div class="stat-glow"></div>
-      <div class="stat-num"><?=$pct?>%</div>
-      <div class="stat-label">Tasks Done</div>
-    </div>
+    <?php endforeach; ?>
   </div><!-- /stat-strip -->
 
   <!-- ── 3-COLUMN DASHBOARD GRID ── -->
@@ -295,6 +420,7 @@ include 'includes/header.php';
               <span class="badge <?=$pb?>"><?=ucfirst($pr)?></span>
               <span class="case-time <?=$over?'ov':''?>"><?=$time?></span>
             </div>
+            <?=tracs_creator_meta($c, $c['created_at'] ?? null, false)?>
           </div>
 
           <!-- Right: date + actions -->
@@ -331,14 +457,14 @@ include 'includes/header.php';
     <div class="col-center">
 
       <!-- CHECKLIST PANEL -->
-      <div class="panel">
+      <div class="panel checklist-panel">
         <div class="panel-head">
-          <span class="panel-title">Checklist</span>
+          <span class="panel-title checklist-panel-title"><i data-lucide="list-checks" class="icon-xs"></i>Checklist</span>
           <div class="panel-right">
             <span class="panel-meta" id="prog-lbl"><?=$done_tasks?>/<?=$total_tasks?></span>
             <a href="checklist.php" class="btn btn-ghost btn-sm">All →</a>
             <button class="btn btn-primary btn-sm" onclick="openNewTask()">
-              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add
+              <i data-lucide="plus" class="icon-sm"></i>Add
             </button>
           </div>
         </div>
@@ -382,6 +508,7 @@ include 'includes/header.php';
             <div class="flex1">
               <div class="task-title <?=$tdone?'done':''?>"><?=$ttit?></div>
               <?php if($tdesc): ?><div class="task-sub"><?=$tdesc?></div><?php endif; ?>
+              <?=tracs_creator_meta($t, $t['created_at'] ?? null, false)?>
             </div>
             <div class="task-acts">
               <button class="btn btn-ghost btn-icon" onclick="openEditTask(<?=$tid?>)" title="Edit">
@@ -429,7 +556,7 @@ include 'includes/header.php';
             ?>
             <div class="shift-item <?=$srstatus==='resolved'?'resolved':''?>" onclick="openEditShiftReport(<?=$srid?>)">
               <div class="shift-priority <?=$pclass?>"></div>
-              <div class="shift-text"><?=$srtit?></div>
+              <div class="shift-text"><?=$srtit?><?=tracs_creator_meta($sr, $sr['created_at'] ?? null, false)?></div>
               <?php if($srstatus==='resolved'):?><span class="badge b-done" style="transform:scale(0.8)">Done</span><?php endif;?>
             </div>
             <?php endforeach; ?>
@@ -458,7 +585,7 @@ include 'includes/header.php';
               <option value="SGD">SGD</option>
             </select>
           </div>
-          <input type="number" id="currency-amount" class="form-input" placeholder="Enter amount" value="1000000">
+          <input type="number" id="currency-amount" class="form-input" placeholder="Transfer amount" value="1000000">
           <button type="button" class="btn btn-primary" id="convert-btn" style="width:100%">Convert</button>
           <div class="currency-result">
             <div id="currency-result">—</div>
@@ -487,12 +614,12 @@ include 'includes/header.php';
           </div>
         </div>
 
-        <?php if(empty($undone_reminders)): ?>
+        <?php if(empty($dashboard_reminders)): ?>
         <div class="empty">
           <div class="empty-ic"><i data-lucide="bell"></i></div>
           <div class="empty-t">No undone reminders</div>
         </div>
-        <?php else: foreach(array_slice($undone_reminders,0,7) as $r):
+        <?php else: foreach(array_slice($dashboard_reminders,0,7) as $r):
           $rid   = intval($r['id']??0);
           $rtit  = esc($r['title']??'Untitled');
           $rstat = $r['status']??'—';
@@ -516,11 +643,14 @@ include 'includes/header.php';
               <span class="badge <?=$pb?>" style="font-size:8px;padding:1px 5px"><?=ucfirst($rprio)?></span>
               <span class="<?=$scls?>"><?=esc($rstat)?></span>
             </div>
+            <?=tracs_creator_meta($r, $r['created_at'] ?? null, false)?>
           </div>
           <div class="rem-acts">
+            <?php if(!$rdone): ?>
             <button class="btn btn-primary btn-sm rem-done-btn" onclick="completeReminder(<?=$rid?>)" title="Mark done">
               <i data-lucide="check" class="icon-xs"></i>Done
             </button>
+            <?php endif; ?>
             <button class="btn btn-ghost btn-icon" onclick="openEditReminder(<?=$rid?>)" title="Edit">
               <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
             </button>
@@ -565,6 +695,7 @@ include 'includes/header.php';
               <span class="badge <?=$mtype_badge?>" style="font-size:8px;padding:1px 5px"><?=ucfirst($mtype)?></span>
               <span class="badge <?=$mstatus_badge?>" style="font-size:8px;padding:1px 5px"><?=ucfirst($mstatus)?></span>
             </div>
+            <?=tracs_creator_meta($m, $m['created_at'] ?? null, false)?>
           </div>
           <div class="rem-meta" style="font-family:var(--mono);color:var(--tx3)"><?=$mwhen?></div>
         </a>
@@ -593,7 +724,7 @@ include 'includes/header.php';
               <span>· <?=esc($a['module']??'')?></span>
             </div>
             <div class="act-desc"><?=esc($a['description']??'')?></div>
-            <div class="act-time"><?=esc($a['time_ago']??'')?></div>
+            <div class="act-time"><?=esc($a['time_ago']??'')?> · <?=tracs_creator_meta($a, $a['created_at'] ?? null, false)?></div>
           </div>
         </div>
         <?php endforeach; endif; ?>

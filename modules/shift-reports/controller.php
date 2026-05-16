@@ -10,8 +10,10 @@ class ShiftReportController {
     private $model;
     private $activity;
     private $user_id;
+    private $conn;
 
     public function __construct($connection, $user_id) {
+        $this->conn = $connection;
         $this->model = new ShiftReportModel($connection);
         $this->activity = new ShiftActivityService($connection, (int)$user_id);
         $this->user_id = $user_id;
@@ -116,6 +118,12 @@ class ShiftReportController {
     }
 
     public function create($data) {
+        if (function_exists('tracs_ensure_creator_columns')) {
+            tracs_ensure_creator_columns($this->conn, 'tracs_shift_reports', 'created_by');
+        }
+        if (function_exists('tracs_current_user_display')) {
+            $data['created_by_name'] = tracs_current_user_display($this->conn);
+        }
         return $this->model->create($data, $this->user_id);
     }
 

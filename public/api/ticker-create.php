@@ -11,8 +11,9 @@ $conn->query("CREATE TABLE IF NOT EXISTS tracs_ticker_messages (
   created_at DATETIME DEFAULT NOW(),
   INDEX(user_id)
 )");
-$stmt=$conn->prepare("INSERT INTO tracs_ticker_messages (user_id,text,class) VALUES (?,?,?)");
-$stmt->bind_param('iss',$uid,$text,$cls);
+tracs_ensure_creator_columns($conn, 'tracs_ticker_messages', 'user_id');
+$stmt=$conn->prepare("INSERT INTO tracs_ticker_messages (user_id,text,class,created_by,created_by_name) VALUES (?,?,?,?,?)");
+$stmt->bind_param('issis',$uid,$text,$cls,$uid,$creator_name);
 if(!$stmt->execute()) fail('Database error');
 $id=$stmt->insert_id; $stmt->close();
 ok(['id'=>$id],'Message added');

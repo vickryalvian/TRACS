@@ -8,6 +8,7 @@ require_once __DIR__.'/../modules/alert-ticker/controller.php';
 require_once __DIR__.'/includes/page_helpers.php';
 
 $uid=$_SESSION['user_id']??0; $user_email=$_SESSION['user_email']??'operator@tracs.local';
+tracs_ensure_creator_columns($conn, 'tracs_side_tasks', 'user_id');
 $KC=new ChecklistController($conn,$uid);
 $TC=new AlertTickerController($conn,$uid);
 $ticker_items=$TC->formatAlertsForTicker();
@@ -28,7 +29,7 @@ $critical_count=0;
 $page_title='Checklist'; $active_page='checklist';
 include 'includes/header.php';
 ?>
-<main class="main"><div class="main-inner">
+<main class="main checklist-page"><div class="main-inner">
 
 <div class="topbar">
   <div><div class="page-title">Checklist</div><div class="page-sub"><?=$total?> tasks · <?=$pending?> pending · <?=$pct?>% complete</div></div>
@@ -42,7 +43,7 @@ include 'includes/header.php';
 </div>
 
 <!-- Progress bar -->
-<div class="panel">
+<div class="panel checklist-progress-panel">
   <div class="panel-head checklist-progress-head">
     <span class="panel-title">Completion</span>
     <div class="checklist-progress-meta">
@@ -65,7 +66,7 @@ include 'includes/header.php';
   <form method="get" class="search-form-wrap">
     <input type="hidden" name="f" value="<?=esc($f)?>">
     <i data-lucide="search" class="search-ic icon-sm"></i>
-    <input type="text" name="q" class="search-input" placeholder="Search tasks…" value="<?=esc($q)?>">
+    <input type="text" name="q" class="search-input" placeholder="Search checklist task, owner context, or notes" value="<?=esc($q)?>">
   </form>
   <button class="btn btn-primary toolbar-add-btn" onclick="openNewTask()">
     <i data-lucide="plus-circle" class="icon-sm"></i>
@@ -73,7 +74,7 @@ include 'includes/header.php';
   </button>
 </div>
 
-<div class="panel">
+<div class="panel checklist-list-panel">
   <div class="panel-head"><span class="panel-title">Task List</span><span class="panel-meta"><?=count($tasks)?> shown</span></div>
   <?php if(empty($tasks)):?>
   <div class="empty"><div class="empty-ic"><i data-lucide="list-checks"></i></div><div class="empty-t">No tasks found</div><div class="empty-s">Add tasks to track your operational checklist</div></div>
@@ -100,6 +101,7 @@ include 'includes/header.php';
         <td style="max-width:300px">
           <div style="font-weight:500;color:var(--tx1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" class="task-title <?=$tdone?'done':''?>"><?=$ttit?></div>
           <?php if($tdesc):?><div class="task-sub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="<?=$tdesc?>"><?=$tdesc?></div><?php endif;?>
+          <?=tracs_creator_meta($t)?>
         </td>
         <td><?php if($tdate_fmt):?><span class="task-date-cell"><?=$tdate_fmt?></span><?php endif;?></td>
         <td class="tracs-acts">

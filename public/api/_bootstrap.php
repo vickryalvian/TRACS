@@ -15,10 +15,12 @@ if (in_array($_SERVER['REQUEST_METHOD'] ?? 'GET', ['POST', 'PUT', 'PATCH', 'DELE
 }
 
 require_once __DIR__.'/../../config/database.php';
+require_once __DIR__.'/../../core/creator_tracking.php';
 require_once __DIR__.'/../../modules/activity-log/controller.php';
 
 $uid  = (int)$_SESSION['user_id'];
 $body = json_decode(file_get_contents('php://input'), true) ?? [];
+$creator_name = tracs_current_user_display($conn);
 
 function ok(mixed $data=null, string $msg='Success'): void {
     echo json_encode(['success'=>true,'message'=>$msg,'data'=>$data]);

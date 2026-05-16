@@ -16,7 +16,6 @@ class SmartTickerEngine {
     public function __construct(mysqli $connection, int $user_id) {
         $this->conn = $connection;
         $this->uid = $user_id;
-        $this->resetDailyChecklistItems();
     }
 
     public function buildFeed(): array {
@@ -430,58 +429,6 @@ class SmartTickerEngine {
             $items[] = $this->item('info', $prio, 'active', 'Manual announcement', $r['text'], $r['created_at'], null, 'custom-'.$r['id']);
         }
         return $items;
-    }
-
-    private function resetDailyChecklistItems(): void {
-        if (!$this->tableExists('tracs_side_tasks')) return;
-
-        $hasRecurrence = $this->columnExists('tracs_side_tasks', 'recurrence_type');
-        $hasResetAt = $this->columnExists('tracs_side_tasks', 'reset_at');
-        $whereRecurrence = $hasRecurrence ? "AND recurrence_type='daily'" : "";
-        $whereReset = $hasResetAt ? "AND reset_at IS NOT NULL AND reset_at <= NOW()" : "AND updated_at < CURDATE()";
-
-        $stmt = $this->conn->prepare("
-            SELECT id, title
-            FROM tracs_side_tasks
-            WHERE user_id=?
-              AND is_completed=1
-              {$whereRecurrence}
-              {$whereReset}
-            LIMIT 100
-        ");
-        if (!$stmt) return;
-        $stmt->bind_param('i', $this->uid);
-        $stmt->execute();
-        $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-        $stmt->close();
-        if (!$rows) return;
-
-        if ($this->tableExists('tracs_side_task_logs')) {
-            $log = $this->conn->prepare("INSERT INTO tracs_side_task_logs (task_id, user_id, note, created_at) VALUES (?, ?, 'Auto-reset daily checklist item', NOW())");
-            if ($log) {
-                foreach ($rows as $r) {
-                    $tid = (int)$r['id'];
-                    $log->bind_param('ii', $tid, $this->uid);
-                    $log->execute();
-                }
-                $log->close();
-            }
-        }
-
-        $ids = array_map(fn($r) => (int)$r['id'], $rows);
-        $placeholders = implode(',', array_fill(0, count($ids), '?'));
-        $types = str_repeat('i', count($ids) + 1);
-        $params = array_merge([$this->uid], $ids);
-        $sets = ["is_completed=0", "updated_at=NOW()"];
-        if ($this->columnExists('tracs_side_tasks', 'completed_at')) $sets[] = "completed_at=NULL";
-        if ($this->columnExists('tracs_side_tasks', 'archived_at')) $sets[] = "archived_at=NULL";
-        if ($hasResetAt) $sets[] = "reset_at=NULL";
-        $sql = "UPDATE tracs_side_tasks SET ".implode(',', $sets)." WHERE user_id=? AND id IN ($placeholders)";
-        $upd = $this->conn->prepare($sql);
-        if (!$upd) return;
-        $upd->bind_param($types, ...$params);
-        $upd->execute();
-        $upd->close();
     }
 
     private function groupLowPriority(array $items): array {

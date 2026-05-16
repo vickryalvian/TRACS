@@ -15,18 +15,27 @@ class ReminderModel {
      * Get all reminders for the current user
      */
     public function getRemindersByUser($user_id) {
+        $completedAtSelect = $this->columnExists('tracs_reminders', 'completed_at') ? 'r.completed_at,' : 'NULL AS completed_at,';
+        $archivedAtSelect = $this->columnExists('tracs_reminders', 'archived_at') ? 'r.archived_at,' : 'NULL AS archived_at,';
         $query = "
             SELECT 
-                id,
-                title,
-                description,
-                due_date,
-                priority,
-                is_completed,
-                created_at
-            FROM tracs_reminders
-            WHERE user_id = ?
-            ORDER BY due_date ASC
+                r.id,
+                r.title,
+                r.description,
+                r.due_date,
+                r.priority,
+                r.is_completed,
+                {$completedAtSelect}
+                {$archivedAtSelect}
+                r.created_at,
+                r.updated_at,
+                r.created_by,
+                r.created_by_name,
+                COALESCE(NULLIF(r.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name
+            FROM tracs_reminders r
+            LEFT JOIN tracs_users u ON r.created_by = u.id
+            WHERE r.user_id = ?
+            ORDER BY r.is_completed ASC, r.created_at DESC
         ";
         
         $stmt = $this->conn->prepare($query);
@@ -46,6 +55,26 @@ class ReminderModel {
         $stmt->close();
         return $reminders;
     }
+
+    private function columnExists(string $table, string $column): bool {
+        $stmt = $this->conn->prepare("
+            SELECT 1
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = ?
+              AND COLUMN_NAME = ?
+            LIMIT 1
+        ");
+        if (!$stmt) {
+            return false;
+        }
+
+        $stmt->bind_param('ss', $table, $column);
+        $stmt->execute();
+        $exists = $stmt->get_result()->num_rows > 0;
+        $stmt->close();
+        return $exists;
+    }
     
     /**
      * Get overdue reminders
@@ -53,15 +82,19 @@ class ReminderModel {
     public function getOverdueReminders($user_id) {
         $query = "
             SELECT 
-                id,
-                title,
-                due_date,
-                priority
-            FROM tracs_reminders
-            WHERE user_id = ?
-            AND due_date < NOW()
-            AND is_completed = 0
-            ORDER BY due_date ASC
+                r.id,
+                r.title,
+                r.due_date,
+                r.priority,
+                r.created_by,
+                r.created_by_name,
+                COALESCE(NULLIF(r.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name
+            FROM tracs_reminders r
+            LEFT JOIN tracs_users u ON r.created_by = u.id
+            WHERE r.user_id = ?
+            AND r.due_date < NOW()
+            AND r.is_completed = 0
+            ORDER BY r.due_date ASC
         ";
         
         $stmt = $this->conn->prepare($query);
@@ -88,17 +121,21 @@ class ReminderModel {
     public function getUpcomingReminders($user_id, $days = 7) {
         $query = "
             SELECT 
-                id,
-                title,
-                due_date,
-                priority,
-                is_completed
-            FROM tracs_reminders
-            WHERE user_id = ?
-            AND due_date >= CURDATE()
-            AND due_date <= DATE_ADD(CURDATE(), INTERVAL ? DAY)
-            AND is_completed = 0
-            ORDER BY due_date ASC
+                r.id,
+                r.title,
+                r.due_date,
+                r.priority,
+                r.is_completed,
+                r.created_by,
+                r.created_by_name,
+                COALESCE(NULLIF(r.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name
+            FROM tracs_reminders r
+            LEFT JOIN tracs_users u ON r.created_by = u.id
+            WHERE r.user_id = ?
+            AND r.due_date >= CURDATE()
+            AND r.due_date <= DATE_ADD(CURDATE(), INTERVAL ? DAY)
+            AND r.is_completed = 0
+            ORDER BY r.due_date ASC
         ";
         
         $stmt = $this->conn->prepare($query);

@@ -68,6 +68,9 @@ class CaseController {
                 'created_at'     => $case['created_at'],
                 'updated_at'     => $case['updated_at'],
                 'notes'          => $case['notes'] ?? '',
+                'created_by'     => $case['created_by'] ?? null,
+                'created_by_name' => $case['created_by_name'] ?? null,
+                'creator_name'   => $case['creator_name'] ?? null,
             ];
         }
         $nextCheck = new DateTime($case['next_check_at']);
@@ -92,6 +95,9 @@ class CaseController {
             'created_at' => $case['created_at'],
             'updated_at' => $case['updated_at'],
             'notes' => $case['notes'] ?? '',
+            'created_by' => $case['created_by'] ?? null,
+            'created_by_name' => $case['created_by_name'] ?? null,
+            'creator_name' => $case['creator_name'] ?? null,
         ];
     }
     

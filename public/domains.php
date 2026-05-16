@@ -47,6 +47,7 @@ $conn->query("CREATE TABLE IF NOT EXISTS `domain_transfers` (
   INDEX `idx_process_start` (`process_start_date`),
   INDEX `idx_process_end`   (`process_end_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+tracs_ensure_creator_columns($conn, 'domain_transfers', 'created_by');
 
 /* ── Activity feed table (migration-safe) ───────────────────── */
 $conn->query("CREATE TABLE IF NOT EXISTS `activity_feed` (
@@ -60,15 +61,17 @@ $conn->query("CREATE TABLE IF NOT EXISTS `activity_feed` (
   INDEX `idx_activity_type` (`activity_type`),
   INDEX `idx_created_at`    (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+tracs_ensure_creator_columns($conn, 'activity_feed', 'created_by');
 
 /* ── Activity helper ────────────────────────────────────────── */
 function log_domain_activity($conn, string $type, string $message, string $domain, int $user_id): void {
+    $creator_name = tracs_current_user_display($conn);
     $stmt = $conn->prepare(
-        "INSERT INTO activity_feed (activity_type, activity_message, related_domain, created_by)
-         VALUES (?, ?, ?, ?)"
+        "INSERT INTO activity_feed (activity_type, activity_message, related_domain, created_by, created_by_name)
+         VALUES (?, ?, ?, ?, ?)"
     );
     if ($stmt) {
-        $stmt->bind_param('sssi', $type, $message, $domain, $user_id);
+        $stmt->bind_param('sssis', $type, $message, $domain, $user_id, $creator_name);
         $stmt->execute();
         $stmt->close();
     }
@@ -135,11 +138,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt = $conn->prepare(
             "INSERT INTO domain_transfers
              (domain_name, transfer_status, process_start_date, process_end_date,
-              webnic_reseller_transfer, notes, created_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?)"
+              webnic_reseller_transfer, notes, created_by, created_by_name)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
         );
         if (!$stmt) { echo json_encode(['success'=>false,'message'=>'DB prepare error']); exit; }
-        $stmt->bind_param('ssssssi', $domain, $status, $start, $end, $webnic, $notes, $uid);
+        $creator_name = tracs_current_user_display($conn);
+        $stmt->bind_param('ssssssis', $domain, $status, $start, $end, $webnic, $notes, $uid, $creator_name);
         $ok = $stmt->execute();
         $stmt->close();
 
@@ -363,30 +367,34 @@ $bind_types = '';
 $bind_vals  = [];
 
 if (in_array($filter_status, $allowed_statuses, true)) {
-    $conditions[] = "transfer_status = ?";
+    $conditions[] = "dt.transfer_status = ?";
     $bind_types  .= 's';
     $bind_vals[]  = $filter_status;
 }
 
 if ($month && preg_match('/^\d{4}-\d{2}$/', $month)) {
-    $conditions[] = "DATE_FORMAT(process_start_date, '%Y-%m') = ?";
+    $conditions[] = "DATE_FORMAT(dt.process_start_date, '%Y-%m') = ?";
     $bind_types  .= 's';
     $bind_vals[]  = $month;
 }
 
 if ($q !== '') {
     $like = '%' . $q . '%';
-    $conditions[] = "(domain_name LIKE ? OR webnic_reseller_transfer LIKE ? OR notes LIKE ?)";
-    $bind_types  .= 'sss';
+    $conditions[] = "(dt.domain_name LIKE ? OR dt.webnic_reseller_transfer LIKE ? OR dt.notes LIKE ? OR dt.created_by_name LIKE ? OR u.name LIKE ? OR u.email LIKE ?)";
+    $bind_types  .= 'ssssss';
+    $bind_vals[]  = $like;
+    $bind_vals[]  = $like;
+    $bind_vals[]  = $like;
     $bind_vals[]  = $like;
     $bind_vals[]  = $like;
     $bind_vals[]  = $like;
 }
 
 $where = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';
+$from_sql = "domain_transfers dt LEFT JOIN tracs_users u ON dt.created_by = u.id";
 
 /* ── Total count ────────────────────────────────────────────── */
-$count_sql  = "SELECT COUNT(*) FROM domain_transfers $where";
+$count_sql  = "SELECT COUNT(*) FROM $from_sql $where";
 $count_stmt = $conn->prepare($count_sql);
 if ($bind_types) $count_stmt->bind_param($bind_types, ...$bind_vals);
 $count_stmt->execute();
@@ -396,7 +404,7 @@ $count_stmt->close();
 $total_pages = max(1, (int) ceil($total_rows / $per_page));
 
 /* ── Fetch current page ─────────────────────────────────────── */
-$data_sql  = "SELECT * FROM domain_transfers $where ORDER BY created_at DESC LIMIT ? OFFSET ?";
+$data_sql  = "SELECT dt.*, COALESCE(NULLIF(dt.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name FROM $from_sql $where ORDER BY dt.created_at DESC LIMIT ? OFFSET ?";
 $data_stmt = $conn->prepare($data_sql);
 $full_types = $bind_types . 'ii';
 $full_vals  = array_merge($bind_vals, [$per_page, $offset]);
@@ -566,7 +574,7 @@ include 'includes/header.php';
     <input type="hidden" name="m" value="<?= esc($month) ?>">
     <i data-lucide="search" class="search-ic icon-sm"></i>
     <input type="text" name="q" class="search-input"
-           placeholder="Search domain, reseller, notes…"
+           placeholder="Search domain, transfer status, reseller, or notes"
            value="<?= esc($q) ?>">
     <?php if ($q || $month || $filter_status !== 'all'): ?>
     <a href="?" class="btn btn-ghost btn-reset btn-sm">Reset</a>
@@ -586,14 +594,18 @@ include 'includes/header.php';
         <?= $month ? ' · ' . esc($month) : '' ?>
       </span>
       <details class="report-export-menu">
-        <summary class="btn btn-ghost btn-icon report-export-trigger" title="Export CSV" aria-label="Export CSV" data-tooltip="Export CSV"><i data-lucide="download" class="icon-sm"></i></summary>
+        <summary class="btn btn-ghost btn-icon report-export-trigger" title="More actions" aria-label="More actions" data-tooltip="More actions"><i data-lucide="more-vertical" class="icon-sm"></i></summary>
         <form method="get" action="/api/export-domains.php" class="report-export-popover">
           <input type="hidden" name="s" value="<?= esc($filter_status) ?>">
           <input type="hidden" name="m" value="<?= esc($month) ?>">
           <input type="hidden" name="q" value="<?= esc($q) ?>">
+          <div class="report-export-title">
+            <i data-lucide="download" class="icon-xs"></i>
+            Export CSV
+          </div>
           <label>From Date<input type="date" name="from" class="form-input"></label>
           <label>To Date<input type="date" name="to" class="form-input"></label>
-          <button type="submit" class="btn btn-primary"><i data-lucide="download" class="icon-sm"></i>Export CSV</button>
+          <button type="submit" class="btn btn-primary"><i data-lucide="download" class="icon-sm"></i>Download CSV</button>
         </form>
       </details>
     </div>
@@ -610,7 +622,7 @@ include 'includes/header.php';
       <div class="dt-inline-group">
         <label class="dt-inline-lbl">Domain Name <span class="req-star">*</span></label>
         <input type="text" class="form-input dt-inline-input" id="nDomain"
-               placeholder="example.com" autocomplete="off"
+               placeholder="Domain name, e.g. exampledomain.com" autocomplete="off"
                onkeydown="if(event.key==='Enter')quickSaveDt()">
       </div>
 
@@ -716,6 +728,7 @@ include 'includes/header.php';
       <td>
         <div class="dt-domain-name" title="<?= esc($dr['domain_name']) ?>"><?= esc($dr['domain_name']) ?></div>
         <div class="dt-domain-sub">#<?= $did ?></div>
+        <?=tracs_creator_meta($dr)?>
       </td>
 
       <!-- ── Inline-editable status cell ── -->
@@ -852,7 +865,7 @@ include 'includes/header.php';
 
     <div class="form-group">
       <label class="form-label">Domain Name <span class="req-star">*</span></label>
-      <input type="text" class="form-input" id="dtDomain" placeholder="example.com" autocomplete="off">
+      <input type="text" class="form-input" id="dtDomain" placeholder="Domain name, e.g. exampledomain.com" autocomplete="off">
     </div>
 
     <div class="form-group">
@@ -893,7 +906,7 @@ include 'includes/header.php';
 
     <div class="form-group">
       <label class="form-label">Notes <span style="color:var(--tx4)">(optional)</span></label>
-      <textarea class="form-input" id="dtNotes" rows="3" placeholder="Additional notes…" style="resize:vertical;min-height:60px"></textarea>
+      <textarea class="form-input" id="dtNotes" rows="3" placeholder="Add domain transfer notes, EPP code context, or next action" style="resize:vertical;min-height:60px"></textarea>
     </div>
   </div>
   <div class="modal-foot">

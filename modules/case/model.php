@@ -17,16 +17,21 @@ class CaseModel {
     public function getCasesByUser($user_id) {
         $query = "
             SELECT 
-                id, 
-                title, 
-                status, 
-                priority, 
-                next_check_at,
-                created_at,
-                updated_at
-            FROM tracs_cases
-            WHERE user_id = ?
-            ORDER BY next_check_at ASC
+                c.id, 
+                c.title, 
+                c.status, 
+                c.priority, 
+                c.next_check_at,
+                c.notes,
+                c.created_at,
+                c.updated_at,
+                c.created_by,
+                c.created_by_name,
+                COALESCE(NULLIF(c.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name
+            FROM tracs_cases c
+            LEFT JOIN tracs_users u ON c.created_by = u.id
+            WHERE c.user_id = ?
+            ORDER BY c.next_check_at ASC
         ";
         
         $stmt = $this->conn->prepare($query);
@@ -52,8 +57,10 @@ class CaseModel {
      */
     public function getCaseById($case_id, $user_id) {
         $query = "
-            SELECT * FROM tracs_cases
-            WHERE id = ? AND user_id = ?
+            SELECT c.*, COALESCE(NULLIF(c.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name
+            FROM tracs_cases c
+            LEFT JOIN tracs_users u ON c.created_by = u.id
+            WHERE c.id = ? AND c.user_id = ?
         ";
         
         $stmt = $this->conn->prepare($query);
@@ -77,19 +84,23 @@ class CaseModel {
     public function getAlertCases($user_id) {
         $query = "
             SELECT 
-                id,
-                title,
-                status,
-                priority,
-                next_check_at
-            FROM tracs_cases
-            WHERE user_id = ?
+                c.id,
+                c.title,
+                c.status,
+                c.priority,
+                c.next_check_at,
+                c.created_by,
+                c.created_by_name,
+                COALESCE(NULLIF(c.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name
+            FROM tracs_cases c
+            LEFT JOIN tracs_users u ON c.created_by = u.id
+            WHERE c.user_id = ?
             AND (
-                priority = 'critical'
-                OR next_check_at < NOW()
-                OR status = 'stuck'
+                c.priority = 'critical'
+                OR c.next_check_at < NOW()
+                OR c.status = 'stuck'
             )
-            ORDER BY priority DESC, next_check_at ASC
+            ORDER BY c.priority DESC, c.next_check_at ASC
             LIMIT 10
         ";
         
@@ -117,15 +128,19 @@ class CaseModel {
     public function getCasesFromToday($user_id) {
         $query = "
             SELECT 
-                id,
-                title,
-                status,
-                priority,
-                next_check_at
-            FROM tracs_cases
-            WHERE user_id = ?
-            AND DATE(next_check_at) = CURDATE()
-            ORDER BY next_check_at ASC
+                c.id,
+                c.title,
+                c.status,
+                c.priority,
+                c.next_check_at,
+                c.created_by,
+                c.created_by_name,
+                COALESCE(NULLIF(c.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name
+            FROM tracs_cases c
+            LEFT JOIN tracs_users u ON c.created_by = u.id
+            WHERE c.user_id = ?
+            AND DATE(c.next_check_at) = CURDATE()
+            ORDER BY c.next_check_at ASC
         ";
         
         $stmt = $this->conn->prepare($query);

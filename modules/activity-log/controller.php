@@ -80,6 +80,8 @@ class ActivityLogController {
             'module' => $activity['module'],
             'reference_id' => $activity['reference_id'],
             'created_at' => $activity['created_at'],
+            'created_by' => $activity['created_by'] ?? null,
+            'creator_name' => $activity['creator_name'] ?? null,
             'time_ago' => $timeAgo,
             'icon' => $icon,
         ];

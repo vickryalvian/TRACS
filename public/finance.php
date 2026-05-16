@@ -42,6 +42,7 @@ $conn->query("CREATE TABLE IF NOT EXISTS `balance_transfers` (
   INDEX `idx_receiver_email` (`receiver_email`(64)),
   INDEX `idx_status`         (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+tracs_ensure_creator_columns($conn, 'balance_transfers', null);
 
 /* ── Filters & Search ───────────────────────────────────────── */
 $filter_status = $_GET['s']    ?? 'all';   // all | done | pending
@@ -69,8 +70,12 @@ if ($q !== '') {
     $like = '%' . $q . '%';
     $conditions[] = "(sender_email LIKE ? OR receiver_email LIKE ?
                     OR sender_user_id LIKE ? OR receiver_user_id LIKE ?
-                    OR ticket_id LIKE ? OR admin_name LIKE ?)";
-    $bind_types  .= 'ssssss';
+                    OR ticket_id LIKE ? OR admin_name LIKE ?
+                    OR bt.created_by_name LIKE ? OR u.name LIKE ? OR u.email LIKE ?)";
+    $bind_types  .= 'sssssssss';
+    $bind_vals[]  = $like;
+    $bind_vals[]  = $like;
+    $bind_vals[]  = $like;
     $bind_vals[]  = $like;
     $bind_vals[]  = $like;
     $bind_vals[]  = $like;
@@ -80,9 +85,10 @@ if ($q !== '') {
 }
 
 $where = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';
+$from_sql = "balance_transfers bt LEFT JOIN tracs_users u ON bt.created_by = u.id";
 
 /* ── Total count for pagination ─────────────────────────────── */
-$count_sql  = "SELECT COUNT(*) FROM balance_transfers $where";
+$count_sql  = "SELECT COUNT(*) FROM $from_sql $where";
 $count_stmt = $conn->prepare($count_sql);
 if ($bind_types) $count_stmt->bind_param($bind_types, ...$bind_vals);
 $count_stmt->execute();
@@ -92,7 +98,7 @@ $count_stmt->close();
 $total_pages = max(1, (int) ceil($total_rows / $per_page));
 
 /* ── Fetch current page ─────────────────────────────────────── */
-$data_sql  = "SELECT * FROM balance_transfers $where ORDER BY transfer_date DESC LIMIT ? OFFSET ?";
+$data_sql  = "SELECT bt.*, COALESCE(NULLIF(bt.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name FROM $from_sql $where ORDER BY bt.transfer_date DESC LIMIT ? OFFSET ?";
 $data_stmt = $conn->prepare($data_sql);
 $full_types = $bind_types . 'ii';
 $full_vals  = array_merge($bind_vals, [$per_page, $offset]);
@@ -178,22 +184,22 @@ include 'includes/header.php';
 
 <!-- ── Stat strip ─────────────────────────────────────────────── -->
 <div class="stat-strip">
-  <div class="stat-card blue">
+  <div class="stat-card finance-stat-card blue">
     <div class="stat-glow"></div>
     <div class="stat-num rp">Rp <?= number_format($stat_total_amount, 0, ',', '.') ?></div>
     <div class="stat-label">Total Transferred</div>
   </div>
-  <div class="stat-card green">
+  <div class="stat-card finance-stat-card green">
     <div class="stat-glow"></div>
     <div class="stat-num rp">Rp <?= number_format($stat_done_amount, 0, ',', '.') ?></div>
     <div class="stat-label">Completed</div>
   </div>
-  <div class="stat-card amber">
+  <div class="stat-card finance-stat-card amber">
     <div class="stat-glow"></div>
     <div class="stat-num"><?= $stat_pending_count ?></div>
     <div class="stat-label">Pending Transfers</div>
   </div>
-  <div class="stat-card cyan">
+  <div class="stat-card finance-stat-card cyan">
     <div class="stat-glow"></div>
     <div class="stat-num rp">Rp <?= number_format($stat_month_amount, 0, ',', '.') ?></div>
     <div class="stat-label">This Month</div>
@@ -233,7 +239,7 @@ include 'includes/header.php';
     <input type="hidden" name="m" value="<?= esc($month) ?>">
     <i data-lucide="search" class="search-ic icon-sm"></i>
     <input type="text" name="q" class="search-input"
-           placeholder="Search email, user ID, ticket, admin…"
+           placeholder="Search customer email, user ID, ticket, or operator"
            value="<?= esc($q) ?>">
   </form>
 
@@ -250,14 +256,18 @@ include 'includes/header.php';
         <?= $month ? ' · ' . esc($month) : '' ?>
       </span>
       <details class="report-export-menu">
-        <summary class="btn btn-ghost btn-icon report-export-trigger" title="Export CSV" aria-label="Export CSV" data-tooltip="Export CSV"><i data-lucide="download" class="icon-sm"></i></summary>
+        <summary class="btn btn-ghost btn-icon report-export-trigger" title="More actions" aria-label="More actions" data-tooltip="More actions"><i data-lucide="more-vertical" class="icon-sm"></i></summary>
         <form method="get" action="/api/export-finance.php" class="report-export-popover">
           <input type="hidden" name="s" value="<?= esc($filter_status) ?>">
           <input type="hidden" name="m" value="<?= esc($month) ?>">
           <input type="hidden" name="q" value="<?= esc($q) ?>">
+          <div class="report-export-title">
+            <i data-lucide="download" class="icon-xs"></i>
+            Export CSV
+          </div>
           <label>From Date<input type="date" name="from" class="form-input"></label>
           <label>To Date<input type="date" name="to" class="form-input"></label>
-          <button type="submit" class="btn btn-primary"><i data-lucide="download" class="icon-sm"></i>Export CSV</button>
+          <button type="submit" class="btn btn-primary"><i data-lucide="download" class="icon-sm"></i>Download CSV</button>
         </form>
       </details>
     </div>
@@ -275,11 +285,11 @@ include 'includes/header.php';
       <!-- Row 1: sender group -->
       <div class="bt-inline-group" style="grid-column: span 2">
         <label class="bt-inline-lbl">Sender Email</label>
-        <input type="email" class="form-input bt-inline-input" id="nSenderEmail" placeholder="sender@example.com" autocomplete="off">
+        <input type="email" class="form-input bt-inline-input" id="nSenderEmail" placeholder="Sender email, e.g. client@domain.com" autocomplete="off">
       </div>
       <div class="bt-inline-group" style="grid-column: span 2">
         <label class="bt-inline-lbl">Sender UID</label>
-        <input type="text" class="form-input bt-inline-input" id="nSenderUid" placeholder="USR-10042" autocomplete="off">
+        <input type="text" class="form-input bt-inline-input" id="nSenderUid" placeholder="Sender user ID, e.g. CID-10042" autocomplete="off">
       </div>
       <div class="bt-inline-group" style="grid-column: span 2">
         <label class="bt-inline-lbl">Sender Type <span class="req-star">*</span></label>
@@ -294,11 +304,11 @@ include 'includes/header.php';
       <!-- Row 2: receiver group -->
       <div class="bt-inline-group" style="grid-column: span 2">
         <label class="bt-inline-lbl">Receiver Email</label>
-        <input type="email" class="form-input bt-inline-input" id="nReceiverEmail" placeholder="receiver@example.com" autocomplete="off">
+        <input type="email" class="form-input bt-inline-input" id="nReceiverEmail" placeholder="Receiver email, e.g. billing@domain.com" autocomplete="off">
       </div>
       <div class="bt-inline-group" style="grid-column: span 2">
         <label class="bt-inline-lbl">Receiver UID</label>
-        <input type="text" class="form-input bt-inline-input" id="nReceiverUid" placeholder="USR-10088" autocomplete="off">
+        <input type="text" class="form-input bt-inline-input" id="nReceiverUid" placeholder="Receiver user ID, e.g. CID-10088" autocomplete="off">
       </div>
       <div class="bt-inline-group" style="grid-column: span 2">
         <label class="bt-inline-lbl">Receiver Type <span class="req-star">*</span></label>
@@ -310,10 +320,10 @@ include 'includes/header.php';
       </div>
 
 
-      <!-- Row 3: amount, status, admin, ticket, date, save -->
+      <!-- Row 3: amount, status, operator, ticket, date, save -->
       <div class="bt-inline-group">
         <label class="bt-inline-lbl">Amount (Rp) <span class="req-star">*</span></label>
-        <input type="number" class="form-input bt-inline-input" id="nAmount" placeholder="0" min="0" step="0.01"
+        <input type="number" class="form-input bt-inline-input" id="nAmount" placeholder="Transfer amount" min="0" step="0.01"
                onkeydown="if(event.key==='Enter')quickSaveBt()">
       </div>
       <div class="bt-inline-group">
@@ -324,13 +334,13 @@ include 'includes/header.php';
         </select>
       </div>
       <div class="bt-inline-group">
-        <label class="bt-inline-lbl">Admin <span class="req-star">*</span></label>
-        <input type="text" class="form-input bt-inline-input" id="nAdmin" placeholder="e.g. Rina" autocomplete="off"
+        <label class="bt-inline-lbl">Operator <span class="req-star">*</span></label>
+        <input type="text" class="form-input bt-inline-input" id="nAdmin" placeholder="Operator email, e.g. operator@idcloudhost.com" autocomplete="off"
                onkeydown="if(event.key==='Enter')quickSaveBt()">
       </div>
       <div class="bt-inline-group">
         <label class="bt-inline-lbl">Ticket ID</label>
-        <input type="text" class="form-input bt-inline-input" id="nTicket" placeholder="TKT-2025-001" autocomplete="off"
+        <input type="text" class="form-input bt-inline-input" id="nTicket" placeholder="Ticket ID, e.g. WHMCS-2026-001" autocomplete="off"
                onkeydown="if(event.key==='Enter')quickSaveBt()">
       </div>
       <div class="fb-inline-col" style="flex: 1.8">
@@ -377,7 +387,7 @@ include 'includes/header.php';
         <th>Type</th>
         <th style="text-align:right">Amount</th>
         <th>Status</th>
-        <th>Admin</th>
+        <th>Operator</th>
         <th>Ticket ID</th>
         <th style="width:60px"></th>
       </tr>
@@ -419,6 +429,7 @@ include 'includes/header.php';
       <td>
         <div class="bt-date-main"><?= $dt_main ?></div>
         <div class="bt-date-time"><?= $dt_time ?></div>
+        <?=tracs_creator_meta($tr, $tr['created_at'] ?? null, false)?>
       </td>
 
       <td>
@@ -551,11 +562,11 @@ include 'includes/header.php';
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Email</label>
-          <input type="email" class="form-input" id="btSenderEmail" placeholder="sender@example.com" autocomplete="off">
+          <input type="email" class="form-input" id="btSenderEmail" placeholder="Sender email, e.g. client@domain.com" autocomplete="off">
         </div>
         <div class="form-group">
           <label class="form-label">User ID</label>
-          <input type="text" class="form-input" id="btSenderUid" placeholder="USR-10042" autocomplete="off">
+          <input type="text" class="form-input" id="btSenderUid" placeholder="Sender user ID, e.g. CID-10042" autocomplete="off">
         </div>
       </div>
       <div class="form-group">
@@ -574,11 +585,11 @@ include 'includes/header.php';
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Email</label>
-          <input type="email" class="form-input" id="btReceiverEmail" placeholder="receiver@example.com" autocomplete="off">
+          <input type="email" class="form-input" id="btReceiverEmail" placeholder="Receiver email, e.g. billing@domain.com" autocomplete="off">
         </div>
         <div class="form-group">
           <label class="form-label">User ID</label>
-          <input type="text" class="form-input" id="btReceiverUid" placeholder="USR-10088" autocomplete="off">
+          <input type="text" class="form-input" id="btReceiverUid" placeholder="Receiver user ID, e.g. CID-10088" autocomplete="off">
         </div>
       </div>
       <div class="form-group">
@@ -594,7 +605,7 @@ include 'includes/header.php';
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">Amount (Rp) *</label>
-        <input type="number" class="form-input" id="btAmount" placeholder="0" min="0" step="0.01">
+        <input type="number" class="form-input" id="btAmount" placeholder="Transfer amount" min="0" step="0.01">
       </div>
       <div class="form-group">
         <label class="form-label">Status</label>
@@ -606,12 +617,12 @@ include 'includes/header.php';
     </div>
     <div class="form-row">
       <div class="form-group">
-        <label class="form-label">Admin Name *</label>
-        <input type="text" class="form-input" id="btAdmin" placeholder="e.g. Rina" autocomplete="off">
+        <label class="form-label">Operator *</label>
+        <input type="text" class="form-input" id="btAdmin" placeholder="Operator email, e.g. operator@idcloudhost.com" autocomplete="off">
       </div>
       <div class="form-group">
         <label class="form-label">Ticket ID <span style="color:var(--tx4)">(optional)</span></label>
-        <input type="text" class="form-input" id="btTicket" placeholder="TKT-2025-001" autocomplete="off">
+        <input type="text" class="form-input" id="btTicket" placeholder="Ticket ID, e.g. WHMCS-2026-001" autocomplete="off">
       </div>
     </div>
   </div>
