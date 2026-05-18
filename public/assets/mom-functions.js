@@ -7,6 +7,16 @@
 // MODAL MANAGEMENT
 // ═══════════════════════════════════════════════════════════════
 
+function momReloadAfterToast(delay=420){
+  if(window.reloadAfterToast)window.reloadAfterToast(delay);
+  else setTimeout(()=>location.reload(),delay);
+}
+
+function momNavigateAfterToast(url,delay=420){
+  if(window.navigateAfterToast)window.navigateAfterToast(url,delay);
+  else setTimeout(()=>{location.href=url;},delay);
+}
+
 function formatLocalDateTime(date) {
   const p = v => String(v).padStart(2, '0');
   return {
@@ -137,7 +147,7 @@ function saveMOMObjective(mom_id) {
   }).then(r => {
     if(r.ok) {
       toast('Objective updated', 'success');
-      location.reload();
+      momReloadAfterToast();
     } else {
       toast(r.msg || 'Failed to update objective', 'error');
     }
@@ -157,7 +167,7 @@ function saveMOMParticipants(mom_id) {
   }).then(r => {
     if(r.ok) {
       toast('Participants updated', 'success');
-      location.reload();
+      momReloadAfterToast();
     } else {
       toast(r.msg || 'Failed to update participants', 'error');
     }
@@ -208,13 +218,11 @@ function saveMOM() {
       const targetMomId = r.mom_id || Number(mom_id || 0);
       await linkSelectedCasesToMOM(targetMomId);
       toast(mom_id ? 'Meeting updated' : 'Meeting scheduled', 'success');
-      setTimeout(() => {
-        if(targetMomId) {
-          location.href = mom_id ? 'mom.php?mom_id=' + targetMomId : 'mom.php';
-        } else {
-          location.reload();
-        }
-      }, 300);
+      if(targetMomId) {
+        momNavigateAfterToast(mom_id ? 'mom.php?mom_id=' + targetMomId : 'mom.php',300);
+      } else {
+        momReloadAfterToast(300);
+      }
     } else {
       toast(r.msg || 'Failed to save meeting', 'error');
     }
@@ -229,7 +237,7 @@ function closeMOM(mom_id) {
     }).then(r => {
       if(r.ok) {
         toast('Meeting completed', 'success');
-        setTimeout(() => location.href = 'mom.php', 300);
+        momNavigateAfterToast('mom.php',300);
       } else {
         toast(r.msg || 'Failed to close meeting', 'error');
       }
@@ -244,7 +252,7 @@ function startMOM(mom_id) {
   }).then(r => {
     if(r.ok) {
       toast('Meeting started', 'success');
-      setTimeout(() => location.href = 'mom.php?mom_id=' + mom_id, 250);
+      momNavigateAfterToast('mom.php?mom_id=' + mom_id,250);
     } else {
       toast(r.msg || 'Failed to start meeting', 'error');
     }
@@ -259,7 +267,7 @@ function cancelMOM(mom_id) {
     }).then(r => {
       if(r.ok) {
         toast('Meeting cancelled', 'success');
-        setTimeout(() => location.href = 'mom.php', 250);
+        momNavigateAfterToast('mom.php',250);
       } else {
         toast(r.msg || 'Failed to cancel meeting', 'error');
       }
@@ -287,7 +295,7 @@ function deleteMOM(mom_id) {
     }).then(r => {
       if(r.ok) {
         toast('Meeting deleted', 'success');
-        setTimeout(() => location.reload(), 300);
+        momReloadAfterToast(300);
       } else {
         toast(r.msg || 'Failed to delete meeting', 'error');
       }
@@ -303,14 +311,33 @@ function addAgendaItem(mom_id) {
   document.getElementById('momAgendaTopic')?.focus();
 }
 
-function saveInlineAgendaItem(mom_id) {
+const momInlineSaving = new Set();
+
+function momInlineKey(type, mom_id) {
+  return `${type}:${mom_id}`;
+}
+
+function momStartInlineSave(type, mom_id) {
+  const key = momInlineKey(type, mom_id);
+  if(momInlineSaving.has(key)) return false;
+  momInlineSaving.add(key);
+  return true;
+}
+
+function momStopInlineSave(type, mom_id) {
+  momInlineSaving.delete(momInlineKey(type, mom_id));
+}
+
+function saveInlineAgendaItem(mom_id, options = {}) {
   const input = document.getElementById('momAgendaTopic');
   const topic = input?.value?.trim() || '';
   if(!topic) {
+    if(options.silent) return;
     toast('Agenda topic is required', 'warning');
     input?.focus();
     return;
   }
+  if(!momStartInlineSave('agenda', mom_id)) return;
   api('api/api_mom.php', {
     action: 'add_agenda_item',
     mom_id: mom_id,
@@ -318,11 +345,15 @@ function saveInlineAgendaItem(mom_id) {
   }).then(r => {
     if(r.ok) {
       toast('Agenda item added', 'success');
-      location.reload();
+      momReloadAfterToast();
     } else {
+      momStopInlineSave('agenda', mom_id);
       toast(r.msg || 'Failed to add agenda item', 'error');
     }
-  }).catch(e => toast('Error: ' + e.message, 'error'));
+  }).catch(e => {
+    momStopInlineSave('agenda', mom_id);
+    toast('Error: ' + e.message, 'error');
+  });
 }
 
 function toggleAgendaItem(item_id, checked) {
@@ -351,7 +382,7 @@ function deleteAgendaItem(item_id) {
     }).then(r => {
       if(r.ok) {
         toast('Agenda item deleted', 'success');
-        location.reload();
+        momReloadAfterToast();
       }
     }).catch(e => toast('Error: ' + e.message, 'error'));
   });
@@ -366,17 +397,19 @@ function addDiscussionNote(mom_id) {
   document.getElementById('momInlineNoteContent')?.focus();
 }
 
-function saveInlineDiscussionNote(mom_id) {
+function saveInlineDiscussionNote(mom_id, options = {}) {
   const contentEl = document.getElementById('momInlineNoteContent');
   const typeEl = document.getElementById('momInlineNoteType');
   const content = contentEl?.value?.trim() || '';
   const note_type = typeEl?.value || 'discussion';
   
   if(!content) {
+    if(options.silent) return;
     toast('Note content required', 'warning');
     contentEl?.focus();
     return;
   }
+  if(!momStartInlineSave('note', mom_id)) return;
   
   api('api/api_mom.php', {
     action: 'add_discussion_note',
@@ -386,11 +419,15 @@ function saveInlineDiscussionNote(mom_id) {
   }).then(r => {
     if(r.ok) {
       toast('Note added', 'success');
-      location.reload();
+      momReloadAfterToast();
     } else {
+      momStopInlineSave('note', mom_id);
       toast(r.msg || 'Failed to add note', 'error');
     }
-  }).catch(e => toast('Error: ' + e.message, 'error'));
+  }).catch(e => {
+    momStopInlineSave('note', mom_id);
+    toast('Error: ' + e.message, 'error');
+  });
 }
 
 function saveDiscussionNote() {
@@ -405,7 +442,7 @@ function deleteNote(note_id) {
     }).then(r => {
       if(r.ok) {
         toast('Note deleted', 'success');
-        location.reload();
+        momReloadAfterToast();
       }
     }).catch(e => toast('Error: ' + e.message, 'error'));
   });
@@ -459,17 +496,19 @@ function addDecisionFromText(text) {
   if(el) el.value = text;
 }
 
-function saveInlineDecision(mom_id) {
+function saveInlineDecision(mom_id, options = {}) {
   const decisionEl = document.getElementById('momInlineDecisionText');
   const decision = decisionEl?.value?.trim() || '';
   const rationale = document.getElementById('momInlineDecisionRationale')?.value?.trim() || '';
   const owner = document.getElementById('momInlineDecisionOwner')?.value?.trim() || '';
   
   if(!decision) {
+    if(options.silent) return;
     toast('Decision text required', 'warning');
     decisionEl?.focus();
     return;
   }
+  if(!momStartInlineSave('decision', mom_id)) return;
   
   api('api/api_mom.php', {
     action: 'add_decision',
@@ -480,11 +519,15 @@ function saveInlineDecision(mom_id) {
   }).then(r => {
     if(r.ok) {
       toast('Decision recorded', 'success');
-      location.reload();
+      momReloadAfterToast();
     } else {
+      momStopInlineSave('decision', mom_id);
       toast(r.msg || 'Failed to add decision', 'error');
     }
-  }).catch(e => toast('Error: ' + e.message, 'error'));
+  }).catch(e => {
+    momStopInlineSave('decision', mom_id);
+    toast('Error: ' + e.message, 'error');
+  });
 }
 
 function saveDecision() {
@@ -499,7 +542,7 @@ function deleteDecision(decision_id) {
     }).then(r => {
       if(r.ok) {
         toast('Decision deleted', 'success');
-        location.reload();
+        momReloadAfterToast();
       }
     }).catch(e => toast('Error: ' + e.message, 'error'));
   });
@@ -529,7 +572,7 @@ function editActionItem(action_id) {
   toast('Loaded action into inline editor. Update the fields and save.', 'info');
 }
 
-function saveInlineActionItem(mom_id) {
+function saveInlineActionItem(mom_id, options = {}) {
   const titleEl = document.getElementById('momInlineActionTitle');
   const title = titleEl?.value?.trim() || '';
   const description = document.getElementById('momInlineActionDesc')?.value?.trim() || '';
@@ -538,10 +581,12 @@ function saveInlineActionItem(mom_id) {
   const due_date = document.getElementById('momInlineActionDueDate')?.value || '';
   
   if(!title) {
+    if(options.silent) return;
     toast('Action title required', 'warning');
     titleEl?.focus();
     return;
   }
+  if(!momStartInlineSave('action', mom_id)) return;
   
   const payload = {
     action: 'add_action_item',
@@ -556,16 +601,55 @@ function saveInlineActionItem(mom_id) {
   api('api/api_mom.php', payload).then(r => {
     if(r.ok) {
       toast('Action created', 'success');
-      location.reload();
+      momReloadAfterToast();
     } else {
+      momStopInlineSave('action', mom_id);
       toast(r.msg || 'Failed to save action', 'error');
     }
-  }).catch(e => toast('Error: ' + e.message, 'error'));
+  }).catch(e => {
+    momStopInlineSave('action', mom_id);
+    toast('Error: ' + e.message, 'error');
+  });
 }
 
 function saveActionItem() {
   saveInlineActionItem(window._currentMOMId);
 }
+
+function momInlineHasContent(form) {
+  return [...form.querySelectorAll('input, textarea')]
+    .some(el => String(el.value || '').trim() !== '');
+}
+
+function saveMOMInlineForm(form) {
+  if(!form || !momInlineHasContent(form)) return;
+  const momId = Number(form.dataset.momId || 0);
+  const type = form.dataset.momAutosave || '';
+  if(!momId || !type) return;
+
+  if(type === 'agenda') saveInlineAgendaItem(momId, { silent: true });
+  if(type === 'note') saveInlineDiscussionNote(momId, { silent: true });
+  if(type === 'decision') saveInlineDecision(momId, { silent: true });
+  if(type === 'action') saveInlineActionItem(momId, { silent: true });
+}
+
+document.addEventListener('focusout', event => {
+  const form = event.target?.closest?.('[data-mom-autosave]');
+  if(!form) return;
+  setTimeout(() => {
+    if(form.contains(document.activeElement)) return;
+    saveMOMInlineForm(form);
+  }, 0);
+});
+
+document.addEventListener('keydown', event => {
+  if(event.key !== 'Enter' || event.shiftKey) return;
+  const form = event.target?.closest?.('[data-mom-autosave]');
+  if(!form) return;
+  if(event.target?.tagName === 'TEXTAREA' && event.target.id !== 'momAgendaTopic') return;
+  event.preventDefault();
+  saveMOMInlineForm(form);
+});
 
 function completeAction(action_id, checked) {
   api('api/api_mom.php', {
@@ -592,7 +676,7 @@ function deleteActionItem(action_id) {
     }).then(r => {
       if(r.ok) {
         toast('Action deleted', 'success');
-        location.reload();
+        momReloadAfterToast();
       }
     }).catch(e => toast('Error: ' + e.message, 'error'));
   });
@@ -610,7 +694,7 @@ function createReminderFromAction(action_id) {
     }).then(r => {
       if(r.ok) {
         toast('Reminder created and linked', 'success');
-        location.reload();
+        momReloadAfterToast();
       } else {
         toast(r.msg || 'Failed to create reminder', 'error');
       }
@@ -646,7 +730,7 @@ function saveInlineCaseLink(mom_id) {
   }).then(r => {
     if(r.ok) {
       toast('Case linked', 'success');
-      location.reload();
+      momReloadAfterToast();
     } else {
       toast(r.msg || 'Failed to link case', 'error');
     }
@@ -694,7 +778,7 @@ function saveMOMSidebarCases(mom_id) {
       return;
     }
     toast('Linked cases updated', 'success');
-    location.reload();
+    momReloadAfterToast();
   }).catch(e => toast('Error: ' + e.message, 'error'));
 }
 
@@ -706,7 +790,7 @@ function createCaseFromAction(action_id) {
     }).then(r => {
       if(r.ok) {
         toast('Case created and linked', 'success');
-        setTimeout(() => location.reload(), 300);
+        momReloadAfterToast(300);
       } else {
         toast(r.msg || 'Failed to create case', 'error');
       }
@@ -726,7 +810,7 @@ function resolveLinkedCaseFromMOM(mom_id, case_id) {
   }).then(r => {
     if(r.ok) {
       toast('Linked case updated', 'success');
-      setTimeout(() => location.reload(), 300);
+      momReloadAfterToast(300);
     } else {
       toast(r.msg || 'Failed to update case', 'error');
     }
@@ -755,7 +839,7 @@ function uploadMOMScreenshot(mom_id, input) {
     }).then(r => {
       if(r.ok) {
         toast('Screenshot uploaded', 'success');
-        setTimeout(() => location.reload(), 300);
+        momReloadAfterToast(300);
       } else {
         toast(r.msg || 'Failed to upload screenshot', 'error');
       }
@@ -791,9 +875,78 @@ function saveMOMSidebarScreenshots(mom_id) {
       return;
     }
     toast('Screenshots updated', 'success');
-    location.reload();
+    momReloadAfterToast();
   }).catch(e => toast('Error: ' + e.message, 'error'));
 }
+
+let momShotLightboxItems = [];
+let momShotLightboxIndex = 0;
+
+function momScreenshotGroupFor(trigger) {
+  const group = trigger?.closest?.('.mom-shot-list, .mom-preview-shots') || document;
+  return [...group.querySelectorAll('[data-mom-screenshot-src]')]
+    .map(el => ({
+      src: el.dataset.momScreenshotSrc || '',
+      alt: el.querySelector('img')?.alt || 'MOM screenshot'
+    }))
+    .filter(item => item.src);
+}
+
+function renderMOMScreenshotLightbox() {
+  const box = document.getElementById('momShotLightbox');
+  const img = document.getElementById('momShotLightboxImage');
+  const count = document.getElementById('momShotLightboxCount');
+  if(!box || !img || !momShotLightboxItems.length) return;
+
+  const item = momShotLightboxItems[momShotLightboxIndex];
+  img.src = item.src;
+  img.alt = item.alt;
+
+  const hasMany = momShotLightboxItems.length > 1;
+  box.classList.toggle('has-multiple', hasMany);
+  if(count) count.textContent = hasMany ? `${momShotLightboxIndex + 1} / ${momShotLightboxItems.length}` : '';
+}
+
+function openMOMScreenshotLightbox(trigger) {
+  const box = document.getElementById('momShotLightbox');
+  if(!box) return;
+
+  momShotLightboxItems = momScreenshotGroupFor(trigger);
+  const src = trigger?.dataset?.momScreenshotSrc || '';
+  momShotLightboxIndex = Math.max(0, momShotLightboxItems.findIndex(item => item.src === src));
+  if(!momShotLightboxItems.length) return;
+
+  renderMOMScreenshotLightbox();
+  box.classList.remove('hidden');
+  document.body.classList.add('mom-shot-lightbox-open');
+  if(window.lucide) lucide.createIcons({ nodes: box.querySelectorAll('[data-lucide]') });
+}
+
+function closeMOMScreenshotLightbox() {
+  const box = document.getElementById('momShotLightbox');
+  const img = document.getElementById('momShotLightboxImage');
+  box?.classList.add('hidden');
+  if(img) img.src = '';
+  document.body.classList.remove('mom-shot-lightbox-open');
+}
+
+function moveMOMScreenshotLightbox(direction) {
+  if(momShotLightboxItems.length <= 1) return;
+  momShotLightboxIndex = (momShotLightboxIndex + direction + momShotLightboxItems.length) % momShotLightboxItems.length;
+  renderMOMScreenshotLightbox();
+}
+
+document.addEventListener('keydown', event => {
+  const box = document.getElementById('momShotLightbox');
+  if(!box || box.classList.contains('hidden')) return;
+  if(event.key === 'Escape') closeMOMScreenshotLightbox();
+  if(event.key === 'ArrowLeft') moveMOMScreenshotLightbox(-1);
+  if(event.key === 'ArrowRight') moveMOMScreenshotLightbox(1);
+});
+
+document.addEventListener('click', event => {
+  if(event.target?.id === 'momShotLightbox') closeMOMScreenshotLightbox();
+});
 
 function filterMOMHistory(value) {
   const needle = String(value || '').trim().toLowerCase();
@@ -801,27 +954,145 @@ function filterMOMHistory(value) {
     const visible = !needle || (row.dataset.momSearch || '').includes(needle);
     row.style.display = visible ? '' : 'none';
     const preview = document.querySelector(`[data-mom-preview-row][data-preview-for="${row.dataset.mid}"]`);
-    if(preview) {
-      preview.style.display = visible && !preview.classList.contains('hidden') ? '' : 'none';
+  if(preview) {
+      preview.style.display = visible ? '' : 'none';
     }
   });
+}
+
+const MOM_PREVIEW_OPEN_MS = 280;
+const MOM_PREVIEW_CLOSE_MS = 260;
+
+function getMOMPreviewInner(row) {
+  return row?.querySelector?.('.mom-preview-inner') || null;
+}
+
+function setMOMPreviewHeight(row) {
+  const inner = getMOMPreviewInner(row);
+  if(!inner) return;
+  inner.style.setProperty('--mom-preview-height', `${inner.scrollHeight}px`);
+}
+
+function resetMOMPreviewInner(inner) {
+  if(!inner) return;
+  inner.style.maxHeight = '';
+  inner.style.opacity = '';
+  inner.style.transform = '';
+  inner.style.transition = '';
+}
+
+function refreshMOMPreviewButton(sourceRow, expanded) {
+  sourceRow?.classList.toggle('is-preview-open', expanded);
+  const btn = sourceRow?.querySelector('.mom-preview-toggle');
+  if(!btn) return;
+  btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+  btn.classList.toggle('is-active', expanded);
+  const icon = btn.querySelector('[data-lucide]');
+  if(icon) icon.setAttribute('data-lucide', expanded ? 'chevron-up' : 'chevron-down');
+  if(window.lucide) lucide.createIcons({ nodes: [btn] });
+}
+
+function closeMOMPreviewRow(row, immediate = false) {
+  if(!row || (row.classList.contains('mom-preview-collapsed') && !row.classList.contains('mom-preview-closing'))) return;
+  window.clearTimeout(row._momPreviewTimer);
+  const inner = getMOMPreviewInner(row);
+  row.classList.remove('mom-preview-opening');
+
+  const sourceRow = row.dataset.previewFor
+    ? document.querySelector(`tr[data-mid="${row.dataset.previewFor}"]`)
+    : null;
+  refreshMOMPreviewButton(sourceRow, false);
+
+  if(immediate || !inner) {
+    row.classList.add('mom-preview-collapsed');
+    row.classList.remove('mom-preview-closing');
+    row.style.display = '';
+    resetMOMPreviewInner(inner);
+    return;
+  }
+
+  row.style.display = '';
+  row.classList.add('mom-preview-closing');
+  row.classList.remove('mom-preview-collapsed');
+  inner.style.transition = 'none';
+  inner.style.maxHeight = `${inner.scrollHeight}px`;
+  inner.style.opacity = '1';
+  inner.style.transform = 'translateY(0)';
+  inner.offsetHeight;
+  inner.style.transition = '';
+  requestAnimationFrame(() => {
+    inner.style.maxHeight = '0px';
+    inner.style.opacity = '0';
+    inner.style.transform = 'translateY(-6px)';
+  });
+  row._momPreviewTimer = window.setTimeout(() => {
+    row.classList.add('mom-preview-collapsed');
+    row.classList.remove('mom-preview-closing');
+    row.style.display = '';
+    resetMOMPreviewInner(inner);
+  }, MOM_PREVIEW_CLOSE_MS);
+}
+
+function openMOMPreviewRow(row, sourceRow) {
+  window.clearTimeout(row._momPreviewTimer);
+  const inner = getMOMPreviewInner(row);
+  row.style.display = '';
+  row.classList.remove('mom-preview-collapsed', 'mom-preview-closing', 'mom-preview-opening');
+  if(inner) {
+    inner.style.transition = 'none';
+    inner.style.maxHeight = '0px';
+    inner.style.opacity = '0';
+    inner.style.transform = 'translateY(-8px)';
+    inner.offsetHeight;
+    setMOMPreviewHeight(row);
+    inner.style.transition = '';
+  }
+  row.classList.add('mom-preview-opening');
+  requestAnimationFrame(() => {
+    if(inner) {
+      inner.style.maxHeight = `${inner.scrollHeight}px`;
+      inner.style.opacity = '1';
+      inner.style.transform = 'translateY(0)';
+    }
+  });
+  row._momPreviewTimer = window.setTimeout(() => {
+    row.classList.remove('mom-preview-opening');
+    if(inner) inner.style.maxHeight = '';
+  }, MOM_PREVIEW_OPEN_MS);
+  refreshMOMPreviewButton(sourceRow, true);
 }
 
 function toggleMOMPreview(mom_id, button) {
   if(button?.disabled) return;
   const row = document.getElementById(`momPreview${mom_id}`);
   if(!row) return;
-  const willOpen = row.classList.contains('hidden');
+  const willOpen = row.classList.contains('mom-preview-collapsed') || row.classList.contains('mom-preview-closing');
   const sourceRow = button?.closest('tr');
-  row.classList.toggle('hidden', !willOpen);
-  row.style.display = willOpen ? '' : 'none';
-  sourceRow?.classList.toggle('is-preview-open', willOpen);
-  button?.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
-  button?.classList.toggle('is-active', willOpen);
-  const icon = button?.querySelector('[data-lucide]');
-  if(icon) icon.setAttribute('data-lucide', willOpen ? 'chevron-up' : 'chevron-down');
-  lucide.createIcons();
+
+  // Accordion: close all other open previews first
+  document.querySelectorAll('[data-mom-preview-row]').forEach(otherRow => {
+    if(otherRow === row) return;
+    if(!otherRow.classList.contains('mom-preview-collapsed')) {
+      closeMOMPreviewRow(otherRow, false);
+    }
+  });
+
+  // Toggle this row
+  if(willOpen) {
+    openMOMPreviewRow(row, sourceRow);
+  } else {
+    closeMOMPreviewRow(row, false);
+  }
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.mom-preview-row.hidden').forEach(row => {
+    row.classList.remove('hidden');
+    row.classList.add('mom-preview-collapsed');
+    row.classList.remove('mom-preview-opening', 'mom-preview-closing');
+    row.style.display = '';
+  });
+});
 
 // ═══════════════════════════════════════════════════════════════
 // API HELPER (uses existing tracs.js api() function)

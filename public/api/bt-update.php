@@ -11,7 +11,6 @@ $receiver_user_id= trim($body['receiver_user_id']?? '');
 $receiver_type   = trim($body['receiver_type']   ?? '');
 $amount          = floatval($body['amount']       ?? 0);
 $status          = trim($body['status']           ?? 'pending');
-$admin_name      = trim($body['admin_name']       ?? '');
 $ticket_id       = trim($body['ticket_id']        ?? '') ?: null;
 $transfer_date   = trim($body['transfer_date']    ?? '');
 
@@ -25,7 +24,6 @@ if (!in_array($sender_type,   $allowed_types,  true)) fail('Invalid sender type'
 if (!in_array($receiver_type, $allowed_types,  true)) fail('Invalid receiver type');
 if ($amount <= 0)                                      fail('Amount must be greater than 0');
 if (!in_array($status, $allowed_status, true))         fail('Invalid status');
-if (!$admin_name)                                      fail('Admin name is required');
 
 $dt = null;
 if ($transfer_date) {
@@ -49,7 +47,6 @@ $stmt = $conn->prepare("
     receiver_type    = ?,
     amount           = ?,
     status           = ?,
-    admin_name       = ?,
     ticket_id        = ?
   WHERE id = ?
 ");
@@ -59,7 +56,7 @@ $stmt->bind_param(
   $dt,
   $sender_email, $sender_user_id, $sender_type,
   $receiver_email, $receiver_user_id, $receiver_type,
-  $amount, $status, $admin_name, $ticket_id,
+  $amount, $status, $ticket_id,
   $id
 );
 

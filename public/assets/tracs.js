@@ -5,21 +5,23 @@
 const API_BASE = '/api/';
 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
 const csrfMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
-const nativeFetch = window.fetch.bind(window);
+const nativeFetch = typeof window.fetch === 'function' ? window.fetch.bind(window) : null;
 
-window.fetch = function(input, init = {}) {
-  const method = String(init.method || input?.method || 'GET').toUpperCase();
-  if (!csrfToken || !csrfMethods.has(method)) {
-    return nativeFetch(input, init);
-  }
+if (nativeFetch) {
+  window.fetch = function(input, init = {}) {
+    const method = String(init.method || input?.method || 'GET').toUpperCase();
+    if (!csrfToken || !csrfMethods.has(method)) {
+      return nativeFetch(input, init);
+    }
 
-  const headers = new Headers(init.headers || input?.headers || {});
-  if (!headers.has('X-CSRF-Token')) {
-    headers.set('X-CSRF-Token', csrfToken);
-  }
+    const headers = new Headers(init.headers || input?.headers || {});
+    if (!headers.has('X-CSRF-Token')) {
+      headers.set('X-CSRF-Token', csrfToken);
+    }
 
-  return nativeFetch(input, { ...init, headers });
-};
+    return nativeFetch(input, { ...init, headers });
+  };
+}
 
 const API = {
 
@@ -85,48 +87,362 @@ setInterval(_clock,1000); _clock();
 
 /* ── Toast ────────────────────────────────────────────── */
 const _dock=(()=>{const d=document.createElement('div');d.className='toast-dock';document.body.appendChild(d);return d;})();
+const TOAST_FLASH_KEY='tracs:toast-flash';
+let _lastToast=null;
 function toastIconFor(msg,type){
-  const text = String(msg || '').toLowerCase();
-  if(type === 'error') return 'alert-triangle';
-  if(text.includes('delete') || text.includes('deleted')) return 'trash-2';
-  if(text.includes('archive') || text.includes('archived')) return 'archive';
-  if(text.includes('resolve') || text.includes('resolved')) return 'check-circle-2';
-  if(text.includes('create') || text.includes('created') || text.includes('added') || text.includes('recorded')) return 'plus-circle';
-  if(text.includes('update') || text.includes('updated') || text.includes('saved') || text.includes('set')) return 'refresh-cw';
-  if(text.includes('transfer')) return 'arrow-right-left';
-  if(text.includes('domain')) return 'globe';
-  if(text.includes('reminder')) return 'bell';
-  if(text.includes('case')) return 'briefcase';
-  if(text.includes('task')) return 'list-checks';
-  return type === 'success' ? 'check-circle-2' : 'info';
+  if(type === 'error' || type === 'warning') return 'alert-triangle';
+  if(type === 'success') return 'check';
+  return 'info';
 }
-function toast(msg,type='info',ms=4600){
+function toast(msg,type='info',ms=6400){
+  _lastToast={msg,type};
   const t=document.createElement('div');
   const ic=toastIconFor(msg,type);
   t.className=`toast ${type}`;
   t.innerHTML=`<span class="toast-radar"><i data-lucide="${ic}" class="toast-icon"></i></span><span class="toast-msg">${msg}</span>`;
   _dock.appendChild(t);
   if(window.lucide) lucide.createIcons({ nodes: [t.querySelector('[data-lucide]')] });
-  setTimeout(()=>{t.classList.add('is-leaving');setTimeout(()=>t.remove(),240);},ms);
+  const dismiss=()=>{
+    if(!t.isConnected)return;
+    t.classList.add('is-leaving');
+    t.addEventListener('animationend',event=>{
+      if(event.target === t && event.animationName === 'toast-fade-right') t.remove();
+    },{once:true});
+    setTimeout(()=>t.remove(),520);
+  };
+  setTimeout(dismiss,ms);
+}
+window.toast=toast;
+
+function queueToastAfterReload(){
+  if(!_lastToast || !_lastToast.msg || _lastToast.type === 'error')return;
+  try{sessionStorage.setItem(TOAST_FLASH_KEY,JSON.stringify(_lastToast));}catch(e){}
 }
 
+function reloadAfterToast(delay=420){
+  queueToastAfterReload();
+  setTimeout(()=>location.reload(),delay);
+}
+
+function navigateAfterToast(url,delay=420){
+  queueToastAfterReload();
+  setTimeout(()=>{location.href=url;},delay);
+}
+
+function showQueuedToast(){
+  let payload=null;
+  try{
+    payload=sessionStorage.getItem(TOAST_FLASH_KEY);
+    sessionStorage.removeItem(TOAST_FLASH_KEY);
+  }catch(e){}
+  if(!payload)return;
+  try{
+    const data=JSON.parse(payload);
+    if(data?.msg)toast(data.msg,data.type||'info');
+  }catch(e){}
+}
+showQueuedToast();
+window.reloadAfterToast=reloadAfterToast;
+window.navigateAfterToast=navigateAfterToast;
+
 /* ── Modal system ─────────────────────────────────────── */
-function openModal(id){const el=document.getElementById(id+'Modal');if(el)el.classList.remove('hidden');}
+function openModal(id){
+  const el=document.getElementById(id+'Modal');
+  if(el)el.classList.remove('hidden');
+  window.TRACSDropdowns?.syncAll();
+}
 function closeModal(id){const el=document.getElementById(id+'Modal');if(el)el.classList.add('hidden');}
 function closeAllModals(){document.querySelectorAll('.modal-overlay:not(.hidden)').forEach(o=>o.classList.add('hidden'));}
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeAllModals();});
 document.addEventListener('click',e=>{if(e.target.classList.contains('modal-overlay'))closeAllModals();});
 
+/* ── TRACS custom dropdowns ───────────────────────────── */
+const TRACSDropdowns = (() => {
+  const instances = new WeakMap();
+  let active = null;
+  let bodyObserver = null;
+
+  const SELECTOR = 'select:not([data-tracs-native])';
+  const labelOf = option => option?.textContent?.trim() || option?.label || option?.value || '';
+  const selectedOptions = select => Array.from(select.options || []).filter(option => option.selected);
+  const visibleOptions = select => Array.from(select.options || []);
+  const mirroredClasses = select => Array.from(select.classList)
+    .filter(name => !['tracs-native-select'].includes(name))
+    .join(' ');
+
+  function dispatchNativeChange(select) {
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  function variantClass(select) {
+    const variants = [];
+    if (select.multiple) variants.push('is-multiple');
+    if (select.classList.contains('compact-select')) variants.push('is-compact');
+    if (select.classList.contains('dt-move-select')) variants.push('is-dt-move');
+    if (select.classList.contains('dt-status-select')) variants.push('is-dt-status');
+    if (select.classList.contains('bt-inline-input') || select.classList.contains('dt-inline-input') || select.classList.contains('fb-inline-input')) variants.push('is-inline');
+    return variants.join(' ');
+  }
+
+  function selectedText(select) {
+    if (select.multiple) {
+      const picked = selectedOptions(select).filter(option => option.value !== '');
+      if (!picked.length) return select.dataset.placeholder || 'Select options';
+      if (picked.length === 1) return labelOf(picked[0]);
+      return `${picked.length} selected`;
+    }
+    const selected = select.options[select.selectedIndex];
+    return labelOf(selected) || select.getAttribute('placeholder') || 'Select';
+  }
+
+  function setActiveOption(instance, index) {
+    const enabled = instance.items.filter(item => !item.option.disabled);
+    if (!enabled.length) return;
+    const bounded = Math.max(0, Math.min(index, enabled.length - 1));
+    instance.activeOption = enabled[bounded];
+    instance.items.forEach(item => item.node.classList.toggle('is-active', item === instance.activeOption));
+    instance.activeOption.node.scrollIntoView({ block: 'nearest' });
+  }
+
+  function activeIndex(instance) {
+    const enabled = instance.items.filter(item => !item.option.disabled);
+    const index = enabled.indexOf(instance.activeOption);
+    if (index >= 0) return index;
+    const selected = enabled.find(item => item.option.selected);
+    return Math.max(0, enabled.indexOf(selected));
+  }
+
+  function positionMenu(instance) {
+    if (!instance.open) return;
+    const rect = instance.trigger.getBoundingClientRect();
+    const viewportGap = 10;
+    const minWidth = Math.max(rect.width, 128);
+    instance.menu.style.minWidth = `${minWidth}px`;
+    instance.menu.style.maxWidth = `${Math.max(minWidth, Math.min(360, window.innerWidth - viewportGap * 2))}px`;
+    const menuHeight = Math.min(instance.menu.scrollHeight || 260, Math.max(160, window.innerHeight - viewportGap * 2));
+    const hasRoomBelow = rect.bottom + menuHeight + viewportGap <= window.innerHeight;
+    const top = hasRoomBelow ? rect.bottom + 4 : Math.max(viewportGap, rect.top - menuHeight - 4);
+    const left = Math.min(Math.max(viewportGap, rect.left), window.innerWidth - minWidth - viewportGap);
+    instance.menu.style.left = `${left}px`;
+    instance.menu.style.top = `${top}px`;
+    instance.menu.style.maxHeight = `${menuHeight}px`;
+    instance.menu.style.zIndex = instance.root.closest('.modal-overlay:not(.hidden)') ? '12000' : '8000';
+  }
+
+  function syncInstance(instance) {
+    const { select, root, trigger, valueEl } = instance;
+    root.className = `${mirroredClasses(select)} tracs-select ${variantClass(select)}`.trim();
+    root.classList.toggle('is-disabled', select.disabled);
+    trigger.disabled = select.disabled;
+    trigger.setAttribute('aria-expanded', instance.open ? 'true' : 'false');
+    trigger.setAttribute('aria-disabled', select.disabled ? 'true' : 'false');
+    valueEl.textContent = selectedText(select);
+    if (select.style.width) root.style.width = select.style.width;
+    if (select.classList.contains('has-value')) root.classList.add('has-value');
+    if (select.multiple) root.dataset.count = String(selectedOptions(select).length);
+    if (instance.open) renderMenu(instance);
+  }
+
+  function makeOptionNode(instance, option, index) {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'tracs-select-option';
+    item.setAttribute('role', 'option');
+    item.setAttribute('aria-selected', option.selected ? 'true' : 'false');
+    item.disabled = option.disabled;
+    item.dataset.value = option.value;
+    item.innerHTML = `
+      <span class="tracs-select-check" aria-hidden="true"></span>
+      <span class="tracs-select-option-label"></span>
+    `;
+    item.querySelector('.tracs-select-option-label').textContent = labelOf(option);
+    item.classList.toggle('is-selected', option.selected);
+    item.classList.toggle('is-placeholder', option.value === '');
+    item.addEventListener('mouseenter', () => setActiveOption(instance, index));
+    item.addEventListener('click', event => {
+      event.stopPropagation();
+      chooseOption(instance, option);
+    });
+    return item;
+  }
+
+  function renderMenu(instance) {
+    instance.menu.innerHTML = '';
+    instance.menu.className = `tracs-select-menu ${instance.select.multiple ? 'is-multiple' : ''}`;
+    instance.menu.setAttribute('role', 'listbox');
+    instance.menu.setAttribute('aria-multiselectable', instance.select.multiple ? 'true' : 'false');
+    instance.items = visibleOptions(instance.select).map((option, index) => {
+      const node = makeOptionNode(instance, option, index);
+      instance.menu.appendChild(node);
+      return { option, node };
+    });
+    const selected = instance.items.find(item => item.option.selected && !item.option.disabled);
+    instance.activeOption = selected || instance.items.find(item => !item.option.disabled) || null;
+    instance.items.forEach(item => item.node.classList.toggle('is-active', item === instance.activeOption));
+    positionMenu(instance);
+  }
+
+  function open(instance) {
+    if (instance.select.disabled) return;
+    if (active && active !== instance) close(active);
+    active = instance;
+    instance.open = true;
+    instance.root.classList.add('is-open');
+    instance.trigger.setAttribute('aria-expanded', 'true');
+    renderMenu(instance);
+    document.body.appendChild(instance.menu);
+    positionMenu(instance);
+  }
+
+  function close(instance) {
+    if (!instance) return;
+    instance.open = false;
+    instance.root.classList.remove('is-open');
+    instance.trigger.setAttribute('aria-expanded', 'false');
+    instance.menu.remove();
+    if (active === instance) active = null;
+  }
+
+  function chooseOption(instance, option) {
+    if (option.disabled) return;
+    const { select } = instance;
+    if (select.multiple) {
+      option.selected = !option.selected;
+      syncInstance(instance);
+      dispatchNativeChange(select);
+      return;
+    }
+    const changed = select.value !== option.value;
+    select.value = option.value;
+    syncInstance(instance);
+    close(instance);
+    instance.trigger.focus();
+    if (changed) dispatchNativeChange(select);
+  }
+
+  function handleKeydown(instance, event) {
+    const keys = ['ArrowDown', 'ArrowUp', 'Enter', ' ', 'Escape', 'Home', 'End'];
+    if (!keys.includes(event.key)) return;
+    if (event.key === 'Escape') {
+      close(instance);
+      instance.trigger.focus();
+      return;
+    }
+    event.preventDefault();
+    if (!instance.open) {
+      open(instance);
+      return;
+    }
+    const enabled = instance.items.filter(item => !item.option.disabled);
+    if (!enabled.length) return;
+    let index = activeIndex(instance);
+    if (event.key === 'ArrowDown') setActiveOption(instance, Math.min(enabled.length - 1, index + 1));
+    if (event.key === 'ArrowUp') setActiveOption(instance, Math.max(0, index - 1));
+    if (event.key === 'Home') setActiveOption(instance, 0);
+    if (event.key === 'End') setActiveOption(instance, enabled.length - 1);
+    if (event.key === 'Enter' || event.key === ' ') chooseOption(instance, instance.activeOption.option);
+  }
+
+  function enhance(select) {
+    if (!select || instances.has(select) || select.dataset.tracsDropdown === 'off') return null;
+    const root = document.createElement('div');
+    const trigger = document.createElement('button');
+    const valueEl = document.createElement('span');
+    const chevron = document.createElement('span');
+    const menu = document.createElement('div');
+
+    root.className = `${mirroredClasses(select)} tracs-select ${variantClass(select)}`.trim();
+    root.dataset.tracsSelectFor = select.id || select.name || '';
+    trigger.type = 'button';
+    trigger.className = 'tracs-select-trigger';
+    trigger.setAttribute('aria-haspopup', 'listbox');
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.setAttribute('aria-label', select.getAttribute('aria-label') || select.name || select.id || 'Select option');
+    valueEl.className = 'tracs-select-value';
+    chevron.className = 'tracs-select-chevron';
+    chevron.setAttribute('aria-hidden', 'true');
+    trigger.append(valueEl, chevron);
+    root.appendChild(trigger);
+
+    select.classList.add('tracs-native-select');
+    select.setAttribute('data-tracs-enhanced', 'true');
+    select.after(root);
+
+    const instance = { select, root, trigger, valueEl, menu, items: [], activeOption: null, open: false };
+    instances.set(select, instance);
+
+    trigger.addEventListener('click', () => instance.open ? close(instance) : open(instance));
+    trigger.addEventListener('keydown', event => handleKeydown(instance, event));
+    select.addEventListener('change', () => syncInstance(instance));
+    select.addEventListener('invalid', () => trigger.classList.add('is-invalid'));
+    select.addEventListener('input', () => syncInstance(instance));
+    new MutationObserver(() => syncInstance(instance)).observe(select, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['selected', 'disabled', 'label', 'value', 'class', 'style']
+    });
+
+    syncInstance(instance);
+    return instance;
+  }
+
+  function init(root = document) {
+    root.querySelectorAll?.(SELECTOR).forEach(enhance);
+  }
+
+  function syncAll() {
+    document.querySelectorAll('select[data-tracs-enhanced="true"]').forEach(select => {
+      const instance = instances.get(select);
+      if (instance) syncInstance(instance);
+    });
+  }
+
+  document.addEventListener('click', event => {
+    if (!active) return;
+    if (active.root.contains(event.target) || active.menu.contains(event.target)) return;
+    close(active);
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && active) close(active);
+  });
+  window.addEventListener('resize', () => active && positionMenu(active));
+  window.addEventListener('scroll', () => active && positionMenu(active), true);
+  document.addEventListener('DOMContentLoaded', () => {
+    init();
+    bodyObserver = new MutationObserver(records => {
+      records.forEach(record => record.addedNodes.forEach(node => {
+        if (node.nodeType !== 1) return;
+        if (node.matches?.(SELECTOR)) enhance(node);
+        init(node);
+      }));
+    });
+    bodyObserver.observe(document.body, { childList: true, subtree: true });
+  });
+
+  return { init, syncAll, syncSelect: select => instances.get(select) && syncInstance(instances.get(select)) };
+})();
+window.TRACSDropdowns = TRACSDropdowns;
+
 /* ── Report export menu ───────────────────────────────── */
 document.addEventListener('click', e => {
   const activeMenu = e.target.closest('.report-export-menu');
+  const activeRowMenu = e.target.closest('.row-action-menu');
   document.querySelectorAll('.report-export-menu[open]').forEach(menu => {
     if (menu !== activeMenu) menu.removeAttribute('open');
   });
+  document.querySelectorAll('.row-action-menu[open]').forEach(menu => {
+    if (menu !== activeRowMenu) menu.removeAttribute('open');
+  });
+  if (e.target.closest('.row-action-popover button')) {
+    const parent = e.target.closest('.row-action-menu');
+    if (parent) parent.removeAttribute('open');
+  }
 });
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
   document.querySelectorAll('.report-export-menu[open]').forEach(menu => menu.removeAttribute('open'));
+  document.querySelectorAll('.row-action-menu[open]').forEach(menu => menu.removeAttribute('open'));
 });
 
 /* ── Confirm dialog ───────────────────────────────────── */
@@ -216,12 +532,81 @@ async function api(url,data){
 }
 
 /* ── Cancellation Feedback Handlers ── */
+function parseFeedbackMulti(value) {
+    if (Array.isArray(value)) return value.filter(Boolean);
+    if (!value) return [];
+    if (typeof value === 'string') {
+        try {
+            const parsed = JSON.parse(value);
+            if (Array.isArray(parsed)) return parsed.filter(Boolean);
+        } catch (e) {}
+        return [value].filter(Boolean);
+    }
+    return [];
+}
+
+function selectedValues(id) {
+    const el = document.getElementById(id);
+    if (!el) return [];
+    if (el.matches('[data-multi-choice]')) {
+        return Array.from(el.querySelectorAll('input[type="checkbox"]:checked')).map(input => input.value).filter(Boolean);
+    }
+    return Array.from(el.selectedOptions || []).map(option => option.value).filter(Boolean);
+}
+
+function setMultiSelectValues(id, values) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const selected = new Set(parseFeedbackMulti(values));
+    if (el.matches('[data-multi-choice]')) {
+        el.querySelectorAll('input[type="checkbox"]').forEach(input => {
+            input.checked = selected.has(input.value);
+        });
+        return;
+    }
+    Array.from(el.options || []).forEach(option => { option.selected = selected.has(option.value); });
+    window.TRACSDropdowns?.syncSelect(el);
+}
+
+function appendMultiValues(fd, name, values) {
+    values.forEach(value => fd.append(`${name}[]`, value));
+}
+
+function renderFeedbackChips(values, critical = false) {
+    const items = parseFeedbackMulti(values);
+    if (!items.length) return '<span class="text-muted">—</span>';
+    return `<div class="cf-chip-row">${items.map(item => `<span class="cf-chip ${critical ? 'cf-chip-critical' : ''}">${escapeHtml(item)}</span>`).join('')}</div>`;
+}
+
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+    }[char]));
+}
+
+function formatFeedbackDate(value) {
+    if (!value) return '—';
+    const normalized = String(value).replace(' ', 'T');
+    const date = new Date(normalized);
+    if (Number.isNaN(date.getTime())) return escapeHtml(value);
+    return date.toLocaleString(undefined, { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+function referenceHtml(value) {
+    const text = String(value || '').trim();
+    if (!text) return '—';
+    const escaped = escapeHtml(text);
+    if (/^https?:\/\//i.test(text)) {
+        return `<a href="${escaped}" target="_blank" rel="noopener noreferrer" class="email-link">${escaped}</a>`;
+    }
+    return escaped;
+}
+
 function openNewFeedback() {
     document.getElementById('feedbackId').value = '';
-    document.getElementById('feedbackSubmitter').value = '';
     document.getElementById('feedbackEmail').value = '';
-    document.getElementById('feedbackService').value = '';
-    document.getElementById('feedbackReason').value = '';
+    setMultiSelectValues('feedbackService', []);
+    setMultiSelectValues('feedbackReason', []);
     document.getElementById('feedbackReference').value = '';
     document.getElementById('feedbackResolution').value = '';
     document.getElementById('feedbackDetails').value = '';
@@ -231,10 +616,9 @@ function openNewFeedback() {
 
 function openEditFeedback(data) {
     document.getElementById('feedbackId').value = data.id;
-    document.getElementById('feedbackSubmitter').value = data.submitter_name;
     document.getElementById('feedbackEmail').value = data.email_address;
-    document.getElementById('feedbackService').value = data.cancelled_service;
-    document.getElementById('feedbackReason').value = data.cancellation_reason;
+    setMultiSelectValues('feedbackService', data.cancelled_services || data.cancelled_service);
+    setMultiSelectValues('feedbackReason', data.cancellation_reasons || data.cancellation_reason);
     document.getElementById('feedbackReference').value = data.whmcs_reference;
     document.getElementById('feedbackResolution').value = data.payment_resolution;
     document.getElementById('feedbackDetails').value = data.additional_details;
@@ -247,10 +631,9 @@ function saveFeedback() {
     const url = id ? 'api/feedback-update.php' : 'api/feedback-create.php';
     const fd = new FormData();
     if (id) fd.append('id', id);
-    fd.append('submitter', document.getElementById('feedbackSubmitter').value);
     fd.append('email', document.getElementById('feedbackEmail').value);
-    fd.append('service', document.getElementById('feedbackService').value);
-    fd.append('reason', document.getElementById('feedbackReason').value);
+    appendMultiValues(fd, 'service', selectedValues('feedbackService'));
+    appendMultiValues(fd, 'reason', selectedValues('feedbackReason'));
     fd.append('reference', document.getElementById('feedbackReference').value);
     fd.append('resolution', document.getElementById('feedbackResolution').value);
     fd.append('details', document.getElementById('feedbackDetails').value);
@@ -259,7 +642,8 @@ function saveFeedback() {
     .then(r => r.json())
     .then(res => {
         if (res.success) {
-            location.reload();
+            toast(id ? 'Feedback updated' : 'Feedback added', 'success');
+            reloadAfterToast();
         } else {
             alert(res.error || 'Save failed');
         }
@@ -273,19 +657,39 @@ function deleteFeedback(id) {
     fetch('api/feedback-delete.php', { method: 'POST', body: fd })
     .then(r => r.json())
     .then(res => {
-        if (res.success) location.reload();
+        if (res.success) {
+          toast('Feedback deleted', 'success');
+          reloadAfterToast();
+        }
         else alert(res.error || 'Delete failed');
     });
 }
 
 function viewFeedback(id) {
-    // Basic view: just scroll or highlight for now, or could expand row
-    const row = document.querySelector(`tr[data-feedback-id="${id}"]`);
-    if (row) {
-        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        row.style.background = 'var(--blue-lt)';
-        setTimeout(() => row.style.background = '', 2000);
+    const data = window.feedbackRecords?.[id];
+    if (!data) return;
+    const criticalReasons = ['Frequent downtime', 'DDoS / security-related instability', 'Slow server performance', 'Repeated Issue', 'Issue not resolved'];
+    const reasons = parseFeedbackMulti(data.cancellation_reasons || data.cancellation_reason);
+    const hasCritical = reasons.some(reason => criticalReasons.includes(reason));
+    document.getElementById('feedbackViewSub').textContent = `Feedback #${data.id || id}`;
+    document.getElementById('fvSubmitter').textContent = data.submitter_name || '—';
+    document.getElementById('fvEmail').innerHTML = data.email_address ? `<a href="mailto:${escapeHtml(data.email_address)}" class="email-link">${escapeHtml(data.email_address)}</a>` : '—';
+    document.getElementById('fvServices').innerHTML = renderFeedbackChips(data.cancelled_services || data.cancelled_service);
+    document.getElementById('fvReasons').innerHTML = renderFeedbackChips(reasons, hasCritical);
+    document.getElementById('fvReference').innerHTML = referenceHtml(data.whmcs_reference);
+    document.getElementById('fvResolution').textContent = data.payment_resolution || '—';
+    document.getElementById('fvCreated').textContent = formatFeedbackDate(data.created_at);
+    document.getElementById('fvUpdated').textContent = formatFeedbackDate(data.updated_at);
+    document.getElementById('fvCreator').textContent = data.creator_name || data.created_by_name || '—';
+    document.getElementById('fvDetails').textContent = data.additional_details || '—';
+    const editBtn = document.getElementById('feedbackViewEdit');
+    if (editBtn) {
+        editBtn.onclick = () => {
+            closeModal('feedbackView');
+            openEditFeedback(data);
+        };
     }
+    openModal('feedbackView');
 }
 
 function copyToClipboard(text) {
@@ -298,16 +702,15 @@ function copyToClipboard(text) {
 /* ── Inline Feedback Handlers ── */
 function quickSaveFeedback() {
     const fd = new FormData();
-    fd.append('submitter', document.getElementById('inSubmitter').value);
-    fd.append('service', document.getElementById('inService').value);
-    fd.append('reason', document.getElementById('inReason').value);
+    appendMultiValues(fd, 'service', selectedValues('inService'));
+    appendMultiValues(fd, 'reason', selectedValues('inReason'));
     fd.append('reference', document.getElementById('inRef').value);
     fd.append('email', document.getElementById('inEmail').value);
     fd.append('resolution', document.getElementById('inResolution').value);
     fd.append('details', document.getElementById('inDetails').value);
 
-    if (!val('inSubmitter') || !val('inService') || !val('inReason')) {
-        alert('Submitter, Service, and Reason are required.');
+    if (!selectedValues('inService').length || !selectedValues('inReason').length) {
+        alert('Service and Reason are required.');
         return;
     }
 
@@ -315,7 +718,8 @@ function quickSaveFeedback() {
     .then(r => r.json())
     .then(res => {
         if (res.success) {
-            location.reload();
+            toast('Feedback added', 'success');
+            reloadAfterToast();
         } else {
             alert(res.error || 'Save failed');
         }
@@ -323,9 +727,8 @@ function quickSaveFeedback() {
 }
 
 function clearInlineFeedback() {
-    document.getElementById('inSubmitter').value = '';
-    document.getElementById('inService').value = '';
-    document.getElementById('inReason').value = '';
+    setMultiSelectValues('inService', []);
+    setMultiSelectValues('inReason', []);
     document.getElementById('inRef').value = '';
     document.getElementById('inEmail').value = '';
     document.getElementById('inResolution').value = '';
@@ -335,12 +738,17 @@ function clearInlineFeedback() {
 
 /* ── DOM helpers ──────────────────────────────────────── */
 function val(id){return document.getElementById(id)?.value||'';}
-function setVal(id,v){const el=document.getElementById(id);if(el)el.value=v||'';}
+function setVal(id,v){
+  const el=document.getElementById(id);
+  if(!el)return;
+  el.value=v||'';
+  if(el.matches?.('select')) window.TRACSDropdowns?.syncSelect(el);
+}
 function removeRow(sel){
   const el=document.querySelector(sel);
   if(el){el.style.cssText='opacity:0;transition:opacity .18s';setTimeout(()=>el.remove(),180);}
 }
-function _reload(){setTimeout(()=>location.reload(),420);}
+function _reload(){reloadAfterToast();}
 
 /* ── CASE CRUD ────────────────────────────────────────── */
 function openNewCase(){
@@ -374,8 +782,17 @@ async function saveCase(){
 }
 async function deleteCase(id){
   confirm('Delete this case permanently? This cannot be undone.',async()=>{
+    const row=document.querySelector(`[data-cid="${id}"]`);
     const d=await api(API.CASE.DELETE,{id});
-    if(d.success){toast('Case deleted','success');removeRow(`[data-cid="${id}"]`);}
+    if(d.success){
+      const badgeContainer = document.getElementById('notif-badge-container');
+      if (badgeContainer && badgeContainer.dataset.badgeMode !== 'alerts' && row?.dataset.status !== 'completed') {
+        const current = parseInt(badgeContainer.dataset.staticExtra || '0', 10) || 0;
+        badgeContainer.dataset.staticExtra = String(Math.max(0, current - 1));
+        refreshNotificationBadge();
+      }
+      toast('Case deleted','success');removeRow(`[data-cid="${id}"]`);
+    }
     else toast(d.message||'Error','error');
   });
 }
@@ -410,11 +827,20 @@ async function saveReminder(){
   else toast(d.message||'Error','error');
 }
 async function deleteReminder(id){
-  confirm('Delete this reminder?',async()=>{
+  confirm('Delete this reminder permanently? Use Mark Done for handled reminders so the history remains available.',async()=>{
+    const row=document.querySelector(`[data-rid="${id}"]`);
     const d=await api(API.REMINDER.DELETE,{id});
-    if(d.success){toast('Reminder deleted','success');removeRow(`[data-rid="${id}"]`);}
+    if(d.success){
+      const badgeContainer = document.getElementById('notif-badge-container');
+      if (badgeContainer && row?.dataset.completed !== '1' && (badgeContainer.dataset.badgeMode !== 'alerts' || row?.dataset.notifAlert === '1')) {
+        const current = parseInt(badgeContainer.dataset.staticExtra || '0', 10) || 0;
+        badgeContainer.dataset.staticExtra = String(Math.max(0, current - 1));
+        refreshNotificationBadge();
+      }
+      toast('Reminder deleted','success');removeRow(`[data-rid="${id}"]`);
+    }
     else toast(d.message||'Error','error');
-  });
+  }, 'Delete Reminder');
 }
 async function toggleReminder(id,checked){
   const row=document.querySelector(`[data-rid="${id}"]`);
@@ -422,14 +848,27 @@ async function toggleReminder(id,checked){
   const d=await api(API.REMINDER.TOGGLE,{id,is_completed:checked?1:0});
   if(d.success){
     row?.querySelector('.rem-title')?.classList.toggle('done',checked);
+    row?.querySelectorAll('.rem-check').forEach(box => { box.checked = checked; });
     const badgeContainer = document.getElementById('notif-badge-container');
     if (badgeContainer) {
       const current = parseInt(badgeContainer.dataset.staticExtra || '0', 10) || 0;
-      badgeContainer.dataset.staticExtra = String(Math.max(0, current + (checked ? -1 : 1)));
+      const alertMode = badgeContainer.dataset.badgeMode === 'alerts';
+      let shouldAdjust = true;
+      if (alertMode) {
+        const due = row?.dataset.due ? new Date(row.dataset.due).getTime() : NaN;
+        const dueSoon = Number.isFinite(due) && due <= Date.now() + 5 * 60 * 1000;
+        shouldAdjust = row?.dataset.notifAlert === '1' || (!checked && dueSoon);
+        if (row) row.dataset.notifAlert = (!checked && dueSoon) ? '1' : '0';
+      }
+      if (shouldAdjust) {
+        badgeContainer.dataset.staticExtra = String(Math.max(0, current + (checked ? -1 : 1)));
+      }
+      refreshNotificationBadge();
     }
-    if (checked) row?.querySelector('.rem-done-btn')?.remove();
+    syncReminderPrimaryAction(row, id, checked);
     moveCheckableRow(row, checked);
     _updateProgress();
+    toast(checked?'Reminder completed':'Reminder reopened','success');
   }else{
     if(row){
       const box=row.querySelector('.rem-check');
@@ -441,7 +880,31 @@ async function toggleReminder(id,checked){
 }
 
 function completeReminder(id){
+  const row=document.querySelector(`[data-rid="${id}"]`);
+  row?.querySelectorAll('.rem-check').forEach(box => { box.checked = true; });
   toggleReminder(id, true);
+}
+
+function syncReminderPrimaryAction(row, id, checked){
+  if(!row)return;
+  const action = row.querySelector('.rem-primary-action');
+  if(!action)return;
+  const compact = action.dataset.compactAction === '1';
+  if(checked){
+    action.className = compact ? 'btn btn-ghost btn-icon rem-primary-action' : 'btn btn-ghost btn-sm rem-primary-action';
+    action.title = 'Reopen reminder';
+    action.setAttribute('aria-label', 'Reopen reminder');
+    action.onclick = () => toggleReminder(id, false);
+    action.innerHTML = compact ? '<i data-lucide="rotate-ccw" class="icon-sm"></i>' : '<i data-lucide="rotate-ccw" class="icon-xs"></i>Reopen';
+  }else{
+    action.className = compact ? 'btn btn-ghost btn-icon rem-done-btn rem-primary-action' : 'btn btn-success btn-sm rem-done-btn rem-primary-action';
+    action.title = compact ? 'Mark reminder done' : 'Mark reminder as done';
+    action.setAttribute('aria-label', 'Mark reminder done');
+    action.onclick = () => completeReminder(id);
+    action.innerHTML = compact ? '<i data-lucide="check-square" class="icon-sm"></i>' : '<i data-lucide="check" class="icon-xs"></i>Mark Done';
+  }
+  if(compact) action.dataset.compactAction = '1';
+  if(window.lucide) lucide.createIcons({ nodes: action.querySelectorAll('[data-lucide]') });
 }
 
 /* ── TASK CRUD ────────────────────────────────────────── */
@@ -497,6 +960,7 @@ async function toggleTask(id,checked){
     }
     moveCheckableRow(row, checked);
     _updateProgress();
+    toast(checked?'Task completed':'Task reopened','success');
   }else{
     if(row){
       const box=row.querySelector('.task-chk');
@@ -547,18 +1011,28 @@ function _updateProgress(){
   if(lbl)lbl.textContent=`${done} / ${total}`;
   if(pctlbl)pctlbl.textContent=pct+'%';
 
-  // Update Notification Badge
-  const pending = total - done;
+  refreshNotificationBadge(total - done);
+}
+
+function refreshNotificationBadge(pendingOverride){
   const badgeContainer = document.getElementById('notif-badge-container');
-  if (badgeContainer) {
-    const extra = parseInt(badgeContainer.dataset.staticExtra || '0', 10) || 0;
-    const checklistCount = parseInt(badgeContainer.dataset.uncheckedChecklist || String(pending), 10) || 0;
-    const count = checklistCount + extra;
-    if (count > 0) {
-      badgeContainer.innerHTML = `<span class="bell-badge">${count}</span>`;
-    } else {
-      badgeContainer.innerHTML = '';
-    }
+  if (!badgeContainer) return;
+  if (badgeContainer.dataset.badgeMode === 'alerts') {
+    const count = parseInt(badgeContainer.dataset.staticExtra || '0', 10) || 0;
+    badgeContainer.innerHTML = count > 0 ? `<span class="bell-badge">${Math.min(count, 99)}</span>` : '';
+    return;
+  }
+  const taskBoxes=document.querySelectorAll('.task-chk');
+  const pending = typeof pendingOverride === 'number'
+    ? pendingOverride
+    : (taskBoxes.length ? [...taskBoxes].filter(b=>!b.checked).length : 0);
+  const extra = parseInt(badgeContainer.dataset.staticExtra || '0', 10) || 0;
+  const checklistCount = parseInt(badgeContainer.dataset.uncheckedChecklist || String(pending), 10) || 0;
+  const count = checklistCount + extra;
+  if (count > 0) {
+    badgeContainer.innerHTML = `<span class="bell-badge">${Math.min(count, 99)}</span>`;
+  } else {
+    badgeContainer.innerHTML = '';
   }
 }
 
@@ -784,7 +1258,7 @@ async function saveOpsStatus() {
     }
 
     toast('Ops status saved', 'success');
-    location.reload();
+    reloadAfterToast();
 
   } catch (err) {
 
@@ -817,7 +1291,7 @@ async function archiveOpsStatus() {
     }
 
     toast('Ops status archived', 'success');
-    location.reload();
+    reloadAfterToast();
 
   } catch (err) {
 
@@ -1040,6 +1514,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!from || !to) return;
 
       [from.value, to.value] = [to.value, from.value];
+      window.TRACSDropdowns?.syncSelect(from);
+      window.TRACSDropdowns?.syncSelect(to);
 
       convertCurrency();
     });
@@ -1194,6 +1670,7 @@ async function quickStatusUpdate(id, selectEl) {
       badge.className  = 'dt-status ' + (DT_STATUS_CLASS[prevStatus] || '');
       badge.textContent = DT_STATUS_LABEL[prevStatus] || prevStatus;
       selectEl.value   = prevStatus;
+      window.TRACSDropdowns?.syncSelect(selectEl);
     }
   }
 }
@@ -1217,6 +1694,7 @@ async function quickMoveUpdate(id, selectEl) {
     toast(d.message || 'Error updating', 'error');
     selectEl.value = prevVal;
     selectEl.classList.toggle('has-value', !!prevVal);
+    window.TRACSDropdowns?.syncSelect(selectEl);
   }
 }
 
@@ -1354,12 +1832,10 @@ API.BT = {
 /* Inline Quick-Save (New Balance Transfer) */
 async function quickSaveBt() {
   const amount      = parseFloat(val('nAmount')) || 0;
-  const admin_name  = val('nAdmin').trim();
   const sender_type = val('nSenderType');
   const receiver_type = val('nReceiverType');
 
   if (!amount || amount <= 0) { toast('Amount is required', 'error'); document.getElementById('nAmount').focus(); return; }
-  if (!admin_name)            { toast('Operator is required', 'error'); document.getElementById('nAdmin').focus(); return; }
 
   const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const sender_email    = val('nSenderEmail').trim();
@@ -1381,7 +1857,6 @@ async function quickSaveBt() {
     receiver_type,
     amount,
     status:           val('nStatus'),
-    admin_name,
     ticket_id:        val('nTicket').trim() || null,
     transfer_date
   });
@@ -1412,7 +1887,6 @@ function openEditBt(data) {
   setVal('btReceiverType',  data.receiver_type);
   setVal('btAmount',        data.amount);
   setVal('btStatus',        data.status);
-  setVal('btAdmin',         data.admin_name);
   setVal('btTicket',        data.ticket_id || '');
   openModal('bt');
 }
@@ -1421,11 +1895,9 @@ function openEditBt(data) {
 async function saveEditBt() {
   const id         = val('btId');
   const amount     = parseFloat(val('btAmount')) || 0;
-  const admin_name = val('btAdmin').trim();
 
   if (!id)                    { toast('Invalid record', 'error'); return; }
   if (!amount || amount <= 0) { toast('Amount is required', 'error'); return; }
-  if (!admin_name)            { toast('Operator is required', 'error'); return; }
 
   const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const sender_email   = val('btSenderEmail').trim();
@@ -1444,7 +1916,6 @@ async function saveEditBt() {
     receiver_type:    val('btReceiverType'),
     amount,
     status:           val('btStatus'),
-    admin_name,
     ticket_id:        val('btTicket').trim() || null
   });
 

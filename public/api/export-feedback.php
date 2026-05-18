@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/_export_helpers.php';
+require_once __DIR__ . '/../../modules/cancellation-feedback/model.php';
 
 [$from, $to] = export_date_range();
 
@@ -14,33 +15,38 @@ $params = [];
 
 if ($q !== '') {
     $like = '%' . $q . '%';
-    $where[] = '(email_address LIKE ? OR whmcs_reference LIKE ? OR submitter_name LIKE ? OR cancelled_service LIKE ? OR additional_details LIKE ?)';
-    $types .= 'sssss';
-    array_push($params, $like, $like, $like, $like, $like);
+    $where[] = '(f.email_address LIKE ? OR f.whmcs_reference LIKE ? OR f.submitter_name LIKE ? OR f.cancelled_service LIKE ? OR f.additional_details LIKE ? OR f.created_by_name LIKE ? OR u.name LIKE ? OR u.email LIKE ?)';
+    $types .= 'ssssssss';
+    array_push($params, $like, $like, $like, $like, $like, $like, $like, $like);
 }
 if ($service !== '') {
-    $where[] = 'cancelled_service = ?';
-    $types .= 's';
+    $where[] = '(f.cancelled_service = ? OR f.cancelled_service LIKE ?)';
+    $types .= 'ss';
     $params[] = $service;
+    $params[] = '%"' . $service . '"%';
 }
 if ($reason !== '') {
-    $where[] = 'cancellation_reason = ?';
-    $types .= 's';
+    $where[] = '(f.cancellation_reason = ? OR f.cancellation_reason LIKE ?)';
+    $types .= 'ss';
     $params[] = $reason;
+    $params[] = '%"' . $reason . '"%';
 }
 if ($resolution !== '') {
-    $where[] = 'payment_resolution = ?';
+    $where[] = 'f.payment_resolution = ?';
     $types .= 's';
     $params[] = $resolution;
 }
 
-export_add_date_filter($where, $types, $params, 'created_at', $from, $to, true);
+export_add_date_filter($where, $types, $params, 'f.created_at', $from, $to, true);
 
-$sql = 'SELECT id, submitter_name, cancelled_service, cancellation_reason, additional_details,
-               whmcs_reference, email_address, payment_resolution, created_at, updated_at
-        FROM tracs_cancellation_feedback
+$sql = 'SELECT f.id,
+               COALESCE(NULLIF(f.created_by_name,\'\'), NULLIF(u.name,\'\'), u.email, NULLIF(f.submitter_name,\'\'), \'System\') AS submitter_name,
+               f.cancelled_service, f.cancellation_reason, f.additional_details,
+               f.whmcs_reference, f.email_address, f.payment_resolution, f.created_at, f.updated_at
+        FROM tracs_cancellation_feedback f
+        LEFT JOIN tracs_users u ON f.created_by = u.id
         WHERE ' . implode(' AND ', $where) . '
-        ORDER BY created_at DESC';
+        ORDER BY f.created_at DESC';
 
 $result = export_query($conn, $sql, $types, $params);
 export_send_csv(
@@ -50,8 +56,8 @@ export_send_csv(
     fn(array $row) => [
         $row['id'] ?? '',
         $row['submitter_name'] ?? '',
-        $row['cancelled_service'] ?? '',
-        $row['cancellation_reason'] ?? '',
+        cf_display_multi_value($row['cancelled_service'] ?? ''),
+        cf_display_multi_value($row['cancellation_reason'] ?? ''),
         $row['additional_details'] ?? '',
         $row['whmcs_reference'] ?? '',
         $row['email_address'] ?? '',

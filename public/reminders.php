@@ -86,7 +86,7 @@ include 'includes/header.php';
           <th>Priority</th>
           <th>Status</th>
           <th>Due Date</th>
-          <th style="width:80px"></th>
+          <th style="width:170px;text-align:right">Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -114,10 +114,28 @@ include 'includes/header.php';
         </td>
         <td><span class="badge <?=$pb?>"><?=ucfirst($rprio)?></span></td>
         <td><span class="<?=$scls?>"><?=esc($rstat)?></span></td>
-        <td><span class="rem-date-display"><?=$rdue_fmt?></span></td>
-        <td class="tracs-acts">
-          <button class="btn btn-ghost btn-icon" onclick="openEditReminder(<?=$rid?>)" title="Edit"><i data-lucide="edit-2" class="icon-sm"></i></button>
-          <button class="btn btn-danger btn-icon" onclick="deleteReminder(<?=$rid?>)" title="Delete"><i data-lucide="trash-2" class="icon-sm"></i></button>
+        <td>
+          <span class="rem-date-display"><?=$rdue_fmt?></span>
+        </td>
+        <td>
+          <div class="rem-table-actions">
+            <?php if($rdone): ?>
+            <button class="btn btn-ghost btn-sm rem-primary-action" type="button" onclick="toggleReminder(<?=$rid?>,false)" title="Reopen reminder">
+              <i data-lucide="rotate-ccw" class="icon-xs"></i>Reopen
+            </button>
+            <?php else: ?>
+            <button class="btn btn-success btn-sm rem-done-btn rem-primary-action" type="button" onclick="completeReminder(<?=$rid?>)" title="Mark reminder as done">
+              <i data-lucide="check" class="icon-xs"></i>Mark Done
+            </button>
+            <?php endif; ?>
+          <details class="row-action-menu">
+            <summary class="btn btn-ghost btn-icon" title="Actions" aria-label="Row actions"><i data-lucide="more-vertical" class="icon-sm"></i></summary>
+            <div class="row-action-popover">
+              <button class="btn btn-ghost btn-sm" type="button" onclick="openEditReminder(<?=$rid?>)"><i data-lucide="pencil" class="icon-xs"></i>Edit</button>
+              <button class="btn btn-danger btn-sm" type="button" onclick="deleteReminder(<?=$rid?>)"><i data-lucide="trash-2" class="icon-xs"></i>Delete</button>
+            </div>
+          </details>
+          </div>
         </td>
       </tr>
       <?php endforeach; ?>

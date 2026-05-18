@@ -86,7 +86,7 @@ include 'includes/header.php';
           <th style="width:40px;text-align:center"></th>
           <th>Title</th>
           <th>Created</th>
-          <th style="width:80px"></th>
+          
         </tr>
       </thead>
       <tbody>
@@ -103,10 +103,15 @@ include 'includes/header.php';
           <?php if($tdesc):?><div class="task-sub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="<?=$tdesc?>"><?=$tdesc?></div><?php endif;?>
           <?=tracs_creator_meta($t)?>
         </td>
-        <td><?php if($tdate_fmt):?><span class="task-date-cell"><?=$tdate_fmt?></span><?php endif;?></td>
-        <td class="tracs-acts">
-          <button class="btn btn-ghost btn-icon" onclick="openEditTask(<?=$tid?>)" title="Edit"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button>
-          <button class="btn btn-danger btn-icon" onclick="deleteTask(<?=$tid?>)" title="Delete"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
+        <td>
+          <?php if($tdate_fmt):?><span class="task-date-cell"><?=$tdate_fmt?></span><?php endif;?>
+          <details class="row-action-menu">
+            <summary class="btn btn-ghost btn-icon" title="Actions" aria-label="Row actions"><i data-lucide="more-vertical" class="icon-sm"></i></summary>
+            <div class="row-action-popover">
+              <button class="btn btn-ghost btn-sm" type="button" onclick="openEditTask(<?=$tid?>)">Edit</button>
+              <button class="btn btn-danger btn-sm" type="button" onclick="deleteTask(<?=$tid?>)">Delete</button>
+            </div>
+          </details>
         </td>
       </tr>
       <?php endforeach; ?>

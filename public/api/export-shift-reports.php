@@ -41,7 +41,9 @@ if ($q !== '') {
 }
 export_add_date_filter($where, $types, $params, 'r.active_date', $from, $to);
 
-$sql = 'SELECT r.active_date, r.shift_name, r.title, r.details, r.priority, r.status, u.email AS creator_email, r.resolved_at, r.created_at, r.updated_at
+$sql = 'SELECT r.active_date, r.shift_name, r.title, r.details, r.priority, r.status,
+               COALESCE(NULLIF(r.created_by_name,\'\'), NULLIF(u.name,\'\'), u.email, \'System\') AS creator_name,
+               r.resolved_at, r.created_at, r.updated_at
         FROM tracs_shift_reports r
         LEFT JOIN tracs_users u ON r.created_by = u.id
         WHERE ' . implode(' AND ', $where) . '
@@ -59,7 +61,7 @@ export_send_csv(
         $row['details'] ?? '',
         $row['priority'] ?? '',
         $row['status'] ?? '',
-        $row['creator_email'] ?? '',
+        $row['creator_name'] ?? '',
         $row['resolved_at'] ?? '',
         $row['created_at'] ?? '',
         $row['updated_at'] ?? '',

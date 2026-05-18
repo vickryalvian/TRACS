@@ -8,20 +8,31 @@ require_once __DIR__ . '/../../modules/cancellation-feedback/controller.php';
 tracs_ensure_creator_columns($conn, 'tracs_cancellation_feedback', null);
 
 $controller = new CancellationFeedbackController($conn, $uid);
+$services = cf_filter_allowed_values($_POST['service'] ?? [], cf_allowed_services());
+$reasons = cf_filter_allowed_values($_POST['reason'] ?? [], cf_allowed_reasons());
+$resolution = trim((string)($_POST['resolution'] ?? ''));
+if ($resolution !== '' && !in_array($resolution, cf_allowed_resolutions(), true)) {
+    $resolution = '';
+}
 
 $data = [
-    'submitter_name'      => $_POST['submitter'] ?? '',
-    'cancelled_service'   => $_POST['service'] ?? '',
-    'cancellation_reason' => $_POST['reason'] ?? '',
-    'additional_details'  => $_POST['details'] ?? '',
-    'whmcs_reference'     => $_POST['reference'] ?? '',
-    'email_address'       => $_POST['email'] ?? '',
-    'payment_resolution'  => $_POST['resolution'] ?? '',
+    'submitter_name'      => $creator_name,
+    'cancelled_service'   => cf_encode_multi_value($services),
+    'cancellation_reason' => cf_encode_multi_value($reasons),
+    'additional_details'  => trim((string)($_POST['details'] ?? '')),
+    'whmcs_reference'     => trim((string)($_POST['reference'] ?? '')),
+    'email_address'       => trim((string)($_POST['email'] ?? '')),
+    'payment_resolution'  => $resolution,
 ];
 
 // Validation
-if (empty($data['submitter_name']) || empty($data['cancelled_service']) || empty($data['cancellation_reason'])) {
-    echo json_encode(['success' => false, 'error' => 'Submitter, Service, and Reason are required.']);
+if (empty($services) || empty($reasons)) {
+    echo json_encode(['success' => false, 'error' => 'Service and Reason are required.']);
+    exit;
+}
+
+if ($data['email_address'] !== '' && !filter_var($data['email_address'], FILTER_VALIDATE_EMAIL)) {
+    echo json_encode(['success' => false, 'error' => 'Email address is invalid.']);
     exit;
 }
 

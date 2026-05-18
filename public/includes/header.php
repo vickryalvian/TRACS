@@ -2,9 +2,23 @@
 /* TRACS — Header Include
    Requires: $page_title, $active_page, $user_email, $ticker_items, $critical_count */
 require_once __DIR__ . '/../../core/security/csrf.php';
+if (isset($conn) && $conn instanceof mysqli) {
+  require_once __DIR__ . '/../../core/user_management.php';
+}
 $_un  = explode('@',$user_email??'op@tracs',2)[0];
 $_av  = strtoupper(substr($_un,0,1));
 $_cnt = (int)($critical_count??0);
+$_can_um = false;
+$_can_monitoring = false;
+$_header_user = null;
+if (isset($conn) && $conn instanceof mysqli && !empty($_SESSION['user_id'])) {
+  $_header_user = tracs_get_user_by_id($conn, (int)$_SESSION['user_id']);
+  $_can_um = tracs_user_can($conn, 'users.view') || tracs_user_can($conn, 'divisions.view') || tracs_user_can($conn, 'roles.view');
+  $_can_monitoring = tracs_user_can($conn, 'tasks.view_own') || tracs_user_can($conn, 'tasks.monitor');
+  if ($_header_user) {
+    $_av = tracs_user_initials($_header_user['display_name'] ?? '', $_header_user['email'] ?? ($_un ?: 'U'));
+  }
+}
 
 // Build ticker HTML (doubled for seamless loop)
 $_ti = $ticker_items??[['text'=>'All systems operational','class'=>'normal']];
@@ -70,6 +84,12 @@ $_css_v = @filemtime(__DIR__.'/../assets/tracs.css') ?: time();
       <i data-lucide="clipboard-list" class="icon-md"></i>
       <span class="nav-tip">Shift Reports</span>
     </a>
+    <?php if($_can_monitoring): ?>
+    <a href="<?=tracs_user_can($conn, 'tasks.monitor') ? 'monitoring.php' : 'tasks.php'?>" class="nav-item <?=$active_page==='monitoring'?'active':''?>">
+      <i data-lucide="kanban-square" class="icon-md"></i>
+      <span class="nav-tip">Tasks / Monitoring</span>
+    </a>
+    <?php endif; ?>
     <a href="domains.php" class="nav-item <?=$active_page==='domains'?'active':''?>">
       <i data-lucide="globe" class="icon-md"></i>
       <span class="nav-tip">Domains</span>
@@ -96,12 +116,34 @@ $_css_v = @filemtime(__DIR__.'/../assets/tracs.css') ?: time();
       <i data-lucide="activity" class="icon-md"></i>
       <span class="nav-tip">Activity Log</span>
     </a>
+    <?php if($_can_um): ?>
+    <a href="user-management.php" class="nav-item <?=$active_page==='user-management'?'active':''?>">
+      <i data-lucide="users-round" class="icon-md"></i>
+      <span class="nav-tip">User Management</span>
+    </a>
+    <a href="intern-management.php" class="nav-item <?=$active_page==='intern-management'?'active':''?>">
+      <i data-lucide="graduation-cap" class="icon-md"></i>
+      <span class="nav-tip">Intern Management</span>
+    </a>
+    <?php endif; ?>
   </nav>
   <div class="sidebar-bottom">
-    <div class="user-avatar" style="position:relative;">
-      <?=$_av?>
-      <span class="nav-tip"><?=htmlspecialchars($user_email??'')?></span>
-    </div>
+    <details class="user-menu-wrap" id="userMenuWrap">
+      <summary class="user-avatar" style="position:relative;" aria-label="User menu">
+        <?=$_av?>
+        <span class="nav-tip"><?=htmlspecialchars($user_email??'')?></span>
+      </summary>
+      <div class="user-menu" role="menu" aria-label="User account menu">
+        <div class="user-menu-head">
+          <strong><?=htmlspecialchars($_header_user['display_name'] ?? ($_SESSION['user_name'] ?? $user_email ?? 'User'))?></strong>
+          <span><?=htmlspecialchars($_header_user['email'] ?? $user_email ?? '')?></span>
+        </div>
+        <a href="profile.php?section=profile" role="menuitem"><i data-lucide="user" class="icon-sm"></i>My Profile</a>
+        <a href="profile.php?section=security" role="menuitem"><i data-lucide="lock-keyhole" class="icon-sm"></i>Change Password</a>
+        <a href="profile.php?section=preferences" role="menuitem"><i data-lucide="sliders-horizontal" class="icon-sm"></i>Preferences</a>
+        <a href="../auth/logout.php" role="menuitem" class="danger"><i data-lucide="log-out" class="icon-sm"></i>Logout</a>
+      </div>
+    </details>
     <div class="theme-menu-wrap" id="themeMenuWrap">
       <button class="theme-toggle" id="themeToggle" type="button" title="Theme" aria-label="Theme" aria-haspopup="menu" aria-expanded="false">
         <i data-lucide="sun" class="icon-md ic-sun"></i>

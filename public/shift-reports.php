@@ -306,15 +306,16 @@ include 'includes/header.php';
     <div class="empty"><div class="empty-ic"><i data-lucide="clipboard-list"></i></div><div class="empty-t">No reports found</div><div class="empty-s">Try a different filter or create a new report</div></div>
     <?php else: ?>
     <div class="table-wrap">
-      <table class="tracs-table">
+      <table class="tracs-table shift-report-table">
         <thead>
           <tr>
             <th>Date</th>
+            <th>Submitter</th>
             <th>Shift</th>
             <th>Title</th>
             <th>Priority</th>
             <th>Status</th>
-            <th style="width:80px"></th>
+            
           </tr>
         </thead>
         <tbody>
@@ -325,6 +326,7 @@ include 'includes/header.php';
           $status=$r['status']??'active';
           $prio=strtolower($r['priority']??'medium');
           $details=esc($r['details']??'');
+          $submitter=tracs_creator_label($r);
           
           $pb=prio_badge($prio);
           $sb=($status==='resolved')?'b-done':'b-active';
@@ -332,6 +334,14 @@ include 'includes/header.php';
         ?>
         <tr class="shift-tr" data-id="<?=$id?>" data-title="<?=$title?>" data-shift="<?=$shift?>" data-prio="<?=$prio?>" data-status="<?=$status?>" data-details="<?=$details?>" data-date="<?=$r['active_date']??''?>">
           <td style="white-space:nowrap"><?=$dt_disp?></td>
+          <td>
+            <div class="user-cell">
+              <div class="avatar"><?=esc(strtoupper(substr($submitter, 0, 1) . substr(explode(' ', $submitter)[1] ?? '', 0, 1)))?></div>
+              <div class="user-info">
+                <div class="user-name"><?=esc($submitter)?></div>
+              </div>
+            </div>
+          </td>
           <td><span class="badge b-info"><?=$shift?></span></td>
           <td style="max-width:300px">
             <div class="search-text" style="font-weight:500;color:var(--tx1);<?=$status==='resolved'?'text-decoration:line-through;color:var(--tx3)':''?>"><?=$title?></div>
@@ -339,13 +349,20 @@ include 'includes/header.php';
             <?=tracs_creator_meta($r)?>
           </td>
           <td><span class="badge <?=$pb?>"><?=ucfirst($prio)?></span></td>
-          <td><span class="badge <?=$sb?>"><?=ucfirst($status)?></span></td>
-          <td class="tracs-acts">
-            <?php if($status==='active'):?>
-            <button class="btn btn-ghost btn-icon" onclick="resolveShiftReport(<?=$id?>)" title="Resolve"><i data-lucide="check-circle" class="icon-sm"></i></button>
-            <?php endif;?>
-            <button class="btn btn-ghost btn-icon" onclick="openEditShiftReport(<?=$id?>)" title="Edit"><i data-lucide="edit-2" class="icon-sm"></i></button>
-            <button class="btn btn-danger btn-icon" onclick="deleteShiftReport(<?=$id?>)" title="Delete"><i data-lucide="trash-2" class="icon-sm"></i></button>
+          <td class="shift-actions-cell">
+            <span class="badge <?=$sb?>"><?=ucfirst($status)?></span>
+            <div class="shift-row-controls">
+              <?php if($status==='active'):?>
+              <button class="btn btn-ghost btn-icon shift-resolve-btn" onclick="resolveShiftReport(<?=$id?>)" title="Resolve"><i data-lucide="check-circle" class="icon-sm"></i></button>
+              <?php endif;?>
+              <details class="row-action-menu">
+                <summary class="btn btn-ghost btn-icon" title="Actions" aria-label="Row actions"><i data-lucide="more-vertical" class="icon-sm"></i></summary>
+                <div class="row-action-popover">
+                  <button class="btn btn-ghost btn-sm" type="button" onclick="openEditShiftReport(<?=$id?>)">Edit</button>
+                  <button class="btn btn-danger btn-sm" type="button" onclick="deleteShiftReport(<?=$id?>)">Delete</button>
+                </div>
+              </details>
+            </div>
           </td>
         </tr>
         <?php endforeach; ?>

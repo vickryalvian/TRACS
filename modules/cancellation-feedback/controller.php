@@ -24,14 +24,18 @@ class CancellationFeedbackController {
     public function createFeedback($data) {
         $data['created_by'] = $this->userId;
         $data['created_by_name'] = function_exists('tracs_current_user_display') ? tracs_current_user_display($this->db) : '';
+        $data['submitter_name'] = $data['created_by_name'] ?: 'System';
         $id = $this->model->create($data);
         if ($id) {
-            $msg = "Added new cancellation feedback for " . $data['cancelled_service'] . " — Reason: " . $data['cancellation_reason'];
+            $serviceText = cf_display_multi_value($data['cancelled_service']);
+            $reasonText = cf_display_multi_value($data['cancellation_reason']);
+            $msg = "Added new cancellation feedback for " . $serviceText . " — Reason: " . $reasonText;
             $this->activityLogger->logActivity('created', 'Cancellation Feedback', $msg, $id);
             
             // Push to ticker
-            $tickerMsg = "[CS OPS] New cancellation feedback for " . $data['cancelled_service'] . " — Reason: " . $data['cancellation_reason'];
-            $type = in_array($data['cancellation_reason'], ['Frequent downtime', 'DDoS / security-related instability', 'Slow server performance', 'Repeated Issue']) ? 'urgent' : 'info';
+            $tickerMsg = "[CS OPS] New cancellation feedback for " . $serviceText . " — Reason: " . $reasonText;
+            $criticalReasons = ['Frequent downtime', 'DDoS / security-related instability', 'Slow server performance', 'Repeated Issue'];
+            $type = array_intersect(cf_decode_multi_value($data['cancellation_reason']), $criticalReasons) ? 'urgent' : 'info';
             $this->ticker->create($this->userId, $tickerMsg, $type, 'Cancellation Feedback', $id);
 
             return $id;
@@ -41,7 +45,7 @@ class CancellationFeedbackController {
 
     public function updateFeedback($id, $data) {
         if ($this->model->update($id, $data)) {
-            $msg = "Updated cancellation feedback for " . $data['cancelled_service'];
+            $msg = "Updated cancellation feedback for " . cf_display_multi_value($data['cancelled_service']);
             $this->activityLogger->logActivity('updated', 'Cancellation Feedback', $msg, $id);
             return true;
         }
@@ -51,7 +55,7 @@ class CancellationFeedbackController {
     public function deleteFeedback($id) {
         $feedback = $this->model->getById($id);
         if ($feedback && $this->model->delete($id)) {
-            $msg = "Deleted cancellation feedback for " . $feedback['cancelled_service'];
+            $msg = "Deleted cancellation feedback for " . cf_display_multi_value($feedback['cancelled_service']);
             $this->activityLogger->logActivity('deleted', 'Cancellation Feedback', $msg, $id);
             return true;
         }
@@ -66,7 +70,7 @@ class CancellationFeedbackController {
     public function buildRetentionIntelligence($feedbacks, $analytics) {
         $total = count($feedbacks);
         $criticalReasons = ['Frequent downtime', 'DDoS / security-related instability', 'Slow server performance', 'Repeated Issue', 'Issue not resolved'];
-        $critical = array_values(array_filter($feedbacks, fn($f) => in_array($f['cancellation_reason'] ?? '', $criticalReasons, true)));
+        $critical = array_values(array_filter($feedbacks, fn($f) => array_intersect(cf_decode_multi_value($f['cancellation_reason'] ?? ''), $criticalReasons)));
 
         $topService = $analytics['top_service']['cancelled_service'] ?? 'no dominant service yet';
         $topServiceCount = (int)($analytics['top_service']['count'] ?? 0);

@@ -16,9 +16,18 @@ if (in_array($_SERVER['REQUEST_METHOD'] ?? 'GET', ['POST', 'PUT', 'PATCH', 'DELE
 
 require_once __DIR__.'/../../config/database.php';
 require_once __DIR__.'/../../core/creator_tracking.php';
+require_once __DIR__.'/../../core/user_management.php';
 require_once __DIR__.'/../../modules/activity-log/controller.php';
 
 $uid  = (int)$_SESSION['user_id'];
+$authUser = tracs_get_user_by_id($conn, $uid);
+if (!$authUser || !tracs_user_can_login($authUser)) {
+    http_response_code(403);
+    echo json_encode(['success'=>false,'message'=>'Account inactive or suspended']);
+    exit;
+}
+tracs_sync_session_user($authUser);
+tracs_touch_user_activity($conn, $uid);
 $body = json_decode(file_get_contents('php://input'), true) ?? [];
 $creator_name = tracs_current_user_display($conn);
 

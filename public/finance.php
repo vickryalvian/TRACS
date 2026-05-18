@@ -98,7 +98,7 @@ $count_stmt->close();
 $total_pages = max(1, (int) ceil($total_rows / $per_page));
 
 /* ── Fetch current page ─────────────────────────────────────── */
-$data_sql  = "SELECT bt.*, COALESCE(NULLIF(bt.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name FROM $from_sql $where ORDER BY bt.transfer_date DESC LIMIT ? OFFSET ?";
+$data_sql  = "SELECT bt.*, COALESCE(NULLIF(bt.created_by_name,''), NULLIF(u.name,''), u.email, NULLIF(bt.admin_name,''), 'System') AS creator_name FROM $from_sql $where ORDER BY bt.transfer_date DESC LIMIT ? OFFSET ?";
 $data_stmt = $conn->prepare($data_sql);
 $full_types = $bind_types . 'ii';
 $full_vals  = array_merge($bind_vals, [$per_page, $offset]);
@@ -283,15 +283,15 @@ include 'includes/header.php';
     <div class="bt-inline-grid">
 
       <!-- Row 1: sender group -->
-      <div class="bt-inline-group" style="grid-column: span 2">
+      <div class="bt-inline-group bt-field-email">
         <label class="bt-inline-lbl">Sender Email</label>
         <input type="email" class="form-input bt-inline-input" id="nSenderEmail" placeholder="Sender email, e.g. client@domain.com" autocomplete="off">
       </div>
-      <div class="bt-inline-group" style="grid-column: span 2">
+      <div class="bt-inline-group bt-field-uid">
         <label class="bt-inline-lbl">Sender UID</label>
         <input type="text" class="form-input bt-inline-input" id="nSenderUid" placeholder="Sender user ID, e.g. CID-10042" autocomplete="off">
       </div>
-      <div class="bt-inline-group" style="grid-column: span 2">
+      <div class="bt-inline-group bt-field-type">
         <label class="bt-inline-lbl">Sender Type <span class="req-star">*</span></label>
         <select class="form-select bt-inline-input" id="nSenderType">
           <option value="client_area">Client Area</option>
@@ -302,15 +302,15 @@ include 'includes/header.php';
 
 
       <!-- Row 2: receiver group -->
-      <div class="bt-inline-group" style="grid-column: span 2">
+      <div class="bt-inline-group bt-field-email">
         <label class="bt-inline-lbl">Receiver Email</label>
         <input type="email" class="form-input bt-inline-input" id="nReceiverEmail" placeholder="Receiver email, e.g. billing@domain.com" autocomplete="off">
       </div>
-      <div class="bt-inline-group" style="grid-column: span 2">
+      <div class="bt-inline-group bt-field-uid">
         <label class="bt-inline-lbl">Receiver UID</label>
         <input type="text" class="form-input bt-inline-input" id="nReceiverUid" placeholder="Receiver user ID, e.g. CID-10088" autocomplete="off">
       </div>
-      <div class="bt-inline-group" style="grid-column: span 2">
+      <div class="bt-inline-group bt-field-type">
         <label class="bt-inline-lbl">Receiver Type <span class="req-star">*</span></label>
         <select class="form-select bt-inline-input" id="nReceiverType">
           <option value="client_area">Client Area</option>
@@ -320,34 +320,29 @@ include 'includes/header.php';
       </div>
 
 
-      <!-- Row 3: amount, status, operator, ticket, date, save -->
-      <div class="bt-inline-group">
+      <!-- Row 3: amount, status, ticket, date, save -->
+      <div class="bt-inline-group bt-field-amount">
         <label class="bt-inline-lbl">Amount (Rp) <span class="req-star">*</span></label>
         <input type="number" class="form-input bt-inline-input" id="nAmount" placeholder="Transfer amount" min="0" step="0.01"
                onkeydown="if(event.key==='Enter')quickSaveBt()">
       </div>
-      <div class="bt-inline-group">
+      <div class="bt-inline-group bt-field-status">
         <label class="bt-inline-lbl">Status</label>
         <select class="form-select bt-inline-input" id="nStatus">
           <option value="pending">Pending</option>
           <option value="done">Done</option>
         </select>
       </div>
-      <div class="bt-inline-group">
-        <label class="bt-inline-lbl">Operator <span class="req-star">*</span></label>
-        <input type="text" class="form-input bt-inline-input" id="nAdmin" placeholder="Operator email, e.g. operator@idcloudhost.com" autocomplete="off"
-               onkeydown="if(event.key==='Enter')quickSaveBt()">
-      </div>
-      <div class="bt-inline-group">
+      <div class="bt-inline-group bt-field-ticket">
         <label class="bt-inline-lbl">Ticket ID</label>
         <input type="text" class="form-input bt-inline-input" id="nTicket" placeholder="Ticket ID, e.g. WHMCS-2026-001" autocomplete="off"
                onkeydown="if(event.key==='Enter')quickSaveBt()">
       </div>
-      <div class="fb-inline-col" style="flex: 1.8">
+      <div class="bt-inline-group bt-field-datetime">
         <label class="bt-inline-lbl">Transfer Date & Time</label>
-        <div style="display:flex; gap:6px">
-          <input type="date" class="form-input split-date bt-inline-input" id="nDateVal" data-sync="nDate" style="flex:1.2">
-          <input type="time" class="form-input split-time bt-inline-input" id="nTimeVal" data-sync="nDate" style="flex:1">
+        <div class="bt-datetime-pair">
+          <input type="date" class="form-input split-date bt-inline-input" id="nDateVal" data-sync="nDate">
+          <input type="time" class="form-input split-time bt-inline-input" id="nTimeVal" data-sync="nDate">
         </div>
         <input type="hidden" id="nDate" class="quick-datetime">
       </div>
@@ -387,9 +382,7 @@ include 'includes/header.php';
         <th>Type</th>
         <th style="text-align:right">Amount</th>
         <th>Status</th>
-        <th>Operator</th>
         <th>Ticket ID</th>
-        <th style="width:60px"></th>
       </tr>
     </thead>
     <tbody>
@@ -419,7 +412,6 @@ include 'includes/header.php';
         'receiver_type'    => $tr['receiver_type'],
         'amount'           => (float) $tr['amount'],
         'status'           => $status,
-        'admin_name'       => $tr['admin_name'],
         'ticket_id'        => $ticket,
       ]), ENT_QUOTES, 'UTF-8');
     ?>
@@ -460,29 +452,19 @@ include 'includes/header.php';
 
       <td><span class="bt-status <?= $status ?>"><?= ucfirst($status) ?></span></td>
 
-      <td><span class="bt-admin"><?= esc($tr['admin_name']) ?></span></td>
-
       <td>
         <?php if ($ticket): ?>
           <span class="bt-ticket"><?= esc($ticket) ?></span>
         <?php else: ?>
           <span class="bt-ticket-none">—</span>
         <?php endif; ?>
-      </td>
-
-      <td>
-        <div class="bt-acts">
-          <button class="btn btn-ghost btn-icon"
-                  onclick="openEditBt(<?= $row_json ?>)"
-                  title="Edit">
-            <i data-lucide="edit-2" class="icon-sm"></i>
-          </button>
-          <button class="btn btn-danger btn-icon"
-                  onclick="deleteBt(<?= $tid ?>)"
-                  title="Delete">
-            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
-          </button>
-        </div>
+        <details class="row-action-menu">
+          <summary class="btn btn-ghost btn-icon" title="Actions" aria-label="Row actions"><i data-lucide="more-vertical" class="icon-sm"></i></summary>
+          <div class="row-action-popover">
+            <button class="btn btn-ghost btn-sm" type="button" onclick="openEditBt(<?= $row_json ?>)">Edit</button>
+            <button class="btn btn-danger btn-sm" type="button" onclick="deleteBt(<?= $tid ?>)">Delete</button>
+          </div>
+        </details>
       </td>
     </tr>
     <?php endforeach; ?>
@@ -616,10 +598,6 @@ include 'includes/header.php';
       </div>
     </div>
     <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Operator *</label>
-        <input type="text" class="form-input" id="btAdmin" placeholder="Operator email, e.g. operator@idcloudhost.com" autocomplete="off">
-      </div>
       <div class="form-group">
         <label class="form-label">Ticket ID <span style="color:var(--tx4)">(optional)</span></label>
         <input type="text" class="form-input" id="btTicket" placeholder="Ticket ID, e.g. WHMCS-2026-001" autocomplete="off">

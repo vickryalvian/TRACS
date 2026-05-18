@@ -39,25 +39,22 @@ $feedbacks = $controller->getFeedbackList($filters, $limit, $offset);
 $total_count = $controller->getTotalCount($filters);
 
 // Dropdown options
-$services = [
-    'Domain', 'Cloud Hosting cPanel', 'Wordpress Hosting', 'Reseller Hosting cPanel',
-    'Website Instant', 'Cloud VPS', 'VPS Pro', 'VPS Rocket', 'VPS AMD Extreme',
-    'SSL Comodo', 'Managed VPS WHM', 'Cyberpanel VPS', 'Email & Collaboration (Zimbra)',
-    'Dedicated Server', 'Baremetal Server', 'Colocation Server', 'Object Storage',
-    'Cloud Storage Drive', 'License', 'Kubernetes', 'Reseller Hosting Plesk', 'Cloud Hosting Plesk'
-];
+$services = cf_allowed_services();
+$reasons = cf_allowed_reasons();
+$resolutions = cf_allowed_resolutions();
+$critical_reasons = ['Frequent downtime', 'DDoS / security-related instability', 'Slow server performance', 'Repeated Issue', 'Issue not resolved'];
+$feedback_detail_records = [];
 
-$reasons = [
-    'Service No Longer Required', 'Document activation requirements', 'Missing required features',
-    'Frequent downtime', 'Slow server performance', 'Network latency / packet loss',
-    'Resource limits', 'DDoS / security-related instability', 'Slow Response Time',
-    'Issue not resolved', 'Repeated Issue', 'Price Increase', 'Cheaper Competitor Found',
-    'Billing/Payment method issue', 'Service Expansion (Upgrade / New Order)', 'Unknown/No Feedback'
-];
-
-$resolutions = [
-    'End of Billing Periode', 'Refund to Credit Balance', 'Refund to Bank Account / Paypal / CC'
-];
+function cf_render_value_chips(array $values, string $class = ''): string {
+    if (empty($values)) {
+        return '<span class="text-muted">—</span>';
+    }
+    $html = '<div class="cf-chip-row">';
+    foreach ($values as $value) {
+        $html .= '<span class="cf-chip ' . esc($class) . '">' . esc($value) . '</span>';
+    }
+    return $html . '</div>';
+}
 
 $page_title = 'Cancellation Feedback';
 $active_page = 'feedback';
@@ -214,47 +211,51 @@ include 'includes/header.php';
         Add Cancellation Feedback
       </div>
       <div class="fb-inline-grid">
-        <div class="dt-inline-group">
-          <label class="fb-inline-lbl">Submitter <span class="req-star">*</span></label>
-          <input type="text" class="form-input fb-inline-input" id="inSubmitter" placeholder="CS operator name or team initials" autocomplete="off">
-        </div>
-        <div class="dt-inline-group">
-          <label class="fb-inline-lbl">Service <span class="req-star">*</span></label>
-          <select class="form-select fb-inline-input" id="inService">
-            <option value="">— Select —</option>
-            <?php foreach($services as $s): ?><option value="<?=esc($s)?>"><?=esc($s)?></option><?php endforeach; ?>
-          </select>
-        </div>
-        <div class="dt-inline-group">
-          <label class="fb-inline-lbl">Reason <span class="req-star">*</span></label>
-          <select class="form-select fb-inline-input" id="inReason">
-            <option value="">— Select —</option>
-            <?php foreach($reasons as $r): ?><option value="<?=esc($r)?>"><?=esc($r)?></option><?php endforeach; ?>
-          </select>
-        </div>
-        <div class="dt-inline-group">
+        <div class="dt-inline-group fb-field-reference">
           <label class="fb-inline-lbl">Reference</label>
           <input type="text" class="form-input fb-inline-input" id="inRef" placeholder="Domain, invoice, or service reference, e.g. exampledomain.com" autocomplete="off">
         </div>
-        <div class="dt-inline-group">
+        <div class="dt-inline-group fb-field-email">
           <label class="fb-inline-lbl">Customer Email</label>
           <input type="text" class="form-input fb-inline-input" id="inEmail" placeholder="Customer email, e.g. client@domain.com" autocomplete="off">
         </div>
-        <div class="dt-inline-group">
+        <div class="dt-inline-group fb-field-service">
+          <label class="fb-inline-lbl">Service <span class="req-star">*</span></label>
+          <div class="cf-choice-box" id="inService" data-multi-choice>
+            <?php foreach($services as $s): ?>
+            <label class="cf-choice-option">
+              <input type="checkbox" value="<?=esc($s)?>">
+              <span class="cf-choice-mark"></span>
+              <span class="cf-choice-text"><?=esc($s)?></span>
+            </label>
+            <?php endforeach; ?>
+          </div>
+        </div>
+        <div class="dt-inline-group fb-field-reason">
+          <label class="fb-inline-lbl">Reason <span class="req-star">*</span></label>
+          <div class="cf-choice-box" id="inReason" data-multi-choice>
+            <?php foreach($reasons as $r): ?>
+            <label class="cf-choice-option">
+              <input type="checkbox" value="<?=esc($r)?>">
+              <span class="cf-choice-mark"></span>
+              <span class="cf-choice-text"><?=esc($r)?></span>
+            </label>
+            <?php endforeach; ?>
+          </div>
+        </div>
+        <div class="dt-inline-group fb-field-resolution">
           <label class="fb-inline-lbl">Resolution</label>
           <select class="form-select fb-inline-input" id="inResolution">
             <option value="">— Select —</option>
             <?php foreach($resolutions as $res): ?><option value="<?=esc($res)?>"><?=esc($res)?></option><?php endforeach; ?>
           </select>
         </div>
-      </div>
-      <div class="fb-inline-grid-row-2">
-        <div class="dt-inline-group">
+        <div class="dt-inline-group fb-field-details">
           <label class="fb-inline-lbl">Additional Details / Context</label>
-          <input type="text" class="form-input fb-inline-input" id="inDetails" placeholder="Add cancellation context, retention effort, or follow-up action" autocomplete="off">
+          <textarea class="form-textarea fb-inline-input fb-details-input" id="inDetails" placeholder="Add cancellation context, retention effort, or follow-up action"></textarea>
         </div>
         <div class="fb-inline-action">
-          <button class="btn btn-primary" onclick="quickSaveFeedback()" style="height:30px; width:100%; font-size:11px; padding:0 20px">
+          <button class="btn btn-primary fb-save-btn" onclick="quickSaveFeedback()">
             <i data-lucide="check" class="icon-xs"></i> Save Feedback
           </button>
         </div>
@@ -273,7 +274,7 @@ include 'includes/header.php';
             <th>Email</th>
             <th>Resolution</th>
             <th>Created At</th>
-            <th style="width:120px">Actions</th>
+            <th class="feedback-actions-head">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -288,24 +289,45 @@ include 'includes/header.php';
             </td>
           </tr>
           <?php else: foreach($feedbacks as $f): 
-            $initials = strtoupper(substr($f['submitter_name'], 0, 1) . substr(explode(' ', $f['submitter_name'])[1] ?? '', 0, 1));
-            $is_critical = in_array($f['cancellation_reason'], ['Frequent downtime', 'DDoS / security-related instability', 'Slow server performance', 'Repeated Issue']);
+            $services_selected = cf_decode_multi_value($f['cancelled_service'] ?? '');
+            $reasons_selected = cf_decode_multi_value($f['cancellation_reason'] ?? '');
+            $service_display = implode(', ', $services_selected);
+            $reason_display = implode(', ', $reasons_selected);
+            $submitter_display = $f['submitter_display'] ?? $f['creator_name'] ?? $f['submitter_name'] ?? 'System';
+            $initials = strtoupper(substr($submitter_display, 0, 1) . substr(explode(' ', $submitter_display)[1] ?? '', 0, 1));
+            $is_critical = (bool)array_intersect($reasons_selected, $critical_reasons);
+            $feedback_detail_records[(int)$f['id']] = [
+              'id' => (int)$f['id'],
+              'submitter_name' => $submitter_display,
+              'cancelled_service' => $f['cancelled_service'] ?? '',
+              'cancelled_services' => $services_selected,
+              'cancelled_service_display' => $service_display,
+              'cancellation_reason' => $f['cancellation_reason'] ?? '',
+              'cancellation_reasons' => $reasons_selected,
+              'cancellation_reason_display' => $reason_display,
+              'additional_details' => $f['additional_details'] ?? '',
+              'whmcs_reference' => $f['whmcs_reference'] ?? '',
+              'email_address' => $f['email_address'] ?? '',
+              'payment_resolution' => $f['payment_resolution'] ?? '',
+              'created_at' => $f['created_at'] ?? '',
+              'updated_at' => $f['updated_at'] ?? '',
+              'creator_name' => $f['creator_name'] ?? '',
+              'created_by_name' => $f['created_by_name'] ?? '',
+            ];
           ?>
           <tr data-feedback-id="<?= $f['id'] ?>" class="<?= $is_critical ? 'row-critical' : '' ?>">
             <td>
               <div class="user-cell">
                 <div class="avatar"><?= $initials ?></div>
                 <div class="user-info">
-                  <div class="user-name"><?= esc($f['submitter_name']) ?></div>
+                  <div class="user-name"><?= esc($submitter_display) ?></div>
                   <?=tracs_creator_meta($f)?>
                 </div>
               </div>
             </td>
-            <td><span class="badge badge-service"><?= esc($f['cancelled_service']) ?></span></td>
+            <td><?= cf_render_value_chips($services_selected, 'cf-chip-service') ?></td>
             <td>
-              <span class="reason-text <?= $is_critical ? 'text-critical' : '' ?>">
-                <?= esc($f['cancellation_reason']) ?>
-              </span>
+              <?= cf_render_value_chips($reasons_selected, $is_critical ? 'cf-chip-critical' : '') ?>
             </td>
             <td class="details-cell" title="<?= esc($f['additional_details']) ?>">
               <div class="truncate-details"><?= esc($f['additional_details']) ?></div>
@@ -319,10 +341,15 @@ include 'includes/header.php';
             <td><a href="mailto:<?= esc($f['email_address']) ?>" class="email-link"><?= esc($f['email_address']) ?></a></td>
             <td><span class="resolution-text"><?= esc($f['payment_resolution']) ?></span></td>
             <td class="mono text-muted"><?= date('d M Y, H:i', strtotime($f['created_at'])) ?></td>
-            <td class="tracs-acts">
-              <button class="btn btn-ghost btn-icon" onclick="viewFeedback(<?= $f['id'] ?>)" title="View"><i data-lucide="eye"></i></button>
-              <button class="btn btn-ghost btn-icon" onclick="openEditFeedback(<?= htmlspecialchars(json_encode($f)) ?>)" title="Edit"><i data-lucide="edit-2"></i></button>
-              <button class="btn btn-danger btn-icon" onclick="deleteFeedback(<?= $f['id'] ?>)" title="Delete"><i data-lucide="trash-2"></i></button>
+            <td class="feedback-actions-cell">
+              <div class="row-action-group cf-row-actions">
+                <button class="btn btn-ghost btn-icon" type="button" onclick="viewFeedback(<?= $f['id'] ?>)" title="View report" aria-label="View cancellation feedback report">
+                  <i data-lucide="eye" class="icon-sm"></i>
+                </button>
+                <button class="btn btn-ghost btn-icon cf-delete-action" type="button" onclick="deleteFeedback(<?= $f['id'] ?>)" title="Delete feedback" aria-label="Delete cancellation feedback">
+                  <i data-lucide="trash-2" class="icon-sm"></i>
+                </button>
+              </div>
             </td>
           </tr>
           <?php endforeach; endif; ?>
@@ -333,5 +360,73 @@ include 'includes/header.php';
 
 </div>
 </main>
+
+<div class="modal-overlay hidden" id="feedbackViewModal">
+<div class="modal modal-lg cf-detail-modal">
+  <div class="modal-head">
+    <div>
+      <div class="modal-title">Cancellation Feedback Report</div>
+      <div class="modal-sub" id="feedbackViewSub">Detailed report view</div>
+    </div>
+    <div class="modal-head-actions">
+      <button class="modal-icon-action" type="button" id="feedbackViewEdit" title="Edit feedback" aria-label="Edit cancellation feedback">
+        <i data-lucide="edit-2"></i>
+      </button>
+      <button class="modal-close" type="button" onclick="closeModal('feedbackView')" aria-label="Close report"><i data-lucide="x"></i></button>
+    </div>
+  </div>
+  <div class="modal-body">
+    <div class="cf-detail-grid">
+      <section class="cf-detail-section">
+        <div class="cf-detail-label">Submitter</div>
+        <div class="cf-detail-value" id="fvSubmitter">—</div>
+      </section>
+      <section class="cf-detail-section">
+        <div class="cf-detail-label">Email Address</div>
+        <div class="cf-detail-value" id="fvEmail">—</div>
+      </section>
+      <section class="cf-detail-section cf-detail-wide">
+        <div class="cf-detail-label">Cancelled Service</div>
+        <div class="cf-detail-value" id="fvServices">—</div>
+      </section>
+      <section class="cf-detail-section cf-detail-wide">
+        <div class="cf-detail-label">Reason for Cancellation</div>
+        <div class="cf-detail-value" id="fvReasons">—</div>
+      </section>
+      <section class="cf-detail-section cf-detail-wide">
+        <div class="cf-detail-label">WHMCS Service URL / Invoice / Domain / Hostname</div>
+        <div class="cf-detail-value cf-detail-mono" id="fvReference">—</div>
+      </section>
+      <section class="cf-detail-section">
+        <div class="cf-detail-label">Payment Resolution</div>
+        <div class="cf-detail-value" id="fvResolution">—</div>
+      </section>
+      <section class="cf-detail-section">
+        <div class="cf-detail-label">Submitted Date</div>
+        <div class="cf-detail-value cf-detail-mono" id="fvCreated">—</div>
+      </section>
+      <section class="cf-detail-section">
+        <div class="cf-detail-label">Updated Date</div>
+        <div class="cf-detail-value cf-detail-mono" id="fvUpdated">—</div>
+      </section>
+      <section class="cf-detail-section">
+        <div class="cf-detail-label">Created By</div>
+        <div class="cf-detail-value" id="fvCreator">—</div>
+      </section>
+      <section class="cf-detail-section cf-detail-wide">
+        <div class="cf-detail-label">Additional Cancellation Details / Notes</div>
+        <div class="cf-detail-value cf-detail-notes" id="fvDetails">—</div>
+      </section>
+    </div>
+  </div>
+  <div class="modal-foot">
+    <button class="btn btn-ghost" type="button" onclick="closeModal('feedbackView')">Close</button>
+  </div>
+</div>
+</div>
+
+<script>
+window.feedbackRecords = <?= json_encode($feedback_detail_records, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
+</script>
 
 <?php include 'includes/footer.php'; ?>

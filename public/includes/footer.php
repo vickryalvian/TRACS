@@ -264,22 +264,17 @@
   </div>
   <div class="modal-body">
     <input type="hidden" id="feedbackId">
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">Submitter *</label><input type="text" class="form-input" id="feedbackSubmitter" placeholder="CS operator name or team initials" autocomplete="off"></div>
-      <div class="form-group"><label class="form-label">Customer Email</label><input type="email" class="form-input" id="feedbackEmail" placeholder="Customer email, e.g. client@domain.com" autocomplete="off"></div>
-    </div>
+    <div class="form-group"><label class="form-label">Customer Email</label><input type="email" class="form-input" id="feedbackEmail" placeholder="Customer email, e.g. client@domain.com" autocomplete="off"></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Cancelled Service *</label>
-        <select class="form-select" id="feedbackService">
-          <option value="">Select Service</option>
+        <select class="form-select cf-multi-select" id="feedbackService" multiple size="6">
           <?php foreach(['Domain', 'Cloud Hosting cPanel', 'Wordpress Hosting', 'Reseller Hosting cPanel', 'Website Instant', 'Cloud VPS', 'VPS Pro', 'VPS Rocket', 'VPS AMD Extreme', 'SSL Comodo', 'Managed VPS WHM', 'Cyberpanel VPS', 'Email & Collaboration (Zimbra)', 'Dedicated Server', 'Baremetal Server', 'Colocation Server', 'Object Storage', 'Cloud Storage Drive', 'License', 'Kubernetes', 'Reseller Hosting Plesk', 'Cloud Hosting Plesk'] as $s): ?>
           <option value="<?=esc($s)?>"><?=esc($s)?></option>
           <?php endforeach; ?>
         </select>
       </div>
       <div class="form-group"><label class="form-label">Reason *</label>
-        <select class="form-select" id="feedbackReason">
-          <option value="">Select Reason</option>
+        <select class="form-select cf-multi-select" id="feedbackReason" multiple size="6">
           <?php foreach(['Service No Longer Required', 'Document activation requirements', 'Missing required features', 'Frequent downtime', 'Slow server performance', 'Network latency / packet loss', 'Resource limits', 'DDoS / security-related instability', 'Slow Response Time', 'Issue not resolved', 'Repeated Issue', 'Price Increase', 'Cheaper Competitor Found', 'Billing/Payment method issue', 'Service Expansion (Upgrade / New Order)', 'Unknown/No Feedback'] as $r): ?>
           <option value="<?=esc($r)?>"><?=esc($r)?></option>
           <?php endforeach; ?>
@@ -318,7 +313,7 @@
       <div class="form-group"><label class="form-label">Date</label><input type="date" class="form-input" id="momFormDate"></div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Time</label><input type="time" class="form-input" id="momFormTime"></div>
+      <div class="form-group"><label class="form-label">Time</label><input type="time" class="form-input split-time" id="momFormTime"></div>
       <div class="form-group"><label class="form-label">Quick Time</label><div class="mom-quick-times"><button type="button" class="mom-quick-btn" data-mom-quick-hours="0">Now</button><button type="button" class="mom-quick-btn" data-mom-quick-hours="1">+1H</button><button type="button" class="mom-quick-btn" data-mom-quick-hours="24">Tomorrow</button></div></div>
     </div>
     <div class="form-group"><label class="form-label">Meeting Objective</label><textarea class="form-textarea" id="momFormObjective" placeholder="Describe the meeting objective, operational scope, or expected outcome"></textarea></div>

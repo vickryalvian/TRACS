@@ -14,6 +14,7 @@ $status          = trim($body['status']           ?? 'pending');
 $admin_name      = trim($body['admin_name']       ?? '');
 $ticket_id       = trim($body['ticket_id']        ?? '') ?: null;
 $transfer_date   = trim($body['transfer_date']    ?? '');
+if ($admin_name === '') $admin_name = $creator_name;
 
 // ── Validation ────────────────────────────────────────────────
 $allowed_types   = ['client_area','billing_console','billing_awan'];
@@ -27,7 +28,6 @@ if (!in_array($sender_type, $allowed_types, true))   fail('Invalid sender type')
 if (!in_array($receiver_type, $allowed_types, true)) fail('Invalid receiver type');
 if ($amount <= 0)                                     fail('Amount must be greater than 0');
 if (!in_array($status, $allowed_status, true))        fail('Invalid status');
-if (!$admin_name)                                     fail('Admin name is required');
 
 // ── Validate / normalise transfer_date ───────────────────────
 $dt = null;

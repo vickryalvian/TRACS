@@ -89,7 +89,7 @@ include 'includes/header.php';
           <th>Priority</th>
           <th>Next Check</th>
           <th>Time Until</th>
-          <th style="width:80px"></th>
+          
         </tr>
       </thead>
       <tbody>
@@ -110,10 +110,15 @@ include 'includes/header.php';
         <td><span class="badge <?=$sb?>"><span class="badge-dot"></span><?=$sl?></span></td>
         <td><span class="badge <?=$pb?>"><?=ucfirst($pr)?></span></td>
         <td style="white-space:nowrap;color:var(--tx2)"><?=$fmt_date?></td>
-        <td><span class="case-time <?=$over?'ov':''?>"><?=$time?></span></td>
-        <td class="tracs-acts">
-          <button class="btn btn-ghost btn-icon" onclick="openEditCase(<?=$cid?>)" title="Edit"><i data-lucide="edit-2" class="icon-sm"></i></button>
-          <button class="btn btn-danger btn-icon" onclick="deleteCase(<?=$cid?>)" title="Delete"><i data-lucide="trash-2" class="icon-sm"></i></button>
+        <td>
+          <span class="case-time <?=$over?'ov':''?>"><?=$time?></span>
+          <details class="row-action-menu">
+            <summary class="btn btn-ghost btn-icon" title="Actions" aria-label="Row actions"><i data-lucide="more-vertical" class="icon-sm"></i></summary>
+            <div class="row-action-popover">
+              <button class="btn btn-ghost btn-sm" type="button" onclick="openEditCase(<?=$cid?>)">Edit</button>
+              <button class="btn btn-danger btn-sm" type="button" onclick="deleteCase(<?=$cid?>)">Delete</button>
+            </div>
+          </details>
         </td>
       </tr>
       <?php endforeach; ?>

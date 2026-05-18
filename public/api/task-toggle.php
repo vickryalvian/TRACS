@@ -54,4 +54,8 @@ if ($done) {
     $shiftActivity->logActivity('checklist', $id, "Checklist completed: {$taskTitle}", null, 'completed');
     tickerEvent($conn, $uid, "Checklist completed: {$taskTitle}", 'success', 'checklist', $id);
 }
+try {
+    require_once __DIR__.'/../../modules/task-management/controller.php';
+    (new TaskManagementController($conn, $uid))->syncFromChecklist($id, (bool)$done);
+} catch (Throwable $e) { /* Task assignment sync is non-fatal for legacy checklist items. */ }
 ok(null,'Updated');

@@ -695,7 +695,7 @@ include 'includes/header.php';
         <th>End Date</th>
         <th>Move Domain</th>
         <th>Notes</th>
-        <th style="width:60px"></th>
+        
       </tr>
     </thead>
     <tbody>
@@ -787,21 +787,13 @@ include 'includes/header.php';
         <?php else: ?>
           <span class="dt-notes-none">—</span>
         <?php endif; ?>
-      </td>
-
-      <td>
-        <div class="dt-acts">
-          <button class="btn btn-ghost btn-icon"
-                  onclick="openEditDt(<?= $row_json ?>)"
-                  title="Edit">
-            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
-          </button>
-          <button class="btn btn-danger btn-icon"
-                  onclick="deleteDt(<?= $did ?>)"
-                  title="Delete">
-            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
-          </button>
-        </div>
+        <details class="row-action-menu">
+          <summary class="btn btn-ghost btn-icon" title="Actions" aria-label="Row actions"><i data-lucide="more-vertical" class="icon-sm"></i></summary>
+          <div class="row-action-popover">
+            <button class="btn btn-ghost btn-sm" type="button" onclick="openEditDt(<?= $row_json ?>)">Edit</button>
+            <button class="btn btn-danger btn-sm" type="button" onclick="deleteDt(<?= $did ?>)">Delete</button>
+          </div>
+        </details>
       </td>
     </tr>
     <?php endforeach; ?>
