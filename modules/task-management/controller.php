@@ -32,6 +32,9 @@ class TaskManagementController {
     public function tasks(array $filters): array { return $this->model->listTasks($filters, $this->actorId, $this->canMonitor()); }
     public function performance(): array { return $this->canMonitor() ? $this->model->performance() : []; }
     public function interns(): array { return $this->canMonitor() ? $this->model->internMonitoring() : []; }
+    public function breakdowns(): array { return $this->model->breakdowns($this->canMonitor(), $this->actorId); }
+    public function taskLogs(int $assignmentId): array { return $this->model->taskLogs($assignmentId); }
+    public function refreshOverdueStatuses(): int { return $this->model->refreshOverdueStatuses($this->actorId); }
 
     private function cleanText(mixed $value, int $max = 255): string {
         $value = trim((string)($value ?? ''));

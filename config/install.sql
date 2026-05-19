@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS `tracs_users` (
   `role`           ENUM('admin','operator','viewer')
                                     NOT NULL DEFAULT 'operator',
   `is_active`      TINYINT(1)       NOT NULL DEFAULT 1,
+  `avatar_path`     VARCHAR(255)              DEFAULT NULL,
   `last_login_at`  DATETIME                  DEFAULT NULL,
   `created_at`     DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`     DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP

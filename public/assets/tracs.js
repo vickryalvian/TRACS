@@ -424,26 +424,395 @@ const TRACSDropdowns = (() => {
 })();
 window.TRACSDropdowns = TRACSDropdowns;
 
-/* ── Report export menu ───────────────────────────────── */
+/* ── Icon popup menus ───────────────────────────────────── */
+const TRACS_POPUP_DETAILS_SELECTOR = [
+  '.user-menu-wrap',
+  '.nav-menu-wrap',
+  '.report-export-menu',
+  '.row-action-menu'
+].join(',');
+const TRACS_CUSTOM_POPUP_SELECTOR = '.theme-menu-wrap, .notif-bell-btn';
+
+function tracsClosestPopup(target) {
+  return target instanceof Element
+    ? target.closest(`${TRACS_POPUP_DETAILS_SELECTOR}, ${TRACS_CUSTOM_POPUP_SELECTOR}`)
+    : null;
+}
+
+function tracsSetCustomPopupOpen(host, open) {
+  if (!host) return;
+  host.classList.toggle('is-open', open);
+  const toggle = host.matches('.theme-menu-wrap')
+    ? host.querySelector('#themeToggle, .theme-toggle')
+    : host.matches('.notif-bell-btn')
+      ? host
+      : null;
+  toggle?.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+function tracsCloseIconPopups(except = null) {
+  document.querySelectorAll(`${TRACS_POPUP_DETAILS_SELECTOR}[open]`).forEach(menu => {
+    if (menu !== except) menu.removeAttribute('open');
+  });
+  document.querySelectorAll(`${TRACS_CUSTOM_POPUP_SELECTOR}.is-open`).forEach(menu => {
+    if (menu !== except) tracsSetCustomPopupOpen(menu, false);
+  });
+}
+
+function tracsToggleCustomPopup(host) {
+  const willOpen = !host.classList.contains('is-open');
+  tracsCloseIconPopups(host);
+  tracsSetCustomPopupOpen(host, willOpen);
+}
+
+function tracsInitNotificationPopups(root = document) {
+  root.querySelectorAll?.('.notif-bell-btn').forEach(btn => {
+    if (btn.dataset.tracsPopupInit === 'true') return;
+    btn.dataset.tracsPopupInit = 'true';
+    btn.setAttribute('aria-expanded', 'false');
+    btn.addEventListener('click', event => {
+      if (event.target.closest('.notif-dropdown')) return;
+      event.stopPropagation();
+      tracsToggleCustomPopup(btn);
+    });
+    btn.addEventListener('keydown', event => {
+      if (event.key === 'Escape') {
+        tracsSetCustomPopupOpen(btn, false);
+        return;
+      }
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      tracsToggleCustomPopup(btn);
+    });
+  });
+}
+
+window.tracsCloseIconPopups = tracsCloseIconPopups;
+window.tracsSetCustomPopupOpen = tracsSetCustomPopupOpen;
+
 document.addEventListener('click', e => {
-  const activeMenu = e.target.closest('.report-export-menu');
-  const activeRowMenu = e.target.closest('.row-action-menu');
-  document.querySelectorAll('.report-export-menu[open]').forEach(menu => {
-    if (menu !== activeMenu) menu.removeAttribute('open');
-  });
-  document.querySelectorAll('.row-action-menu[open]').forEach(menu => {
-    if (menu !== activeRowMenu) menu.removeAttribute('open');
-  });
-  if (e.target.closest('.row-action-popover button')) {
-    const parent = e.target.closest('.row-action-menu');
-    if (parent) parent.removeAttribute('open');
+  const popup = tracsClosestPopup(e.target);
+  const summary = e.target instanceof Element ? e.target.closest('summary') : null;
+  const clickedPopupSummary = summary?.closest(TRACS_POPUP_DETAILS_SELECTOR);
+
+  if (!popup) {
+    tracsCloseIconPopups();
+    return;
+  }
+
+  if (clickedPopupSummary) {
+    setTimeout(() => {
+      if (clickedPopupSummary.open) tracsCloseIconPopups(clickedPopupSummary);
+    }, 0);
+  }
+
+  if (e.target instanceof Element && e.target.closest('.row-action-popover button')) {
+    e.target.closest('.row-action-menu')?.removeAttribute('open');
   }
 });
+
+/* ── Profile picture crop/upload ─────────────────────── */
+(() => {
+  const MAX_RAW_SIZE = 5 * 1024 * 1024;
+  const OUTPUT_SIZE = 512;
+  const SUPPORTED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+  const state = {
+    userId: '',
+    image: null,
+    objectUrl: '',
+    zoom: 1,
+    minScale: 1,
+    offsetX: 0,
+    offsetY: 0,
+    dragging: false,
+    lastX: 0,
+    lastY: 0
+  };
+
+  const modal = () => document.getElementById('avatarCropModal');
+  const cropCanvas = () => document.getElementById('avatarCropCanvas');
+  const previewCanvas = () => document.getElementById('avatarPreviewCanvas');
+  const zoomRange = () => document.getElementById('avatarZoomRange');
+
+  function webpSupported() {
+    const canvas = document.createElement('canvas');
+    return canvas.toDataURL('image/webp').startsWith('data:image/webp');
+  }
+
+  function avatarInitials(node) {
+    return node?.dataset?.avatarInitials || 'U';
+  }
+
+  function setAvatarNode(node, avatarUrl, initials) {
+    if (!node) return;
+    node.dataset.avatarInitials = initials || avatarInitials(node);
+    node.innerHTML = avatarUrl
+      ? `<img src="${avatarUrl}" alt="" loading="lazy" decoding="async">`
+      : `<span>${node.dataset.avatarInitials || 'U'}</span>`;
+  }
+
+  function updateUserPayloads(userId, avatarUrl, avatarPath) {
+    document.querySelectorAll('[data-user]').forEach(node => {
+      try {
+        const payload = JSON.parse(node.dataset.user || '{}');
+        if (String(payload.id) !== String(userId)) return;
+        payload.avatar_url = avatarUrl || '';
+        payload.avatar_path = avatarPath || avatarUrl || '';
+        node.dataset.user = JSON.stringify(payload);
+      } catch (e) {}
+    });
+  }
+
+  function selectorEscape(value) {
+    if (window.CSS && typeof window.CSS.escape === 'function') return window.CSS.escape(String(value));
+    return String(value).replace(/["\\]/g, '\\$&');
+  }
+
+  function updateAvatarUi(userId, avatarUrl, initials, avatarPath = '') {
+    document.querySelectorAll(`.tracs-avatar[data-avatar-user-id="${selectorEscape(userId)}"]`).forEach(node => {
+      setAvatarNode(node, avatarUrl, initials);
+    });
+    document.querySelectorAll(`[data-avatar-remove][data-avatar-user-id="${selectorEscape(userId)}"]`).forEach(btn => {
+      btn.disabled = !avatarUrl;
+    });
+    updateUserPayloads(userId, avatarUrl, avatarPath);
+  }
+
+  function clampOffset() {
+    if (!state.image) return;
+    const width = state.image.width * state.minScale * state.zoom;
+    const height = state.image.height * state.minScale * state.zoom;
+    state.offsetX = width <= OUTPUT_SIZE ? (OUTPUT_SIZE - width) / 2 : Math.min(0, Math.max(OUTPUT_SIZE - width, state.offsetX));
+    state.offsetY = height <= OUTPUT_SIZE ? (OUTPUT_SIZE - height) / 2 : Math.min(0, Math.max(OUTPUT_SIZE - height, state.offsetY));
+  }
+
+  function drawAvatarCrop() {
+    const canvas = cropCanvas();
+    const preview = previewCanvas();
+    if (!canvas || !preview || !state.image) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
+    clampOffset();
+    const width = state.image.width * state.minScale * state.zoom;
+    const height = state.image.height * state.minScale * state.zoom;
+    ctx.drawImage(state.image, state.offsetX, state.offsetY, width, height);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,.85)';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(2, 2, OUTPUT_SIZE - 4, OUTPUT_SIZE - 4);
+    ctx.restore();
+
+    const pctx = preview.getContext('2d');
+    pctx.clearRect(0, 0, preview.width, preview.height);
+    pctx.drawImage(canvas, 0, 0, preview.width, preview.height);
+  }
+
+  function canvasPoint(event) {
+    const canvas = cropCanvas();
+    const rect = canvas.getBoundingClientRect();
+    const touch = event.touches?.[0] || event.changedTouches?.[0] || event;
+    return {
+      x: ((touch.clientX - rect.left) / rect.width) * OUTPUT_SIZE,
+      y: ((touch.clientY - rect.top) / rect.height) * OUTPUT_SIZE
+    };
+  }
+
+  function setZoom(nextZoom) {
+    const oldZoom = state.zoom;
+    state.zoom = Math.max(1, Math.min(4, Number(nextZoom) || 1));
+    const ratio = state.zoom / oldZoom;
+    state.offsetX = OUTPUT_SIZE / 2 - (OUTPUT_SIZE / 2 - state.offsetX) * ratio;
+    state.offsetY = OUTPUT_SIZE / 2 - (OUTPUT_SIZE / 2 - state.offsetY) * ratio;
+    const range = zoomRange();
+    if (range) range.value = String(state.zoom);
+    drawAvatarCrop();
+  }
+
+  function closeCropModal() {
+    modal()?.classList.add('hidden');
+    if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
+    state.objectUrl = '';
+    state.image = null;
+  }
+
+  function openCropModal(file, userId) {
+    state.userId = String(userId || '');
+    state.objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      state.image = img;
+      state.zoom = 1;
+      state.minScale = Math.max(OUTPUT_SIZE / img.width, OUTPUT_SIZE / img.height);
+      const width = img.width * state.minScale;
+      const height = img.height * state.minScale;
+      state.offsetX = (OUTPUT_SIZE - width) / 2;
+      state.offsetY = (OUTPUT_SIZE - height) / 2;
+      const range = zoomRange();
+      if (range) range.value = '1';
+      modal()?.classList.remove('hidden');
+      drawAvatarCrop();
+      window.TRACSDropdowns?.syncAll();
+      lucide?.createIcons();
+    };
+    img.onerror = () => {
+      closeCropModal();
+      toast('The selected image could not be loaded.', 'error');
+    };
+    img.src = state.objectUrl;
+  }
+
+  function chooseAvatarFile(userId) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/jpeg,image/png,image/webp';
+    input.addEventListener('change', () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      if (!SUPPORTED_TYPES.has(file.type)) {
+        toast('Only JPG, JPEG, PNG, and WEBP profile pictures are supported.', 'error');
+        return;
+      }
+      if (file.size > MAX_RAW_SIZE) {
+        toast('Choose an image smaller than 5MB.', 'error');
+        return;
+      }
+      openCropModal(file, userId);
+    }, { once: true });
+    input.click();
+  }
+
+  function blobFromCanvas(canvas, type, quality) {
+    return new Promise(resolve => canvas.toBlob(resolve, type, quality));
+  }
+
+  async function uploadCroppedAvatar() {
+    const canvas = cropCanvas();
+    const confirm = document.querySelector('[data-avatar-confirm]');
+    if (!canvas || !state.userId) return;
+    const mime = webpSupported() ? 'image/webp' : 'image/jpeg';
+    const extension = mime === 'image/webp' ? 'webp' : 'jpg';
+    const blob = await blobFromCanvas(canvas, mime, 0.82);
+    if (!blob) {
+      toast('Unable to process this image.', 'error');
+      return;
+    }
+    const form = new FormData();
+    form.append('action', 'upload');
+    form.append('target_user_id', state.userId);
+    form.append('avatar', blob, `avatar.${extension}`);
+    try {
+      if (confirm) confirm.disabled = true;
+      const res = await fetch('/api/user-avatar.php', { method: 'POST', body: form });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.message || 'Unable to save profile picture.');
+      updateAvatarUi(json.data.user_id, json.data.avatar_url || '', json.data.initials || 'U', json.data.avatar_path || '');
+      closeCropModal();
+      toast(json.message || 'Profile picture updated.', 'success');
+    } catch (error) {
+      toast(error.message || 'Unable to save profile picture.', 'error');
+    } finally {
+      if (confirm) confirm.disabled = false;
+    }
+  }
+
+  async function removeAvatar(userId) {
+    if (!userId || !confirm('Remove this profile picture?')) return;
+    const form = new FormData();
+    form.append('action', 'remove');
+    form.append('target_user_id', userId);
+    try {
+      const res = await fetch('/api/user-avatar.php', { method: 'POST', body: form });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.message || 'Unable to remove profile picture.');
+      updateAvatarUi(json.data.user_id, '', json.data.initials || 'U', '');
+      toast(json.message || 'Profile picture removed.', 'success');
+    } catch (error) {
+      toast(error.message || 'Unable to remove profile picture.', 'error');
+    }
+  }
+
+  function bindCropper() {
+    const canvas = cropCanvas();
+    if (!canvas || canvas.dataset.avatarBound === '1') return;
+    canvas.dataset.avatarBound = '1';
+    canvas.addEventListener('pointerdown', event => {
+      state.dragging = true;
+      canvas.setPointerCapture?.(event.pointerId);
+      const point = canvasPoint(event);
+      state.lastX = point.x;
+      state.lastY = point.y;
+    });
+    canvas.addEventListener('pointermove', event => {
+      if (!state.dragging) return;
+      const point = canvasPoint(event);
+      state.offsetX += point.x - state.lastX;
+      state.offsetY += point.y - state.lastY;
+      state.lastX = point.x;
+      state.lastY = point.y;
+      drawAvatarCrop();
+    });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(type => {
+      canvas.addEventListener(type, () => { state.dragging = false; });
+    });
+    canvas.addEventListener('wheel', event => {
+      event.preventDefault();
+      setZoom(state.zoom + (event.deltaY < 0 ? 0.08 : -0.08));
+    }, { passive: false });
+  }
+
+  document.addEventListener('click', event => {
+    const upload = event.target.closest('[data-avatar-upload]');
+    if (upload) {
+      const userId = upload.dataset.avatarUserId || upload.closest('[data-avatar-scope]')?.querySelector('[data-avatar-user-id]')?.dataset.avatarUserId || '';
+      if (!userId) {
+        toast('Save this user before uploading a profile picture.', 'error');
+        return;
+      }
+      chooseAvatarFile(userId);
+      return;
+    }
+    const remove = event.target.closest('[data-avatar-remove]');
+    if (remove) {
+      removeAvatar(remove.dataset.avatarUserId || '');
+      return;
+    }
+    if (event.target.closest('[data-avatar-cancel]')) {
+      closeCropModal();
+      return;
+    }
+    if (event.target.closest('[data-avatar-confirm]')) {
+      uploadCroppedAvatar();
+      return;
+    }
+    if (event.target.closest('[data-avatar-zoom-in]')) {
+      setZoom(state.zoom + 0.12);
+      return;
+    }
+    if (event.target.closest('[data-avatar-zoom-out]')) {
+      setZoom(state.zoom - 0.12);
+    }
+  });
+
+  document.addEventListener('input', event => {
+    if (event.target === zoomRange()) setZoom(event.target.value);
+  });
+  document.addEventListener('DOMContentLoaded', bindCropper);
+  bindCropper();
+  window.TRACSAvatars = { updateAvatarUi };
+})();
+
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
-  document.querySelectorAll('.report-export-menu[open]').forEach(menu => menu.removeAttribute('open'));
-  document.querySelectorAll('.row-action-menu[open]').forEach(menu => menu.removeAttribute('open'));
+  tracsCloseIconPopups();
 });
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => tracsInitNotificationPopups());
+} else {
+  tracsInitNotificationPopups();
+}
 
 /* ── Confirm dialog ───────────────────────────────────── */
 let _cb=null;
@@ -1450,12 +1819,19 @@ function bindSidebarTooltips() {
   const placeTip = (host) => {
     const tip = host.querySelector('.nav-tip');
     const sidebar = host.closest('.sidebar');
-    if (!tip || !sidebar) return;
+    if (!sidebar) return;
 
     const hostRect = host.getBoundingClientRect();
     const sideRect = sidebar.getBoundingClientRect();
-    tip.style.setProperty('--nav-tip-left', `${sideRect.right + 10}px`);
-    tip.style.setProperty('--nav-tip-top', `${hostRect.top + hostRect.height / 2}px`);
+    if (tip) {
+      tip.style.setProperty('--nav-tip-left', `${sideRect.right + 10}px`);
+      tip.style.setProperty('--nav-tip-top', `${hostRect.top + hostRect.height / 2}px`);
+    }
+
+    const submenu = host.closest('.nav-menu-wrap')?.querySelector('.nav-submenu');
+    if (submenu) {
+      submenu.style.setProperty('--nav-submenu-top', `${hostRect.top + hostRect.height / 2}px`);
+    }
   };
 
   hosts.forEach((host) => {
@@ -2046,16 +2422,15 @@ function tracsOpenThemeMenu() {
   const wrap = document.getElementById('themeMenuWrap');
   const toggle = document.getElementById('themeToggle');
   if (!wrap || !toggle) return;
-  wrap.classList.add('is-open');
-  toggle.setAttribute('aria-expanded', 'true');
+  tracsCloseIconPopups?.(wrap);
+  tracsSetCustomPopupOpen?.(wrap, true);
 }
 
 function tracsCloseThemeMenu() {
   const wrap = document.getElementById('themeMenuWrap');
   const toggle = document.getElementById('themeToggle');
   if (!wrap || !toggle) return;
-  wrap.classList.remove('is-open');
-  toggle.setAttribute('aria-expanded', 'false');
+  tracsSetCustomPopupOpen?.(wrap, false);
 }
 
 function tracsToggleThemeMenu() {

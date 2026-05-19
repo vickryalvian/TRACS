@@ -428,7 +428,7 @@ include 'includes/header.php';
               $adone=($astatus==='completed');
             ?>
               <div class="quick-action-item" style="opacity:<?=$adone?'.5':'1'?>">
-                <span style="<?=$adone?'text-decoration:line-through':''?>"><?=esc(substr($a['title']??'',0,30))?></span>
+                <span style="<?=$adone?'color:var(--tx3)':''?>"><?=esc(substr($a['title']??'',0,30))?></span>
               </div>
             <?php endforeach; ?>
             <?php if(count($actions)>3): ?>

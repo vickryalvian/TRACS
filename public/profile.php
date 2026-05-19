@@ -91,11 +91,18 @@ include __DIR__ . '/includes/header.php';
   $roleClass = tracs_user_role_badge_class($me['role_slug'] ?? 'agent');
   $statusClass = tracs_user_status_badge_class($me['status'] ?? 'active');
   $initials = tracs_user_initials($me['display_name'] ?? '', $me['email'] ?? 'U');
+  $avatarUrl = tracs_user_avatar_url($me);
 ?>
 
 <div class="profile-layout">
   <aside class="panel profile-card">
-    <div class="profile-avatar" style="<?=!empty($me['avatar_initials_color'])?'--um-avatar-bg:'.esc($me['avatar_initials_color']):''?>"><?=$initials?></div>
+    <div class="profile-avatar-wrap" data-avatar-scope>
+      <div class="profile-avatar tracs-avatar" data-avatar-user-id="<?=esc((string)$uid)?>" data-avatar-initials="<?=esc($initials)?>" style="<?=!empty($me['avatar_initials_color'])?'--um-avatar-bg:'.esc($me['avatar_initials_color']):''?>"><?php if($avatarUrl): ?><img src="<?=esc($avatarUrl)?>" alt="" loading="lazy" decoding="async"><?php else: ?><span><?=$initials?></span><?php endif; ?></div>
+      <div class="profile-avatar-actions">
+        <button type="button" class="btn btn-ghost btn-sm" data-avatar-upload data-avatar-user-id="<?=esc((string)$uid)?>"><i data-lucide="image-plus" class="icon-sm"></i>Change Photo</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-avatar-remove data-avatar-user-id="<?=esc((string)$uid)?>" <?=$avatarUrl ? '' : 'disabled'?>> <i data-lucide="trash-2" class="icon-sm"></i>Remove</button>
+      </div>
+    </div>
     <div class="profile-name"><?=esc($me['display_name'])?></div>
     <div class="profile-email"><?=esc($me['email'])?> · @<?=esc($me['username'])?></div>
     <div class="um-badge-row profile-badges">
@@ -194,6 +201,29 @@ include __DIR__ . '/includes/header.php';
 
 <?php endif; ?>
 </div></main>
+
+<?php if($schema_ready): ?>
+<div class="modal-overlay hidden" id="avatarCropModal">
+  <div class="modal avatar-crop-modal" role="dialog" aria-modal="true" aria-labelledby="avatarCropTitle">
+    <div class="modal-head">
+      <div><div class="modal-title" id="avatarCropTitle">Crop Profile Picture</div><div class="modal-sub">Square avatar preview before upload</div></div>
+      <button type="button" class="modal-close" data-avatar-cancel><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body avatar-crop-body">
+      <div class="avatar-crop-grid">
+        <div class="avatar-crop-stage"><canvas id="avatarCropCanvas" width="512" height="512" aria-label="Avatar crop area"></canvas></div>
+        <div class="avatar-crop-side">
+          <canvas id="avatarPreviewCanvas" width="128" height="128" aria-label="Avatar preview"></canvas>
+          <label class="form-label" for="avatarZoomRange">Zoom</label>
+          <input id="avatarZoomRange" class="avatar-zoom-range" type="range" min="1" max="4" step="0.01" value="1">
+          <div class="avatar-crop-actions"><button type="button" class="btn btn-ghost btn-sm" data-avatar-zoom-out><i data-lucide="minus" class="icon-sm"></i></button><button type="button" class="btn btn-ghost btn-sm" data-avatar-zoom-in><i data-lucide="plus" class="icon-sm"></i></button></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot"><button type="button" class="btn btn-ghost" data-avatar-cancel>Cancel</button><button type="button" class="btn btn-primary" data-avatar-confirm><i data-lucide="check" class="icon-sm"></i>Save Photo</button></div>
+  </div>
+</div>
+<?php endif; ?>
 
 <script>
 function profileTogglePassword(id){

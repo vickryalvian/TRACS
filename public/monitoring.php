@@ -105,6 +105,9 @@ $allowed_tabs = $can_monitor ? ['my','assigned','monitoring','interns','review']
 $requested_tab = (string)($_GET['tab'] ?? 'my');
 $tab = in_array($requested_tab, $allowed_tabs, true) ? $requested_tab : 'my';
 
+if ($schema_ready) {
+    $TM->refreshOverdueStatuses();
+}
 $summary = $schema_ready ? $TM->summary() : [];
 $users = $schema_ready ? $TM->users() : [];
 $roles = $schema_ready ? $TM->roles() : [];
@@ -122,7 +125,16 @@ $filters = [
 $tasks = $schema_ready ? $TM->tasks($filters) : [];
 $performance = ($schema_ready && $tab === 'monitoring') ? $TM->performance() : [];
 $interns = ($schema_ready && $tab === 'interns') ? $TM->interns() : [];
+$breakdowns = ($schema_ready && $can_monitor) ? $TM->breakdowns() : [];
+$selected_assignment_id = (int)($_GET['assignment_id'] ?? 0);
 $selected_task = $tasks[0] ?? null;
+foreach ($tasks as $candidate) {
+    if ((int)$candidate['assignment_id'] === $selected_assignment_id) {
+        $selected_task = $candidate;
+        break;
+    }
+}
+$task_logs = ($selected_task && $schema_ready) ? $TM->taskLogs((int)$selected_task['assignment_id']) : [];
 
 $TC = new AlertTickerController($conn, $uid);
 $ticker_items = $TC->formatAlertsForTicker();
@@ -201,6 +213,22 @@ include __DIR__ . '/includes/header.php';
           <?php endforeach; ?>
         </div>
       </div>
+      <div class="tm-breakdown-grid">
+        <?php foreach(['priority'=>'Priority','category'=>'Category','division'=>'Division / Team','role'=>'Role','assigner'=>'Assigned By'] as $key=>$label): ?>
+        <div class="panel tm-breakdown-panel">
+          <div class="panel-head"><span class="panel-title"><?=esc($label)?></span></div>
+          <div class="tm-breakdown-list">
+            <?php foreach(($breakdowns[$key] ?? []) as $row): ?>
+            <div class="tm-breakdown-row">
+              <strong><?=esc(tm_label((string)$row['label']))?></strong>
+              <span><?=esc($row['total'])?> total · <?=esc($row['active'])?> active · <?=esc($row['overdue'])?> late/overdue</span>
+              <em><?=tm_duration(isset($row['avg_completion_seconds']) ? (int)$row['avg_completion_seconds'] : null)?> avg</em>
+            </div>
+            <?php endforeach; ?>
+          </div>
+        </div>
+        <?php endforeach; ?>
+      </div>
     <?php endif; ?>
 
     <?php if($tab === 'interns'): ?>
@@ -238,7 +266,12 @@ include __DIR__ . '/includes/header.php';
               <td><span class="<?=esc($delta['class'])?>"><?=esc($delta['label'])?></span></td>
               <td><?=tm_duration(isset($task['completion_seconds']) ? (int)$task['completion_seconds'] : null)?></td>
               <td><?=!empty($task['assignment_updated_at']) ? esc(date('d M Y, H:i', strtotime($task['assignment_updated_at']))) : '—'?></td>
-              <td><button type="button" class="btn btn-ghost btn-sm" onclick="tmOpenUpdate(<?=$task['assignment_id']?>,'<?=esc($task['assignment_status'])?>')"><i data-lucide="pencil" class="icon-xs"></i>Update</button></td>
+              <td>
+                <div class="tm-row-actions">
+                  <a class="btn btn-ghost btn-sm" href="?<?=http_build_query(array_merge($_GET, ['assignment_id' => (int)$task['assignment_id']]))?>"><i data-lucide="eye" class="icon-xs"></i>Details</a>
+                  <button type="button" class="btn btn-ghost btn-sm" onclick="tmOpenUpdate(<?=$task['assignment_id']?>,'<?=esc($task['stored_status'] ?: $task['assignment_status'])?>')"><i data-lucide="pencil" class="icon-xs"></i>Update</button>
+                </div>
+              </td>
             </tr>
           <?php endforeach; ?>
           </tbody>
@@ -254,8 +287,11 @@ include __DIR__ . '/includes/header.php';
       <div class="tm-detail-body">
         <div class="tm-detail-title"><strong><?=esc($selected_task['title'])?></strong><span><?=esc($selected_task['assignee_name'])?> · <?=esc(tm_label($selected_task['category']))?></span></div>
         <div class="tm-detail-grid">
+          <div><span>Created</span><strong><?=!empty($selected_task['created_at']) ? esc(date('d M Y, H:i', strtotime($selected_task['created_at']))) : '-'?></strong></div>
+          <div><span>Assigned by</span><strong><?=esc($selected_task['assigned_by_name'] ?? $selected_task['created_by_name'] ?? 'System')?></strong></div>
           <div><span>SLA status</span><strong class="<?=esc($delta['class'])?>"><?=esc($delta['label'])?></strong></div>
           <div><span>Status</span><strong><?=esc(tm_label($selected_task['assignment_status']))?></strong></div>
+          <div><span>Due</span><strong><?=!empty($selected_task['due_at']) ? esc(date('d M Y, H:i', strtotime($selected_task['due_at']))) : '-'?></strong></div>
           <div><span>Assigned</span><strong><?=!empty($selected_task['assigned_at']) ? esc(date('d M Y, H:i', strtotime($selected_task['assigned_at']))) : '-'?></strong></div>
           <div><span>Started</span><strong><?=!empty($selected_task['started_at']) ? esc(date('d M Y, H:i', strtotime($selected_task['started_at']))) : '-'?></strong></div>
           <div><span>Completed</span><strong><?=!empty($selected_task['completed_at']) ? esc(date('d M Y, H:i', strtotime($selected_task['completed_at']))) : '-'?></strong></div>
@@ -264,6 +300,19 @@ include __DIR__ . '/includes/header.php';
           <div><span>Overdue duration</span><strong><?=tm_duration(isset($selected_task['overdue_seconds']) ? (int)$selected_task['overdue_seconds'] : null)?></strong></div>
           <div><span>Reminder</span><strong><?=!empty($selected_task['linked_reminder_id']) ? 'Linked #' . (int)$selected_task['linked_reminder_id'] : 'No timed reminder'?></strong></div>
           <div><span>Review</span><strong><?=!empty($selected_task['reviewed_at']) ? 'Reviewed' : ($selected_task['requires_review'] ? 'Required' : 'Optional')?></strong></div>
+        </div>
+        <div class="tm-detail-notes"><span>Instruction / notes</span><strong><?=esc($selected_task['description'] ?: 'No instruction provided.')?></strong></div>
+        <div class="tm-history">
+          <div class="tm-history-title">Activity Log</div>
+          <?php if(!$task_logs): ?>
+            <div class="tm-history-empty">No task history recorded yet.</div>
+          <?php else: foreach($task_logs as $log): ?>
+            <div class="tm-history-row">
+              <strong><?=esc(tm_label((string)$log['action']))?></strong>
+              <span><?=esc($log['actor_name'] ?? 'System')?> · <?=!empty($log['created_at']) ? esc(date('d M Y, H:i', strtotime($log['created_at']))) : '-'?></span>
+              <?php if(!empty($log['note'])): ?><em><?=esc($log['note'])?></em><?php endif; ?>
+            </div>
+          <?php endforeach; endif; ?>
         </div>
       </div>
       <?php endif; ?>

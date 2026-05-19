@@ -76,6 +76,12 @@ $tab = in_array($requested_tab, $allowed_tabs, true) ? $requested_tab : 'users';
 
 $stats = $schema_ready ? $UM->stats() : [];
 $roles = $schema_ready ? $UM->roles() : [];
+$hidden_role_slugs = ['viewer', 'auditor'];
+$visible_roles = array_values(array_filter($roles, function (array $role) use ($hidden_role_slugs): bool {
+    $slug = strtolower((string)($role['slug'] ?? ''));
+    $name = strtolower(trim((string)($role['name'] ?? '')));
+    return !in_array($slug, $hidden_role_slugs, true) && $name !== 'viewer / auditor';
+}));
 $permissions = $schema_ready ? $UM->permissions() : [];
 $role_permission_map = $schema_ready ? $UM->rolePermissionMap() : [];
 $divisions = $schema_ready ? $UM->divisions() : [];
@@ -136,6 +142,8 @@ function um_user_payload(array $user): string {
         'division_name' => $user['division_name'] ?: 'No Division',
         'status' => $user['status'] ?? 'active',
         'shift_preference' => $user['shift_preference'] ?? '',
+        'avatar_path' => $user['avatar_path'] ?? '',
+        'avatar_url' => tracs_user_avatar_url($user),
         'avatar_initials_color' => $user['avatar_initials_color'] ?? '',
         'created_at' => um_dt($user['created_at'] ?? null),
         'updated_at' => um_dt($user['updated_at'] ?? null),
@@ -219,7 +227,7 @@ $has_user_filters = trim((string)($_GET['q'] ?? '')) !== ''
     || (string)($_GET['role_id'] ?? '') !== ''
     || (string)($_GET['status'] ?? '') !== ''
     || (string)($_GET['last_active'] ?? '') !== '';
-$role_count = count($roles);
+$role_count = count($visible_roles);
 $permission_count = array_sum(array_map(fn($group) => count($group), $permissions));
 $supervisor_count = count(array_filter($users, fn($user) => ($user['role_slug'] ?? '') === 'supervisor'));
 $intern_preview_count = (int)($stats['active_interns'] ?? 0);
@@ -325,7 +333,7 @@ include __DIR__ . '/includes/header.php';
         </select>
         <select name="role_id" class="form-select compact-select" aria-label="Role">
           <option value="">All Roles</option>
-          <?php foreach($roles as $role): ?>
+          <?php foreach($visible_roles as $role): ?>
             <option value="<?=$role['id']?>" <?=((string)($_GET['role_id'] ?? '')===(string)$role['id'])?'selected':''?>><?=esc($role['name'])?></option>
           <?php endforeach; ?>
         </select>
@@ -439,7 +447,7 @@ include __DIR__ . '/includes/header.php';
 
 <?php if($tab === 'roles'): ?>
   <div class="um-role-grid">
-    <?php foreach($roles as $role): ?>
+    <?php foreach($visible_roles as $role): ?>
       <div class="panel um-role-card">
         <div class="panel-head"><span class="panel-title"><?=esc($role['slug'])?></span><?=um_badge((string)$role['hierarchy_level'], 'b-info')?></div>
         <div class="um-role-body">
@@ -462,17 +470,17 @@ include __DIR__ . '/includes/header.php';
     </div>
     <div class="um-matrix-wrap">
       <table class="tracs-table um-permission-table">
-        <thead><tr><th>Permission</th><?php foreach($roles as $role): ?><th><?=esc($role['name'])?></th><?php endforeach; ?></tr></thead>
+        <thead><tr><th>Permission</th><?php foreach($visible_roles as $role): ?><th><?=esc($role['name'])?></th><?php endforeach; ?></tr></thead>
         <tbody>
         <?php foreach($permissions as $category=>$items): ?>
-          <tr class="um-permission-group"><td colspan="<?=count($roles)+1?>"><?=esc($category)?></td></tr>
+          <tr class="um-permission-group"><td colspan="<?=count($visible_roles)+1?>"><?=esc($category)?></td></tr>
           <?php foreach($items as $permission): $key=$permission['permission_key']; ?>
           <tr>
             <td>
               <div class="um-permission-name"><?=esc($key)?></div>
               <div class="um-permission-desc"><?=esc($permission['description'] ?? '')?></div>
             </td>
-            <?php foreach($roles as $role):
+            <?php foreach($visible_roles as $role):
               $roleId=(int)$role['id'];
               $checked=in_array($key, $role_permission_map[$roleId]['keys'] ?? [], true);
               $editable=$can_manage_permissions && ($role['slug'] !== 'super_admin') && ($is_super_admin || ($roleId !== (int)($actor['role_id'] ?? 0) && (int)$role['hierarchy_level'] <= (int)($actor['hierarchy_level'] ?? 0) && in_array($key, $actor_permissions, true)));
@@ -555,12 +563,23 @@ include __DIR__ . '/includes/header.php';
     </div>
     <div class="modal-body">
       <div class="um-form-section"><div class="um-form-section-title">Identity</div>
+        <div class="um-avatar-editor" data-avatar-scope>
+          <div class="um-avatar-editor-preview tracs-avatar" id="umAvatarPreview" data-avatar-user-id="" data-avatar-initials="U"><span>U</span></div>
+          <div class="um-avatar-editor-copy">
+            <div class="um-avatar-editor-title">Profile Picture</div>
+            <div class="form-hint" id="umAvatarHint">Save the user first, then upload a cropped avatar.</div>
+          </div>
+          <div class="um-avatar-editor-actions">
+            <button type="button" class="btn btn-ghost btn-sm" id="umAvatarChangeBtn" data-avatar-upload data-avatar-user-id="" disabled><i data-lucide="image-plus" class="icon-sm"></i>Change Photo</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="umAvatarRemoveBtn" data-avatar-remove data-avatar-user-id="" disabled><i data-lucide="trash-2" class="icon-sm"></i>Remove</button>
+          </div>
+        </div>
         <div class="form-row"><div class="form-group"><label class="form-label">Full Name</label><input class="form-input" name="name" id="umName" required></div><div class="form-group"><label class="form-label">Username</label><input class="form-input" name="username" id="umUsername" required></div></div>
         <div class="form-row"><div class="form-group"><label class="form-label">Email</label><input class="form-input" type="email" name="email" id="umEmail" required></div><div class="form-group"><label class="form-label">Phone</label><input class="form-input" name="phone" id="umPhone"></div></div>
         <div class="form-row"><div class="form-group"><label class="form-label">Position</label><input class="form-input" name="position" id="umPosition"></div><div class="form-group"><label class="form-label">Avatar Color</label><input class="form-input" name="avatar_initials_color" id="umAvatarColor" placeholder="#2563eb"></div></div>
       </div>
       <div class="um-form-section"><div class="um-form-section-title">Access</div>
-        <div class="form-row"><div class="form-group"><label class="form-label">Role</label><select class="form-select" name="role_id" id="umRoleId" required onchange="umToggleInternSection()"><?php foreach($roles as $role): ?><option value="<?=$role['id']?>" data-role-slug="<?=esc($role['slug'])?>"><?=esc($role['name'])?></option><?php endforeach; ?></select></div><div class="form-group"><label class="form-label">Division</label><select class="form-select" name="division_id" id="umDivisionId"><option value="">No Division</option><?php foreach($divisions as $division): ?><option value="<?=$division['id']?>"><?=esc($division['name'])?></option><?php endforeach; ?></select></div></div>
+        <div class="form-row"><div class="form-group"><label class="form-label">Role</label><select class="form-select" name="role_id" id="umRoleId" required onchange="umToggleInternSection()"><?php foreach($visible_roles as $role): ?><option value="<?=$role['id']?>" data-role-slug="<?=esc($role['slug'])?>"><?=esc($role['name'])?></option><?php endforeach; ?></select></div><div class="form-group"><label class="form-label">Division</label><select class="form-select" name="division_id" id="umDivisionId"><option value="">No Division</option><?php foreach($divisions as $division): ?><option value="<?=$division['id']?>"><?=esc($division['name'])?></option><?php endforeach; ?></select></div></div>
         <div class="form-row"><div class="form-group"><label class="form-label">Status</label><select class="form-select" name="status" id="umStatus"><option value="active">Active</option><option value="inactive">Inactive</option><option value="suspended">Suspended</option></select></div><div class="form-group"><label class="form-label">Shift Preference</label><input class="form-input" name="shift_preference" id="umShift" placeholder="Shift 1, Shift 2, Shift 3"></div></div>
       </div>
       <div class="um-form-section um-intern-form-section" id="umInternSection" hidden>
@@ -611,7 +630,7 @@ include __DIR__ . '/includes/header.php';
 
 <aside class="um-drawer" id="umUserDrawer" aria-hidden="true">
   <div class="um-drawer-head">
-    <div class="um-drawer-avatar" id="umDrawerAvatar">U</div>
+    <div class="um-drawer-avatar tracs-avatar" id="umDrawerAvatar" data-avatar-user-id="" data-avatar-initials="U"><span>U</span></div>
     <div><div class="um-drawer-title" id="umDrawerName">User</div><div class="um-drawer-sub" id="umDrawerEmail">email</div></div>
     <button class="modal-close" type="button" onclick="umCloseUserDrawer()"><i data-lucide="x"></i></button>
   </div>
@@ -659,6 +678,27 @@ include __DIR__ . '/includes/header.php';
 </aside>
 <div class="um-drawer-scrim" id="umDrawerScrim" onclick="umCloseDrawers()"></div>
 
+<div class="modal-overlay hidden" id="avatarCropModal">
+  <div class="modal avatar-crop-modal" role="dialog" aria-modal="true" aria-labelledby="avatarCropTitle">
+    <div class="modal-head">
+      <div><div class="modal-title" id="avatarCropTitle">Crop Profile Picture</div><div class="modal-sub">Square avatar preview before upload</div></div>
+      <button type="button" class="modal-close" data-avatar-cancel><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body avatar-crop-body">
+      <div class="avatar-crop-grid">
+        <div class="avatar-crop-stage"><canvas id="avatarCropCanvas" width="512" height="512" aria-label="Avatar crop area"></canvas></div>
+        <div class="avatar-crop-side">
+          <canvas id="avatarPreviewCanvas" width="128" height="128" aria-label="Avatar preview"></canvas>
+          <label class="form-label" for="avatarZoomRange">Zoom</label>
+          <input id="avatarZoomRange" class="avatar-zoom-range" type="range" min="1" max="4" step="0.01" value="1">
+          <div class="avatar-crop-actions"><button type="button" class="btn btn-ghost btn-sm" data-avatar-zoom-out><i data-lucide="minus" class="icon-sm"></i></button><button type="button" class="btn btn-ghost btn-sm" data-avatar-zoom-in><i data-lucide="plus" class="icon-sm"></i></button></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot"><button type="button" class="btn btn-ghost" data-avatar-cancel>Cancel</button><button type="button" class="btn btn-primary" data-avatar-confirm><i data-lucide="check" class="icon-sm"></i>Save Photo</button></div>
+  </div>
+</div>
+
 <script>
 const UM_PERMISSION_CATALOG = <?=json_encode($permission_catalog_payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)?>;
 const UM_ROLE_PERMISSIONS = <?=json_encode($role_permission_payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)?>;
@@ -668,6 +708,28 @@ const UM_IS_SUPER_ADMIN = <?=json_encode($is_super_admin)?>;
 function umEsc(value){ return String(value ?? '').replace(/[&<>"']/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch])); }
 function umData(btn, key){ try { return JSON.parse(btn.dataset[key] || '{}'); } catch(e) { return {}; } }
 function umSetValue(id, value){ const el=document.getElementById(id); if(el) el.value=value ?? ''; }
+function umInitials(u){ return (u.name||u.email||'U').split(/\s+/).map(x=>x[0]).join('').slice(0,2).toUpperCase(); }
+function umSetAvatarNode(node, u){
+  if(!node) return;
+  const initials=umInitials(u);
+  node.dataset.avatarUserId=u.id || '';
+  node.dataset.avatarInitials=initials;
+  if(u.avatar_initials_color) node.style.setProperty('--um-avatar-bg', u.avatar_initials_color);
+  const url=u.avatar_url || u.avatar_path || '';
+  node.innerHTML=url ? `<img src="${umEsc(url)}" alt="" loading="lazy" decoding="async">` : `<span>${umEsc(initials)}</span>`;
+}
+function umSetAvatarEditor(u){
+  const userId=u?.id || '';
+  umSetAvatarNode(document.getElementById('umAvatarPreview'), u || {name:'User', email:'U'});
+  ['umAvatarChangeBtn','umAvatarRemoveBtn'].forEach(id=>{
+    const btn=document.getElementById(id);
+    if(!btn) return;
+    btn.dataset.avatarUserId=userId;
+    btn.disabled=!userId;
+  });
+  const hint=document.getElementById('umAvatarHint');
+  if(hint) hint.textContent=userId ? 'Upload is cropped and compressed before it is saved.' : 'Save the user first, then upload a cropped avatar.';
+}
 function umCurrentRoleSlug(){
   const select=document.getElementById('umRoleId');
   return select?.selectedOptions?.[0]?.dataset?.roleSlug || '';
@@ -690,6 +752,7 @@ function umCreateUser(){
   umSetValue('umUserAction','create_user'); umSetValue('umUserId','');
   umSetValue('umOriginalStatus',''); umSetValue('umUserReason','');
   ['umName','umUsername','umEmail','umPhone','umPosition','umAvatarColor','umShift','umPassword'].forEach(id=>umSetValue(id,''));
+  umSetAvatarEditor({id:'', name:'User', email:'U'});
   umClearInternFields();
   umSetValue('umStatus','active'); umSetValue('umDivisionId',''); document.getElementById('umSecuritySection').style.display='';
   openModal('userForm'); umToggleInternSection(); window.TRACSDropdowns?.syncAll();
@@ -703,6 +766,7 @@ function umEditUser(btn){
   umSetValue('umOriginalStatus',u.status || 'active'); umSetValue('umUserReason','');
   umSetValue('umName',u.name); umSetValue('umUsername',u.username); umSetValue('umEmail',u.email); umSetValue('umPhone',u.phone);
   umSetValue('umPosition',u.position); umSetValue('umAvatarColor',u.avatar_initials_color); umSetValue('umRoleId',u.role_id);
+  umSetAvatarEditor(u);
   umSetValue('umDivisionId',u.division_id || ''); umSetValue('umStatus',u.status); umSetValue('umShift',u.shift_preference);
   umSetValue('umUniversityName',u.university_name); umSetValue('umStudyProgram',u.study_program); umSetValue('umInternStart',u.internship_start_date);
   umSetValue('umInternEnd',u.internship_end_date); umSetValue('umMentorUserId',u.mentor_user_id || ''); umSetValue('umInternshipStatus',u.internship_status || 'active');
@@ -778,7 +842,7 @@ function umCopy(id){
 }
 function umOpenUserDrawer(btn){
   const u=umData(btn,'user');
-  document.getElementById('umDrawerAvatar').textContent=(u.name||u.email||'U').split(/\s+/).map(x=>x[0]).join('').slice(0,2).toUpperCase();
+  umSetAvatarNode(document.getElementById('umDrawerAvatar'), u);
   document.getElementById('umDrawerName').textContent=u.name || 'User';
   document.getElementById('umDrawerEmail').textContent=`${u.email} · @${u.username}`;
   document.getElementById('umDrawerBadges').innerHTML=`<span class="badge ${u.role_slug==='super_admin'?'b-critical':u.role_slug==='admin'?'b-active':u.role_slug==='supervisor'?'b-info':u.role_slug==='viewer'?'b-done':'b-low'}">${umEsc(u.role_name)}</span><span class="badge ${u.status==='active'?'b-active':u.status==='suspended'?'b-critical':'b-done'}">${umEsc(u.status)}</span><span class="badge ${u.division_name==='No Division'?'b-done':'b-info'}">${umEsc(u.division_name)}</span>`;

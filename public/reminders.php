@@ -16,15 +16,8 @@ $ticker_items=$TC->formatAlertsForTicker();
 $all=[];
 foreach($RC->getReminders()?:[] as $r){try{$all[]=$RC->formatReminder($r);}catch(Exception $e){}}
 
-function reminder_completed_recently(array $reminder): bool {
-  if(empty($reminder['is_completed'])) return false;
-  $completed_at = $reminder['completed_at'] ?? $reminder['archived_at'] ?? $reminder['updated_at'] ?? null;
-  if(empty($completed_at)) return false;
-  return strtotime((string)$completed_at) >= strtotime('-24 hours');
-}
-
 $f=$_GET['f']??'all'; $q=strtolower(trim($_GET['q']??''));
-$visible_reminders=array_values(array_filter($all, fn($r)=>empty($r['is_completed']) || reminder_completed_recently($r)));
+$visible_reminders=array_values(array_filter($all, fn($r)=>reminder_visible_in_checklist($r)));
 $rems=$visible_reminders;
 if($f!=='all') $rems=array_filter($rems,fn($r)=>match($f){
   'overdue'=>($r['status']??'')==='Overdue','today'=>($r['status']??'')==='Today',

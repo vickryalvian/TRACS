@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: tracs_app
+    ports:
+      - "8080:80"
+
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: tracs
+      DB_PASS: tracs_secret
+      DB_NAME: tracs_db
+      TZ: Asia/Jakarta
+
+    volumes:
+      - .:/var/www/html
+      - ./logs:/var/log/apache2
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+    restart: unless-stopped
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  db:
+    image: mysql:8.0
+    container_name: tracs_db
+
+    environment:
+      MYSQL_ROOT_PASSWORD: root_secret
+      MYSQL_DATABASE: tracs_db
+      MYSQL_USER: tracs
+      MYSQL_PASSWORD: tracs_secret
+      TZ: Asia/Jakarta
+
+    ports:
+      - "3307:3306"
+
+    volumes:
+      - tracs_db:/var/lib/mysql
+      - ./config/install.sql:/docker-entrypoint-initdb.d/install.sql:ro
+
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -proot_secret"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+    restart: unless-stopped
+
+volumes:
+  tracs_db:

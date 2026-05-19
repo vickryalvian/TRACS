@@ -82,6 +82,49 @@ class TaskManagementModel {
         return array_values(array_unique(array_filter($ids, fn($id) => $id > 0)));
     }
 
+    public function refreshOverdueStatuses(?int $actorId = null): int {
+        $actorId = $actorId ?: 0;
+        $stmt = $this->conn->prepare("
+            SELECT ta.id, ta.task_id, ta.user_id, t.title, TIMESTAMPDIFF(SECOND, t.due_at, NOW()) AS overdue_seconds
+            FROM tracs_task_assignments ta
+            INNER JOIN tracs_tasks t ON t.id = ta.task_id
+            WHERE ta.status NOT IN ('completed_on_time','completed_late','reviewed','cancelled','overdue')
+              AND t.due_at IS NOT NULL
+              AND t.due_at < NOW()
+            LIMIT 250
+        ");
+        if (!$stmt) {
+            return 0;
+        }
+        $stmt->execute();
+        $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+        if (!$rows) {
+            return 0;
+        }
+
+        $update = $this->conn->prepare("
+            UPDATE tracs_task_assignments
+            SET status = 'overdue', overdue_seconds = ?, updated_by = ?, updated_at = NOW()
+            WHERE id = ?
+        ");
+        if (!$update) {
+            return 0;
+        }
+        $count = 0;
+        foreach ($rows as $row) {
+            $overdue = max(0, (int)($row['overdue_seconds'] ?? 0));
+            $assignmentId = (int)$row['id'];
+            $update->bind_param('iii', $overdue, $actorId, $assignmentId);
+            if ($update->execute()) {
+                $count++;
+                $this->log((int)$row['task_id'], $assignmentId, $actorId, 'overdue', 'Task became overdue.');
+            }
+        }
+        $update->close();
+        return $count;
+    }
+
     public function createTask(array $data, array $assigneeIds, int $actorId, string $actorName): int {
         $this->conn->begin_transaction();
         try {
@@ -359,9 +402,6 @@ class TaskManagementModel {
         if (!$current) {
             return false;
         }
-        if ($status === 'assigned') {
-            $status = 'not_started';
-        }
         $fields = ['status = ?', 'progress_note = ?', 'review_note = ?', 'updated_by = ?', 'updated_at = NOW()'];
         $types = 'sssi';
         $params = [$status, $progressNote, $reviewNote, $actorId];
@@ -388,6 +428,11 @@ class TaskManagementModel {
             $params[] = $actorId;
         } elseif ($status === 'cancelled') {
             $fields[] = 'cancelled_at = NOW()';
+        } elseif ($status === 'reassigned') {
+            $fields[] = 'assigned_at = NOW()';
+            $fields[] = 'assigned_by = ?';
+            $types .= 'i';
+            $params[] = $actorId;
         }
         $sql = "UPDATE tracs_task_assignments SET " . implode(', ', $fields) . " WHERE id = ?";
         $types .= 'i';
@@ -478,5 +523,57 @@ class TaskManagementModel {
             $stmt->execute();
             $stmt->close();
         }
+    }
+
+    public function taskLogs(int $assignmentId): array {
+        $stmt = $this->conn->prepare("
+            SELECT tl.*, COALESCE(NULLIF(u.name,''), u.email, 'System') AS actor_name
+            FROM tracs_task_logs tl
+            LEFT JOIN tracs_users u ON u.id = tl.actor_user_id
+            WHERE tl.assignment_id = ?
+            ORDER BY tl.created_at DESC
+            LIMIT 30
+        ");
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('i', $assignmentId);
+        $stmt->execute();
+        $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+        return $rows;
+    }
+
+    public function breakdowns(bool $canMonitor, int $actorId): array {
+        $scope = $canMonitor ? '1=1' : 'ta.user_id=' . (int)$actorId;
+        return [
+            'priority' => $this->breakdownQuery("t.priority", $scope),
+            'category' => $this->breakdownQuery("t.category", $scope),
+            'division' => $this->breakdownQuery("COALESCE(d.name, 'No Division')", $scope),
+            'role' => $this->breakdownQuery("COALESCE(r.name, 'No Role')", $scope),
+            'assigner' => $this->breakdownQuery("COALESCE(NULLIF(ab.name,''), ab.email, 'System')", $scope),
+        ];
+    }
+
+    private function breakdownQuery(string $labelExpression, string $scope): array {
+        $result = $this->conn->query("
+            SELECT {$labelExpression} AS label,
+                   COUNT(*) AS total,
+                   SUM(ta.status IN ('assigned','not_started','in_progress','need_review','overdue','reassigned')) AS active,
+                   SUM(ta.status IN ('completed_on_time','completed_late','reviewed')) AS completed,
+                   SUM(ta.status='completed_late' OR (ta.status NOT IN ('completed_on_time','completed_late','reviewed','cancelled') AND t.due_at IS NOT NULL AND t.due_at < NOW())) AS overdue,
+                   AVG(NULLIF(ta.completion_seconds,0)) AS avg_completion_seconds
+            FROM tracs_task_assignments ta
+            INNER JOIN tracs_tasks t ON t.id = ta.task_id
+            INNER JOIN tracs_users u ON u.id = ta.user_id
+            LEFT JOIN tracs_roles r ON r.id = u.role_id
+            LEFT JOIN tracs_divisions d ON d.id = u.division_id
+            LEFT JOIN tracs_users ab ON ab.id = ta.assigned_by
+            WHERE {$scope}
+            GROUP BY label
+            ORDER BY total DESC, label ASC
+            LIMIT 12
+        ");
+        return $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
     }
 }

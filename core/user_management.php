@@ -251,6 +251,7 @@ function tracs_select_existing_user_columns(mysqli $conn, string $prefix = 'u'):
         'division_id',
         'role_id',
         'shift_preference',
+        'avatar_path',
         'avatar_initials_color',
         'created_by',
         'updated_by',
@@ -288,8 +289,35 @@ function tracs_normalize_user_row(array $user): array {
     $user['division_name'] = trim((string)($user['division_name'] ?? ''));
     $user['division_code'] = trim((string)($user['division_code'] ?? ''));
     $user['display_name'] = trim((string)($user['name'] ?? '')) ?: (string)($user['email'] ?? 'User');
+    $user['avatar_path'] = tracs_user_avatar_path($user);
+    $user['avatar_url'] = tracs_user_avatar_url($user);
 
     return $user;
+}
+
+function tracs_user_avatar_path(array $user): string {
+    $path = trim((string)($user['avatar_path'] ?? ''));
+    if ($path === '') {
+        return '';
+    }
+    $path = '/' . ltrim($path, '/');
+    if (!preg_match('#^/uploads/avatars/[A-Za-z0-9._-]+\.(webp|jpe?g|png)$#i', $path)) {
+        return '';
+    }
+    return $path;
+}
+
+function tracs_user_avatar_url(array $user): string {
+    return tracs_user_avatar_path($user);
+}
+
+function tracs_avatar_img_html(array $user, string $class = '', string $alt = ''): string {
+    $url = tracs_user_avatar_url($user);
+    if ($url === '') {
+        return '';
+    }
+    $alt = $alt !== '' ? $alt : (($user['display_name'] ?? $user['name'] ?? 'User') . ' profile picture');
+    return '<img src="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '" alt="' . htmlspecialchars((string)$alt, ENT_QUOTES, 'UTF-8') . '"' . ($class !== '' ? ' class="' . htmlspecialchars($class, ENT_QUOTES, 'UTF-8') . '"' : '') . ' loading="lazy" decoding="async">';
 }
 
 function tracs_get_user_by_id(mysqli $conn, int $userId): ?array {

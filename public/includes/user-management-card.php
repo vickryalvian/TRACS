@@ -1,5 +1,6 @@
 <?php
 $initials = tracs_user_initials($user['display_name'] ?? '', $user['email'] ?? 'U');
+$avatarUrl = tracs_user_avatar_url($user);
 $roleClass = tracs_user_role_badge_class($user['role_slug'] ?? 'agent');
 $statusClass = tracs_user_status_badge_class($user['status'] ?? 'active');
 $payload = um_user_payload($user);
@@ -21,7 +22,7 @@ $remainingLabel = is_numeric($remaining)
 ?>
 <article class="um-user-card <?=($isIntern && $showInternMeta) ? 'um-user-card-intern ' . esc($monitor ? 'intern-' . $monitor : 'intern-active') : ''?>">
   <div class="um-user-card-main">
-    <button type="button" class="um-avatar" onclick="umOpenUserDrawer(this)" data-user="<?=$payload?>" style="<?=!empty($user['avatar_initials_color'])?'--um-avatar-bg:'.esc($user['avatar_initials_color']):''?>"><?=$initials?></button>
+    <button type="button" class="um-avatar tracs-avatar" onclick="umOpenUserDrawer(this)" data-user="<?=$payload?>" data-avatar-user-id="<?=esc((string)$user['id'])?>" data-avatar-initials="<?=esc($initials)?>" style="<?=!empty($user['avatar_initials_color'])?'--um-avatar-bg:'.esc($user['avatar_initials_color']):''?>"><?php if($avatarUrl): ?><img src="<?=esc($avatarUrl)?>" alt="" loading="lazy" decoding="async"><?php else: ?><span><?=$initials?></span><?php endif; ?></button>
     <div class="um-user-main">
       <button type="button" class="um-user-name" onclick="umOpenUserDrawer(this)" data-user="<?=$payload?>"><?=esc($user['display_name'])?></button>
       <div class="um-user-meta">@<?=esc($user['username'])?> · <?=esc($user['email'])?></div>

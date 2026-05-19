@@ -37,7 +37,8 @@ $SC = new ShiftReportController($conn,$uid);
 $MC = new MOMController($conn,$uid);
 
 $opsStatus = getOpsStatus($conn);
-$shift_reports = $SC->getTodayByShift();
+$shift_reports = $SC->getDashboardByShift();
+$shift_handover_label = $SC->getDashboardWindowLabel();
 
 $cases      = array_map([$CC,'formatCase'], $CC->getCases()?:[]);
 $reminders  = [];
@@ -204,14 +205,9 @@ $attention_cases = array_values(array_filter($active_cases, function($c){
   return ($c['priority']??'') === 'critical' || ($c['status']??'') === 'stuck' || str_starts_with($time, 'Overdue');
 }));
 $new_cases = array_values(array_filter($cases, fn($c)=>!empty($c['created_at']) && strtotime((string)$c['created_at']) >= strtotime('-24 hours')));
-$recent_checked_reminders = array_values(array_filter($reminders, function($r) {
-  if (empty($r['is_completed'])) return false;
-  $completed_at = $r['completed_at'] ?? $r['archived_at'] ?? $r['updated_at'] ?? null;
-  if (empty($completed_at)) return false;
-  return strtotime((string)$completed_at) >= strtotime('-24 hours');
-}));
+$recent_checked_reminders = array_values(array_filter($reminders, fn($r)=>!empty($r['is_completed']) && reminder_visible_in_checklist($r)));
 usort($unchecked_reminders, fn($a, $b) => strtotime($b['created_at'] ?? '1970-01-01') <=> strtotime($a['created_at'] ?? '1970-01-01'));
-usort($recent_checked_reminders, fn($a, $b) => strtotime(($b['completed_at'] ?? $b['archived_at'] ?? $b['updated_at'] ?? '1970-01-01')) <=> strtotime(($a['completed_at'] ?? $a['archived_at'] ?? $a['updated_at'] ?? '1970-01-01')));
+usort($recent_checked_reminders, fn($a, $b) => strtotime(reminder_completed_at($b) ?? '1970-01-01') <=> strtotime(reminder_completed_at($a) ?? '1970-01-01'));
 $dashboard_reminders = array_merge($unchecked_reminders, $recent_checked_reminders);
 $scheduled_meetings = array_values(array_filter($mom_dashboard, fn($m)=>($m['status']??'') === 'upcoming'));
 $active_mom_count = count(array_filter($mom_dashboard, fn($m)=>in_array($m['status']??'', ['upcoming','ongoing'], true)));
@@ -365,7 +361,7 @@ include 'includes/header.php';
 
       <div class="topbar-divider"></div>
 
-      <div class="notif-bell-btn" title="Open notification center">
+      <div class="notif-bell-btn" title="Open notification center" role="button" tabindex="0" aria-label="Open notification center" aria-haspopup="true" aria-expanded="false">
         <i data-lucide="bell" class="icon-md"></i>
         <div id="notif-badge-container" data-badge-mode="alerts" data-static-extra="<?=$notification_static_extra?>" data-unchecked-checklist="<?=$unchecked_task_count?>">
           <?php if($notif_count > 0): ?>
@@ -439,6 +435,17 @@ include 'includes/header.php';
          LEFT COL — Core Operations
     ════════════════════════════ -->
     <div class="col-left">
+
+      <!-- INFRASTRUCTURE PULSE SUMMARY -->
+      <a class="panel infra-dashboard-widget" href="infrastructure-pulse.php" data-infra-dashboard-widget>
+        <div class="infra-dashboard-widget__head">
+          <div>
+            <span>Infrastructure Pulse</span>
+            <strong>Loading</strong>
+          </div>
+          <i data-lucide="radar"></i>
+        </div>
+      </a>
 
       <!-- CASES PANEL -->
       <div class="panel dashboard-case-panel">
@@ -606,7 +613,7 @@ include 'includes/header.php';
         <div class="panel-head">
           <span class="panel-title">Shift Handover</span>
           <div class="panel-right">
-            <span class="panel-meta">Today</span>
+            <span class="panel-meta"><?=esc($shift_handover_label)?></span>
             <a href="shift-reports.php" class="btn btn-ghost btn-sm">History →</a>
             <button class="btn btn-primary btn-sm btn-add-reveal" onclick="openNewShiftReport()">
               <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span class="btn-add-label">Add</span>
@@ -819,4 +826,8 @@ include 'includes/header.php';
 </main>
 
 <?php include __DIR__.'/../modules/ops-status/modal.php'; ?>
+<?php $_infra_data_v = @filemtime(__DIR__.'/assets/infrastructure-pulse-data.js') ?: time(); ?>
+<?php $_infra_js_v = @filemtime(__DIR__.'/assets/infrastructure-pulse.js') ?: time(); ?>
+<script src="assets/infrastructure-pulse-data.js?v=<?=$_infra_data_v?>"></script>
+<script src="assets/infrastructure-pulse.js?v=<?=$_infra_js_v?>"></script>
 <?php include 'includes/footer.php'; ?>

@@ -1,0 +1,7 @@
+Options -Indexes
+AddType image/webp .webp
+AddType image/jpeg .jpg .jpeg
+AddType image/png .png
+<FilesMatch "\.(php|phtml|phar|cgi|pl|asp|aspx|jsp|sh)$">
+  Require all denied
+</FilesMatch>

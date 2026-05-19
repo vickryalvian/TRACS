@@ -23,7 +23,8 @@ function reminderColumnExists(mysqli $conn, string $column): bool {
 
 $sets=["is_completed=?","updated_at=NOW()"];
 if(reminderColumnExists($conn,'completed_at')) $sets[]=$done ? "completed_at=NOW()" : "completed_at=NULL";
-if(reminderColumnExists($conn,'archived_at')) $sets[]=$done ? "archived_at=NOW()" : "archived_at=NULL";
+if(reminderColumnExists($conn,'archived_at')) $sets[]="archived_at=NULL";
+if(reminderColumnExists($conn,'reset_at')) $sets[]="reset_at=NULL";
 if(reminderColumnExists($conn,'completed_by')) $sets[]=$done ? "completed_by={$uid}" : "completed_by=NULL";
 
 $reminderTitle = "reminder #{$id}";

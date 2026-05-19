@@ -32,6 +32,35 @@ class ShiftReportController {
         return $grouped;
     }
 
+    public function getDashboardByShift(?string $viewerShift = null) {
+        $viewerShift = $this->resolveViewerShift($viewerShift);
+        $reports = $this->model->getDashboardReports($viewerShift);
+        $grouped = [];
+        $today = date('Y-m-d');
+        $yesterday = date('Y-m-d', strtotime('-1 day'));
+
+        foreach ($reports as $r) {
+            $shift = (string)$r['shift_name'];
+            $activeDate = (string)($r['active_date'] ?? '');
+            if ($activeDate !== '' && $activeDate !== $today) {
+                $dateLabel = $activeDate === $yesterday ? 'Yesterday' : $activeDate;
+                $shift .= ' - ' . $dateLabel;
+            }
+            if (!isset($grouped[$shift])) {
+                $grouped[$shift] = [];
+            }
+            $grouped[$shift][] = $r;
+        }
+        return $grouped;
+    }
+
+    public function getDashboardWindowLabel(?string $viewerShift = null): string {
+        $viewerShift = $this->resolveViewerShift($viewerShift);
+        return in_array($viewerShift, ['Shift 1', 'Shift 2'], true)
+            ? 'Today + yesterday S3'
+            : 'Today';
+    }
+
     public function getTodayStats() {
         $reports = $this->model->getTodayReports();
         $active = 0;
@@ -153,6 +182,40 @@ class ShiftReportController {
 
     public function logShiftActivity(string $type, int $reference_id, string $title, ?string $description = null, string $status = 'info'): bool {
         return $this->activity->logActivity($type, $reference_id, $title, $description, $status);
+    }
+
+    private function resolveViewerShift(?string $viewerShift = null): string {
+        $normalized = $this->normalizeShiftName($viewerShift);
+        if ($normalized !== null) {
+            return $normalized;
+        }
+
+        if ((int)$this->user_id > 0 && function_exists('tracs_column_exists') && tracs_column_exists($this->conn, 'tracs_users', 'shift_preference')) {
+            $stmt = $this->conn->prepare('SELECT shift_preference FROM tracs_users WHERE id = ? LIMIT 1');
+            if ($stmt) {
+                $uid = (int)$this->user_id;
+                $stmt->bind_param('i', $uid);
+                $stmt->execute();
+                $row = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                $normalized = $this->normalizeShiftName($row['shift_preference'] ?? null);
+                if ($normalized !== null) {
+                    return $normalized;
+                }
+            }
+        }
+
+        return $this->detectCurrentShift();
+    }
+
+    private function normalizeShiftName(?string $shift): ?string {
+        $shift = strtolower(trim((string)$shift));
+        return match ($shift) {
+            'shift 1', '1', 's1' => 'Shift 1',
+            'shift 2', '2', 's2' => 'Shift 2',
+            'shift 3', '3', 's3' => 'Shift 3',
+            default => null,
+        };
     }
 
     private function detectCategory($report) {

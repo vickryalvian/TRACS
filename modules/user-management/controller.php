@@ -690,6 +690,35 @@ class UserManagementController {
         return ['message' => 'Profile updated successfully.'];
     }
 
+    public function updateProfilePicture(int $userId, ?string $avatarPath): array {
+        if ($userId <= 0) {
+            throw new InvalidArgumentException('Invalid user.');
+        }
+        $before = $this->model->getUserById($userId);
+        if (!$before) {
+            throw new RuntimeException('User not found.');
+        }
+
+        if ($userId === $this->actorId) {
+            tracs_require_permission($this->conn, 'profile.update_own');
+        } else {
+            tracs_require_permission($this->conn, 'users.update');
+            $this->assertCanManageUser($before);
+        }
+
+        $this->model->updateAvatarPath($userId, $avatarPath, $this->actorId);
+        $after = $this->model->getUserById($userId);
+        if ($userId === $this->actorId && $after) {
+            tracs_sync_session_user($after);
+        }
+        tracs_log_user_event($this->conn, $this->actorId, $avatarPath ? 'user_avatar_updated' : 'user_avatar_removed', 'user', $userId, ['avatar_path' => $before['avatar_path'] ?? null], ['avatar_path' => $avatarPath]);
+
+        return [
+            'message' => $avatarPath ? 'Profile picture updated successfully.' : 'Profile picture removed.',
+            'user' => $after,
+        ];
+    }
+
     public function changeOwnPassword(array $input): array {
         tracs_require_permission($this->conn, 'profile.change_password_own');
         $user = $this->model->getUserById($this->actorId);

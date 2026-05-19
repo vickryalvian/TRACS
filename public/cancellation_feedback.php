@@ -117,9 +117,10 @@ include 'includes/header.php';
   </div>
 
   <!-- ── Filter & Search ────────────────────────────────────────── -->
-  <div class="shift-toolbar-panel feedback-toolbar-panel">
-    <div class="filter-search-row">
-      <form method="get" class="filter-group-wrap">
+  <div class="feedback-toolbar-row">
+    <div class="shift-toolbar-panel feedback-toolbar-panel">
+      <div class="filter-search-row">
+        <form method="get" class="filter-group-wrap">
         <div class="month-select-wrap">
           <label>Service</label>
           <select name="service" class="form-select compact-select" onchange="this.form.submit()">
@@ -160,23 +161,30 @@ include 'includes/header.php';
           <input type="date" name="dt" class="form-input compact-select" value="<?=esc($filters['date_to'])?>" onchange="this.form.submit()" style="width:125px">
         </div>
 
+        <input type="hidden" name="q" value="<?=esc($filters['q'])?>">
+
         <?php if(array_filter($filters)): ?>
         <a href="cancellation_feedback.php" class="btn btn-ghost btn-reset">
           <i data-lucide="rotate-ccw" class="icon-xs" style="margin-right:4px"></i> Reset
         </a>
         <?php endif; ?>
-      </form>
 
-      <form method="get" class="search-form-wrap feedback-search-wrap">
-        <input type="hidden" name="service" value="<?=esc($filters['service'])?>">
-        <input type="hidden" name="reason" value="<?=esc($filters['reason'])?>">
-        <input type="hidden" name="resolution" value="<?=esc($filters['resolution'])?>">
-        <input type="hidden" name="df" value="<?=esc($filters['date_from'])?>">
-        <input type="hidden" name="dt" value="<?=esc($filters['date_to'])?>">
-        <i data-lucide="search" class="search-ic icon-sm"></i>
-        <input type="text" name="q" class="search-input" placeholder="Search customer email, domain, service reference, or notes" value="<?=esc($filters['q'])?>" onchange="this.form.submit()">
-      </form>
+        <button type="submit" class="btn btn-primary feedback-filter-btn">
+          <i data-lucide="filter" class="icon-xs"></i> Filter
+        </button>
+        </form>
+      </div>
     </div>
+
+    <form method="get" class="shift-toolbar-panel search-form-wrap feedback-search-wrap feedback-search-panel">
+      <input type="hidden" name="service" value="<?=esc($filters['service'])?>">
+      <input type="hidden" name="reason" value="<?=esc($filters['reason'])?>">
+      <input type="hidden" name="resolution" value="<?=esc($filters['resolution'])?>">
+      <input type="hidden" name="df" value="<?=esc($filters['date_from'])?>">
+      <input type="hidden" name="dt" value="<?=esc($filters['date_to'])?>">
+      <i data-lucide="search" class="search-ic icon-sm"></i>
+      <input type="text" name="q" class="search-input" placeholder="Search customer email, domain, service reference, or notes" value="<?=esc($filters['q'])?>" onchange="this.form.submit()">
+    </form>
   </div>
 
   <!-- ── Main Table ─────────────────────────────────────────────── -->

@@ -2,7 +2,7 @@
 require_once __DIR__.'/../../modules/shift-reports/controller.php';
 
 $SC = new ShiftReportController($conn, $uid);
-$grouped = $SC->getTodayByShift();
+$grouped = $SC->getDashboardByShift();
 $stats = $SC->getTodayStats();
 
 ok(['reports' => $grouped, 'stats' => $stats]);

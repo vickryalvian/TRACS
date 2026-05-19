@@ -85,3 +85,18 @@ function tracs_highlight_lines(mixed $lines, mixed $highlight): string {
 function rem_status_class(string $s): string {
     return match($s){'Overdue'=>'rem-ov','Today'=>'rem-today',default=>'rem-future'};
 }
+function reminder_completed_at(array $reminder): ?string {
+    foreach (['completed_at', 'archived_at', 'updated_at'] as $key) {
+        if (!empty($reminder[$key]) && strtotime((string)$reminder[$key]) !== false) {
+            return (string)$reminder[$key];
+        }
+    }
+    return null;
+}
+function reminder_visible_in_checklist(array $reminder): bool {
+    if (empty($reminder['is_completed'])) {
+        return true;
+    }
+    $completed_at = reminder_completed_at($reminder);
+    return $completed_at !== null && strtotime($completed_at) >= strtotime('-24 hours');
+}

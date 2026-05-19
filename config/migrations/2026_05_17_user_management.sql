@@ -226,7 +226,8 @@ CALL tracs_um_add_column_if_missing('tracs_users', 'status', 'ENUM(''active'',''
 CALL tracs_um_add_column_if_missing('tracs_users', 'division_id', 'INT UNSIGNED NULL AFTER `status`');
 CALL tracs_um_add_column_if_missing('tracs_users', 'role_id', 'INT UNSIGNED NULL AFTER `division_id`');
 CALL tracs_um_add_column_if_missing('tracs_users', 'shift_preference', 'VARCHAR(60) NULL AFTER `role_id`');
-CALL tracs_um_add_column_if_missing('tracs_users', 'avatar_initials_color', 'VARCHAR(20) NULL AFTER `shift_preference`');
+CALL tracs_um_add_column_if_missing('tracs_users', 'avatar_path', 'VARCHAR(255) NULL AFTER `shift_preference`');
+CALL tracs_um_add_column_if_missing('tracs_users', 'avatar_initials_color', 'VARCHAR(20) NULL AFTER `avatar_path`');
 CALL tracs_um_add_column_if_missing('tracs_users', 'created_by', 'INT UNSIGNED NULL AFTER `avatar_initials_color`');
 CALL tracs_um_add_column_if_missing('tracs_users', 'updated_by', 'INT UNSIGNED NULL AFTER `created_by`');
 CALL tracs_um_add_column_if_missing('tracs_users', 'last_login_at', 'DATETIME NULL AFTER `updated_by`');

@@ -30,6 +30,34 @@ class ShiftReportModel {
         return $reports;
     }
 
+    public function getDashboardReports(string $viewerShift) {
+        $includePreviousShift3 = in_array($viewerShift, ['Shift 1', 'Shift 2'], true);
+        $where = "r.active_date = CURDATE()";
+        if ($includePreviousShift3) {
+            $where = "({$where} OR (r.active_date = DATE_SUB(CURDATE(), INTERVAL 1 DAY) AND r.shift_name = 'Shift 3'))";
+        }
+
+        $query = "
+            SELECT r.*, u.email AS creator_email, COALESCE(NULLIF(r.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name
+            FROM tracs_shift_reports r
+            LEFT JOIN tracs_users u ON r.created_by = u.id
+            WHERE {$where}
+            ORDER BY r.active_date ASC,
+                     FIELD(r.shift_name, 'Shift 1', 'Shift 2', 'Shift 3') ASC,
+                     r.status ASC,
+                     FIELD(r.priority, 'critical', 'high', 'medium', 'low') ASC,
+                     r.created_at DESC
+        ";
+        $result = $this->conn->query($query);
+        $reports = [];
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
+                $reports[] = $row;
+            }
+        }
+        return $reports;
+    }
+
     public function getHistory($filters = [], $limit = 50, $offset = 0) {
         $where = ["1=1"];
         $params = [];

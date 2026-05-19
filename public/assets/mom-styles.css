@@ -509,7 +509,7 @@
 }
 
 .action-item-completed .action-title {
-  text-decoration: line-through;
+  text-decoration: none;
   color: var(--tx3);
 }
 

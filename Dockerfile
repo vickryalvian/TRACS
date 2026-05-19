@@ -1,12 +1,18 @@
 FROM php:8.2-apache
 
-# Install mysqli
-RUN docker-php-ext-install mysqli && docker-php-ext-enable mysqli
+# Install mysqli for TRACS' MySQL/MariaDB connection layer.
+RUN docker-php-ext-install mysqli
 
-# Enable mod_rewrite
+# Make Docker/Apache environment variables available through PHP $_ENV.
+RUN { \
+    echo 'variables_order=EGPCS'; \
+    echo 'date.timezone=Asia/Jakarta'; \
+  } > /usr/local/etc/php/conf.d/tracs.ini
+
+# Enable Apache modules used by public/.htaccess and security headers.
 RUN a2enmod rewrite headers
 
-# Apache config
+# Apache directory config.
 RUN echo '<Directory /var/www/html>\n\
     Options -Indexes +FollowSymLinks\n\
     AllowOverride All\n\
@@ -14,10 +20,10 @@ RUN echo '<Directory /var/www/html>\n\
 </Directory>' > /etc/apache2/conf-available/tracs.conf && \
     a2enconf tracs
 
-# Copy application
+# Copy application.
 COPY . /var/www/html/
 
-# Set document root to /public
+# Set document root to /public.
 RUN echo '<VirtualHost *:80>\n\
     DocumentRoot /var/www/html/public\n\
     <Directory /var/www/html/public>\n\
@@ -27,7 +33,7 @@ RUN echo '<VirtualHost *:80>\n\
     </Directory>\n\
 </VirtualHost>' > /etc/apache2/sites-available/000-default.conf
 
-# Permissions
+# Permissions.
 RUN chown -R www-data:www-data /var/www/html
 RUN chmod -R 755 /var/www/html
 

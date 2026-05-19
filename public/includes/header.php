@@ -7,6 +7,7 @@ if (isset($conn) && $conn instanceof mysqli) {
 }
 $_un  = explode('@',$user_email??'op@tracs',2)[0];
 $_av  = strtoupper(substr($_un,0,1));
+$_avatar_url = '';
 $_cnt = (int)($critical_count??0);
 $_can_um = false;
 $_can_monitoring = false;
@@ -17,6 +18,7 @@ if (isset($conn) && $conn instanceof mysqli && !empty($_SESSION['user_id'])) {
   $_can_monitoring = tracs_user_can($conn, 'tasks.view_own') || tracs_user_can($conn, 'tasks.monitor');
   if ($_header_user) {
     $_av = tracs_user_initials($_header_user['display_name'] ?? '', $_header_user['email'] ?? ($_un ?: 'U'));
+    $_avatar_url = tracs_user_avatar_url($_header_user);
   }
 }
 
@@ -39,6 +41,9 @@ $_css_v = @filemtime(__DIR__.'/../assets/tracs.css') ?: time();
 <link rel="stylesheet" href="assets/tracs.css?v=<?=$_css_v?>">
 <?php if(in_array(($active_page??''), ['mom','dashboard'], true)): $_mom_css_v = @filemtime(__DIR__.'/../assets/mom-styles.css') ?: time(); ?>
 <link rel="stylesheet" href="assets/mom-styles.css?v=<?=$_mom_css_v?>">
+<?php endif; ?>
+<?php if(in_array(($active_page??''), ['dashboard','infrastructure-pulse'], true)): $_infra_css_v = @filemtime(__DIR__.'/../assets/infrastructure-pulse.css') ?: time(); ?>
+<link rel="stylesheet" href="assets/infrastructure-pulse.css?v=<?=$_infra_css_v?>">
 <?php endif; ?>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://unpkg.com/lucide@latest"></script>
@@ -90,6 +95,10 @@ $_css_v = @filemtime(__DIR__.'/../assets/tracs.css') ?: time();
       <span class="nav-tip">Tasks / Monitoring</span>
     </a>
     <?php endif; ?>
+    <a href="infrastructure-pulse.php" class="nav-item <?=$active_page==='infrastructure-pulse'?'active':''?>">
+      <i data-lucide="radar" class="icon-md"></i>
+      <span class="nav-tip">Infrastructure Pulse</span>
+    </a>
     <a href="domains.php" class="nav-item <?=$active_page==='domains'?'active':''?>">
       <i data-lucide="globe" class="icon-md"></i>
       <span class="nav-tip">Domains</span>
@@ -116,21 +125,35 @@ $_css_v = @filemtime(__DIR__.'/../assets/tracs.css') ?: time();
       <i data-lucide="activity" class="icon-md"></i>
       <span class="nav-tip">Activity Log</span>
     </a>
+    <?php if(in_array((string)($_header_user['role_slug'] ?? ''), ['super_admin','admin','supervisor'], true)): ?>
+    <a href="tv-mode.php" class="nav-item <?=$active_page==='tv-mode'?'active':''?>">
+      <i data-lucide="monitor-up" class="icon-md"></i>
+      <span class="nav-tip">TV Mode</span>
+    </a>
+    <?php endif; ?>
     <?php if($_can_um): ?>
-    <a href="user-management.php" class="nav-item <?=$active_page==='user-management'?'active':''?>">
-      <i data-lucide="users-round" class="icon-md"></i>
-      <span class="nav-tip">User Management</span>
-    </a>
-    <a href="intern-management.php" class="nav-item <?=$active_page==='intern-management'?'active':''?>">
-      <i data-lucide="graduation-cap" class="icon-md"></i>
-      <span class="nav-tip">Intern Management</span>
-    </a>
+    <details class="nav-menu-wrap" id="userManagementNav">
+      <summary class="nav-item <?=in_array($active_page, ['user-management','intern-management'], true)?'active':''?>" aria-label="User Management menu">
+        <i data-lucide="users-round" class="icon-md"></i>
+        <span class="nav-tip">User Management</span>
+      </summary>
+      <div class="nav-submenu" role="menu" aria-label="User Management">
+        <a href="user-management.php" role="menuitem" class="<?=$active_page==='user-management'?'active':''?>">
+          <i data-lucide="users-round" class="icon-sm"></i>
+          <span>User Management</span>
+        </a>
+        <a href="intern-management.php" role="menuitem" class="<?=$active_page==='intern-management'?'active':''?>">
+          <i data-lucide="graduation-cap" class="icon-sm"></i>
+          <span>Intern Management</span>
+        </a>
+      </div>
+    </details>
     <?php endif; ?>
   </nav>
   <div class="sidebar-bottom">
     <details class="user-menu-wrap" id="userMenuWrap">
-      <summary class="user-avatar" style="position:relative;" aria-label="User menu">
-        <?=$_av?>
+      <summary class="user-avatar tracs-avatar" style="position:relative;<?=!empty($_header_user['avatar_initials_color'])?'--um-avatar-bg:'.htmlspecialchars((string)$_header_user['avatar_initials_color'], ENT_QUOTES, 'UTF-8'):''?>" aria-label="User menu" data-avatar-user-id="<?=htmlspecialchars((string)($_header_user['id'] ?? ''), ENT_QUOTES, 'UTF-8')?>" data-avatar-initials="<?=htmlspecialchars($_av, ENT_QUOTES, 'UTF-8')?>">
+        <?php if($_avatar_url !== ''): ?><img src="<?=htmlspecialchars($_avatar_url, ENT_QUOTES, 'UTF-8')?>" alt="" loading="lazy" decoding="async"><?php else: ?><span><?=$_av?></span><?php endif; ?>
         <span class="nav-tip"><?=htmlspecialchars($user_email??'')?></span>
       </summary>
       <div class="user-menu" role="menu" aria-label="User account menu">
@@ -168,8 +191,5 @@ $_css_v = @filemtime(__DIR__.'/../assets/tracs.css') ?: time();
         </button>
       </div>
     </div>
-    <a href="../auth/logout.php" class="logout-btn" title="Sign out">
-      <i data-lucide="log-out" class="icon-md"></i>
-    </a>
   </div>
 </aside>

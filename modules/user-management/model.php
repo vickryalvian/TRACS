@@ -242,6 +242,9 @@ class UserManagementModel {
             $params[] = (int)$actor['division_id'];
         }
 
+        $avatarSelect = tracs_column_exists($this->conn, 'tracs_users', 'avatar_path')
+            ? 'u.avatar_path,'
+            : 'NULL AS avatar_path,';
         $internSelect = $internReady ? ",
                 ip.university_name, ip.study_program, ip.internship_start_date, ip.internship_end_date,
                 ip.mentor_user_id, ip.internship_status, ip.evaluation_status, ip.skill_level,
@@ -254,6 +257,7 @@ class UserManagementModel {
             SELECT
                 u.id, u.email, u.phone, u.position, u.name, u.username, u.role AS legacy_role,
                 u.is_active, u.status, u.division_id, u.role_id, u.shift_preference,
+                {$avatarSelect}
                 u.avatar_initials_color, u.created_by, u.updated_by, u.last_login_at,
                 u.last_activity_at, u.last_password_change_at, u.created_at, u.updated_at,
                 r.name AS role_name, r.slug AS role_slug, r.hierarchy_level,
@@ -535,6 +539,26 @@ class UserManagementModel {
         if (!$stmt->execute()) {
             $stmt->close();
             throw new RuntimeException('Unable to update user.');
+        }
+        $stmt->close();
+    }
+
+    public function updateAvatarPath(int $userId, ?string $avatarPath, int $actorId): void {
+        if (!tracs_column_exists($this->conn, 'tracs_users', 'avatar_path')) {
+            throw new RuntimeException('Run the avatar profile picture migration before saving photos.');
+        }
+        $stmt = $this->conn->prepare("
+            UPDATE tracs_users
+            SET avatar_path = ?, updated_by = ?, updated_at = NOW()
+            WHERE id = ?
+        ");
+        if (!$stmt) {
+            throw new RuntimeException('Unable to update profile picture.');
+        }
+        $stmt->bind_param('sii', $avatarPath, $actorId, $userId);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            throw new RuntimeException('Unable to update profile picture.');
         }
         $stmt->close();
     }

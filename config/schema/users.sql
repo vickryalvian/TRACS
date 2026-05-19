@@ -2,6 +2,8 @@
 -- Auth accounts live in auth.sql; user preferences live in preferences.sql.
 -- Apply config/migrations/2026_05_17_user_management.sql to upgrade legacy
 -- installations safely without recreating tracs_users.
+-- User profile pictures are stored as optimized public URL paths in
+-- tracs_users.avatar_path by config/migrations/2026_05_18_user_avatars.sql.
 
 CREATE TABLE IF NOT EXISTS `tracs_roles` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,

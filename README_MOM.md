@@ -1,407 +1,153 @@
-# 📋 MOM (Minutes of Meeting) Module for TRACS
-
-> An operational meeting intelligence and follow-up management system for customer support teams
+# TRACS — MoM (Minutes of Meeting)
+
+MoM is the TRACS meeting operations module. It turns meeting schedules, discussions, decisions, and action items into operational records linked to reminders, cases, ticker events, ops-status windows, screenshots, and history/export.
+
+## Current Status
+
+| Area | Status | Notes |
+| --- | --- | --- |
+| Meeting creation | Implemented | Create title, type, objective, participants, meeting time, and meeting URL. |
+| Meeting schedule | Implemented | `meeting_at` is stored on `tracs_moms`; scheduled meetings create reminders and ops-status entries. |
+| Meeting lifecycle | Implemented | `upcoming`, `ongoing`, `completed`, `cancelled`; due meetings may auto-start in controller flow. |
+| Agenda | Implemented | Add/update/delete agenda items and mark completed/skipped. |
+| Discussion notes | Implemented | Add and delete notes with note types. |
+| Decisions | Implemented | Add/delete decisions with owner/status fields in schema. |
+| Action items | Implemented | Add/update/delete/complete action items with priority, assignee text, due date. |
+| Reminder integration | Implemented | Meeting schedules and action items can create records in `tracs_reminders`. |
+| Ops window integration | Implemented | Meeting schedule/start/complete/cancel updates `ops_status` when linked. |
+| Ticker integration | Implemented | Meeting events can create ticker events. |
+| Case links | Implemented | Link/unlink cases; linked cases can be updated from MoM flow. |
+| Case creation from action | Implemented in controller/API flow | Creates operational cases from action items where current UI/API invokes it. |
+| Screenshots | Implemented | Screenshot metadata is stored in `tracs_mom_screenshots`; UI supports upload/lightbox/delete. |
+| Meeting history/export | Implemented | Recent completed/cancelled meetings and CSV export. |
+| Case suggestions | Implemented | Weekly suggestions use unresolved/recent cases. |
+
+## Files
+
+| File | Purpose |
+| --- | --- |
+| [public/mom.php](/tracs/public/mom.php) | Main MoM page. |
+| [public/assets/mom-styles.css](/tracs/public/assets/mom-styles.css) | MoM-specific styling. |
+| [public/assets/mom-functions.js](/tracs/public/assets/mom-functions.js) | MoM frontend behavior. |
+| [public/api/api_mom.php](/tracs/public/api/api_mom.php) | Current JSON API for MoM operations. |
+| [public/api/mom-action.php](/tracs/public/api/mom-action.php) | Legacy/compatibility API shape. |
+| [modules/mom/controller.php](/tracs/modules/mom/controller.php) | Bridge include. |
+| [public/modules/mom/controller.php](/tracs/public/modules/mom/controller.php) | Main MoM controller. |
+| [config/schema/moms.sql](/tracs/config/schema/moms.sql) | Focused MoM schema reference. |
+| [config/install.sql](/tracs/config/install.sql) | Fresh-install schema containing MoM tables. |
+
+## Database Tables
+
+| Table | Purpose |
+| --- | --- |
+| `tracs_moms` | Meeting header, lifecycle, schedule, URL, summary, linked reminder/ops status. |
+| `tracs_mom_agenda` | Agenda items. |
+| `tracs_mom_notes` | Discussion notes, decisions-as-notes, insights, risks. |
+| `tracs_mom_decisions` | Structured decisions. |
+| `tracs_mom_actions` | Action items with assignee text, due date, priority, linked reminder/case. |
+| `tracs_mom_case_links` | Many-to-many links between meetings and cases. |
+| `tracs_mom_screenshots` | Screenshot attachment metadata. |
+| `tracs_mom_audit_log` | MoM-specific audit trail. |
+
+## Current MoM Flow
+
+1. User opens `mom.php`.
+2. If MoM tables are missing, the page shows an installation warning.
+3. User creates a meeting with title, type, schedule, URL, objective, participants, and optional suggested case links.
+4. Controller stores the meeting as `upcoming`.
+5. Controller creates a scheduled reminder in `tracs_reminders`.
+6. Controller creates an `ops_status` row and ticker event for operational visibility.
+7. At meeting time or when manually started, status becomes `ongoing`; the scheduled reminder is completed.
+8. During the meeting, users add agenda items, notes, decisions, actions, linked cases, and screenshots.
+9. Action items can create reminders and/or operational cases.
+10. Completion stores `completed_at`, deactivates/updates the ops-status row, completes the scheduled reminder, and emits ticker/activity records.
+11. Completed/cancelled meetings appear in history and can be exported.
+
+## Meeting Types
+
+| Type | Intended use |
+| --- | --- |
+| `weekly` | Recurring operations review, usually with unresolved case suggestions. |
+| `training` | SOP, incident review, and internal learning. |
+| `coordination` | Cross-team or division coordination. |
+| `urgent` | Escalation or high-risk operational event. |
+
+## Reminder / Ticker / Ops Integration
+
+- Meeting schedule creates a reminder titled `MOM: <title>`.
+- Urgent meetings use higher priority/severity signals.
+- Starting/completing/cancelling meetings updates linked reminder and ops-status rows when IDs are available.
+- Ticker events are created for scheduled, started, completed, cancelled, and auto-started meetings.
+- Action item reminders link back to `tracs_mom_actions.linked_reminder_id`.
+
+## Case Integration
+
+Implemented:
+
+- Link existing cases to a meeting.
+- Show related cases in the MoM context.
+- Suggest unresolved cases for weekly meeting preparation.
+- Create a case from an action item when the API/UI path is used.
+- Update linked case status/notes from MoM flow when invoked.
+
+Planned/improvement:
+
+- Stronger case timeline showing MoM decisions/actions inside the case detail view.
+- More explicit UI for “suggest case from selected discussion text”.
+- Better two-way badges from case rows back to linked MoM records.
+
+## Screenshots / Attachments
+
+Implemented now:
 
----
-
-## 🎯 What is MOM?
-
-MOM is a **modular extension to TRACS** that transforms meetings from passive note-taking into **actionable operational intelligence**.
-
-**Problem It Solves:**
-- Meetings end without clear actions
-- Follow-ups get lost
-- Escalations aren't tracked
-- Reminders don't sync with workflow
-- Cases aren't linked to discussions
+- Screenshot upload UI and lightbox are present.
+- Metadata is stored in `tracs_mom_screenshots`.
+- Screenshots can be associated with general meeting context and displayed on the MoM page.
 
-**Solution:**
-- Capture decisions and turn them into actions
-- Auto-create reminders that sync to global system
-- Link cases to meetings for context
-- Track action completion
-- Monitor operational insights
-
----
-
-## ✨ Key Features
-
-### 🎬 Meeting Workspace
-- **Objective** — Why are we meeting?
-- **Agenda** — What will we discuss? (auto-suggested from unresolved cases)
-- **Discussion** — Live notes with quick-action buttons
-- **Decisions** — Log what we decided
-- **Actions** — Create action items with assignment & due dates
-- **Attachments** — Upload screenshots/files
-
-### 🔔 Reminder Integration
-Create a reminder from any action:
-```
-Action Item → Create Reminder → Auto-syncs to global system
-                                    ↓
-                        Appears in /reminders.php
-                        Appears in dashboard
-                        Appears in ticker alerts
-                        Tracked by assigned user
-```
-
-### 📌 Operational Sidebar
-Always visible:
-- **Meeting selector** — Switch between meetings
-- **Action summary** — How many are pending/in-progress/done?
-- **Linked cases** — Connected operational cases
-- **Reminders** — All reminders created from this meeting
-- **Participants** — Who's attending?
-- **Insights** — Unresolved cases, escalations waiting
-
-### 📱 Meeting Types
-- **Weekly Meeting** — Recurring issue review
-- **Training Meeting** — SOP & incident learning
-- **Coordination Meeting** — Cross-team sync
-- **Urgent Meeting** — Escalation handling
-
-### 🖼️ Attachments
-Drag-drop screenshots directly:
-- Image preview
-- Linked to actions/decisions
-- Stored in `/uploads/mom/`
-
----
-
-## 🚀 Quick Setup
-
-### Installation (5 minutes)
-
-```bash
-# 1. Run database migration
-mysql -u user -p database < mom-migration.sql
-
-# 2. Create upload directory
-mkdir -p uploads/mom && chmod 755 uploads/mom
-
-# 3. Add navigation link (in your header/sidebar)
-<a href="mom.php">Minutes of Meeting</a>
-
-# 4. Visit the page
-# Open /mom.php in your browser
-
-# 5. Create your first meeting!
-```
-
-### That's it! ✅
-
----
-
-## 📊 How MOM Fits Into TRACS
-
-```
-TRACS Dashboard
-    ├── Cases ←→ MOM ←→ Reminders
-    ├── Reminders ←→ MOM (sync)
-    ├── Ticker (shows MOM reminders)
-    └── Users (participants in MOM)
-
-MOM Meeting
-    ├── Discussion Notes
-    ├── Decisions
-    ├── Actions → Reminders (auto-sync to tracs_reminders)
-    ├── Linked Cases
-    ├── Attachments
-    └── Participants
-```
-
----
-
-## 💡 Common Workflows
-
-### Weekly Operations Review
-```
-1. Create "Weekly Ops" meeting
-2. Select "Weekly Meeting"
-   → Auto-gets: Unresolved cases from last 7 days
-3. Review each case
-4. Log decisions
-5. Create action items
-6. For urgent ones: Create reminders (auto-syncs!)
-7. Link to relevant cases
-8. Mark complete
-```
-
-### Handling Escalation
-```
-1. Create "Urgent Meeting"
-2. Document escalation details
-3. Create decision: "Escalate to engineering"
-4. Create action: "Contact engineering lead"
-5. Create reminder: "Follow up in 2 hours"
-6. Link to case
-7. Reminder appears in dashboard immediately
-```
-
-### Training Incident
-```
-1. Create "Training Meeting"
-2. Document incident
-3. Log what went wrong
-4. Capture decision: "Update SOP"
-5. Create action: "Assign someone to update docs"
-6. Create reminder: Check completion next week
-7. All linked to case
-8. Team stays on top of it
-```
-
----
-
-## 🏗️ Architecture
-
-### Database
-9 new tables (no modifications to existing TRACS):
-- `tracs_meetings` — Meeting records
-- `tracs_meeting_participants` — Attendees
-- `tracs_meeting_notes` — Discussion notes
-- `tracs_meeting_decisions` — Logged decisions
-- `tracs_meeting_actions` — Action items
-- `tracs_meeting_attachments` — Files/screenshots
-- `tracs_meeting_agenda` — Agenda items
-- `tracs_meeting_reminders` — Sync to global reminders ← Key feature
-- `tracs_meeting_activity_logs` — Audit trail
-
-### Backend
-- `modules/mom/controller.php` — 40+ methods for all operations
-- `api/mom-action.php` — REST API endpoint for all actions
-
-### Frontend
-- `mom.php` — Main page (two-column layout)
-- `modules/mom/mom.css` — Styling
-- `modules/mom/mom.js` — Interactions
-
-### Files & Uploads
-- `/uploads/mom/` — Screenshot storage
-
----
-
-## 🔒 Security & Compatibility
-
-### Security ✅
-- Session-based auth (must be logged in)
-- User isolation (can't see others' meetings)
-- Parameterized queries (no SQL injection)
-- File validation (images only)
-
-### Compatibility ✅
-- Requires: PHP 5.7+, MySQL 5.7+
-- Works with: All TRACS versions
-- **Zero breaking changes** (completely isolated)
-- Can be disabled without affecting TRACS
-- Inherits TRACS dark mode
-
----
-
-## 📚 Documentation
-
-### Quick References
-- **`MOM_QUICK_START.md`** — 5-min setup guide
-- **`DELIVERY_COMPLETE.md`** — What you got & next steps
-
-### Detailed Guides
-- **`MOM_INTEGRATION_GUIDE.md`** — Full integration instructions
-- **`MOM_BUILD_SUMMARY.md`** — Technical deep dive
-- **`modules/mom/README.md`** — Module API reference
-
----
-
-## 📁 What's Included
-
-```
-Core Files:
-  ✓ modules/mom/controller.php     (Business logic)
-  ✓ modules/mom/mom.css           (Styling)
-  ✓ modules/mom/mom.js            (Interactions)
-  ✓ modules/mom/README.md         (Module docs)
-  ✓ mom.php                       (Main page)
-  ✓ api/mom-action.php            (API endpoint)
-
-Database:
-  ✓ mom-migration.sql             (Schema)
-
-Documentation:
-  ✓ MOM_QUICK_START.md
-  ✓ MOM_INTEGRATION_GUIDE.md
-  ✓ MOM_BUILD_SUMMARY.md
-  ✓ DELIVERY_COMPLETE.md
-  ✓ README_MOM.md (this file)
-
-Directory (create):
-  ✓ uploads/mom/                  (For attachments)
-```
-
----
-
-## 🎯 Success Criteria
-
-After installation, verify:
-- ✅ `/mom.php` loads
-- ✅ Can create meeting
-- ✅ Can add discussion note
-- ✅ Can create action item
-- ✅ Can create reminder from action
-- ✅ Reminder appears in `/reminders.php`
-- ✅ Can link case
-- ✅ Can upload screenshot
-- ✅ No console errors
-- ✅ TRACS pages still work
-
----
-
-## 🎨 Design System
-
-Uses TRACS design tokens:
-- **Colors:** Blue, Red, Amber, Green, Purple, Cyan
-- **Typography:** Inter + JetBrains Mono
-- **Spacing:** 8px system
-- **Mode:** Dark/Light (inherited from TRACS)
-- **Responsive:** Mobile-first design
-
----
-
-## ⚡ Performance
-
-- Page load: < 100ms
-- API operations: < 50ms
-- Database queries: ~8 per page load (optimized)
-- File upload: Depends on file size
-
----
-
-## 🤔 FAQ
-
-**Q: Do I need to modify TRACS code?**
-A: No. MOM is completely isolated. Just add the navigation link.
-
-**Q: Where do reminders go?**
-A: They sync to the global `tracs_reminders` table. Check `/reminders.php` and the dashboard!
-
-**Q: Can multiple people edit?**
-A: Yes! Add them as participants. Each person sees the meeting in their list.
-
-**Q: What if I delete a meeting?**
-A: All linked actions, reminders, and decisions are deleted. No recovery.
-
-**Q: Will this slow down TRACS?**
-A: No. MOM is completely separate. Zero impact on existing pages.
-
-**Q: Does it support dark mode?**
-A: Yes! Inherits TRACS theme settings automatically.
-
----
-
-## 🚀 Getting Started
-
-### 1. Read (2 minutes)
-Start with `MOM_QUICK_START.md`
-
-### 2. Install (5 minutes)
-Run the database migration and copy files
+Operational note:
 
-### 3. Setup (1 minute)
-Add navigation link
+- Confirm upload directory and permissions during deployment. Keep uploads outside Git if production users add real evidence files.
 
-### 4. Test (2 minutes)
-Create a meeting and test the workflow
+## Setup
 
-### 5. Deploy (10 minutes)
-Roll out to team
+### Fresh install
 
-**Total: ~20 minutes**
+Run [config/install.sql](/tracs/config/install.sql). It includes the MoM schema.
 
----
+### Existing install
 
-## 🔄 Reminder Sync - The Magic
+Back up the database, then apply current schema/migrations in chronological order. The focused reference is [config/schema/moms.sql](/tracs/config/schema/moms.sql), but production upgrades should follow migration discipline rather than manually pasting fragments into a live DB.
 
-This is the core feature that makes MOM powerful:
+### Verify
 
-```
-You create a reminder from an action item...
-    ↓
-MOM inserts into global tracs_reminders table
-    ↓
-Bridge table links MOM reminder to action
-    ↓
-NOW the reminder:
-  • Appears in /reminders.php ✓
-  • Shows in dashboard widgets ✓
-  • Sends ticker alerts ✓
-  • Assigned to specific user ✓
-  • Tracks priority & due date ✓
-  • Integrates with your workflow ✓
-```
+- `/mom.php` loads without the missing-table warning.
+- A meeting can be created with a meeting time.
+- A scheduled reminder appears in reminders.
+- Starting/completing/cancelling updates meeting lifecycle.
+- Agenda, note, decision, and action forms save.
+- Case linking works.
+- Screenshot upload works in the deployment environment.
+- CSV export works for authorized users.
 
-No manual sync. No separate tracking. Just works.
+## Implemented Now
 
----
+- Meeting schedule and lifecycle.
+- Reminder creation from meeting schedule and action item.
+- Ops-status and ticker integration.
+- Agenda, notes, decisions, actions.
+- Meeting history and export.
+- Linked cases and weekly suggestions.
+- Screenshot UI/storage metadata.
 
-## 🎁 Bonus Features
+## Planned / Improvement
 
-Already included:
-- Smart agenda suggestions (from unresolved cases)
-- Text selection quick-actions
-- Operational sidebar with insights
-- Participant management
-- Activity audit trail (ready for logging)
-- Responsive mobile design
-- Dark mode support
-- Keyboard-friendly forms
+- Consolidate `api_mom.php` and `mom-action.php` into one response style after confirming no callers depend on the legacy shape.
+- Replace stale “run `config/mom_database_schema.sql`” error text with current installer/migration guidance.
+- Add richer participant model if free-text participants become insufficient.
+- Add stronger audit/evidence export for ISO 9001 management review.
+- Add action assignment to actual TRACS users rather than only assignee text, if needed.
+- Improve screenshot storage configuration and production retention rules.
 
----
+## Legacy Notes
 
-## 📞 Support Resources
-
-1. **Quick questions?** → Check `MOM_QUICK_START.md` FAQ
-2. **Integration help?** → See `MOM_INTEGRATION_GUIDE.md`
-3. **Technical details?** → Read `MOM_BUILD_SUMMARY.md`
-4. **API reference?** → Check `modules/mom/README.md`
-5. **Browser errors?** → Open console (F12) and check errors
-6. **Database issues?** → Verify migration ran: `SHOW TABLES LIKE 'tracs_meeting%'`
-
----
-
-## 📝 Version & Status
-
-- **Version:** 1.0
-- **Status:** ✅ Production Ready
-- **Release:** 2026-05-13
-- **Tested:** Yes
-- **Documented:** Yes
-- **Secure:** Yes
-
----
-
-## 🎉 Ready to Go!
-
-Everything you need is here:
-- ✅ Complete source code
-- ✅ Database schema
-- ✅ Full documentation
-- ✅ Integration guide
-- ✅ Quick start guide
-- ✅ Troubleshooting help
-
-**Installation is a 5-minute process.**
-
-Start with `MOM_QUICK_START.md` and you'll be up and running in minutes!
-
----
-
-## 🏁 Next Step
-
-👉 Read **`MOM_QUICK_START.md`** now!
-
-It has everything you need to get started in 5 minutes.
-
----
-
-**Questions?** Check the documentation.
-**Ready?** Run the migration!
-**Need help?** See troubleshooting section in the guides.
-
-Happy meeting coordination! 🚀
+Older MoM documentation referred to `mom-migration.sql`, `modules/mom/mom.css`, `modules/mom/mom.js`, and `/uploads/mom/` as if MoM were a separate drop-in package. The current integrated TRACS repository uses `public/assets/mom-styles.css`, `public/assets/mom-functions.js`, `config/install.sql`, and the integrated `public/mom.php` flow. Keep old package docs under `MOM README/` as historical reference only.
