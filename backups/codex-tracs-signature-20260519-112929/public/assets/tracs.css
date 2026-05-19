@@ -1,7 +1,6 @@
-/*! ═══════════════════════════════════════════════
+/* ═══════════════════════════════════════════════
    TRACS — CS Operations Dashboard
    Design System v3.0 · Light Mode · TV/Large Monitor
-   Initial Architecture & UX Direction by Vickry
 ═══════════════════════════════════════════════ */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
@@ -5234,56 +5233,6 @@ input, select, textarea { font-family: inherit }
   color: var(--tx3);
   font-size: 11px;
   line-height: 1.5;
-}
-.tracs-build-panel {
-  display: grid;
-  gap: 14px;
-}
-.tracs-build-copy {
-  max-width: 680px;
-  color: var(--tx2);
-  font-size: 12px;
-  line-height: 1.6;
-}
-.tracs-build-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-.tracs-build-grid.compact {
-  grid-template-columns: 1fr;
-}
-.tracs-build-grid > div {
-  display: grid;
-  gap: 5px;
-  min-width: 0;
-  padding: 11px 12px;
-  border: 1px solid var(--bd1);
-  border-radius: var(--r2);
-  background: var(--s2);
-}
-.tracs-build-grid span {
-  color: var(--tx3);
-  font-family: var(--mono);
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-}
-.tracs-build-grid strong {
-  min-width: 0;
-  color: var(--tx1);
-  font-size: 12px;
-  font-weight: 700;
-  overflow-wrap: anywhere;
-}
-.tracs-build-modal .form-hint {
-  line-height: 1.5;
-}
-@media (max-width: 680px) {
-  .tracs-build-grid {
-    grid-template-columns: 1fr;
-  }
 }
 .um-filter-search,
 .um-filter-group,

@@ -1,8 +1,6 @@
 <?php
 /**
  * Shared creator tracking and compact creator metadata rendering.
- *
- * TRACS Operations System: creator-aware workflow direction by Vickry.
  */
 
 function tracs_identifier(string $identifier): string {

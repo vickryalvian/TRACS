@@ -1,9 +1,4 @@
 <?php
-/**
- * Dashboard ops-status signal.
- *
- * TRACS Operations System: initial dashboard direction by Vickry.
- */
 
 function getOpsStatus($conn){
 

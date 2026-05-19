@@ -93,7 +93,6 @@ Use `http://localhost:8080`. MySQL is exposed on host port `3307`.
 - Disable display errors in production.
 - Ensure upload paths used by MoM screenshots are writable.
 - Enable HTTPS and secure PHP session flags.
-- Preserve `docs/TRACS_SIGNATURE.md`, `core/build_signature.php`, and the manifest/head metadata as the first-deployment authorship marker.
 
 ## UI/UX Rules
 

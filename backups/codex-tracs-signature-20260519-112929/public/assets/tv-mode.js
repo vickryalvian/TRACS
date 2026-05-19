@@ -1,15 +1,6 @@
-/*! TRACS TV Mode surface | Initial deployment identity by Vickry */
 (function () {
   const root = document.querySelector('[data-tv-mode]');
   if (!root) return;
-
-  const buildInfo = window.TRACS_BUILD_INFO || {};
-  if (!window.__TRACS_SIGNATURE_LOGGED__ && buildInfo.owner) {
-    const version = buildInfo.version ? ` • ${buildInfo.version}` : '';
-    console.log(`%cTRACS System • Initial Build by ${buildInfo.owner}${version}`, 'color:#0891b2;font-weight:700;');
-    if (buildInfo.easterEgg) console.log('Internal build channel active.');
-    window.__TRACS_SIGNATURE_LOGGED__ = true;
-  }
 
   const state = {
     paused: false,

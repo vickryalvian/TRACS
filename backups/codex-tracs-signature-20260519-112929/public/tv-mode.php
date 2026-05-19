@@ -1,6 +1,5 @@
 <?php
 require_once __DIR__ . '/../core/security/csrf.php';
-require_once __DIR__ . '/../core/build_signature.php';
 tracs_start_session();
 
 require_once __DIR__ . '/../config/database.php';
@@ -12,7 +11,6 @@ $tv_js_v = @filemtime(__DIR__ . '/assets/tv-mode.js') ?: time();
 $infra_css_v = @filemtime(__DIR__ . '/assets/infrastructure-pulse.css') ?: time();
 $infra_data_v = @filemtime(__DIR__ . '/assets/infrastructure-pulse-data.js') ?: time();
 $infra_js_v = @filemtime(__DIR__ . '/assets/infrastructure-pulse.js') ?: time();
-$tracs_build_info = tracs_build_public_payload();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -20,23 +18,14 @@ $tracs_build_info = tracs_build_public_payload();
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <?= csrf_meta_tag() ?>
-<!-- TRACS System by Vickry -->
-<meta name="author" content="<?=htmlspecialchars(TRACS_BUILD_OWNER, ENT_QUOTES, 'UTF-8')?>">
-<meta name="application-name" content="TRACS">
-<meta name="tracs-build-owner" content="<?=htmlspecialchars(TRACS_BUILD_OWNER, ENT_QUOTES, 'UTF-8')?>">
-<meta name="tracs-build-version" content="<?=htmlspecialchars(TRACS_BUILD_VERSION, ENT_QUOTES, 'UTF-8')?>">
 <title>TRACS TV Mode</title>
 <?php include __DIR__ . '/includes/theme_bootstrap.php'; ?>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
-<link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="assets/tracs.css?v=<?=$css_v?>">
 <link rel="stylesheet" href="assets/tv-mode.css?v=<?=$tv_css_v?>">
 <link rel="stylesheet" href="assets/infrastructure-pulse.css?v=<?=$infra_css_v?>">
 <script src="https://unpkg.com/lucide@latest"></script>
-<script>
-window.TRACS_BUILD_INFO = <?=json_encode($tracs_build_info, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)?>;
-</script>
 </head>
 <body class="tv-mode-body">
 <main class="tv-mode" data-tv-mode>

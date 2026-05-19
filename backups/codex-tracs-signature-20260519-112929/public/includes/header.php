@@ -2,11 +2,9 @@
 /* TRACS — Header Include
    Requires: $page_title, $active_page, $user_email, $ticker_items, $critical_count */
 require_once __DIR__ . '/../../core/security/csrf.php';
-require_once __DIR__ . '/../../core/build_signature.php';
 if (isset($conn) && $conn instanceof mysqli) {
   require_once __DIR__ . '/../../core/user_management.php';
 }
-$_tracs_build_info = tracs_build_public_payload();
 $_un  = explode('@',$user_email??'op@tracs',2)[0];
 $_av  = strtoupper(substr($_un,0,1));
 $_avatar_url = '';
@@ -36,16 +34,10 @@ $_css_v = @filemtime(__DIR__.'/../assets/tracs.css') ?: time();
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <?= csrf_meta_tag() ?>
-<!-- TRACS System by Vickry -->
-<meta name="author" content="<?=htmlspecialchars(TRACS_BUILD_OWNER, ENT_QUOTES, 'UTF-8')?>">
-<meta name="application-name" content="TRACS">
-<meta name="tracs-build-owner" content="<?=htmlspecialchars(TRACS_BUILD_OWNER, ENT_QUOTES, 'UTF-8')?>">
-<meta name="tracs-build-version" content="<?=htmlspecialchars(TRACS_BUILD_VERSION, ENT_QUOTES, 'UTF-8')?>">
 <title>TRACS — <?=htmlspecialchars($page_title??'Dashboard')?></title>
 <?php include __DIR__ . '/theme_bootstrap.php'; ?>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="assets/tracs.css?v=<?=$_css_v?>">
 <?php if(in_array(($active_page??''), ['mom','dashboard'], true)): $_mom_css_v = @filemtime(__DIR__.'/../assets/mom-styles.css') ?: time(); ?>
 <link rel="stylesheet" href="assets/mom-styles.css?v=<?=$_mom_css_v?>">
@@ -56,9 +48,6 @@ $_css_v = @filemtime(__DIR__.'/../assets/tracs.css') ?: time();
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-<script>
-window.TRACS_BUILD_INFO = <?=json_encode($_tracs_build_info, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)?>;
-</script>
 </head>
 <body>
 <div class="shell">

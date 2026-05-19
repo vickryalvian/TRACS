@@ -1,27 +1,16 @@
 <?php
 require_once __DIR__ . '/../core/security/csrf.php';
-require_once __DIR__ . '/../core/build_signature.php';
 tracs_start_session();
 $error=$_SESSION['login_error']??''; unset($_SESSION['login_error']);
-$tracs_build_info = tracs_build_public_payload();
 ?><!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <?= csrf_meta_tag() ?>
-<!-- TRACS System by Vickry -->
-<meta name="author" content="<?=htmlspecialchars(TRACS_BUILD_OWNER, ENT_QUOTES, 'UTF-8')?>">
-<meta name="application-name" content="TRACS">
-<meta name="tracs-build-owner" content="<?=htmlspecialchars(TRACS_BUILD_OWNER, ENT_QUOTES, 'UTF-8')?>">
-<meta name="tracs-build-version" content="<?=htmlspecialchars(TRACS_BUILD_VERSION, ENT_QUOTES, 'UTF-8')?>">
 <title>TRACS — Sign In</title>
 <?php include __DIR__ . '/includes/theme_bootstrap.php'; ?>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="/assets/tracs.css">
-<script>
-window.TRACS_BUILD_INFO = <?=json_encode($tracs_build_info, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)?>;
-</script>
 </head><body>
 <div class="login-shell">
   <div class="login-grid"></div>

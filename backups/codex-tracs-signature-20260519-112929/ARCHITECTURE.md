@@ -32,7 +32,7 @@ Browser JS
 | [public/includes](/tracs/public/includes) | Header/sidebar/ticker, footer/modals/scripts, theme bootstrap, page helpers. |
 | [public/assets](/tracs/public/assets) | `tracs.css`, `tracs.js`, MoM assets, TV mode assets, logo. |
 | [modules](/tracs/modules) | Controllers/models for operational modules. |
-| [core](/tracs/core) | CSRF, build signature, user management, creator tracking. |
+| [core](/tracs/core) | CSRF, user management, creator tracking. |
 | [config](/tracs/config) | Database config, installer, schema modules, migrations, archive. |
 | [Dockerfile](/tracs/Dockerfile) | PHP Apache image for local/container deployment. |
 | [docker-compose.yml](/tracs/docker-compose.yml) | Local app + MySQL stack. |
@@ -44,7 +44,6 @@ Browser JS
 - Auth guard: [public/auth/auth_check.php](/tracs/public/auth/auth_check.php).
 - User/role/permission helpers: [core/user_management.php](/tracs/core/user_management.php).
 - CSRF helpers: [core/security/csrf.php](/tracs/core/security/csrf.php).
-- Build signature metadata: [core/build_signature.php](/tracs/core/build_signature.php).
 
 User-management schema adds roles, permissions, divisions, intern profiles, user activity logs, and password reset tokens. Navigation in `header.php` is role/permission aware: monitoring, TV mode, and user management are only visible to eligible users.
 

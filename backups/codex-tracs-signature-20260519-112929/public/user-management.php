@@ -1,6 +1,5 @@
 <?php
 require_once __DIR__ . '/../core/security/csrf.php';
-require_once __DIR__ . '/../core/build_signature.php';
 tracs_start_session();
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/auth/auth_check.php';
@@ -71,11 +70,7 @@ unset($_SESSION['tracs_flash']);
 $temp_password = $_SESSION['um_temp_password'] ?? null;
 unset($_SESSION['um_temp_password']);
 
-$can_manage_settings = $schema_ready && tracs_user_can($conn, 'settings.manage');
 $allowed_tabs = ['users', 'roles', 'activity'];
-if ($can_manage_settings) {
-    $allowed_tabs[] = 'system';
-}
 $requested_tab = (string)($_GET['tab'] ?? 'users');
 $tab = in_array($requested_tab, $allowed_tabs, true) ? $requested_tab : 'users';
 
@@ -117,7 +112,6 @@ $can_manage_permissions = tracs_user_can($conn, 'roles.manage_permissions');
 $actor = tracs_get_user_by_id($conn, $uid) ?? [];
 $actor_permissions = tracs_user_permissions($conn, $uid);
 $is_super_admin = ($actor['role_slug'] ?? '') === 'super_admin';
-$build_signature = tracs_build_public_payload();
 
 $TC = new AlertTickerController($conn, $uid);
 $ticker_items = $TC->formatAlertsForTicker();
@@ -315,7 +309,6 @@ include __DIR__ . '/includes/header.php';
   <a class="filter-tab <?=$tab==='users'?'active':''?>" href="?tab=users"><i data-lucide="layout-dashboard" class="icon-sm"></i>Dashboard</a>
   <a class="filter-tab <?=$tab==='roles'?'active':''?>" href="?tab=roles"><i data-lucide="shield-check" class="icon-sm"></i>Roles & Permissions</a>
   <a class="filter-tab <?=$tab==='activity'?'active':''?>" href="?tab=activity"><i data-lucide="history" class="icon-sm"></i>Activity Log</a>
-  <?php if($can_manage_settings): ?><a class="filter-tab <?=$tab==='system'?'active':''?>" href="?tab=system"><i data-lucide="settings" class="icon-sm"></i>System</a><?php endif; ?>
 </div>
 
 <?php if($tab === 'users'): ?>
@@ -550,25 +543,6 @@ include __DIR__ . '/includes/header.php';
       </div>
     <?php endif; ?>
   </div>
-<?php endif; ?>
-
-<?php if($tab === 'system' && $can_manage_settings): ?>
-  <section class="panel tracs-build-panel" aria-label="System build information">
-    <div class="panel-head">
-      <span class="panel-title">System Build</span>
-      <button type="button" class="btn btn-ghost btn-sm" onclick="openModal('buildInfo')"><i data-lucide="info" class="icon-sm"></i>Build Info</button>
-    </div>
-    <div class="tracs-build-copy">
-      This internal build identity is kept for deployment history, support traceability, and authorship reference. It is intentionally limited to administrative system settings and does not appear as public-facing branding.
-    </div>
-    <div class="tracs-build-grid">
-      <div><span>Version</span><strong><?=esc($build_signature['version'])?></strong></div>
-      <div><span>First deployment</span><strong><?=esc($build_signature['deployedLabel'])?></strong></div>
-      <div><span>Build owner</span><strong><?=esc($build_signature['owner'])?></strong></div>
-      <div><span>Environment</span><strong><?=esc($build_signature['environment'])?></strong></div>
-    </div>
-    <div class="um-side-note">Reference document: <code>docs/TRACS_SIGNATURE.md</code></div>
-  </section>
 <?php endif; ?>
 
 <?php endif; ?>

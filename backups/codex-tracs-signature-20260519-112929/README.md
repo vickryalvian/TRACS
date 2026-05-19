@@ -29,10 +29,6 @@ TRACS is a high-density operational control panel for support, legal, and CS ope
 - CSS custom-property design system in [public/assets/tracs.css](/tracs/public/assets/tracs.css).
 - External browser assets: Google Fonts, lucide, flatpickr CDN.
 
-## Build Signature
-
-TRACS includes a subtle first-deployment authorship marker for copyright, support traceability, and deployment history. The build owner is recorded as Vickry in HTML metadata, [public/manifest.json](/tracs/public/manifest.json), retained asset comments, admin-only system build information, and [docs/TRACS_SIGNATURE.md](/tracs/docs/TRACS_SIGNATURE.md). It is intentionally not exposed as a visible watermark or public-facing brand treatment.
-
 ## Quick Start
 
 ### Docker
@@ -135,7 +131,6 @@ docker compose up -d --build
 - Change default admin password.
 - Verify login, case create/update, reminder create/toggle, checklist create/toggle, MoM create, user permissions, and exports.
 - Confirm `public/uploads/mom` or equivalent upload path is writable if MoM screenshots are used.
-- Preserve [docs/TRACS_SIGNATURE.md](/tracs/docs/TRACS_SIGNATURE.md) and the build-signature metadata when packaging first-deployment artifacts.
 - Keep [AI_MEMORY.md](/tracs/AI_MEMORY.md), [ARCHITECTURE.md](/tracs/ARCHITECTURE.md), and [HANDOFF.md](/tracs/HANDOFF.md) with the deployment package.
 
 ## Troubleshooting

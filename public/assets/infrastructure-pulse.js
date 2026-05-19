@@ -69,10 +69,10 @@
       }));
 
     return regionItems.length ? regionItems : [{
-      name: 'All clear',
-      detail: 'No affected datacenter',
+      name: 'All systems up',
+      detail: 'No affected datacenter or region',
       status: 'healthy',
-      label: 'Stable',
+      label: 'Operational',
     }];
   }
 

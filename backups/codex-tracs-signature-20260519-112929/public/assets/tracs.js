@@ -1,19 +1,5 @@
-/*! TRACS — Global JS v3 | Initial Build by Vickry */
+/* TRACS — Global JS v3 */
 'use strict';
-
-function tracsLogBuildSignature() {
-  if (window.__TRACS_SIGNATURE_LOGGED__) return;
-  const build = window.TRACS_BUILD_INFO || {};
-  const owner = build.owner || 'Vickry';
-  const version = build.version ? ` • ${build.version}` : '';
-  console.log(`%cTRACS System • Initial Build by ${owner}${version}`, 'color:#0891b2;font-weight:700;');
-  if (build.easterEgg) {
-    console.log('Internal build channel active.');
-  }
-  window.__TRACS_SIGNATURE_LOGGED__ = true;
-}
-tracsLogBuildSignature();
-
 /* ── BASE API ─────────────────────────────────────────── */
 /* ── API CONFIG ───────────────────────────────────────── */
 const API_BASE = '/api/';

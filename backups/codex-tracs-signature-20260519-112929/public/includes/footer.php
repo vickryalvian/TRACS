@@ -1,9 +1,4 @@
-<?php
-/* TRACS — Footer Include. Requires $ticker_items */
-require_once __DIR__ . '/../../core/build_signature.php';
-$_tracs_footer_build = tracs_build_public_payload();
-$_tracs_can_view_build_info = isset($conn) && $conn instanceof mysqli && function_exists('tracs_user_can') && tracs_user_can($conn, 'settings.manage');
-?>
+<?php /* TRACS — Footer Include. Requires $ticker_items */ ?>
 <!-- CASE MODAL -->
 <div class="modal-overlay hidden" id="caseModal">
 <div class="modal">
@@ -303,31 +298,6 @@ $_tracs_can_view_build_info = isset($conn) && $conn instanceof mysqli && functio
   </div>
 </div></div>
 
-<?php if($_tracs_can_view_build_info): ?>
-<!--
-TRACS Operations System
-Initial Architecture & UX Direction by Vickry
-First Deployment Build
--->
-<div class="modal-overlay hidden" id="buildInfoModal">
-<div class="modal modal-sm tracs-build-modal">
-  <div class="modal-head">
-    <div><div class="modal-title">System Build</div><div class="modal-sub">Deployment identity and authorship reference</div></div>
-    <button class="modal-close" onclick="closeModal('buildInfo')"><i data-lucide="x"></i></button>
-  </div>
-  <div class="modal-body">
-    <div class="tracs-build-grid compact">
-      <div><span>Version</span><strong><?=htmlspecialchars((string)$_tracs_footer_build['version'], ENT_QUOTES, 'UTF-8')?></strong></div>
-      <div><span>First deployment</span><strong><?=htmlspecialchars((string)$_tracs_footer_build['deployedLabel'], ENT_QUOTES, 'UTF-8')?></strong></div>
-      <div><span>Build owner</span><strong><?=htmlspecialchars((string)$_tracs_footer_build['owner'], ENT_QUOTES, 'UTF-8')?></strong></div>
-      <div><span>Environment</span><strong><?=htmlspecialchars((string)$_tracs_footer_build['environment'], ENT_QUOTES, 'UTF-8')?></strong></div>
-    </div>
-    <div class="form-hint">Internal authorship marker for deployment history, support traceability, and copyright reference.</div>
-  </div>
-  <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('buildInfo')">Close</button></div>
-</div></div>
-<?php endif; ?>
-
 <?php if(in_array(($active_page??''), ['mom','dashboard'], true)): ?>
 <!-- MOM MODALS -->
 <div class="modal-overlay hidden" id="momFormModal"><div class="modal">
@@ -421,7 +391,6 @@ First Deployment Build
 
 </div><!-- /body-row -->
 </div><!-- /shell -->
-<!-- TRACS System by Vickry -->
 <?php $_tracs_js_v = @filemtime(__DIR__.'/../assets/tracs.js') ?: time(); ?>
 <script src="assets/tracs.js?v=<?=$_tracs_js_v?>"></script>
 <?php if(in_array(($active_page??''), ['mom','dashboard'], true)): ?>

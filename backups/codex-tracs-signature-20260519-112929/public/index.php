@@ -21,7 +21,6 @@ require_once __DIR__.'/../modules/mom/controller.php';
 
 require_once __DIR__.'/includes/page_helpers.php';
 
-// TRACS Operations System: first-deployment dashboard direction by Vickry.
 $uid        = (int)($_SESSION['user_id']??0);
 $user_email = $_SESSION['user_email']??'operator@tracs.local';
 tracs_ensure_creator_columns($conn, 'tracs_cases', 'user_id');
