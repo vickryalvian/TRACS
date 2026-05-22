@@ -164,5 +164,9 @@ try {
     if (!empty($newPath ?? '')) {
         avatar_delete_public_path((string)$newPath);
     }
-    fail($e->getMessage(), $e instanceof InvalidArgumentException ? 400 : 500);
+    if ($e instanceof InvalidArgumentException) {
+        fail($e->getMessage(), 400);
+    }
+    error_log('TRACS avatar update failed: ' . $e->getMessage());
+    fail('Profile picture could not be updated.', 500);
 }

@@ -15,6 +15,12 @@ if (!$id) {
     exit;
 }
 
+if (!tracs_can_view_feedback($conn, $id)) {
+    http_response_code(404);
+    echo json_encode(['success' => false, 'error' => 'Not found.']);
+    exit;
+}
+
 if ($controller->deleteFeedback($id)) {
     echo json_encode(['success' => true]);
 } else {

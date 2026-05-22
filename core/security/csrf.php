@@ -3,29 +3,63 @@
  * TRACS CSRF/session helpers.
  */
 
+require_once __DIR__ . '/auth_hardening.php';
+
 function tracs_is_https(): bool {
+    $forwardedProto = strtolower($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '');
+    $trustedForwardedHttps = $forwardedProto === 'https'
+        && function_exists('tracs_auth_remote_addr_is_trusted')
+        && tracs_auth_remote_addr_is_trusted();
+
     return (
         (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
         (($_SERVER['SERVER_PORT'] ?? null) == 443) ||
-        (strtolower($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https')
+        $trustedForwardedHttps
     );
+}
+
+function tracs_send_security_headers(): void {
+    if (headers_sent()) {
+        return;
+    }
+
+    header('X-Content-Type-Options: nosniff');
+    header('X-Frame-Options: SAMEORIGIN');
+    header('Referrer-Policy: same-origin');
+    header('Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()');
+    header("Content-Security-Policy: frame-ancestors 'self'; base-uri 'self'; object-src 'none'");
+    if (tracs_is_https()) {
+        header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+    }
 }
 
 function tracs_start_session(): void {
     if (session_status() !== PHP_SESSION_NONE) {
+        tracs_send_security_headers();
         return;
     }
 
+    tracs_send_security_headers();
+    $secure = tracs_is_https();
     $params = session_get_cookie_params();
     session_set_cookie_params([
         'lifetime' => $params['lifetime'] ?? 0,
         'path' => $params['path'] ?? '/',
         'domain' => $params['domain'] ?? '',
-        'secure' => tracs_is_https(),
+        'secure' => $secure,
         'httponly' => true,
         'samesite' => 'Lax',
     ]);
+    ini_set('session.use_strict_mode', '1');
+    ini_set('session.use_only_cookies', '1');
+    ini_set('session.cookie_secure', $secure ? '1' : '0');
+    ini_set('session.cookie_httponly', '1');
     session_start();
+}
+
+function tracs_rotate_csrf_token(): void {
+    tracs_start_session();
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
 function csrf_token(): string {

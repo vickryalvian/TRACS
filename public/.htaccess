@@ -1,13 +1,25 @@
 Options -Indexes
+ErrorDocument 404 /404.php
 RewriteEngine On
+RewriteRule ^modules/ - [F,L]
+RewriteRule ^uploads/.*\.(php|phtml|phar|cgi|pl|py|asp|aspx|jsp|sh)$ - [F,L,NC]
+RewriteRule (^|/)[^/]*(backup|bak|old|orig|save|copy)[^/]*\.(css|js|php|html?|json|txt|sql|zip|tar|gz)$ - [F,L,NC]
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^$ index.php [L]
+
+<FilesMatch "(^\.|~$|\.bak$|\.backup|\.old$|\.orig$|\.save$|\.swp$|\.sql$|\.env$|\.ini$|\.log$|\.md$|\.toml$|\.lock$)">
+  Require all denied
+</FilesMatch>
 
 # Security headers
 <IfModule mod_headers.c>
   Header always set X-Content-Type-Options "nosniff"
   Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Referrer-Policy "same-origin"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+  Header always set Content-Security-Policy "frame-ancestors 'self'; base-uri 'self'; object-src 'none'"
+  Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains" "expr=%{HTTPS} == 'on'"
 </IfModule>
 
 # PHP error handling - hide from users

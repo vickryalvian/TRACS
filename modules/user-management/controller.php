@@ -487,6 +487,32 @@ class UserManagementController {
         ];
     }
 
+    public function resetTwoFactor(int $userId, string $reason = ''): array {
+        $actor = $this->actor();
+        if (($actor['role_slug'] ?? '') !== 'super_admin') {
+            tracs_auth_log_event($this->conn, 'permission_denied', 'blocked', '', $this->actorId, 'two_factor_reset_requires_super_admin');
+            throw new RuntimeException('Only Super Admin can reset two-factor authentication.');
+        }
+        $target = $this->model->getUserById($userId);
+        if (!$target) {
+            throw new RuntimeException('User not found.');
+        }
+        $this->assertCanManageUser($target);
+        $this->model->resetTwoFactor($userId);
+        tracs_log_user_event(
+            $this->conn,
+            $this->actorId,
+            'reset_two_factor',
+            'user',
+            $userId,
+            ['two_factor_enabled' => (int)($target['two_factor_enabled'] ?? 0), 'two_factor_confirmed_at' => $target['two_factor_confirmed_at'] ?? null],
+            ['two_factor_reset_required' => true],
+            $this->cleanLongText($reason, 500)
+        );
+        tracs_auth_log_event($this->conn, 'two_factor_reset', 'success', (string)($target['email'] ?? ''), $userId, 'reset_by_super_admin');
+        return ['message' => 'Two-factor authentication reset. The user must set it up again on next login.'];
+    }
+
     public function createDivision(array $input): array {
         tracs_require_permission($this->conn, 'divisions.create');
         $code = strtoupper($this->cleanText($input['code'] ?? '', 40));

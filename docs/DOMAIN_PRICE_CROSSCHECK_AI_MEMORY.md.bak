@@ -1,0 +1,118 @@
+# AI Memory — Domain Price Crosscheck Module
+
+This file is a critical repository of engineering constraints, design rules, warning markers, and development directions for **future AI coding sessions** working on this module.
+
+> [!IMPORTANT]
+> **READ THIS BEFORE INITIATING WORK.** Future AI agents must read and respect the guidelines in this file to prevent regressions, preserve historical audit records, and maintain the architectural boundaries of the TRACS system.
+
+---
+
+## 1. System Identity
+
+- **Module Name**: Domain Price Crosscheck
+- **System Classification**: Scoped Operational Audit Panel
+- **Tech Stack**: Vanilla PHP 8 + Vanilla JS + Vanilla CSS. No framework, no build steps.
+- **Integration Layer**: Added inside the Task Management category.
+
+---
+
+## 2. Context & Purpose
+
+This module comparison audits our domain registrar acquisition costs (USD/IDR) against our selling prices (IDCloudHost Website/Cloud PAAS) on a monthly schedule.
+- **Goal**: Highlight where we are selling domains at a loss, have dangerously low profit margins, or need to adjust our backend registrar routing to the cheapest source.
+
+---
+
+## 3. Strict AI Memory Warnings
+
+Future developers and AI agents must comply with these rules. Violating these constraints will fail validation checks:
+
+### A. Core Scoping & Boundaries
+- **No Scraping or Scrapers**: Do not write, deploy, or execute any web crawling or scraping scripts for IDCloudHost or competitors unless explicitly requested by the user.
+- **No Integration APIs**: Do not implement WHMCS,billing, or external registrar API hooks in Version 1.
+- **Strictly Scoped CSS**: Place new styles inside `public/assets/domain-price-crosscheck.css` using unique container selectors (e.g. `.tracs-domain-price-crosscheck`). Do not bloat or change global TRACS CSS classes in `public/assets/tracs.css` unless making minor enhancements.
+- **Do Not Bypass Server-Side Permissions**: Client-side UI hiding is *not* security. You must enforce permissions (`tracs_require_permission()`) inside controllers and API routes.
+
+### B. Data & Integrity Safeguards
+- **Immutable Snapshots**: Once a month's record is marked `'approved'`, it is locked. The database or controller must block any update or delete request. Do not allow users to overwrite approved monthly snapshots under normal operational roles.
+- **Preserve Audit Trail**: Do not delete, disable, or bypass audit log behavior. Every change to drafts, rates, approvals, or overrides must be committed to `domain_price_audit_logs`.
+- **Do Not Break Task Management**: Do not alter `tracs_tasks` or `tracs_task_assignments` schema. Use the provided description references or temporary delegation logic to link checklist tasks.
+
+---
+
+## 4. Key Formulas
+
+Calculate these values strictly as defined below:
+
+- **IDR cost price conversion**:
+  $$\text{Cost}_{\text{IDR}} = \text{Cost}_{\text{USD}} \times \text{Exchange Rate}_{\text{Month}}$$
+- **Lowest TLD Cost**:
+  $$\text{Lowest Cost}_{\text{TLD}} = \min \left( \text{Cost}_{\text{Source 1}}, \dots, \text{Cost}_{\text{Source N}} \right)$$
+- **Margin Amount**:
+  $$\text{Margin Amount} = \text{Selling Price} - \text{Lowest Cost}_{\text{TLD}}$$
+- **Margin Percentage**:
+  $$\text{Margin \%} = \frac{\text{Selling Price} - \text{Lowest Cost}_{\text{TLD}}}{\text{Selling Price}} \times 100$$
+- **Monthly Difference**:
+  $$\text{Cost Diff} = \text{Lowest Cost}_{\text{Current}} - \text{Lowest Cost}_{\text{Previous}}$$
+- **Monthly Percentage Change**:
+  $$\text{Cost Change \%} = \frac{\text{Lowest Cost}_{\text{Current}} - \text{Lowest Cost}_{\text{Previous}}}{\text{Lowest Cost}_{\text{Previous}}} \times 100$$
+
+---
+
+## 5. File Ownership Registry
+
+### Dedicated Module Files (Safe to edit)
+- [domain_price_crosscheck.php](file:///Users/ulfahanifah/Documents/tracs/public/domain_price_crosscheck.php)
+- [domain-price-crosscheck.php (API)](file:///Users/ulfahanifah/Documents/tracs/public/api/domain-price-crosscheck.php)
+- [controller.php](file:///Users/ulfahanifah/Documents/tracs/modules/domain-price-crosscheck/controller.php)
+- [model.php](file:///Users/ulfahanifah/Documents/tracs/modules/domain-price-crosscheck/model.php)
+- [domain_price_crosscheck.sql](file:///Users/ulfahanifah/Documents/tracs/config/schema/domain_price_crosscheck.sql)
+- [2026_05_20_domain_price_crosscheck.sql (migration)](file:///Users/ulfahanifah/Documents/tracs/config/migrations/2026_05_20_domain_price_crosscheck.sql)
+- [domain-price-crosscheck.css](file:///Users/ulfahanifah/Documents/tracs/public/assets/domain-price-crosscheck.css)
+- [domain-price-crosscheck.js](file:///Users/ulfahanifah/Documents/tracs/public/assets/domain-price-crosscheck.js)
+
+### Shared / Global Files (Handle with extreme care)
+- [header.php](file:///Users/ulfahanifah/Documents/tracs/public/includes/header.php): Handles sidebar layout and nav permissions.
+- [csrf.php](file:///Users/ulfahanifah/Documents/tracs/core/security/csrf.php): Handles global session token generation and verification.
+- [user_management.php](file:///Users/ulfahanifah/Documents/tracs/core/user_management.php): Owns the permission check `tracs_user_can()` helper.
+- [_bootstrap.php](file:///Users/ulfahanifah/Documents/tracs/public/api/_bootstrap.php): API entry bootstrap and CSRF interceptor.
+- [database.php](file:///Users/ulfahanifah/Documents/tracs/config/database.php): Core database connector.
+
+---
+
+## 6. Known Risks & Constraints
+
+1. **Exchange Rate Locking**: Since exchange rates are set per-month, a sudden mid-month currency devaluation will not affect calculations unless a Superadmin updates the rate, triggering a total recalculation of outstanding drafts.
+2. **Missing Benchmark Data**: When a TLD is brand new, there is no previous month's baseline. Code must handle `NULL` or `'—'` gracefully in UI comparisons.
+3. **Intern Gating**: Ensure that when an Intern views a draft, they only see the month assigned to their task assignment card, preventing lateral data exposure.
+
+---
+
+## 7. UI/UX Style Guide
+
+- **Density**: Use compact tables (`.table-dense`), short paddings, and thin borders.
+- **Themes**: Support dark/light mode transparently by utilizing CSS custom properties (e.g. `--color-bg-panel`, `--color-text`, `--color-border`).
+- **Icons**: Use lucide icons loaded globally (`alert-triangle` for below cost, `trending-up` for price hike, etc.).
+- **Watermark & Signature**: Retain any Vickry author markers or TRACS system build comments.
+
+---
+
+## 8. Phase 3 Implemented Constraints & Decisions
+
+Future sessions continuing on Phase 4 (Pricing Matrix & Comparison Engine) must respect these implemented behaviors from Phase 3:
+1. **USD to IDR Updates**:
+   - Updates to the monthly exchange rate are only permitted when the status is `'draft'`.
+   - Any exchange rate changes must specify a mandatory text `change_reason` which is logged structurally in `domain_price_audit_logs`.
+   - Prevent redundant log writes if the rate value is unchanged.
+   - Values are rendered as `Rp<?=number_format($rate, 2)?>`.
+2. **Reverting to Draft**:
+   - Monthly records in `'pending_review'` status can be reverted back to `'draft'` by authorized operators using the `revertToDraft` transition.
+   - Edits are unlocked on reversion and logged under action `'reverted_to_draft'`.
+3. **Precise Auditing**:
+   - The `domain_price_audit_logs` table has precise structural columns: `tld_id`, `source_id`, `field_name`, `old_value`, `new_value`, and `change_reason`. Always populate these fields during pricing entries or metadata modifications.
+   - The active timeline in the UI displays only the **latest 10 logs** per month (`LIMIT 10`) for performance.
+   - Collapsible panel UI: The audit trail section is collapsed by default and toggled via `.dpc-audit-panel.collapsed` styling in `domain-price-crosscheck.js`.
+4. **Metadata Duplication**:
+   - The "Duplicate Month" metadata cloner replicates the metadata shell.
+   - The frontend automatically predicts the next chronological calendar month code (e.g., `2026-05` to `2026-06`) on opening the modal.
+   - Deep-cloning of price entries will be integrated in Phase 4.

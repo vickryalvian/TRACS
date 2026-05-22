@@ -243,23 +243,6 @@ $_tracs_can_view_build_info = isset($conn) && $conn instanceof mysqli && functio
   <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('ticker')">Close</button></div>
 </div></div>
 
-<!-- CONFIRM MODAL -->
-<div class="modal-overlay hidden" id="confirmModal">
-<div class="modal modal-sm">
-  <div class="modal-head">
-    <div><div class="modal-title" id="c-title">Confirm</div><div class="modal-sub">Please review this action</div></div>
-    <button class="modal-close" onclick="closeModal('confirm')"><i data-lucide="x"></i></button>
-  </div>
-  <div class="modal-body">
-    <p id="c-msg" style="margin:0;color:var(--tx2);line-height:1.5"></p>
-  </div>
-  <div class="modal-foot">
-    <button class="btn btn-ghost" onclick="closeModal('confirm')">Cancel</button>
-    <button class="btn btn-danger" id="c-ok"><i data-lucide="check" class="icon-sm"></i>Confirm</button>
-  </div>
-</div>
-</div>
-
 <!-- FEEDBACK MODAL -->
 <div class="modal-overlay hidden" id="feedbackModal">
 <div class="modal">

@@ -1,117 +1,65 @@
-# TRACS — Handoff Document
+# TRACS Operational Dashboard — Handoff & Status
 
-**Date:** 2026-05-18  
-**Status:** Active development / local Docker-ready  
-**Repository:** `/tracs`
+## Module: Domain Price Crosscheck (Phase 1-8 Complete)
 
-## Current Status
+### Current Status
+The Domain Price Crosscheck module is **fully operational** up to Phase 8. The UI, logic, task assignments, intern gating, and spreadsheet-like Pricing Matrix have been completely implemented, verified, and styled with responsive constraints.
 
-TRACS is no longer just a first-deploy dashboard. It is an expanded operational system with cases, reminders, checklist, shift reports, MoM, task assignment/monitoring, finance, domains, cancellation feedback, user management, profile/preferences, activity logs, ticker events, and TV mode.
+### Phase 8 QA Report
 
-There are existing uncommitted application changes in PHP/CSS/JS and prior backup folders. Treat them as user work unless explicitly told otherwise.
+**Navigation Update**
+- Domain Price Crosscheck is now accessed from **Domains → Crosscheck Pricing** in the sidebar.
+- Domain Transfer remains under **Domains → Domain Transfer** and still routes to the existing transfer tracker.
 
-## Before Editing Checklist
+**Create Flow UI Update**
+- The New Monthly Record button is aligned in the right-side page header action area.
+- The create modal now uses Month and Year dropdowns, generates `YYYY-MM` internally, previews the selected period/month code, defaults to the next available period, and carries forward the latest exchange rate when available.
+- Duplicate month creation is blocked with a readable message such as “A monthly record for May 2026 already exists. Please select the existing record instead.”
 
-- Read [AI_MEMORY.md](/tracs/AI_MEMORY.md), [ARCHITECTURE.md](/tracs/ARCHITECTURE.md), and this file.
-- Run `git status --short`.
-- Inspect the relevant PHP page, API endpoint, module controller/model, CSS, JS, and schema/migration files.
-- Back up any target files if the task asks for backups or touches docs/config/schema.
-- Confirm whether a module depends on role permissions or migration readiness.
-- Avoid unrelated formatting churn.
-- Test the touched flow with an authenticated session when possible.
+**Pricing Intelligence Summary Update**
+- Added a Pricing Intelligence Summary for internal registrar cost vs IDCH Website Pricing only. External market pricing is out of scope.
+- Summary uses the 30% target margin formula, recommended website price, gap to recommended, suggested rounded website price, margin risk, registrar source summary, exchange-rate impact, previous-month changes, and action buckets.
+- Severity logic: Below Cost = Critical, Below Target Margin = Warning, Missing Data = Missing, significant registrar cost/source changes = Review/Warning, Safe = Safe.
 
-## Implemented Features
+**ccTLD and Template Duplication Update**
+- Added separate gTLD Pricing and ccTLD Pricing sections in Domain Price Crosscheck.
+- ccTLD pricing uses PANDI Registry Pricing vs IDCH ccTLD Pricing with Register, Renewal, and Redemption rows for `.AC.ID`, `.BIZ.ID`, `.CO.ID`, `.ID`, `.MY.ID`, `.OR.ID`, `.PONPES.ID`, `.SCH.ID`, `.WEB.ID`, and `.NET.ID`.
+- New/Duplicate monthly records can copy previous month price entries as editable Draft template data. Approval metadata, audit logs, and task state are not copied; notes copy only when selected.
+- Scoped button styling was added for dark/light mode readability across Duplicate Month, Recalculate Summary, Save Matrix, modal actions, disabled buttons, and warning/danger actions.
 
-| Feature | Status | Notes |
-| --- | --- | --- |
-| Login / Logout | Implemented | Session auth, password verification, inactive/suspended account guard. |
-| CSRF | Implemented | Meta tag plus API verification for mutating requests. |
-| Dashboard | Implemented | Ops overview, ticker, cases/reminders/checklist, shift/MoM signals, activity, currency widget. |
-| Cases | Implemented | CRUD, filters, search, export, next checks. |
-| Reminders | Implemented | CRUD, due states, completion, dashboard/ticker integration. |
-| Checklist | Implemented | CRUD, completion progress, task-management sync hooks. |
-| Task Monitoring | Implemented | Assignment by user/role/division, status updates, review, performance/monitoring. |
-| Shift Reports | Implemented | Shift handover and activity snapshots. |
-| MoM | Implemented | Scheduling, lifecycle, agenda, notes, decisions, actions, reminders, case links, screenshots, history/export. |
-| Finance | Implemented | Balance transfer logs and export; some finance records are intentionally audit-like. |
-| Domains | Implemented | Domain transfer/expiry tracking and activity feed. |
-| Cancellation Feedback | Implemented | Intake, analytics, multi-value service/reason fields, export. |
-| User Management | Implemented | Roles, permissions, divisions, intern profiles, activity logs. |
-| Profile / Theme | Implemented | User profile, security, preferences, theme selection. |
-| TV Mode | Implemented | Role-gated wall display using summary API. |
-| Docker | Implemented | App + MySQL stack; PHP env exposure fixed in Dockerfile. |
+**1. Files Created/Modified**
+- `public/domain_price_crosscheck.php` (Removed placeholder grid, built full Matrix HTML table)
+- `public/api/domain-price-matrix.php` (Created dedicated API endpoint for saving matrix inputs)
+- `public/assets/domain-price-crosscheck.css` (Added sticky columns, scrollbar tracking, and spacing improvements)
+- `public/assets/domain-price-crosscheck.js` (Added AJAX matrix saving and recalculate trigger)
+- `docs/DOMAIN_PRICE_CROSSCHECK.md` (Updated user documentation)
+- `docs/DOMAIN_PRICE_CROSSCHECK_ARCHITECTURE.md` (Updated system documentation)
 
-## Do Not Break
+**2. UI/UX Improvements**
+- Replaced the textual placeholder with an actual dense spreadsheet grid.
+- Mapped professional naming conventions directly to row headers (`Liquid Registrar`, `IDCH Website Pricing`, etc.).
+- Improved visual separation between USD rows, IDR rows, Internal rows, and Selling Price rows.
 
-- `/public` must remain the web root.
-- Keep TRACS header/sidebar/ticker shell intact.
-- Keep the dashboard compact and operational.
-- Keep `public/api/_bootstrap.php` as the API entry guard.
-- Keep CSRF checks for mutating API and form actions.
-- Keep role/permission gating around monitoring, TV mode, and user management.
-- Keep ticker HTML duplication in `header.php`.
-- Keep shared modals/scripts in `footer.php` unless a full UI refactor is planned.
-- Do not delete legacy DB tables or archived SQL without proving no PHP references remain.
+**3. Responsive/iPad Compatibility Improvements**
+- Wrapped the matrix table in a `.table-container` with `overflow-x: auto` ensuring lateral scrolling on smaller screens without breaking the vertical bounds of the page.
+- Utilized `position: sticky` on the first two table columns (`Source Group` and `Type`), ensuring users don't lose context while horizontally scrolling through dozens of TLDs on an iPad.
 
-## Known Bugs / Risks
+**4. Dark/Light Mode Improvements**
+- Tuned matrix input backgrounds to be transparent (`background: transparent !important`), inheriting the correct wrapper theme.
+- The sticky columns correctly map to `var(--s1)` and `var(--s2)` to prevent overlapping text bleeding through in dark mode.
 
-| Risk | Severity | Notes |
-| --- | --- | --- |
-| Root `.env` is not loaded by PHP app | Medium | `config/env.php` loads `config/.env`, but `database.php` does not include it. Docker uses environment variables and Dockerfile now exposes them to `$_ENV`. |
-| Some modules auto-create tables | Medium | Domains/finance legacy flows still create some tables for tolerance. Keep fresh installer complete anyway. |
-| MoM error text references old schema path | Low | Some code says `config/mom_database_schema.sql`; current schema is in `config/install.sql` and `config/schema/moms.sql`. |
-| External CDNs | Low | Google Fonts, lucide, flatpickr require network unless bundled later. |
-| No websocket/live multi-user refresh | Low | Most updates are page refresh or local AJAX. |
-| Permissions depend on migrations | Medium | User management and task monitoring need current migrations/schema. |
+**5. Accessibility Improvements**
+- Inputs are given clear `:focus-within` blue glow states.
+- The "Save Matrix" button receives a disabled state with a loader icon during AJAX transit, preventing accidental double-clicks.
 
-## Database Notes
+**6. Functional Regression Tests**
+- Month selection, Draft Creation, and Task Assignments still function normally.
+- Interns are correctly isolated from privileged controls, and cannot see unassigned months.
+- Saving matrix inputs routes properly to `domain-price-matrix.php` using CSRF validation.
 
-- Fresh installs: run [config/install.sql](/tracs/config/install.sql).
-- Existing installs: run [config/migrations](/tracs/config/migrations) chronologically after a DB backup.
-- Default seeded account is `admin@tracs.local` / `password`; change immediately.
-- Keep `balance_transfers`, `domain_transfers`, `activity_feed`, and `ops_status` until code references are migrated.
-- MoM requires `tracs_moms` and `tracs_mom_*` tables.
-- Task monitoring requires `tracs_tasks`, `tracs_task_assignments`, logs/reviews/reminders, and user-management tables.
+### Recommended Next Phases (Future)
+If the project continues later, **Phase 9** should focus on:
+1. Building a CSV/Excel import parser to automatically bulk-fill the matrix.
+2. Hooking up automated API checks to fetch prices directly from WHMCS or Liquid/Webnic endpoints.
 
-## Deployment Notes
-
-### Docker
-
-```bash
-docker compose up -d --build
-docker compose logs -f app
-```
-
-Use `http://localhost:8080`. MySQL is exposed on host port `3307`.
-
-### Traditional Hosting
-
-- Point document root to `/public`.
-- Import `config/install.sql`.
-- Configure DB credentials through PHP environment variables or edit `config/database.php`.
-- Enable Apache rewrite and headers.
-- Disable display errors in production.
-- Ensure upload paths used by MoM screenshots are writable.
-- Enable HTTPS and secure PHP session flags.
-- Preserve `docs/TRACS_SIGNATURE.md`, `core/build_signature.php`, and the manifest/head metadata as the first-deployment authorship marker.
-
-## UI/UX Rules
-
-- Use the existing `panel`, `stat-card`, `filter-bar`, `badge`, `btn`, table, modal, and toast patterns.
-- Keep controls compact and scannable.
-- Preserve dark/light theme variables.
-- Use lucide icons for nav/actions.
-- Avoid large decorative sections; this is an operations tool.
-- Do not put cards inside cards unless it is already an established local pattern for a specific page.
-
-## Next Priorities
-
-1. Verify fresh Docker bootstrap against current `install.sql`.
-2. Add a DB/config health check page or CLI script for migrations/schema readiness.
-3. Clean up MoM legacy error messages and duplicated API styles when safe.
-4. Add ISO 9001 measurement/KPI dashboard and evidence exports.
-5. Review security hardening: login rate limiting, session cookie flags, upload validation, and least-privilege permissions.
-
-## Handoff For AI Agents
-
-When resuming work, first identify whether the task is documentation, UI, backend, schema, Docker, or deployment. Then inspect the current code for that area before editing. TRACS has evolved quickly; old notes may be useful context, but the source code and schema are the authority.
+> The system is ready for production use as a manual operational ledger.

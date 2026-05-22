@@ -9,7 +9,10 @@ $conn->query("CREATE TABLE IF NOT EXISTS tracs_finance_transfers (id INT AUTO_IN
 tracs_ensure_creator_columns($conn, 'tracs_finance_transfers', 'user_id');
 $stmt=$conn->prepare("INSERT INTO tracs_finance_transfers (user_id,note,from_account,to_account,amount,direction,status,transfer_date,created_by,created_by_name) VALUES (?,?,?,?,?,?,?,?,?,?)");
 $stmt->bind_param('isssdsssis',$uid,$note,$from,$to,$amount,$dir,$status,$dt,$uid,$creator_name);
-if(!$stmt->execute()) fail('DB error: '.$conn->error);
+if(!$stmt->execute()) {
+    error_log('TRACS finance-create failed: ' . $conn->error);
+    fail('Database error', 500);
+}
 $id=$stmt->insert_id; $stmt->close();
 logAct($conn,$uid,'created','Finance',"Transfer logged: {$note} Rp ".number_format($amount,0,',','.'),$id);
 ok(['id'=>$id],'Transfer saved');

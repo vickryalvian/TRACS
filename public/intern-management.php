@@ -3,6 +3,7 @@ require_once __DIR__ . '/../core/security/csrf.php';
 tracs_start_session();
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/auth/auth_check.php';
+require_once __DIR__ . '/../core/access_control.php';
 require_once __DIR__ . '/../modules/user-management/controller.php';
 require_once __DIR__ . '/../modules/task-management/controller.php';
 require_once __DIR__ . '/../modules/alert-ticker/controller.php';
@@ -11,9 +12,7 @@ require_once __DIR__ . '/includes/page_helpers.php';
 $uid = (int)($_SESSION['user_id'] ?? 0);
 $user_email = $_SESSION['user_email'] ?? 'operator@tracs.local';
 if (!tracs_user_can($conn, 'users.view') && !tracs_user_can($conn, 'tasks.monitor')) {
-    http_response_code(403);
-    echo 'Forbidden';
-    exit;
+    tracs_abort_404();
 }
 
 $UM = new UserManagementController($conn, $uid);

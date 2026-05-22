@@ -1,6 +1,11 @@
 <?php require '_bootstrap.php';
 
 $action = $body['action'] ?? '';
+$actorRole = (string)($_SESSION['user_role_slug'] ?? '');
+if (!tracs_user_can($conn, 'settings.manage') && !in_array($actorRole, ['super_admin', 'admin', 'supervisor'], true)) {
+    tracs_auth_log_event($conn, 'permission_denied', 'blocked', (string)($_SESSION['user_email'] ?? ''), $uid, 'ops_status_update');
+    fail('Forbidden', 403);
+}
 
 if ($action === 'save') {
     $id = (int)($body['id'] ?? 0);

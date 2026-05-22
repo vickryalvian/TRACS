@@ -571,6 +571,7 @@ class MOMController {
 
   public function addAgendaItem($mom_id, $topic, $notes='', $status='pending') {
     $mom_id = (int)$mom_id;
+    if(!$this->getMOM($mom_id)) return false;
     $now = date('Y-m-d H:i:s');
     
     $stmt = $this->conn->prepare("
@@ -601,7 +602,7 @@ class MOMController {
       WHERE a.id=?
     ");
     $stmt->bind_param('isssssi', $this->uid, $topic, $topic, $notes, $notes, $status, $item_id);
-    return $stmt->execute();
+    return $stmt->execute() && $stmt->affected_rows > 0;
   }
 
   public function deleteAgendaItem($item_id) {
@@ -612,7 +613,7 @@ class MOMController {
       WHERE a.id=?
     ");
     $stmt->bind_param('ii', $this->uid, $item_id);
-    return $stmt->execute();
+    return $stmt->execute() && $stmt->affected_rows > 0;
   }
 
   // ═══════════════════════════════════════════════════════
@@ -621,6 +622,7 @@ class MOMController {
 
   public function addDiscussionNote($mom_id, $content, $note_type='discussion') {
     $mom_id = (int)$mom_id;
+    if(!$this->getMOM($mom_id)) return false;
     $now = date('Y-m-d H:i:s');
     
     $stmt = $this->conn->prepare("
@@ -653,7 +655,7 @@ class MOMController {
       WHERE n.id=?
     ");
     $stmt->bind_param('ii', $this->uid, $note_id);
-    return $stmt->execute();
+    return $stmt->execute() && $stmt->affected_rows > 0;
   }
 
   // ═══════════════════════════════════════════════════════
@@ -662,6 +664,7 @@ class MOMController {
 
   public function addDecision($mom_id, $decision, $rationale='', $owner='') {
     $mom_id = (int)$mom_id;
+    if(!$this->getMOM($mom_id)) return false;
     $now = date('Y-m-d H:i:s');
     
     $stmt = $this->conn->prepare("
@@ -697,7 +700,7 @@ class MOMController {
       WHERE d.id=?
     ");
     $stmt->bind_param('ii', $this->uid, $decision_id);
-    return $stmt->execute();
+    return $stmt->execute() && $stmt->affected_rows > 0;
   }
 
   // ═══════════════════════════════════════════════════════
@@ -706,6 +709,7 @@ class MOMController {
 
   public function addActionItem($mom_id, $title, $description='', $assigned_to='', $priority='medium', $due_date=null) {
     $mom_id = (int)$mom_id;
+    if(!$this->getMOM($mom_id)) return false;
     $now = date('Y-m-d H:i:s');
     
     $stmt = $this->conn->prepare("
@@ -821,7 +825,7 @@ class MOMController {
       WHERE a.id=?
     ");
     $stmt->bind_param('ii', $this->uid, $action_id);
-    return $stmt->execute();
+    return $stmt->execute() && $stmt->affected_rows > 0;
   }
 
   // ═══════════════════════════════════════════════════════
@@ -1030,16 +1034,29 @@ class MOMController {
     $uploadDir = __DIR__ . '/../../uploads/mom';
     if(!is_dir($uploadDir)) @mkdir($uploadDir, 0755, true);
     
-    $filename = 'mom_' . $mom_id . '_' . time() . '_' . bin2hex(random_bytes(4)) . '.png';
-    $filepath = $uploadDir . '/' . $filename;
-    
-    // Decode base64 if needed
-    if(strpos($image_data, 'base64,') !== false) {
-      $image_data = explode('base64,', $image_data)[1];
+    $declared_mime = '';
+    if(preg_match('/^data:([^;,]+);base64,/', (string)$image_data, $matches)) {
+      $declared_mime = strtolower($matches[1]);
+      $image_data = substr((string)$image_data, strpos((string)$image_data, 'base64,') + 7);
     }
-    
+
     $bytes = base64_decode($image_data, true);
-    if($bytes && strlen($bytes) <= 5 * 1024 * 1024 && file_put_contents($filepath, $bytes)) {
+    if(!$bytes || strlen($bytes) > 5 * 1024 * 1024) {
+      return false;
+    }
+
+    $info = @getimagesizefromstring($bytes);
+    $allowed_mimes = ['image/png' => 'png', 'image/jpeg' => 'jpg', 'image/webp' => 'webp'];
+    $mime = strtolower((string)($info['mime'] ?? ''));
+    if(!isset($allowed_mimes[$mime]) || ($declared_mime !== '' && $declared_mime !== $mime)) {
+      return false;
+    }
+
+    $filename = 'mom_' . $mom_id . '_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $allowed_mimes[$mime];
+    $filepath = $uploadDir . '/' . $filename;
+
+    if(file_put_contents($filepath, $bytes)) {
+      @chmod($filepath, 0644);
       $stmt = $this->conn->prepare("
         INSERT INTO tracs_mom_screenshots (mom_id, filename, attached_to_type, attached_to_id, uploaded_at)
         VALUES (?, ?, ?, ?, ?)

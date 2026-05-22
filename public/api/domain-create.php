@@ -8,7 +8,10 @@ $ssl=(int)(bool)($body['ssl_active']??0); $auto=(int)(bool)($body['auto_renew']?
 $notes=$body['notes']??'';
 $stmt=$conn->prepare("INSERT INTO tracs_domains (user_id,domain,registrar,expires_at,ssl_active,auto_renew,notes,created_by,created_by_name) VALUES (?,?,?,?,?,?,?,?,?)");
 $stmt->bind_param('isssiisis',$uid,$domain,$registrar,$expires,$ssl,$auto,$notes,$uid,$creator_name);
-if(!$stmt->execute()) fail('DB error: '.$conn->error);
+if(!$stmt->execute()) {
+    error_log('TRACS domain-create failed: ' . $conn->error);
+    fail('Database error', 500);
+}
 $id=$stmt->insert_id; $stmt->close();
 logAct($conn,$uid,'created','Domains',"Added domain: {$domain}",$id);
 ok(['id'=>$id],'Domain added');

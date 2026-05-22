@@ -13,11 +13,13 @@ $_avatar_url = '';
 $_cnt = (int)($critical_count??0);
 $_can_um = false;
 $_can_monitoring = false;
+$_can_dpc = false;
 $_header_user = null;
 if (isset($conn) && $conn instanceof mysqli && !empty($_SESSION['user_id'])) {
   $_header_user = tracs_get_user_by_id($conn, (int)$_SESSION['user_id']);
   $_can_um = tracs_user_can($conn, 'users.view') || tracs_user_can($conn, 'divisions.view') || tracs_user_can($conn, 'roles.view');
   $_can_monitoring = tracs_user_can($conn, 'tasks.view_own') || tracs_user_can($conn, 'tasks.monitor');
+  $_can_dpc = tracs_user_can($conn, 'domain_price.view');
   if ($_header_user) {
     $_av = tracs_user_initials($_header_user['display_name'] ?? '', $_header_user['email'] ?? ($_un ?: 'U'));
     $_avatar_url = tracs_user_avatar_url($_header_user);
@@ -100,20 +102,42 @@ window.TRACS_BUILD_INFO = <?=json_encode($_tracs_build_info, JSON_UNESCAPED_SLAS
       <i data-lucide="clipboard-list" class="icon-md"></i>
       <span class="nav-tip">Shift Reports</span>
     </a>
-    <?php if($_can_monitoring): ?>
-    <a href="<?=tracs_user_can($conn, 'tasks.monitor') ? 'monitoring.php' : 'tasks.php'?>" class="nav-item <?=$active_page==='monitoring'?'active':''?>">
-      <i data-lucide="kanban-square" class="icon-md"></i>
-      <span class="nav-tip">Tasks / Monitoring</span>
-    </a>
+    <?php if ($_can_monitoring): ?>
+    <details class="nav-menu-wrap" id="tasksMonitoringNav">
+      <summary class="nav-item <?=in_array($active_page, ['monitoring', 'tasks'], true)?'active':''?>" aria-label="Tasks / Monitoring menu">
+        <i data-lucide="kanban-square" class="icon-md"></i>
+        <span class="nav-tip">Tasks / Monitoring</span>
+      </summary>
+      <div class="nav-submenu" role="menu" aria-label="Tasks / Monitoring">
+        <a href="<?=tracs_user_can($conn, 'tasks.monitor') ? 'monitoring.php' : 'tasks.php'?>" role="menuitem" class="<?=in_array($active_page, ['monitoring', 'tasks'], true)?'active':''?>">
+          <i data-lucide="kanban-square" class="icon-sm"></i>
+          <span>Tasks & Monitoring</span>
+        </a>
+      </div>
+    </details>
     <?php endif; ?>
     <a href="infrastructure-pulse.php" class="nav-item <?=$active_page==='infrastructure-pulse'?'active':''?>">
       <i data-lucide="radar" class="icon-md"></i>
       <span class="nav-tip">Infrastructure Pulse</span>
     </a>
-    <a href="domains.php" class="nav-item <?=$active_page==='domains'?'active':''?>">
-      <i data-lucide="globe" class="icon-md"></i>
-      <span class="nav-tip">Domains</span>
-    </a>
+    <details class="nav-menu-wrap" id="domainsNav">
+      <summary class="nav-item <?=in_array($active_page, ['domains', 'domain_price_crosscheck'], true)?'active':''?>" aria-label="Domains menu">
+        <i data-lucide="globe" class="icon-md"></i>
+        <span class="nav-tip">Domains</span>
+      </summary>
+      <div class="nav-submenu" role="menu" aria-label="Domains">
+        <?php if ($_can_dpc): ?>
+        <a href="domain_price_crosscheck.php" role="menuitem" class="<?=$active_page==='domain_price_crosscheck'?'active':''?>">
+          <i data-lucide="trending-up" class="icon-sm"></i>
+          <span>Crosscheck Pricing</span>
+        </a>
+        <?php endif; ?>
+        <a href="domains.php" role="menuitem" class="<?=$active_page==='domains'?'active':''?>">
+          <i data-lucide="globe" class="icon-sm"></i>
+          <span>Domain Transfer</span>
+        </a>
+      </div>
+    </details>
     <a href="finance.php" class="nav-item <?=$active_page==='finance'?'active':''?>">
       <i data-lucide="circle-dollar-sign" class="icon-md"></i>
       <span class="nav-tip">Finance</span>
@@ -175,7 +199,10 @@ window.TRACS_BUILD_INFO = <?=json_encode($_tracs_build_info, JSON_UNESCAPED_SLAS
         <a href="profile.php?section=profile" role="menuitem"><i data-lucide="user" class="icon-sm"></i>My Profile</a>
         <a href="profile.php?section=security" role="menuitem"><i data-lucide="lock-keyhole" class="icon-sm"></i>Change Password</a>
         <a href="profile.php?section=preferences" role="menuitem"><i data-lucide="sliders-horizontal" class="icon-sm"></i>Preferences</a>
-        <a href="../auth/logout.php" role="menuitem" class="danger"><i data-lucide="log-out" class="icon-sm"></i>Logout</a>
+        <form action="/auth/logout.php" method="post" class="user-menu-logout">
+          <?=csrf_input()?>
+          <button type="submit" role="menuitem" class="danger"><i data-lucide="log-out" class="icon-sm"></i>Logout</button>
+        </form>
       </div>
     </details>
     <div class="theme-menu-wrap" id="themeMenuWrap">

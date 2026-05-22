@@ -1,6 +1,12 @@
 <?php require '_bootstrap.php';
-$id = (int)($body['id'] ?? $_GET['id'] ?? 0);
-if (!$id) fail('ID required');
-$row = $conn->query("SELECT * FROM tracs_cases WHERE id=$id AND user_id=$uid")->fetch_assoc();
+$rawId = $body['id'] ?? $_GET['id'] ?? null;
+$id = tracs_is_positive_int($rawId) ? (int)$rawId : 0;
+if (!$id) fail_not_found();
+$stmt = $conn->prepare("SELECT * FROM tracs_cases WHERE id=? AND user_id=? LIMIT 1");
+if (!$stmt) fail('Database error', 500);
+$stmt->bind_param('ii', $id, $uid);
+$stmt->execute();
+$row = $stmt->get_result()->fetch_assoc();
+$stmt->close();
 if (!$row) fail('Not found', 404);
 ok($row);

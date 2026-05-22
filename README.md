@@ -18,6 +18,7 @@ TRACS is a high-density operational control panel for support, legal, and CS ope
 | Cancellation Feedback | Cancellation intake, multi-value reasons/services, retention intelligence, filters, export. |
 | User Management | Users, roles, permissions, divisions, intern profiles, user audit activity, profile/preferences. |
 | TV Mode | Read-only operational wall display for super admin/admin/supervisor roles. |
+| Domain Price Crosscheck | Monthly comparison panel for domain registrar costs vs selling prices. Accessed from Domains → Crosscheck Pricing; Task Management integration remains for assignment/workflow. See [DOMAIN_PRICE_CROSSCHECK.md](file:///Users/ulfahanifah/Documents/tracs/docs/DOMAIN_PRICE_CROSSCHECK.md), [DOMAIN_PRICE_CROSSCHECK_ARCHITECTURE.md](file:///Users/ulfahanifah/Documents/tracs/docs/DOMAIN_PRICE_CROSSCHECK_ARCHITECTURE.md), and [DOMAIN_PRICE_CROSSCHECK_AI_MEMORY.md](file:///Users/ulfahanifah/Documents/tracs/docs/DOMAIN_PRICE_CROSSCHECK_AI_MEMORY.md). |
 
 ## Tech Stack
 
@@ -92,7 +93,7 @@ Fresh installs should run [config/install.sql](/tracs/config/install.sql). Exist
 
 Current active schema includes core `tracs_` tables plus legacy names still used by PHP:
 
-- `tracs_users`, `tracs_roles`, `tracs_permissions`, `tracs_role_permissions`, `tracs_divisions`, `user_intern_profiles`
+- `tracs_users`, `tracs_login_attempts`, `tracs_auth_events`, `tracs_roles`, `tracs_permissions`, `tracs_role_permissions`, `tracs_divisions`, `user_intern_profiles`
 - `tracs_cases`, `tracs_reminders`, `tracs_side_tasks`, `tracs_side_task_logs`
 - `tracs_tasks`, `tracs_task_assignments`, `tracs_task_logs`, `tracs_task_reviews`, `tracs_task_reminders`
 - `tracs_shift_reports`, `tracs_shift_activities`
@@ -133,6 +134,11 @@ docker compose up -d --build
 - Disable PHP display errors in production.
 - Enable HTTPS.
 - Change default admin password.
+- Run `config/migrations/2026_05_21_login_hardening.sql` on existing databases to enable failed-login counters and authentication security logs.
+- Run `config/migrations/2026_05_21_mandatory_2fa.sql` on existing databases to add mandatory TOTP 2FA fields. Existing users will be forced to set up 2FA on their next successful password login.
+- Configure login protection as needed with `TRACS_LOGIN_MAX_FAILED_ATTEMPTS`, `TRACS_LOGIN_WINDOW_MINUTES`, `TRACS_LOGIN_LOCK_MINUTES`, `TRACS_LOGIN_CAPTCHA_AFTER`, `TRACS_SESSION_IDLE_TIMEOUT_MINUTES`, and `TRACS_TRUSTED_PROXIES`. `TRACS_SESSION_IDLE_TIMEOUT_MINUTES` defaults to 2880 and is capped at 2880 minutes / 48 hours.
+- Configure 2FA as needed with `TRACS_2FA_ISSUER`, `TRACS_2FA_TIMEOUT_MINUTES`, `TRACS_2FA_MAX_FAILED_ATTEMPTS`, `TRACS_2FA_LOCK_MINUTES`, `TRACS_2FA_VALID_WINDOW_STEPS`, and `TRACS_2FA_SECRET_KEY`. Production deployments should set `TRACS_2FA_SECRET_KEY` to a long random value and keep it stable across deploys.
+- Optional CAPTCHA: set `TRACS_CAPTCHA_PROVIDER=turnstile`, `TRACS_TURNSTILE_SITE_KEY`, and `TRACS_TURNSTILE_SECRET_KEY`. If unset, TRACS uses an internal challenge only after suspicious login behavior.
 - Verify login, case create/update, reminder create/toggle, checklist create/toggle, MoM create, user permissions, and exports.
 - Confirm `public/uploads/mom` or equivalent upload path is writable if MoM screenshots are used.
 - Preserve [docs/TRACS_SIGNATURE.md](/tracs/docs/TRACS_SIGNATURE.md) and the build-signature metadata when packaging first-deployment artifacts.
@@ -144,6 +150,9 @@ docker compose up -d --build
 | --- | --- |
 | DB connection fails in Docker | Rebuild after the Dockerfile `variables_order=EGPCS` config, confirm `db` service is healthy, and inspect `docker compose logs db`. |
 | Login redirects repeatedly | Confirm sessions are writable and `public/auth/auth_check.php` is included from a public page after `tracs_start_session()`. |
+| Login shows CAPTCHA or lockout | Failed credentials crossed the configured threshold. Wait for `TRACS_LOGIN_LOCK_MINUTES`, solve the challenge, or review User Management → Login Security as an admin/supervisor. |
+| Login forces 2FA setup | This is expected after the mandatory 2FA migration until the user scans the QR code and confirms a TOTP code. |
+| 2FA code is rejected | Confirm device time sync, `TRACS_2FA_ISSUER`, and that `TRACS_2FA_SECRET_KEY` has not changed since setup. |
 | 401 on API calls | User session expired or CSRF token missing/invalid for mutating requests. Reload the page and retry. |
 | MoM says tables are not installed | Import current `config/install.sql` or run the MoM schema/migrations on existing DB. |
 | User/monitoring pages return Forbidden | Run user-management and task-management migrations, then assign appropriate role permissions. |
@@ -152,3 +161,20 @@ docker compose up -d --build
 ## Project Notes
 
 TRACS intentionally remains a no-framework PHP application. Preserve the TRACS identity, sidebar/ticker/dashboard layout, shared modals, and the compact operational design language unless a future redesign is planned as its own project.
+
+## Login And 2FA Hardening Notes
+
+- Failed login attempts are tracked by normalized email/username input and client IP in `tracs_login_attempts`.
+- Defaults: CAPTCHA after 3 failed attempts, temporary lock after 5 failed attempts within 15 minutes, 15-minute lock, and 48-hour idle session timeout.
+- Login errors are intentionally generic. The assistance message, “If you are having trouble logging in, please contact your administrator for further assistance.”, is only shown after relevant trouble states such as repeated failures, CAPTCHA, lockout, failed 2FA, or expired pending 2FA sessions.
+- Mandatory 2FA uses TOTP authenticator apps. Password verification creates only a temporary pending state; the full authenticated session is created after setup or verification succeeds.
+- Session IDs are regenerated after password verification and again after successful 2FA. Protected pages and APIs require the full authenticated state, not merely a password-verified pending session.
+- Fully authenticated sessions refresh their idle timer on valid protected page, API, and export activity. Session timing stays in the background and is not displayed in the UI. Users are signed out only after inactivity exceeds the configured idle timeout, capped at 48 hours.
+- 2FA secrets are encrypted before storage. The setup QR code and manual key are shown only during initial setup; existing secrets are never shown again.
+- Super Admin users can reset another user's 2FA from User Management. The reset clears the stored secret, marks setup required, and writes user and auth audit events.
+- Logout is protected by POST + CSRF. Authentication events are recorded in `tracs_auth_events` without passwords, session IDs, CAPTCHA secrets, or CSRF tokens.
+- Behind a reverse proxy, set `TRACS_TRUSTED_PROXIES` before trusting `X-Forwarded-For` or Cloudflare client-IP headers. Example: `TRACS_TRUSTED_PROXIES=127.0.0.1,10.0.0.0/8`.
+- Rollback: restore backed-up PHP/CSS/docs files, restore the database backup taken before the 2FA migration or clear the new `tracs_users.two_factor_*` columns only after exporting audit history, and keep `TRACS_2FA_SECRET_KEY` unchanged if any encrypted secrets remain.
+- Testing checklist: existing and new users are forced through setup, users cannot open dashboard/API/export routes before 2FA, invalid 2FA does not create a session, valid 2FA logs in, 2FA lockout works, Super Admin reset works, non-Super Admin reset is blocked, login error UI is compact/centered, assistance text appears only on trouble states, logout destroys the session, and light/dark/mobile layouts remain clean.
+
+See [docs/SECURITY_AUDIT_2FA.md](/tracs/docs/SECURITY_AUDIT_2FA.md) for the implementation audit, known limitations, and detailed verification checklist.

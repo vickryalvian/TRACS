@@ -3,3 +3,24 @@ Options -Indexes
 <Files ".env">
     Require all denied
 </Files>
+
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "same-origin"
+    Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+    Header always set Content-Security-Policy "frame-ancestors 'self'; base-uri 'self'; object-src 'none'"
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains" "expr=%{HTTPS} == 'on'"
+</IfModule>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^(config|core|modules|logs|backup|backups)(/|$) - [F,L]
+    RewriteRule \.(sql|log|md|bak|backup|old|orig|save|swp|env|ini|toml|lock)$ - [F,L,NC]
+    RewriteRule (^|/)[^/]*(backup|bak|old|orig|save|copy)[^/]*\.(css|js|php|html?|json|txt|sql|zip|tar|gz)$ - [F,L,NC]
+    RewriteRule ^public/uploads/.*\.(php|phtml|phar|cgi|pl|py|asp|aspx|jsp|sh)$ - [F,L,NC]
+</IfModule>
+
+<FilesMatch "^\.(env|git|DS_Store)">
+    Require all denied
+</FilesMatch>

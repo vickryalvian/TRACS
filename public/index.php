@@ -1,14 +1,22 @@
 <?php
 
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
+if (in_array(strtolower((string)($_ENV['APP_ENV'] ?? getenv('APP_ENV') ?: 'production')), ['local', 'development', 'dev'], true)) {
+  ini_set('display_errors', '1');
+  ini_set('display_startup_errors', '1');
+  error_reporting(E_ALL);
+} else {
+  ini_set('display_errors', '0');
+  ini_set('display_startup_errors', '0');
+  error_reporting(E_ALL & ~E_NOTICE & ~E_DEPRECATED & ~E_STRICT);
+}
 
 require_once __DIR__ . '/../core/security/csrf.php';
 tracs_start_session();
 
 require_once __DIR__.'/../config/database.php';
 require_once __DIR__.'/auth/auth_check.php';
+require_once __DIR__.'/../core/access_control.php';
+tracs_require_page_permission($conn, 'dashboard.view');
 
 require_once __DIR__.'/../modules/case/controller.php';
 require_once __DIR__.'/../modules/reminder/controller.php';
@@ -307,6 +315,32 @@ if ($hour >= 0 && $hour < 8) {
     $current_shift = ['num' => 3, 'name' => 'SHIFT 3', 'color' => 'blue'];
 }
 
+$current_shift_name = 'Shift '.$current_shift['num'];
+$previous_shift_meta = match($current_shift_name) {
+  'Shift 1' => ['shift' => 'Shift 3', 'date' => date('Y-m-d', strtotime('-1 day'))],
+  'Shift 2' => ['shift' => 'Shift 1', 'date' => date('Y-m-d')],
+  default => ['shift' => 'Shift 2', 'date' => date('Y-m-d')],
+};
+$last_shift_reports = $SC->getHistory([
+  'date' => $previous_shift_meta['date'],
+  'shift' => $previous_shift_meta['shift'],
+], 12, 0);
+$last_shift_total = count($last_shift_reports);
+$last_shift_open = array_values(array_filter($last_shift_reports, fn($r)=>($r['status']??'') === 'active'));
+$last_shift_resolved = array_values(array_filter($last_shift_reports, fn($r)=>($r['status']??'') === 'resolved'));
+$last_shift_priority = array_values(array_filter($last_shift_open, fn($r)=>in_array(($r['priority']??''), ['critical','high'], true)));
+$last_shift_focus = $last_shift_priority[0] ?? ($last_shift_open[0] ?? ($last_shift_reports[0] ?? null));
+$last_shift_ref = $previous_shift_meta['shift'].($previous_shift_meta['date'] !== date('Y-m-d') ? ' yesterday' : '');
+$shift_summary_status = count(array_filter($last_shift_open, fn($r)=>($r['priority']??'') === 'critical')) > 0 ? 'critical' : (count($last_shift_open) > 0 ? 'active' : 'clear');
+$shift_summary_label = $shift_summary_status === 'critical' ? 'Carryover Alert' : ($shift_summary_status === 'active' ? 'Carryover' : 'Clean Handover');
+$shift_summary_title = count($last_shift_open) > 0
+  ? count($last_shift_open).' open from '.$last_shift_ref
+  : ($last_shift_total > 0 ? $last_shift_ref.' closed cleanly' : 'No handover from '.$last_shift_ref);
+$shift_summary_detail = count($last_shift_open) > 0
+  ? (count($last_shift_priority) > 0 ? count($last_shift_priority).' priority item'.(count($last_shift_priority) === 1 ? '' : 's').' need follow-up' : 'Open items remain for current shift review')
+  : ($last_shift_total > 0 ? count($last_shift_resolved).' item'.(count($last_shift_resolved) === 1 ? '' : 's').' resolved before takeover' : 'No recorded issue carried into this shift');
+$shift_summary_icon = $shift_summary_status === 'clear' ? 'check-circle' : 'triangle-alert';
+
 $page_title='Dashboard'; $active_page='dashboard';
 include 'includes/header.php';
 ?>
@@ -437,16 +471,43 @@ include 'includes/header.php';
     ════════════════════════════ -->
     <div class="col-left">
 
-      <!-- INFRASTRUCTURE PULSE SUMMARY -->
-      <a class="panel infra-dashboard-widget" href="infrastructure-pulse.php" data-infra-dashboard-widget>
-        <div class="infra-dashboard-widget__head">
-          <div>
-            <span>Infrastructure Pulse</span>
-            <strong>Loading</strong>
+      <!-- OPERATIONS SUMMARY WIDGETS -->
+      <div class="dashboard-widget-slider" aria-label="Operations summary widgets">
+        <div class="dashboard-widget-track">
+          <div class="dashboard-widget-slide">
+            <a class="panel infra-dashboard-widget" href="infrastructure-pulse.php" data-infra-dashboard-widget>
+              <div class="infra-dashboard-widget__head">
+                <div>
+                  <span>Infrastructure Pulse</span>
+                  <strong>Loading</strong>
+                </div>
+                <i data-lucide="radar" class="dashboard-widget-main-icon"></i>
+              </div>
+            </a>
           </div>
-          <i data-lucide="radar"></i>
+          <div class="dashboard-widget-slide">
+            <a class="panel shift-dashboard-widget is-<?=esc($shift_summary_status)?>" href="shift-reports.php">
+              <div class="shift-dashboard-widget__head">
+                <div>
+                  <span>Shift Summary</span>
+                  <strong><?=esc($shift_summary_label)?></strong>
+                </div>
+                <i data-lucide="<?=esc($shift_summary_icon)?>" class="dashboard-widget-main-icon"></i>
+              </div>
+              <div class="shift-dashboard-widget__smart">
+                <span><?=esc($shift_summary_title)?></span>
+                <strong><?=esc($last_shift_focus['title'] ?? 'Current shift can continue monitoring')?></strong>
+                <p><?=esc($shift_summary_detail)?></p>
+              </div>
+              <div class="shift-dashboard-widget__latest">
+                <span>Last shift</span>
+                <strong><?=esc($last_shift_ref)?></strong>
+              </div>
+            </a>
+          </div>
         </div>
-      </a>
+        <button type="button" class="dashboard-widget-next" data-dashboard-widget-next aria-label="Show next summary widget">›</button>
+      </div>
 
       <!-- CASES PANEL -->
       <div class="panel dashboard-case-panel">

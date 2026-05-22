@@ -35,3 +35,12 @@ AH00558: apache2: Could not reliably determine the server's fully qualified doma
 AH00558: apache2: Could not reliably determine the server's fully qualified domain name, using 172.18.0.3. Set the 'ServerName' directive globally to suppress this message
 [Mon May 18 11:44:43.598259 2026] [mpm_prefork:notice] [pid 1:tid 1] AH00163: Apache/2.4.67 (Debian) PHP/8.2.31 configured -- resuming normal operations
 [Mon May 18 11:44:43.599818 2026] [core:notice] [pid 1:tid 1] AH00094: Command line: 'apache2 -D FOREGROUND'
+[Wed May 20 04:22:16.316727 2026] [mpm_prefork:notice] [pid 1:tid 1] AH00170: caught SIGWINCH, shutting down gracefully
+AH00558: apache2: Could not reliably determine the server's fully qualified domain name, using 172.18.0.3. Set the 'ServerName' directive globally to suppress this message
+[Wed May 20 06:32:34.849784 2026] [mpm_prefork:notice] [pid 1:tid 1] AH00163: Apache/2.4.67 (Debian) PHP/8.2.31 configured -- resuming normal operations
+[Wed May 20 06:32:34.855954 2026] [core:notice] [pid 1:tid 1] AH00094: Command line: 'apache2 -D FOREGROUND'
+[Wed May 20 18:24:12.218780 2026] [php:error] [pid 90:tid 90] [client 172.18.0.1:65372] script '/var/www/html/public/infrastructure-pulse1.php' not found or unable to stat
+[Thu May 21 08:23:58.923059 2026] [php:error] [pid 28:tid 28] [client 172.18.0.1:57176] script '/var/www/html/public/infrastructure-pu2lse.php' not found or unable to stat
+[Thu May 21 13:47:52.356230 2026] [php:notice] [pid 25:tid 25] [client 172.18.0.1:57544] TRACS auth event: {"event_type":"session_timeout","result":"expired","user_id":1,"identifier":"","ip_address":"172.18.0.1","reason":"idle_timeout"}, referer: http://localhost:8080/index.php
+[Thu May 21 14:10:27.892089 2026] [php:notice] [pid 17:tid 17] [client 172.18.0.1:58202] TRACS auth event: {"event_type":"suspicious_access_attempt","result":"blocked","user_id":5,"identifier":"internqa@tracs.local","ip_address":"172.18.0.1","reason":"pending_two_factor"}
+[Thu May 21 18:53:25.447128 2026] [php:notice] [pid 17:tid 17] [client 172.18.0.1:63732] TRACS auth event: {"event_type":"session_timeout","result":"expired","user_id":1,"identifier":"","ip_address":"172.18.0.1","reason":"two_factor_max_age"}

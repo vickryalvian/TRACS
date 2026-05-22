@@ -41,12 +41,15 @@ Browser JS
 
 - Login form: [public/login.php](/tracs/public/login.php).
 - Login handler: [public/auth/login.php](/tracs/public/auth/login.php).
+- 2FA setup page: [public/two-factor-setup.php](/tracs/public/two-factor-setup.php).
+- 2FA verification page: [public/two-factor-verify.php](/tracs/public/two-factor-verify.php).
 - Auth guard: [public/auth/auth_check.php](/tracs/public/auth/auth_check.php).
 - User/role/permission helpers: [core/user_management.php](/tracs/core/user_management.php).
 - CSRF helpers: [core/security/csrf.php](/tracs/core/security/csrf.php).
+- Auth hardening helpers: [core/security/auth_hardening.php](/tracs/core/security/auth_hardening.php).
 - Build signature metadata: [core/build_signature.php](/tracs/core/build_signature.php).
 
-User-management schema adds roles, permissions, divisions, intern profiles, user activity logs, and password reset tokens. Navigation in `header.php` is role/permission aware: monitoring, TV mode, and user management are only visible to eligible users.
+Login uses CSRF validation, generic failure messages, `password_verify()`, session ID regeneration after password verification, a temporary pending-2FA state, mandatory TOTP setup/verification, session ID regeneration after 2FA, idle timeout, failed-attempt tracking, CAPTCHA escalation, and temporary lockouts by identifier and IP address. Protected pages, APIs, and exports require `tracs_auth_state = full`; a password-verified pending session cannot access TRACS. User-management schema adds roles, permissions, divisions, intern profiles, user activity logs, password reset tokens, and Super Admin-only 2FA reset. Navigation in `header.php` is role/permission aware: monitoring, TV mode, and user management are only visible to eligible users.
 
 ## Main Pages And Modules
 
@@ -67,6 +70,7 @@ User-management schema adds roles, permissions, divisions, intern profiles, user
 | `profile.php` | user helpers/preferences | Profile, security, theme/preferences. |
 | `activity.php` | `modules/activity-log` | Audit/activity browser. |
 | `tv-mode.php` | `public/api/tv-mode-summary.php` | Role-gated wall display. |
+| `domain_price_crosscheck.php` | `modules/domain-price-crosscheck` | Compare domain cost vs website/PAAS selling prices. See [DOMAIN_PRICE_CROSSCHECK_ARCHITECTURE.md](file:///Users/ulfahanifah/Documents/tracs/docs/DOMAIN_PRICE_CROSSCHECK_ARCHITECTURE.md). |
 
 ## Frontend Assets
 
@@ -92,7 +96,7 @@ The header loads Google Fonts, lucide, flatpickr, the theme bootstrap, and cache
 
 | Area | Tables |
 | --- | --- |
-| Users/Auth | `tracs_users`, `tracs_roles`, `tracs_permissions`, `tracs_role_permissions`, `tracs_divisions`, `user_intern_profiles` |
+| Users/Auth | `tracs_users`, `tracs_login_attempts`, `tracs_auth_events`, `tracs_roles`, `tracs_permissions`, `tracs_role_permissions`, `tracs_divisions`, `user_intern_profiles` |
 | Cases/Reminders/Checklist | `tracs_cases`, `tracs_reminders`, `tracs_side_tasks`, `tracs_side_task_logs` |
 | Task Management | `tracs_tasks`, `tracs_task_assignments`, `tracs_task_logs`, `tracs_task_reviews`, `tracs_task_reminders` |
 | MoM | `tracs_moms`, `tracs_mom_agenda`, `tracs_mom_notes`, `tracs_mom_decisions`, `tracs_mom_actions`, `tracs_mom_case_links`, `tracs_mom_screenshots`, `tracs_mom_audit_log` |
@@ -100,16 +104,19 @@ The header loads Google Fonts, lucide, flatpickr, the theme bootstrap, and cache
 | Alerts/Activity | `tracs_ticker_messages`, `tracs_ticker_events`, `tracs_activity_logs`, `tracs_user_activity_logs`, `ops_status` |
 | Finance/Domains | `tracs_finance_transfers`, `balance_transfers`, `tracs_domains`, `domain_transfers`, `activity_feed` |
 | Feedback/Utility | `tracs_cancellation_feedback`, `tracs_currency_history`, `tracs_user_preferences` |
+| Domain Price Crosscheck | `domain_price_months`, `domain_price_tlds`, `domain_price_sources`, `domain_price_entries`, `domain_price_summaries`, `domain_price_audit_logs` |
 
 ## Operational Flow
 
-1. User logs in and the session stores user identity.
-2. Page includes DB/auth/controllers and prepares formatted data.
-3. Header renders ticker, sidebar, theme/user menus, and role-aware navigation.
-4. Page body renders compact panels, tables, forms, and action buttons.
-5. Footer renders shared modals and loads JS.
-6. JS posts to `/api/*.php`; `_bootstrap.php` checks auth and CSRF.
-7. Controllers update tables, log activity, and optionally create ticker events, reminders, checklist items, or ops-status records.
+1. User submits username/email and password.
+2. Valid credentials create a temporary password-verified session and route to mandatory 2FA setup or verification.
+3. Successful 2FA creates the full authenticated session and stores user identity.
+4. Page includes DB/auth/controllers and prepares formatted data.
+5. Header renders ticker, sidebar, theme/user menus, and role-aware navigation.
+6. Page body renders compact panels, tables, forms, and action buttons.
+7. Footer renders shared modals and loads JS.
+8. JS posts to `/api/*.php`; `_bootstrap.php` checks full auth and CSRF.
+9. Controllers update tables, log activity, and optionally create ticker events, reminders, checklist items, or ops-status records.
 
 ## Cross-Module Integrations
 

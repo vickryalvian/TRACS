@@ -30,6 +30,12 @@ if (!$id || empty($services) || empty($reasons)) {
     exit;
 }
 
+if (!tracs_can_view_feedback($conn, $id)) {
+    http_response_code(404);
+    echo json_encode(['success' => false, 'error' => 'Not found.']);
+    exit;
+}
+
 if ($data['email_address'] !== '' && !filter_var($data['email_address'], FILTER_VALIDATE_EMAIL)) {
     echo json_encode(['success' => false, 'error' => 'Email address is invalid.']);
     exit;

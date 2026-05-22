@@ -82,6 +82,7 @@
 | Cancellation Feedback | Important for retention intelligence and reporting. |
 | TV Mode | Role-gated wall display; avoid coupling it to dashboard DOM. |
 | ISO 9001 / Measurement | Future direction: measurement page/subdomain, KPIs, achievement tracking, evidence exports. |
+| Domain Price Crosscheck | Operational comparison panel for TLD base cost vs selling prices. Accessed from Domains → Crosscheck Pricing; Task Management integration remains for assignment/workflow. See [DOMAIN_PRICE_CROSSCHECK.md](file:///Users/ulfahanifah/Documents/tracs/docs/DOMAIN_PRICE_CROSSCHECK.md), [DOMAIN_PRICE_CROSSCHECK_ARCHITECTURE.md](file:///Users/ulfahanifah/Documents/tracs/docs/DOMAIN_PRICE_CROSSCHECK_ARCHITECTURE.md), and [DOMAIN_PRICE_CROSSCHECK_AI_MEMORY.md](file:///Users/ulfahanifah/Documents/tracs/docs/DOMAIN_PRICE_CROSSCHECK_AI_MEMORY.md). |
 
 ## Known Constraints
 

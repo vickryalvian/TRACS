@@ -18,6 +18,7 @@ $allowed_types  = ['client_area','billing_console','billing_awan'];
 $allowed_status = ['done','pending'];
 
 if (!$id)                                                                     fail('Invalid ID');
+if (!tracs_can_view_balance_transfer($conn, $id))                             fail_not_found();
 if ($sender_email   && !filter_var($sender_email,   FILTER_VALIDATE_EMAIL))  fail('Invalid sender email');
 if ($receiver_email && !filter_var($receiver_email, FILTER_VALIDATE_EMAIL))  fail('Invalid receiver email');
 if (!in_array($sender_type,   $allowed_types,  true)) fail('Invalid sender type');
@@ -34,8 +35,6 @@ if ($transfer_date) {
 }
 if (!$dt) $dt = date('Y-m-d H:i:s');
 
-// Ownership check — only allow editing own user's records (if user_id stored)
-// If multi-user strict mode needed, add: AND user_id = {$uid}
 $stmt = $conn->prepare("
   UPDATE balance_transfers SET
     transfer_date    = ?,
@@ -60,7 +59,10 @@ $stmt->bind_param(
   $id
 );
 
-if (!$stmt->execute()) fail('Database error: ' . $stmt->error);
+if (!$stmt->execute()) {
+  error_log('TRACS bt-update failed: ' . $stmt->error);
+  fail('Database error', 500);
+}
 if ($stmt->affected_rows === 0) fail('Record not found or no changes');
 
 try { logAct('balance_transfer','update',$id,'Updated transfer #'.$id); } catch(Throwable $e){}

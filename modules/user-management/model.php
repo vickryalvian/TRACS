@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../../core/user_management.php';
+require_once __DIR__ . '/../../core/security/auth_hardening.php';
 
 class UserManagementModel {
     private mysqli $conn;
@@ -245,6 +246,9 @@ class UserManagementModel {
         $avatarSelect = tracs_column_exists($this->conn, 'tracs_users', 'avatar_path')
             ? 'u.avatar_path,'
             : 'NULL AS avatar_path,';
+        $twoFactorSelect = tracs_two_factor_schema_ready($this->conn)
+            ? 'u.two_factor_enabled, u.two_factor_confirmed_at, u.two_factor_reset_required, u.two_factor_failed_attempts, u.two_factor_locked_until, u.two_factor_last_verified_at,'
+            : '0 AS two_factor_enabled, NULL AS two_factor_confirmed_at, 1 AS two_factor_reset_required, 0 AS two_factor_failed_attempts, NULL AS two_factor_locked_until, NULL AS two_factor_last_verified_at,';
         $internSelect = $internReady ? ",
                 ip.university_name, ip.study_program, ip.internship_start_date, ip.internship_end_date,
                 ip.mentor_user_id, ip.internship_status, ip.evaluation_status, ip.skill_level,
@@ -258,7 +262,7 @@ class UserManagementModel {
                 u.id, u.email, u.phone, u.position, u.name, u.username, u.role AS legacy_role,
                 u.is_active, u.status, u.division_id, u.role_id, u.shift_preference,
                 {$avatarSelect}
-                u.avatar_initials_color, u.created_by, u.updated_by, u.last_login_at,
+                u.avatar_initials_color, {$twoFactorSelect} u.created_by, u.updated_by, u.last_login_at,
                 u.last_activity_at, u.last_password_change_at, u.created_at, u.updated_at,
                 r.name AS role_name, r.slug AS role_slug, r.hierarchy_level,
                 d.name AS division_name, d.code AS division_code,
@@ -704,6 +708,10 @@ class UserManagementModel {
             throw new RuntimeException('Unable to update password.');
         }
         $stmt->close();
+    }
+
+    public function resetTwoFactor(int $userId): void {
+        tracs_two_factor_reset_for_user($this->conn, $userId);
     }
 
     public function getDivisions(): array {

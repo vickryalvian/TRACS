@@ -25,20 +25,44 @@ function formatLocalDateTime(date) {
   };
 }
 
+function setMOMDateLikeInput(el, value, displayValue = value) {
+  if(!el) return;
+
+  if(typeof window.setDateLikeInput === 'function') {
+    window.setDateLikeInput(el, value, displayValue);
+    return;
+  }
+
+  if(el._flatpickr) {
+    el._flatpickr.setDate(value, true);
+  }
+  el.value = value;
+  if(el._flatpickr?.altInput) {
+    el._flatpickr.altInput.value = displayValue;
+    el._flatpickr.altInput.dispatchEvent(new Event('input', { bubbles: true }));
+    el._flatpickr.altInput.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
 function setMOMDateTime(value) {
   const dateEl = document.getElementById('momFormDate');
   const timeEl = document.getElementById('momFormTime');
   if(!dateEl || !timeEl) return;
 
   if(!value) {
-    dateEl.value = '';
-    timeEl.value = '';
+    setMOMDateLikeInput(dateEl, '', '');
+    setMOMDateLikeInput(timeEl, '', '');
     return;
   }
 
-  const parts = String(value).split('T');
-  dateEl.value = parts[0] || '';
-  timeEl.value = (parts[1] || '').slice(0, 5);
+  const normalized = String(value).trim().replace(' ', 'T');
+  const parts = normalized.split('T');
+  const dateValue = parts[0] || '';
+  const timeValue = (parts[1] || '').slice(0, 5);
+  setMOMDateLikeInput(dateEl, dateValue, typeof formatDateDisplay === 'function' ? formatDateDisplay(dateValue) : dateValue);
+  setMOMDateLikeInput(timeEl, timeValue, timeValue);
 }
 
 function setMOMQuickTime(hours) {
@@ -52,10 +76,8 @@ function setMOMQuickTime(hours) {
   const date = new Date();
   date.setHours(date.getHours() + Number(hours || 0));
   const formatted = formatLocalDateTime(date);
-  dateEl.value = formatted.date;
-  timeEl.value = formatted.time;
-  dateEl.dispatchEvent(new Event('change', { bubbles: true }));
-  timeEl.dispatchEvent(new Event('change', { bubbles: true }));
+  setMOMDateLikeInput(dateEl, formatted.date, typeof formatDateDisplay === 'function' ? formatDateDisplay(formatted.date) : formatted.date);
+  setMOMDateLikeInput(timeEl, formatted.time, formatted.time);
 }
 
 window.setMOMQuickTime = setMOMQuickTime;
@@ -230,7 +252,7 @@ function saveMOM() {
 }
 
 function closeMOM(mom_id) {
-  confirm('Complete this meeting and move it into Meeting History?', () => {
+  tracsConfirm('Complete this meeting and move it into Meeting History?', () => {
     api('api/api_mom.php', {
       action: 'close_mom',
       mom_id: mom_id
@@ -260,7 +282,7 @@ function startMOM(mom_id) {
 }
 
 function cancelMOM(mom_id) {
-  confirm('Cancel this scheduled meeting?', () => {
+  tracsConfirm('Cancel this scheduled meeting?', () => {
     api('api/api_mom.php', {
       action: 'cancel_mom',
       mom_id: mom_id
@@ -288,7 +310,7 @@ function saveMOMSummary(mom_id) {
 }
 
 function deleteMOM(mom_id) {
-  confirm('Delete this meeting? This cannot be undone.', () => {
+  tracsConfirm('Delete this meeting? This cannot be undone.', () => {
     api('api/api_mom.php', {
       action: 'delete_mom',
       mom_id: mom_id
@@ -375,7 +397,7 @@ function toggleAgendaItem(item_id, checked) {
 }
 
 function deleteAgendaItem(item_id) {
-  confirm('Delete this agenda item?', () => {
+  tracsConfirm('Delete this agenda item?', () => {
     api('api/api_mom.php', {
       action: 'delete_agenda_item',
       item_id: item_id
@@ -435,7 +457,7 @@ function saveDiscussionNote() {
 }
 
 function deleteNote(note_id) {
-  confirm('Delete this note?', () => {
+  tracsConfirm('Delete this note?', () => {
     api('api/api_mom.php', {
       action: 'delete_note',
       note_id: note_id
@@ -535,7 +557,7 @@ function saveDecision() {
 }
 
 function deleteDecision(decision_id) {
-  confirm('Delete this decision?', () => {
+  tracsConfirm('Delete this decision?', () => {
     api('api/api_mom.php', {
       action: 'delete_decision',
       decision_id: decision_id
@@ -669,7 +691,7 @@ function completeAction(action_id, checked) {
 }
 
 function deleteActionItem(action_id) {
-  confirm('Delete this action item?', () => {
+  tracsConfirm('Delete this action item?', () => {
     api('api/api_mom.php', {
       action: 'delete_action_item',
       action_id: action_id
@@ -687,7 +709,7 @@ function deleteActionItem(action_id) {
 // ═══════════════════════════════════════════════════════════════
 
 function createReminderFromAction(action_id) {
-  confirm('Create a reminder for this action?', () => {
+  tracsConfirm('Create a reminder for this action?', () => {
     api('api/api_mom.php', {
       action: 'create_reminder_from_action',
       action_id: action_id
@@ -783,7 +805,7 @@ function saveMOMSidebarCases(mom_id) {
 }
 
 function createCaseFromAction(action_id) {
-  confirm('Create an operational case for this action?', () => {
+  tracsConfirm('Create an operational case for this action?', () => {
     api('api/api_mom.php', {
       action: 'create_case_from_action',
       action_id: action_id
@@ -1099,7 +1121,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // ═══════════════════════════════════════════════════════════════
 
 // Assumes api() and toast() functions exist in tracs.js
-// Assumes confirm() function exists in tracs.js
+// Uses tracsConfirm() from tracs.js
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {

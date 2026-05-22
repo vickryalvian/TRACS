@@ -99,23 +99,65 @@ function _clock(){
 }
 setInterval(_clock,1000); _clock();
 
-/* ── Toast ────────────────────────────────────────────── */
+/* ── TRACS notifications ─────────────────────────────── */
 const _dock=(()=>{const d=document.createElement('div');d.className='toast-dock';document.body.appendChild(d);return d;})();
 const TOAST_FLASH_KEY='tracs:toast-flash';
 let _lastToast=null;
-function toastIconFor(msg,type){
-  if(type === 'error' || type === 'warning') return 'alert-triangle';
+function tracsNoticeType(type){
+  return ['success','error','warning','info'].includes(type) ? type : 'info';
+}
+function toastIconFor(type){
+  if(type === 'error') return 'circle-alert';
+  if(type === 'warning') return 'alert-triangle';
   if(type === 'success') return 'check';
   return 'info';
 }
-function toast(msg,type='info',ms=6400){
-  _lastToast={msg,type};
+function tracsRefreshIcons(root){
+  if(window.lucide) lucide.createIcons(root ? { nodes: Array.from(root.querySelectorAll('[data-lucide]')) } : undefined);
+}
+function showToast(type='info',title='',message='',options={}){
+  const noticeType=tracsNoticeType(type);
+  const duration=Number.isFinite(Number(options.duration)) ? Number(options.duration) : 6400;
+  const toastTitle=String(title || '').trim();
+  const toastMessage=String(message || '').trim();
+  const fallback=toastTitle || toastMessage;
+  if(!fallback)return null;
+  _lastToast={type:noticeType,title:toastTitle,message:toastMessage || toastTitle};
   const t=document.createElement('div');
-  const ic=toastIconFor(msg,type);
-  t.className=`toast ${type}`;
-  t.innerHTML=`<span class="toast-radar"><i data-lucide="${ic}" class="toast-icon"></i></span><span class="toast-msg">${msg}</span>`;
+  const ic=toastIconFor(noticeType);
+  t.className=`toast ${noticeType}`;
+  t.setAttribute('role',noticeType === 'error' ? 'alert' : 'status');
+  t.setAttribute('aria-live',noticeType === 'error' ? 'assertive' : 'polite');
+  const radar=document.createElement('span');
+  radar.className='toast-radar';
+  const icon=document.createElement('i');
+  icon.dataset.lucide=ic;
+  icon.className='toast-icon';
+  radar.appendChild(icon);
+  const body=document.createElement('span');
+  body.className='toast-body';
+  if(toastTitle && toastMessage && toastTitle !== toastMessage){
+    const titleEl=document.createElement('span');
+    titleEl.className='toast-title';
+    titleEl.textContent=toastTitle;
+    body.appendChild(titleEl);
+    const msgEl=document.createElement('span');
+    msgEl.className='toast-msg';
+    msgEl.textContent=toastMessage;
+    body.appendChild(msgEl);
+  }else{
+    const msgEl=document.createElement('span');
+    msgEl.className='toast-msg';
+    msgEl.textContent=toastMessage || toastTitle;
+    body.appendChild(msgEl);
+  }
+  const close=document.createElement('button');
+  close.type='button';
+  close.className='toast-close';
+  close.setAttribute('aria-label','Dismiss notification');
+  close.innerHTML='<i data-lucide="x" class="icon-xs"></i>';
+  t.append(radar,body,close);
   _dock.appendChild(t);
-  if(window.lucide) lucide.createIcons({ nodes: [t.querySelector('[data-lucide]')] });
   const dismiss=()=>{
     if(!t.isConnected)return;
     t.classList.add('is-leaving');
@@ -124,12 +166,20 @@ function toast(msg,type='info',ms=6400){
     },{once:true});
     setTimeout(()=>t.remove(),520);
   };
-  setTimeout(dismiss,ms);
+  close.addEventListener('click',dismiss);
+  tracsRefreshIcons(t);
+  if(duration > 0)setTimeout(dismiss,duration);
+  return t;
+}
+function toast(msg,type='info',ms=6400){
+  return showToast(type,'',msg,{duration:ms});
 }
 window.toast=toast;
+window.showToast=showToast;
+window.tracsToast=showToast;
 
 function queueToastAfterReload(){
-  if(!_lastToast || !_lastToast.msg || _lastToast.type === 'error')return;
+  if(!_lastToast || (!_lastToast.message && !_lastToast.title) || _lastToast.type === 'error')return;
   try{sessionStorage.setItem(TOAST_FLASH_KEY,JSON.stringify(_lastToast));}catch(e){}
 }
 
@@ -152,12 +202,154 @@ function showQueuedToast(){
   if(!payload)return;
   try{
     const data=JSON.parse(payload);
-    if(data?.msg)toast(data.msg,data.type||'info');
+    if(data?.message || data?.title)showToast(data.type||'info',data.title||'',data.message||data.title||'');
   }catch(e){}
 }
 showQueuedToast();
 window.reloadAfterToast=reloadAfterToast;
 window.navigateAfterToast=navigateAfterToast;
+
+function tracsDialogShell(){
+  let overlay=document.getElementById('tracsSystemDialog');
+  if(overlay)return overlay;
+  overlay=document.createElement('div');
+  overlay.id='tracsSystemDialog';
+  overlay.className='tracs-dialog-overlay hidden';
+  overlay.innerHTML=[
+    '<div class="tracs-dialog" role="dialog" aria-modal="true" aria-labelledby="tracsDialogTitle" aria-describedby="tracsDialogMessage">',
+      '<div class="tracs-dialog-head">',
+        '<span class="tracs-dialog-icon"><i data-lucide="info" class="icon-sm"></i></span>',
+        '<div class="tracs-dialog-heading">',
+          '<div class="tracs-dialog-title" id="tracsDialogTitle"></div>',
+          '<div class="tracs-dialog-sub" id="tracsDialogSub"></div>',
+        '</div>',
+        '<button type="button" class="modal-close tracs-dialog-x" data-tracs-dialog-cancel aria-label="Close"><i data-lucide="x"></i></button>',
+      '</div>',
+      '<div class="tracs-dialog-body">',
+        '<p class="tracs-dialog-message" id="tracsDialogMessage"></p>',
+        '<div class="tracs-dialog-field" hidden>',
+          '<label class="form-label" for="tracsDialogInput"></label>',
+          '<textarea class="form-textarea" id="tracsDialogInput" rows="3"></textarea>',
+        '</div>',
+      '</div>',
+      '<div class="tracs-dialog-foot">',
+        '<button type="button" class="btn btn-ghost" data-tracs-dialog-cancel>Cancel</button>',
+        '<button type="button" class="btn btn-primary" data-tracs-dialog-ok>OK</button>',
+      '</div>',
+    '</div>'
+  ].join('');
+  document.body.appendChild(overlay);
+  return overlay;
+}
+
+let tracsDialogActive=null;
+function tracsCloseSystemDialog(result,value=''){
+  const active=tracsDialogActive;
+  const overlay=document.getElementById('tracsSystemDialog');
+  tracsDialogActive=null;
+  if(overlay)overlay.classList.add('hidden');
+  if(active)active.resolve(active.mode === 'prompt' ? (result ? value : null) : !!result);
+}
+function tracsOpenSystemDialog(options={},mode='alert'){
+  const overlay=tracsDialogShell();
+  const dialog=overlay.querySelector('.tracs-dialog');
+  const type=tracsNoticeType(options.type || (mode === 'confirm' ? 'warning' : 'info'));
+  const icon=toastIconFor(type);
+  overlay.dataset.type=type;
+  dialog.dataset.type=type;
+  overlay.querySelector('.tracs-dialog-icon i').dataset.lucide=icon;
+  overlay.querySelector('#tracsDialogTitle').textContent=String(options.title || (mode === 'confirm' ? 'Confirm action' : 'Notice'));
+  const sub=overlay.querySelector('#tracsDialogSub');
+  sub.textContent=String(options.subtitle || (mode === 'confirm' ? 'Please review this action' : 'TRACS notification'));
+  overlay.querySelector('#tracsDialogMessage').textContent=String(options.message || '');
+  const field=overlay.querySelector('.tracs-dialog-field');
+  const input=overlay.querySelector('#tracsDialogInput');
+  const label=field.querySelector('label');
+  const cancel=overlay.querySelector('[data-tracs-dialog-cancel]');
+  const cancelButtons=overlay.querySelectorAll('[data-tracs-dialog-cancel]');
+  const ok=overlay.querySelector('[data-tracs-dialog-ok]');
+  field.hidden=mode !== 'prompt';
+  if(mode === 'prompt'){
+    label.textContent=String(options.inputLabel || 'Response');
+    input.value=String(options.defaultValue || '');
+    input.placeholder=String(options.placeholder || '');
+    input.required=!!options.required;
+  }else{
+    input.value='';
+    input.required=false;
+  }
+  cancelButtons.forEach(btn=>{btn.hidden=mode === 'alert' && btn !== cancel;});
+  ok.textContent=String(options.confirmText || options.okText || (mode === 'confirm' ? 'Confirm' : 'OK'));
+  ok.className='btn ' + (options.destructive || type === 'error' ? 'btn-danger' : type === 'warning' ? 'btn-warning' : 'btn-primary');
+  const cancelFoot=overlay.querySelector('.tracs-dialog-foot [data-tracs-dialog-cancel]');
+  cancelFoot.textContent=String(options.cancelText || 'Cancel');
+  overlay.classList.remove('hidden');
+  tracsRefreshIcons(overlay);
+  return new Promise(resolve=>{
+    tracsDialogActive={resolve,mode};
+    const cleanup=()=>{
+      ok.onclick=null;
+      cancelButtons.forEach(btn=>{btn.onclick=null;});
+    };
+    ok.onclick=()=>{
+      if(mode === 'prompt' && input.required && !input.value.trim()){
+        input.focus();
+        return;
+      }
+      cleanup();
+      tracsCloseSystemDialog(true,input.value.trim());
+    };
+    cancelButtons.forEach(btn=>{
+      btn.onclick=()=>{
+        cleanup();
+        tracsCloseSystemDialog(false,'');
+      };
+    });
+    window.setTimeout(()=>{(mode === 'prompt' ? input : ok).focus();},30);
+  });
+}
+
+function tracsAlert(options,type='info',title='Notice'){
+  const opts=typeof options === 'object' && options !== null ? options : {message:String(options ?? ''),type,title};
+  return tracsOpenSystemDialog(opts,'alert');
+}
+function tracsConfirm(options,cb,title='Confirm action'){
+  const msg=String(options ?? '');
+  const opts=typeof options === 'object' && options !== null
+    ? options
+    : {message:msg,title,type:'warning',destructive:/delete|remove|archive|reset|revert|suspend|cancel|permanent/i.test(msg)};
+  const promise=tracsOpenSystemDialog(opts,'confirm');
+  if(typeof cb === 'function')promise.then(ok=>{if(ok)cb();});
+  return promise;
+}
+function tracsPrompt(options,defaultValue=''){
+  const opts=typeof options === 'object' && options !== null ? options : {message:String(options ?? ''),defaultValue,type:'info',title:'Input required'};
+  return tracsOpenSystemDialog(opts,'prompt');
+}
+function tracsConfirmSubmit(form,options){
+  if(!form)return false;
+  if(form.dataset.tracsConfirmed === '1'){
+    delete form.dataset.tracsConfirmed;
+    return true;
+  }
+  tracsConfirm(options).then(ok=>{
+    if(!ok)return;
+    form.dataset.tracsConfirmed='1';
+    if(typeof form.requestSubmit === 'function')form.requestSubmit();
+    else form.submit();
+  });
+  return false;
+}
+
+window.tracsAlert=tracsAlert;
+window.showAlertDialog=tracsAlert;
+window.tracsConfirm=tracsConfirm;
+window.showConfirmDialog=tracsConfirm;
+window.tracsPrompt=tracsPrompt;
+window.tracsConfirmSubmit=tracsConfirmSubmit;
+window.alert=function(message){tracsAlert({type:'info',title:'Notice',message:String(message ?? '')});};
+window.confirm=function(message){tracsConfirm({type:'warning',title:'Confirm action',message:String(message ?? ''),destructive:true});return false;};
+window.prompt=function(message,defaultValue=''){tracsPrompt({type:'info',title:'Input required',message:String(message ?? ''),defaultValue});return null;};
 
 /* ── Modal system ─────────────────────────────────────── */
 function openModal(id){
@@ -732,7 +924,15 @@ document.addEventListener('click', e => {
   }
 
   async function removeAvatar(userId) {
-    if (!userId || !confirm('Remove this profile picture?')) return;
+    if (!userId) return;
+    const ok = await tracsConfirm({
+      type: 'warning',
+      title: 'Remove profile picture',
+      message: 'Remove this profile picture?',
+      confirmText: 'Remove',
+      destructive: true
+    });
+    if (!ok) return;
     const form = new FormData();
     form.append('action', 'remove');
     form.append('target_user_id', userId);
@@ -827,18 +1027,6 @@ if (document.readyState === 'loading') {
 } else {
   tracsInitNotificationPopups();
 }
-
-/* ── Confirm dialog ───────────────────────────────────── */
-let _cb=null;
-function confirm(msg,cb,title='Confirm Delete'){
-  const m=document.getElementById('confirmModal');if(!m)return;
-  document.getElementById('c-title').textContent=title;
-  document.getElementById('c-msg').textContent=msg;
-  _cb=cb; openModal('confirm');
-}
-document.addEventListener('DOMContentLoaded',()=>{
-  document.getElementById('c-ok')?.addEventListener('click',()=>{closeModal('confirm');if(_cb){_cb();_cb=null;}});
-});
 
 /* ── Stat card cursor glow ───────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
@@ -1028,13 +1216,20 @@ function saveFeedback() {
             toast(id ? 'Feedback updated' : 'Feedback added', 'success');
             reloadAfterToast();
         } else {
-            alert(res.error || 'Save failed');
+            toast(res.error || 'Save failed', 'error');
         }
     });
 }
 
-function deleteFeedback(id) {
-    if (!confirm('Are you sure you want to delete this feedback record?')) return;
+async function deleteFeedback(id) {
+    const ok = await tracsConfirm({
+      type: 'warning',
+      title: 'Delete feedback',
+      message: 'Delete this feedback record? This cannot be undone.',
+      confirmText: 'Delete',
+      destructive: true
+    });
+    if (!ok) return;
     const fd = new FormData();
     fd.append('id', id);
     fetch('api/feedback-delete.php', { method: 'POST', body: fd })
@@ -1044,7 +1239,7 @@ function deleteFeedback(id) {
           toast('Feedback deleted', 'success');
           reloadAfterToast();
         }
-        else alert(res.error || 'Delete failed');
+        else toast(res.error || 'Delete failed', 'error');
     });
 }
 
@@ -1093,7 +1288,7 @@ function quickSaveFeedback() {
     fd.append('details', document.getElementById('inDetails').value);
 
     if (!selectedValues('inService').length || !selectedValues('inReason').length) {
-        alert('Service and Reason are required.');
+        toast('Service and Reason are required.', 'error');
         return;
     }
 
@@ -1104,7 +1299,7 @@ function quickSaveFeedback() {
             toast('Feedback added', 'success');
             reloadAfterToast();
         } else {
-            alert(res.error || 'Save failed');
+            toast(res.error || 'Save failed', 'error');
         }
     });
 }
@@ -1164,7 +1359,7 @@ async function saveCase(){
   else toast(d.message||'Error saving case','error');
 }
 async function deleteCase(id){
-  confirm('Delete this case permanently? This cannot be undone.',async()=>{
+  tracsConfirm('Delete this case permanently? This cannot be undone.',async()=>{
     const row=document.querySelector(`[data-cid="${id}"]`);
     const d=await api(API.CASE.DELETE,{id});
     if(d.success){
@@ -1210,7 +1405,7 @@ async function saveReminder(){
   else toast(d.message||'Error','error');
 }
 async function deleteReminder(id){
-  confirm('Delete this reminder permanently? Use Mark Done for handled reminders so the history remains available.',async()=>{
+  tracsConfirm('Delete this reminder permanently? Use Mark Done for handled reminders so the history remains available.',async()=>{
     const row=document.querySelector(`[data-rid="${id}"]`);
     const d=await api(API.REMINDER.DELETE,{id});
     if(d.success){
@@ -1316,7 +1511,7 @@ async function saveTask(){
   else toast(d.message||'Error','error');
 }
 async function deleteTask(id){
-  confirm('Delete this task?',async()=>{
+  tracsConfirm('Delete this task?',async()=>{
     const d=await api(API.TASK.DELETE,{id});
     if(d.success){
       const row=document.querySelector(`[data-tid="${id}"]`);
@@ -1429,7 +1624,7 @@ async function addTickerMsg(){
 }
 async function archiveTickerMsg(id){
 
-  confirm(
+  tracsConfirm(
     'Archive this announcement?',
     async()=>{
 
@@ -1493,14 +1688,14 @@ async function saveShiftReport(){
   else toast(d.message||'Error','error');
 }
 async function resolveShiftReport(id){
-  confirm('Mark this shift report as resolved?',async()=>{
+  tracsConfirm('Mark this shift report as resolved?',async()=>{
     const d=await api(API.SHIFT.RESOLVE,{id});
     if(d.success){toast('Report resolved','success');_reload();}
     else toast(d.message||'Error','error');
   });
 }
 async function deleteShiftReport(id){
-  confirm('Delete this shift report?',async()=>{
+  tracsConfirm('Delete this shift report?',async()=>{
     const d=await api(API.SHIFT.DELETE,{id});
     if(d.success){toast('Report deleted','success');removeRow(`[data-id="${id}"]`);}
     else toast(d.message||'Error','error');
@@ -1701,12 +1896,25 @@ let activeQuickTimeInput = null;
 let pendingQuickTimeInput = null;
 
 function resolveQuickTimeTarget(btn) {
+  const explicitTarget = btn?.dataset?.quickTarget || btn?.getAttribute?.('data-sync');
+  if (explicitTarget) {
+    const explicitInput = document.getElementById(explicitTarget);
+    if (explicitInput) return explicitInput;
+  }
+
   const group = btn?.closest?.('.form-group') || btn?.closest?.('.fb-inline-col');
-  if (!group) return activeQuickTimeInput;
-  return group.querySelector('.split-date') ||
-    group.querySelector('.split-time') ||
-    group.querySelector('.quick-datetime') ||
-    activeQuickTimeInput;
+  const modal = btn?.closest?.('.modal') || btn?.closest?.('.modal-overlay') || btn?.closest?.('form');
+  const row = btn?.closest?.('.form-row');
+  const scopedTargets = [group, row, modal].filter(Boolean);
+
+  for (const scope of scopedTargets) {
+    const target = scope.querySelector('.split-date') ||
+      scope.querySelector('.split-time') ||
+      scope.querySelector('.quick-datetime');
+    if (target) return target;
+  }
+
+  return activeQuickTimeInput;
 }
 
 function formatDateDisplay(value) {
@@ -1717,7 +1925,11 @@ function formatDateDisplay(value) {
 function setDateLikeInput(el, value, displayValue = value) {
   if (!el) return;
   if (el._flatpickr) {
-    el._flatpickr.setDate(value, true);
+    if (value === '') {
+      el._flatpickr.clear();
+    } else {
+      el._flatpickr.setDate(value, true);
+    }
   }
   el.value = value;
   if (el._flatpickr?.altInput) {
@@ -1728,6 +1940,9 @@ function setDateLikeInput(el, value, displayValue = value) {
   el.dispatchEvent(new Event('input', { bubbles: true }));
   el.dispatchEvent(new Event('change', { bubbles: true }));
 }
+
+window.setDateLikeInput = setDateLikeInput;
+window.formatDateDisplay = formatDateDisplay;
 
 function bindQuickDatetimeInputs() {
 
@@ -1744,27 +1959,30 @@ function bindQuickDatetimeInputs() {
       });
     });
 
-	  document.addEventListener('click', e => {
-	    const btn = e.target.closest?.('.quick-time-btn');
-	    if (!btn) return;
-	    const input = resolveQuickTimeTarget(btn);
-	    if (input) {
-	      activeQuickTimeInput = input;
-	      pendingQuickTimeInput = input;
-	    }
-	  }, true);
+  document.addEventListener('click', e => {
+    const btn = e.target.closest?.('.quick-time-btn');
+    if (!btn) return;
+    const input = resolveQuickTimeTarget(btn);
+    if (input) {
+      activeQuickTimeInput = input;
+      pendingQuickTimeInput = input;
+    }
+  }, true);
 }
 
 function setQuickTime(type, sourceBtn = null) {
 
-	  const input = sourceBtn ? resolveQuickTimeTarget(sourceBtn) : (pendingQuickTimeInput || activeQuickTimeInput);
-	  pendingQuickTimeInput = null;
+  const input = sourceBtn ? resolveQuickTimeTarget(sourceBtn) : (pendingQuickTimeInput || activeQuickTimeInput);
+  pendingQuickTimeInput = null;
 
   if (!input) return;
 
   const now = new Date();
 
   switch(type){
+
+    case 'now':
+      break;
 
     case '1h':
       now.setHours(now.getHours() + 1);
@@ -1807,30 +2025,34 @@ function setQuickTime(type, sourceBtn = null) {
     const dateInp = document.querySelector(`[data-sync="${targetId}"].split-date`);
     const timeInp = document.querySelector(`[data-sync="${targetId}"].split-time`);
 
-	    setDateLikeInput(dateInp, dVal, formatDateDisplay(dVal));
-	    setDateLikeInput(timeInp, tVal, tVal);
-	    if (mainInput) {
-	      mainInput.value = fullVal;
-	      mainInput.dispatchEvent(new Event('input', { bubbles: true }));
-	      mainInput.dispatchEvent(new Event('change', { bubbles: true }));
-	    }
-	    return;
-	  }
+    setDateLikeInput(dateInp, dVal, formatDateDisplay(dVal));
+    setDateLikeInput(timeInp, tVal, tVal);
+    if (mainInput) {
+      mainInput.value = fullVal;
+      mainInput.dispatchEvent(new Event('input', { bubbles: true }));
+      mainInput.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    return;
+  }
 
   if (input._flatpickr) {
     const dateVal = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
     input._flatpickr.setDate(input.type === 'date' ? dateVal : now, true);
   } else {
     input.value = fullVal;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
     input.dispatchEvent(new Event('change', { bubbles: true }));
   }
 }
+
+window.setQuickTime = setQuickTime;
 
 function bindSidebarTooltips() {
   const hosts = document.querySelectorAll('.sidebar .nav-item, .sidebar .user-avatar, .sidebar .theme-toggle');
   if (!hosts.length) return;
 
   const placeTip = (host) => {
+    if (!host) return;
     const tip = host.querySelector('.nav-tip');
     const sidebar = host.closest('.sidebar');
     if (!sidebar) return;
@@ -1844,14 +2066,35 @@ function bindSidebarTooltips() {
 
     const submenu = host.closest('.nav-menu-wrap')?.querySelector('.nav-submenu');
     if (submenu) {
+      submenu.style.setProperty('--nav-submenu-left', `${sideRect.right + 10}px`);
       submenu.style.setProperty('--nav-submenu-top', `${hostRect.top + hostRect.height / 2}px`);
     }
+  };
+
+  const placeOpenSubmenus = () => {
+    document.querySelectorAll('.sidebar .nav-menu-wrap[open] > .nav-item').forEach(host => placeTip(host));
   };
 
   hosts.forEach((host) => {
     host.addEventListener('mouseenter', () => placeTip(host));
     host.addEventListener('focusin', () => placeTip(host));
+    if (host.closest('.nav-menu-wrap')) {
+      host.addEventListener('click', () => placeTip(host));
+      host.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') placeTip(host);
+      });
+    }
   });
+
+  document.querySelectorAll('.sidebar .nav-menu-wrap').forEach(menu => {
+    menu.addEventListener('toggle', () => {
+      if (menu.open) placeTip(menu.querySelector('summary.nav-item'));
+    });
+  });
+
+  window.addEventListener('resize', placeOpenSubmenus);
+  window.addEventListener('scroll', placeOpenSubmenus, true);
+  requestAnimationFrame(placeOpenSubmenus);
 }
 
 const email = document.querySelector('input[name="email"]');
@@ -2192,7 +2435,7 @@ async function saveEditDt() {
 
 /* Delete Domain Transfer */
 function deleteDt(id) {
-  confirm('Delete this domain transfer record? This cannot be undone.', async () => {
+  tracsConfirm('Delete this domain transfer record? This cannot be undone.', async () => {
     const d = await api(window.location.pathname, { action: 'delete', id });
     if (d.success) {
       toast('Transfer deleted', 'success');
@@ -2320,7 +2563,7 @@ async function saveEditBt() {
 
 /* Delete Balance Transfer */
 function deleteBt(id) {
-  confirm('Delete this transfer record? This cannot be undone.', async () => {
+  tracsConfirm('Delete this transfer record? This cannot be undone.', async () => {
     const d = await api(API.BT.DELETE, { id });
     if (d.success) {
       toast('Transfer deleted', 'success');

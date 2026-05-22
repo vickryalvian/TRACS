@@ -1,13 +1,11 @@
 <?php
 
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-
 require_once __DIR__ . '/../core/security/csrf.php';
 tracs_start_session();
 require_once __DIR__.'/../config/database.php';
 require_once __DIR__.'/auth/auth_check.php';
+require_once __DIR__.'/../core/access_control.php';
+tracs_require_page_permission($conn, 'moms.view');
 require_once __DIR__.'/../modules/mom/controller.php';
 require_once __DIR__.'/../modules/reminder/controller.php';
 require_once __DIR__.'/../modules/case/controller.php';
@@ -24,8 +22,14 @@ $CC=new CaseController($conn,$uid);
 $TC=new AlertTickerController($conn,$uid);
 $mom_installed=$MC->isInstalled();
 
-// Get MOM ID from URL, or start new
-$mom_id=intval($_GET['mom_id']??0);
+// Get MOM ID from URL, or start new. Invalid/direct-forbidden IDs are generic 404s.
+$mom_id = 0;
+if (array_key_exists('mom_id', $_GET)) {
+  $mom_id = tracs_request_int($_GET, 'mom_id') ?? 0;
+  if ($mom_id <= 0 || !tracs_can_view_mom($conn, $mom_id)) {
+    tracs_abort_404();
+  }
+}
 $ticker_items=$TC->formatAlertsForTicker();
 
 $mom=null;
@@ -37,6 +41,7 @@ $weekly_suggestions=[];
 
 if($mom_installed && $mom_id>0){
   $mom=$MC->getMOM($mom_id);
+  if(!$mom) tracs_abort_404();
   if($mom){
     $mom_details=$MC->formatMOM($mom);
     $related_reminders=$MC->getRelatedReminders($mom_id);

@@ -82,7 +82,10 @@ $stmt->bind_param(
   $amount, $status, $admin_name, $ticket_id, $uid, $creator_name
 );
 
-if (!$stmt->execute()) fail('Database error: ' . $stmt->error);
+if (!$stmt->execute()) {
+  error_log('TRACS bt-create failed: ' . $stmt->error);
+  fail('Database error', 500);
+}
 
 try { logAct('balance_transfer','create',$conn->insert_id,'Logged transfer: '.$sender_email.' → '.$receiver_email); } catch(Throwable $e){}
 

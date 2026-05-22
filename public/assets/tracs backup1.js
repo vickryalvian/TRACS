@@ -80,7 +80,7 @@ document.addEventListener('click',e=>{if(e.target.classList.contains('modal-over
 
 /* ── Confirm dialog ───────────────────────────────────── */
 let _cb=null;
-function confirm(msg,cb,title='Confirm Delete'){
+function tracsConfirm(msg,cb,title='Confirm Delete'){
   const m=document.getElementById('confirmModal');if(!m)return;
   document.getElementById('c-title').textContent=title;
   document.getElementById('c-msg').textContent=msg;
@@ -138,7 +138,7 @@ async function saveCase(){
   else toast(d.message||'Error saving case','error');
 }
 async function deleteCase(id){
-  confirm('Delete this case permanently? This cannot be undone.',async()=>{
+  tracsConfirm('Delete this case permanently? This cannot be undone.',async()=>{
     const d=await api(API.CASE.DELETE,{id});
     if(d.success){toast('Case deleted','success');removeRow(`[data-cid="${id}"]`);}
     else toast(d.message||'Error','error');
@@ -175,7 +175,7 @@ async function saveReminder(){
   else toast(d.message||'Error','error');
 }
 async function deleteReminder(id){
-  confirm('Delete this reminder?',async()=>{
+  tracsConfirm('Delete this reminder?',async()=>{
     const d=await api(API.REMINDER.DELETE,{id});
     if(d.success){toast('Reminder deleted','success');removeRow(`[data-rid="${id}"]`);}
     else toast(d.message||'Error','error');
@@ -215,7 +215,7 @@ async function saveTask(){
   else toast(d.message||'Error','error');
 }
 async function deleteTask(id){
-  confirm('Delete this task?',async()=>{
+  tracsConfirm('Delete this task?',async()=>{
     const d=await api(API.TASK.DELETE,{id});
     if(d.success){toast('Task deleted','success');removeRow(`[data-tid="${id}"]`);}
     else toast(d.message||'Error','error');
@@ -251,7 +251,7 @@ async function addTickerMsg(){
 }
 async function archiveTickerMsg(id){
 
-  confirm(
+  tracsConfirm(
     'Archive this announcement?',
     async()=>{
 

@@ -106,5 +106,6 @@ try {
       mom_legacy_fail('Unknown action');
   }
 } catch(Throwable $e) {
-  mom_legacy_fail($e->getMessage(), 500);
+  error_log('TRACS legacy MOM action failed: ' . $e->getMessage());
+  mom_legacy_fail('Request failed', 500);
 }

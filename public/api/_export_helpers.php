@@ -3,22 +3,79 @@ require_once __DIR__ . '/../../core/security/csrf.php';
 tracs_start_session();
 header('X-Content-Type-Options: nosniff');
 
-if (empty($_SESSION['user_id'])) {
+require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../core/user_management.php';
+
+if (!tracs_is_fully_authenticated()) {
+    if (tracs_auth_pending_user_id() > 0) {
+        $reason = tracs_auth_pending_expired() ? 'pending_two_factor_expired' : 'pending_two_factor';
+        tracs_auth_log_event($conn, 'suspicious_access_attempt', 'blocked', tracs_auth_pending_identifier(), tracs_auth_pending_user_id(), $reason);
+        if (tracs_auth_pending_expired()) {
+            tracs_auth_clear_pending_2fa();
+        }
+    }
     http_response_code(401);
     header('Content-Type: text/plain; charset=utf-8');
     echo 'Unauthorized';
     exit;
 }
 
-require_once __DIR__ . '/../../config/database.php';
+$lastSeen = (int)($_SESSION['tracs_last_seen_at'] ?? time());
+if ((time() - $lastSeen) > tracs_auth_idle_timeout_seconds()) {
+    $expiredUserId = (int)($_SESSION['user_id'] ?? 0);
+    tracs_auth_destroy_current_session();
+    tracs_auth_log_event($conn, 'session_timeout', 'expired', '', $expiredUserId ?: null, 'idle_timeout');
+    http_response_code(401);
+    header('Content-Type: text/plain; charset=utf-8');
+    echo 'Session expired';
+    exit;
+}
+$_SESSION['tracs_last_seen_at'] = time();
 
 $uid = (int) $_SESSION['user_id'];
+$authUser = tracs_get_user_by_id($conn, $uid);
+if (!$authUser || !tracs_user_can_login($authUser)) {
+    http_response_code(403);
+    header('Content-Type: text/plain; charset=utf-8');
+    echo 'Forbidden';
+    exit;
+}
+tracs_sync_session_user($authUser);
+tracs_touch_user_activity($conn, $uid);
 
 function export_fail(string $message, int $code = 400): void {
     http_response_code($code);
     header('Content-Type: text/plain; charset=utf-8');
     echo $message;
     exit;
+}
+
+function export_require_permissions(array $permissions): void {
+    global $conn, $uid;
+    foreach ($permissions as $permission) {
+        if (!is_string($permission) || $permission === '') {
+            continue;
+        }
+        if (!tracs_user_can($conn, $permission, $uid)) {
+            tracs_auth_log_event($conn, 'permission_denied', 'blocked', (string)($_SESSION['user_email'] ?? ''), $uid ?: null, $permission);
+            export_fail('Forbidden', 403);
+        }
+    }
+}
+
+$script = basename((string)(parse_url($_SERVER['SCRIPT_NAME'] ?? '', PHP_URL_PATH) ?: ''));
+$exportPermissionMap = [
+    'export-activity.php' => ['reports.export', 'users.view_activity'],
+    'export-cases.php' => ['reports.export', 'cases.view'],
+    'export-domain-price-crosscheck.php' => ['reports.export', 'domain_price.view'],
+    'export-domains.php' => ['reports.export', 'domains.view'],
+    'export-feedback.php' => ['reports.export', 'cancellation_feedback.view'],
+    'export-finance.php' => ['reports.export', 'finance.view'],
+    'export-moms.php' => ['reports.export', 'moms.view'],
+    'export-shift-reports.php' => ['reports.export', 'reports.view'],
+];
+if (isset($exportPermissionMap[$script])) {
+    export_require_permissions($exportPermissionMap[$script]);
 }
 
 function export_date_param(string $key): ?string {

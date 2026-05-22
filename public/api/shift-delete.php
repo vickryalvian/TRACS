@@ -3,6 +3,7 @@ require_once __DIR__.'/../../modules/shift-reports/controller.php';
 
 $id = (int)($body['id'] ?? 0);
 if (!$id) fail('ID required');
+if (!tracs_can_view_report($conn, $id)) fail_not_found();
 
 $SC = new ShiftReportController($conn, $uid);
 $report = $SC->getById($id);

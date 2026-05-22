@@ -7,6 +7,7 @@
   const state = {
     selectedCode: 'NDS',
     lastEventKey: '',
+    store: null,
   };
 
   function esc(value) {
@@ -37,11 +38,59 @@
 
   function tracsStatusBadgeClass(status) {
     if (status === 'critical') return 'b-critical';
-    if (status === 'warning') return 'b-warning';
+    if (status === 'warning' || status === 'degraded') return 'b-warning';
     if (status === 'maintenance') return 'b-pending';
     if (status === 'recovery') return 'b-info';
     if (status === 'healthy') return 'b-active';
     return 'b-low';
+  }
+
+  const METHOD_LABELS = {
+    icmp: 'Network Ping',
+    tcp: 'Port Check',
+    http: 'Health Endpoint',
+    mock: 'Demo Data',
+  };
+
+  const METHOD_HELP = {
+    icmp: 'ICMP ping may be blocked by firewall. Use TCP or HTTP check for more reliable service monitoring.',
+    tcp: 'TCP check is recommended for checking specific services such as SSH, HTTP, HTTPS, database, or custom ports.',
+    http: 'HTTP health check is recommended for web services and APIs.',
+    mock: 'Mock mode is for demo and TV Mode testing only.',
+  };
+
+  function methodLabel(method) {
+    return METHOD_LABELS[method] || 'Monitoring Target';
+  }
+
+  function modeLabel(node) {
+    return node.mode === 'real' ? 'REAL MONITORING' : 'MOCK';
+  }
+
+  function monitoringTarget(node) {
+    if (node.method === 'http') return node.health_url || 'Health URL pending';
+    if (node.method === 'tcp') return `${node.target_host || 'Host pending'}:${node.target_port || '--'}`;
+    if (node.method === 'icmp') return node.target_host || node.target_ip || 'Host pending';
+    return 'Demo session telemetry';
+  }
+
+  function metricRiskScore(node) {
+    if (!node || node.status === 'pending') return -1;
+    const statusWeight = Infra.statusRank(node.status) * 100000;
+    const packetLoss = Number(node.packetLoss || 0);
+    const latency = Number(node.latency || 0);
+    const lossWeight = packetLoss >= 1 ? 60000 : (packetLoss >= 0.1 ? 30000 : packetLoss * 10000);
+    const latencyWeight = latency >= 80 ? 45000 : (latency >= 50 ? 22000 : latency * 100);
+    return statusWeight + lossWeight + latencyWeight;
+  }
+
+  function orderedMetricNodes(nodes) {
+    return [...(nodes || [])].sort((a, b) => (
+      metricRiskScore(b) - metricRiskScore(a)
+      || Number(b.packetLoss || 0) - Number(a.packetLoss || 0)
+      || Number(b.latency || 0) - Number(a.latency || 0)
+      || String(a.code || '').localeCompare(String(b.code || ''))
+    ));
   }
 
   function dashboardAffectedItems(snapshot) {
@@ -50,8 +99,8 @@
       .sort((a, b) => (Infra.statusRank(b.status) - Infra.statusRank(a.status)) || (b.latency - a.latency))
       .slice(0, 3)
       .map((node) => ({
-        name: node.code,
-        detail: node.name,
+        name: node.name,
+        detail: node.region || node.country || node.code,
         status: node.status,
         label: Infra.statusLabel(node.status),
       }));
@@ -81,10 +130,13 @@
       <span class="badge infra-dashboard-widget__affected-pill ${tracsStatusBadgeClass(item.status)}">
         <span class="badge-dot"></span>
         <strong>${esc(item.name)}</strong>
-        <em>${esc(item.label)}</em>
       </span>
     `).join('');
-    return items.length > 1 ? pills + pills : pills;
+    if (items.length <= 1) return pills;
+    return `
+      <span class="infra-dashboard-widget__affected-set">${pills}</span>
+      <span class="infra-dashboard-widget__affected-set" aria-hidden="true">${pills}</span>
+    `;
   }
 
   function summaryCards(snapshot) {
@@ -108,14 +160,14 @@
         label: 'Average Latency',
         value: ms(summary.averageLatency),
         meta: 'Mock realtime sample',
-        status: summary.averageLatency > 60 ? 'warning' : 'healthy',
+        status: summary.averageLatency > 60 ? 'degraded' : 'healthy',
         icon: 'activity',
       },
       {
         label: '30D Uptime',
         value: pct(summary.uptime30d),
         meta: 'Prototype aggregate',
-        status: summary.uptime30d < 99.9 ? 'warning' : 'healthy',
+        status: summary.uptime30d < 99.9 ? 'degraded' : 'healthy',
         icon: 'shield-check',
       },
       {
@@ -149,51 +201,6 @@
     `).join('');
   }
 
-  function overviewNode(label, value, status, x, y, extra) {
-    return `
-      <g class="infra-map-node infra-map-node--overview ${statusClass(status)}" transform="translate(${x} ${y})">
-        <circle class="node-ripple" r="31"></circle>
-        <circle class="node-halo" r="22"></circle>
-        <circle class="node-core" r="7"></circle>
-        <text class="node-label" x="0" y="-34" text-anchor="middle">${esc(label)}</text>
-        <text class="node-sub-label" x="0" y="42" text-anchor="middle">${esc(value)}</text>
-        <text class="node-mini-label" x="0" y="58" text-anchor="middle">${esc(extra)}</text>
-      </g>
-    `;
-  }
-
-  function renderOverview(svg, snapshot) {
-    const target = svg?.querySelector('[data-infra-overview-nodes]');
-    if (!target) return;
-    target.innerHTML = [
-      overviewNode('Indonesia', snapshot.summary.indonesia.label, snapshot.summary.indonesia.status, 296, 246, `${snapshot.summary.indonesia.latency} ms avg`),
-      overviewNode('Singapore', snapshot.summary.singapore.label, snapshot.summary.singapore.status, 720, 170, `${snapshot.summary.singapore.latency} ms avg`),
-    ].join('');
-  }
-
-  function nodeMarkup(node) {
-    const pos = node.cluster;
-    const active = state.selectedCode === node.code ? ' is-selected' : '';
-    return `
-      <g class="infra-map-node ${statusClass(node.status)}${active}" transform="translate(${pos.x} ${pos.y})" data-infra-node="${esc(node.code)}" tabindex="0" role="button" aria-label="${esc(node.name)} ${esc(Infra.statusLabel(node.status))}">
-        <circle class="node-ripple" r="26"></circle>
-        <circle class="node-halo" r="17"></circle>
-        <circle class="node-ring" r="12"></circle>
-        <circle class="node-core" r="6"></circle>
-        ${node.status === 'maintenance' ? '<path class="node-maint-icon" d="M-5 8 L5 8 L0 -6 Z"></path>' : ''}
-        <text class="node-label" x="0" y="-23" text-anchor="middle">${esc(node.code)}</text>
-        <text class="node-sub-label" x="0" y="30" text-anchor="middle">${esc(ms(node.latency))}</text>
-      </g>
-    `;
-  }
-
-  function renderMap(svg, snapshot) {
-    const target = svg?.querySelector('[data-infra-map-nodes]');
-    if (!target) return;
-    renderOverview(svg, snapshot);
-    target.innerHTML = snapshot.nodes.map(nodeMarkup).join('');
-  }
-
   function selectedNode(snapshot) {
     const worst = snapshot.summary.worstAffected?.code;
     if (!state.selectedCode && worst) state.selectedCode = worst;
@@ -202,29 +209,86 @@
       || snapshot.nodes[0];
   }
 
-  function renderDetail(panel, snapshot) {
-    if (!panel) return;
+  function reportInsight(snapshot) {
+    const { summary } = snapshot;
+    if (summary.globalStatus === 'critical') {
+      return `Critical infrastructure attention is required. ${summary.worstAffected?.name || 'A monitored node'} is currently the highest-risk server, with ${summary.activeIncidents} active incident signal(s) across the registry.`;
+    }
+    if (summary.globalStatus === 'warning') {
+      return `Infrastructure is degraded but service is still observable. ${summary.activeIncidents} active signal(s) should be reviewed before the next handover.`;
+    }
+    return `Infrastructure is operating inside the expected band. No critical server is currently blocking handover.`;
+  }
+
+  function renderReport(container, snapshot) {
+    if (!container) return;
     const node = selectedNode(snapshot);
-    if (!node) return;
-    panel.className = `infra-map-detail ${statusClass(node.status)}`;
-    panel.innerHTML = `
-      <div class="infra-map-detail__head">
-        <span>${esc(node.code)}</span>
-        ${statusChip(node.status)}
+    const affected = snapshot.nodes
+      .filter((item) => item.status !== 'healthy')
+      .sort((a, b) => Infra.statusRank(b.status) - Infra.statusRank(a.status));
+    const healthy = snapshot.nodes.filter((item) => item.status === 'healthy');
+    container.innerHTML = `
+      <div class="infra-report-main ${statusClass(snapshot.summary.globalStatus)}">
+        <div class="infra-report-head">
+          <div>
+            <div class="infra-report-kicker"><i data-lucide="clipboard-check" class="icon-sm"></i>Infrastructure Summary</div>
+            <h2>${esc(snapshot.summary.globalStatusLabel)}</h2>
+          </div>
+          ${statusChip(snapshot.summary.globalStatus)}
+        </div>
+        <p class="infra-report-summary">${esc(reportInsight(snapshot))}</p>
+        <div class="infra-report-metrics">
+          <div><span>Nodes</span><strong>${esc(snapshot.summary.nodeCount)}</strong></div>
+          <div><span>Healthy</span><strong>${esc(snapshot.summary.healthyCount)}</strong></div>
+          <div><span>Incidents</span><strong>${esc(snapshot.summary.activeIncidents)}</strong></div>
+          <div><span>Avg latency</span><strong>${esc(ms(snapshot.summary.averageLatency))}</strong></div>
+        </div>
       </div>
-      <strong>${esc(node.name)}</strong>
-      <p>${esc(Infra.statusCopy(node.status))}</p>
-      <div class="infra-map-detail__grid">
-        <div><span>Latency</span><b>${esc(ms(node.latency))}</b></div>
-        <div><span>Loss</span><b>${esc(Number(node.packetLoss).toFixed(2))}%</b></div>
-        <div><span>Uptime</span><b>${esc(pct(node.uptime))}</b></div>
-        <div><span>Checked</span><b>${esc(Infra.formatTime(node.lastChecked))}</b></div>
+      <aside class="infra-report-side ${statusClass(node?.status || 'healthy')}">
+        <div class="infra-report-kicker"><i data-lucide="server" class="icon-sm"></i>Selected Server</div>
+        ${node ? `
+          <div class="infra-report-node-head">
+            <strong>${esc(node.name)}</strong>
+            ${statusChip(node.status)}
+          </div>
+          <p>${esc(node.region || node.city || '--')} / ${esc(node.provider || node.facility || '--')}</p>
+          <div class="infra-report-node-grid">
+            <div><span>Latency</span><b>${esc(ms(node.latency))}</b></div>
+            <div><span>Loss</span><b>${esc(Number(node.packetLoss || 0).toFixed(2))}%</b></div>
+            <div><span>Uptime</span><b>${esc(pct(node.uptime))}</b></div>
+            <div><span>Checked</span><b>${esc(Infra.formatTime(node.lastChecked))}</b></div>
+          </div>
+        ` : '<p>No selected server.</p>'}
+      </aside>
+      <div class="infra-report-lists">
+        <section>
+          <div class="infra-report-list-title"><i data-lucide="alert-triangle" class="icon-xs"></i>Needs Attention</div>
+          ${affected.length ? affected.slice(0, 6).map((item) => `
+            <button type="button" class="infra-report-row ${statusClass(item.status)}" data-infra-select="${esc(item.code)}">
+              <span>${esc(item.code)}</span>
+              <strong>${esc(item.name)}</strong>
+              <em>${esc(Infra.statusLabel(item.status))} / ${esc(ms(item.latency))}</em>
+            </button>
+          `).join('') : '<p class="infra-empty-line">No degraded, critical, maintenance, or recovery servers.</p>'}
+        </section>
+        <section>
+          <div class="infra-report-list-title"><i data-lucide="check-check" class="icon-xs"></i>Stable Nodes</div>
+          ${healthy.length ? healthy.slice(0, 6).map((item) => `
+            <button type="button" class="infra-report-row is-healthy" data-infra-select="${esc(item.code)}">
+              <span>${esc(item.code)}</span>
+              <strong>${esc(item.name)}</strong>
+              <em>${esc(ms(item.latency))} / ${esc(pct(item.uptime))}</em>
+            </button>
+          `).join('') : '<p class="infra-empty-line">No healthy servers in this snapshot.</p>'}
+        </section>
       </div>
     `;
   }
 
   function ensureMetricRows(container, nodes) {
-    if (!container || container.dataset.ready === '1') return;
+    if (!container) return;
+    const nodeKey = (nodes || []).map((node) => node.code).sort().join('|');
+    if (container.dataset.ready === '1' && container.dataset.nodeKey === nodeKey) return;
     container.innerHTML = nodes.map((node) => `
       <article class="infra-metric-row" data-infra-metric="${esc(node.code)}">
         <button type="button" class="infra-metric-row__main" data-infra-select="${esc(node.code)}">
@@ -239,19 +303,21 @@
           <path class="infra-sparkline__area" data-field="spark-area"></path>
           <path class="infra-sparkline__line" data-field="spark-line"></path>
         </svg>
-        <span class="infra-metric-time" data-field="checked"></span>
       </article>
     `).join('');
     container.dataset.ready = '1';
+    container.dataset.nodeKey = nodeKey;
   }
 
   function updateMetricRows(container, snapshot) {
     if (!container) return;
-    ensureMetricRows(container, snapshot.nodes);
-    snapshot.nodes.forEach((node) => {
+    const nodes = orderedMetricNodes(snapshot.nodes);
+    ensureMetricRows(container, nodes);
+    nodes.forEach((node) => {
       const row = container.querySelector(`[data-infra-metric="${CSS.escape(node.code)}"]`);
       if (!row) return;
       row.className = `infra-metric-row ${statusClass(node.status)}${state.selectedCode === node.code ? ' is-selected' : ''}`;
+      container.appendChild(row);
       const chip = row.querySelector('.infra-status-chip');
       if (chip) {
         chip.className = `infra-status-chip ${statusClass(node.status)}`;
@@ -260,13 +326,87 @@
       row.querySelector('[data-field="latency"]').textContent = ms(node.latency);
       row.querySelector('[data-field="loss"]').textContent = `${Number(node.packetLoss).toFixed(2)}% loss`;
       row.querySelector('[data-field="uptime"]').textContent = pct(node.uptime);
-      row.querySelector('[data-field="checked"]').textContent = Infra.formatTime(node.lastChecked);
       const line = row.querySelector('[data-field="spark-line"]');
       const area = row.querySelector('[data-field="spark-area"]');
-      const linePath = Infra.sparklinePath(node.history);
+      const linePath = Infra.sparklinePath(node.history?.latency || []);
       if (line) line.setAttribute('d', linePath);
       if (area) area.setAttribute('d', `${linePath} L113 32 L3 32 Z`);
     });
+  }
+
+  function svgPath(points, width = 320, height = 86, padding = 8) {
+    return Infra.sparklinePath(points || [], width, height, padding);
+  }
+
+  function graphPanel(title, subtitle, series, options = {}) {
+    const width = 320;
+    const height = 86;
+    const legends = series.map((item) => `<span class="${statusClass(item.status || 'healthy')}"><i></i>${esc(item.label)}</span>`).join('');
+    const lines = series.map((item) => `
+      <path class="infra-graph__area ${statusClass(item.status || 'healthy')}" d="${esc(svgPath(item.points, width, height, 8))} L312 ${height} L8 ${height} Z"></path>
+      <path class="infra-graph__line ${statusClass(item.status || 'healthy')}" d="${esc(svgPath(item.points, width, height, 8))}"></path>
+    `).join('');
+    return `
+      <article class="panel infra-graph-panel">
+        <div class="panel-head">
+          <div>
+            <span class="panel-title">${esc(title)}</span>
+            <div class="panel-meta">${esc(subtitle)}</div>
+          </div>
+          ${options.value ? `<strong class="infra-graph-panel__value">${esc(options.value)}</strong>` : ''}
+        </div>
+        <div class="infra-graph">
+          <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true">
+            <path class="infra-graph__grid" d="M8 18H312 M8 43H312 M8 68H312"></path>
+            ${lines}
+          </svg>
+          <div class="infra-graph__legend">${legends}</div>
+        </div>
+      </article>
+    `;
+  }
+
+  function renderGraphs(container, snapshot) {
+    if (!container) return;
+    const worst = selectedNode(snapshot);
+    const degradedCount = snapshot.nodes.filter((node) => ['degraded', 'warning'].includes(node.status)).length;
+    const criticalCount = snapshot.nodes.filter((node) => node.status === 'critical').length;
+    const maintenanceCount = snapshot.nodes.filter((node) => node.status === 'maintenance').length;
+    const healthyCount = snapshot.nodes.filter((node) => node.status === 'healthy').length;
+    const indonesiaLatency = snapshot.nodes.filter((node) => node.country === 'Indonesia').map((node) => node.latency);
+    const singaporeLatency = snapshot.nodes.filter((node) => node.country === 'Singapore').map((node) => node.latency);
+    container.innerHTML = [
+      graphPanel('Latency Trend', `${worst?.name || 'Selected node'} / last samples`, [
+        { label: worst?.code || 'N/A', points: worst?.history?.latency || [], status: worst?.status || 'healthy' },
+      ], { value: worst ? ms(worst.latency) : '--' }),
+      graphPanel('Packet Loss', 'Selected node loss trend', [
+        { label: worst?.code || 'N/A', points: worst?.history?.packetLoss || [], status: worst?.status || 'healthy' },
+      ], { value: worst ? `${Number(worst.packetLoss || 0).toFixed(2)}%` : '--' }),
+      graphPanel('30D Uptime', 'Aggregate uptime samples', [
+        { label: '30D', points: snapshot.nodes.flatMap((node) => node.history?.uptime?.slice(-6) || []), status: snapshot.summary.uptime30d < 99.9 ? 'degraded' : 'healthy' },
+      ], { value: pct(snapshot.summary.uptime30d) }),
+      graphPanel('Incident Count', 'Synthetic event pressure', [
+        { label: 'Incidents', points: snapshot.events.slice(0, 12).map((_, index) => Math.max(0, snapshot.summary.activeIncidents - (index % 3))).reverse(), status: snapshot.summary.globalStatus },
+      ], { value: String(snapshot.summary.activeIncidents) }),
+      graphPanel('Regional Latency', 'Indonesia vs Singapore', [
+        { label: 'Indonesia', points: indonesiaLatency, status: snapshot.summary.indonesia.status },
+        { label: 'Singapore', points: singaporeLatency, status: snapshot.summary.singapore.status },
+      ]),
+      graphPanel('Node Health Mix', 'Healthy / degraded / critical / maintenance', [
+        { label: 'Healthy', points: [healthyCount, healthyCount + 1, healthyCount, healthyCount], status: 'healthy' },
+        { label: 'Degraded', points: [degradedCount, degradedCount + 1, degradedCount, degradedCount], status: 'degraded' },
+        { label: 'Critical', points: [criticalCount, criticalCount, criticalCount + 1, criticalCount], status: 'critical' },
+        { label: 'Maint', points: [maintenanceCount, maintenanceCount, maintenanceCount + 1, maintenanceCount], status: 'maintenance' },
+      ]),
+      graphPanel('Maintenance Timeline', 'Planned work signal', [
+        { label: 'Windows', points: snapshot.nodes.map((node) => node.status === 'maintenance' ? 1 : 0), status: 'maintenance' },
+      ]),
+      graphPanel('Response Percentiles', 'p50 / p95 / p99 selected node', [
+        { label: 'p50', points: worst?.history?.p50 || [], status: 'healthy' },
+        { label: 'p95', points: worst?.history?.p95 || [], status: 'degraded' },
+        { label: 'p99', points: worst?.history?.p99 || [], status: 'critical' },
+      ]),
+    ].join('');
   }
 
   function renderEventFeed(container, snapshot) {
@@ -293,9 +433,9 @@
 
   function renderPage(page, snapshot) {
     renderSummary(page.querySelector('[data-infra-summary]'), snapshot);
-    renderMap(page.querySelector('[data-infra-map]'), snapshot);
-    renderDetail(page.querySelector('[data-infra-detail]'), snapshot);
+    renderReport(page.querySelector('[data-infra-report]'), snapshot);
     updateMetricRows(page.querySelector('[data-infra-metrics]'), snapshot);
+    renderGraphs(page.querySelector('[data-infra-graphs]'), snapshot);
     renderEventFeed(page.querySelector('[data-infra-feed]'), snapshot);
     page.querySelectorAll('[data-infra-generated-at]').forEach((node) => {
       node.textContent = Infra.formatTime(snapshot.generatedAt);
@@ -314,7 +454,7 @@
           <span>Infrastructure Pulse</span>
           <strong>${esc(summary.globalStatusLabel)}</strong>
         </div>
-        <i data-lucide="radar"></i>
+        <i data-lucide="radar" class="dashboard-widget-main-icon"></i>
       </div>
       <div class="infra-dashboard-widget__metrics">
         <div><span>Incidents</span><b>${esc(summary.activeIncidents)}</b></div>
@@ -370,16 +510,336 @@
     if (!page || page.dataset.bound === '1') return;
     page.dataset.bound = '1';
     page.addEventListener('click', (event) => {
-      const select = event.target.closest('[data-infra-node], [data-infra-select]');
+      const select = event.target.closest('[data-infra-select]');
       if (!select) return;
-      state.selectedCode = select.getAttribute('data-infra-node') || select.getAttribute('data-infra-select');
+      state.selectedCode = select.getAttribute('data-infra-select');
       renderPage(page, store.getSnapshot());
     });
-    page.addEventListener('mouseover', (event) => {
-      const select = event.target.closest('[data-infra-node]');
-      if (!select) return;
-      state.selectedCode = select.getAttribute('data-infra-node');
-      renderPage(page, store.getSnapshot());
+  }
+
+  function initDashboardWidgetSliders() {
+    document.querySelectorAll('.dashboard-widget-slider').forEach((slider) => {
+      if (slider.dataset.bound === '1') return;
+      const slides = slider.querySelectorAll('.dashboard-widget-slide');
+      const next = slider.querySelector('[data-dashboard-widget-next]');
+      if (!next || slides.length < 2) return;
+
+      slider.dataset.bound = '1';
+      slider.dataset.widgetSlide = slider.dataset.widgetSlide || '0';
+      let index = 0;
+      let intervalId = null;
+      let isPaused = false;
+      const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const showSlide = (nextIndex) => {
+        index = nextIndex % slides.length;
+        slider.dataset.widgetSlide = String(index);
+      };
+      const startAuto = () => {
+        if (reduceMotion || intervalId) return;
+        intervalId = window.setInterval(() => {
+          if (!isPaused) showSlide(index + 1);
+        }, 8000);
+      };
+      const pauseAuto = () => { isPaused = true; };
+      const resumeAuto = () => { isPaused = false; };
+
+      next.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        showSlide(index + 1);
+      });
+      slider.addEventListener('mouseenter', pauseAuto);
+      slider.addEventListener('mouseleave', resumeAuto);
+      slider.addEventListener('focusin', pauseAuto);
+      slider.addEventListener('focusout', resumeAuto);
+      startAuto();
+    });
+  }
+
+  function nodeFromForm(form) {
+    const data = new FormData(form);
+    const method = String(data.get('method') || 'icmp');
+    const mode = method === 'mock' ? 'mock' : 'real';
+    const code = String(data.get('code') || '').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 8);
+    if (!code) return null;
+    const createdAt = new Date().toISOString();
+    const latency = mode === 'mock' ? Number(data.get('latency') || 24) : 0;
+    const packetLoss = mode === 'mock' ? Number(data.get('packetLoss') || 0) : 0;
+    const uptime = mode === 'mock' ? Number(data.get('uptime') || 99.99) : 100;
+    const targetHost = String(data.get('target_host') || '').trim();
+    const targetPort = String(data.get('target_port') || '').trim();
+    const healthUrl = String(data.get('health_url') || '').trim();
+    const expectedStatus = Number(data.get('expected_status') || 200);
+    const timeoutSeconds = Number(data.get('timeout_seconds') || 5);
+    const intervalSeconds = Number(data.get('interval_seconds') || 60);
+    return {
+      id: `manual-${code.toLowerCase()}`,
+      code,
+      shortCode: code,
+      name: String(data.get('name') || code).trim(),
+      region: String(data.get('region') || 'Manual Registry').trim(),
+      country: String(data.get('country') || 'Indonesia').trim(),
+      city: String(data.get('region') || 'Manual Registry').trim(),
+      provider: String(data.get('provider') || 'Manual entry').trim(),
+      facility: String(data.get('provider') || 'Manual entry').trim(),
+      mode,
+      method,
+      target_host: targetHost,
+      target_ip: targetHost,
+      target_port: method === 'tcp' ? targetPort : '',
+      health_url: method === 'http' ? healthUrl : '',
+      expected_status: method === 'http' ? expectedStatus : '',
+      expected_keyword: method === 'http' ? String(data.get('expected_keyword') || '').trim() : '',
+      packet_count: method === 'icmp' ? Number(data.get('packet_count') || 4) : '',
+      interval_seconds: mode === 'real' ? intervalSeconds : '',
+      timeout_seconds: mode === 'real' ? timeoutSeconds : '',
+      is_active: true,
+      status: mode === 'mock' ? String(data.get('status') || 'healthy') : 'pending',
+      latency,
+      packetLoss,
+      uptime,
+      incidentCount: mode === 'mock' && ['critical', 'degraded', 'maintenance'].includes(String(data.get('status'))) ? 1 : 0,
+      latitude: 0,
+      longitude: 0,
+      lastChecked: mode === 'mock' ? createdAt : null,
+      last_checked_at: mode === 'mock' ? createdAt : null,
+      created_at: createdAt,
+      updated_at: createdAt,
+      history: {
+        latency: Array.from({ length: 36 }, (_, index) => Math.max(1, Math.round(latency + Math.sin(index / 3) * 2))),
+        packetLoss: Array.from({ length: 36 }, () => packetLoss),
+        uptime: Array.from({ length: 36 }, () => uptime),
+        incidents: Array.from({ length: 12 }, () => 0),
+        p50: Array.from({ length: 24 }, () => Math.round(latency * 0.78)),
+        p95: Array.from({ length: 24 }, () => Math.round(latency * 1.24)),
+        p99: Array.from({ length: 24 }, () => Math.round(latency * 1.55)),
+      },
+    };
+  }
+
+  function requiredFieldsFor(method) {
+    const base = ['name', 'code', 'region', 'country', 'provider'];
+    if (method === 'icmp') return [...base, 'target_host'];
+    if (method === 'tcp') return [...base, 'target_host', 'target_port'];
+    if (method === 'http') return [...base, 'health_url'];
+    return base;
+  }
+
+  function validateServerForm(form) {
+    const method = String(new FormData(form).get('method') || 'icmp');
+    const missing = requiredFieldsFor(method).filter((name) => !String(form.elements[name]?.value || '').trim());
+    const invalid = [];
+    if (method === 'tcp') {
+      const port = Number(form.elements.target_port?.value || 0);
+      if (port < 1 || port > 65535) invalid.push('port 1-65535');
+    }
+    if (method === 'http') {
+      const url = String(form.elements.health_url?.value || '').trim();
+      if (url && !/^https?:\/\//i.test(url)) invalid.push('HTTP/HTTPS URL');
+    }
+    return { method, missing, invalid };
+  }
+
+  function updateMethodUi(modal) {
+    const form = modal.querySelector('[data-infra-server-form]');
+    if (!form) return;
+    const method = String(new FormData(form).get('method') || 'icmp');
+    modal.querySelectorAll('[data-infra-method-card]').forEach((card) => {
+      card.classList.toggle('is-active', card.getAttribute('data-infra-method-card') === method);
+    });
+    modal.querySelectorAll('[data-method-section]').forEach((section) => {
+      const sectionName = section.getAttribute('data-method-section');
+      section.hidden = (sectionName === 'mock' && method !== 'mock') || (sectionName === 'real' && method === 'mock');
+    });
+    modal.querySelectorAll('[data-method-field]').forEach((field) => {
+      const methods = String(field.getAttribute('data-method-field') || '').split(/\s+/);
+      field.hidden = !methods.includes(method);
+    });
+    const note = modal.querySelector('[data-infra-method-note]');
+    if (note) note.textContent = METHOD_HELP[method] || '';
+    const validation = modal.querySelector('[data-infra-server-validation]');
+    if (validation) {
+      validation.classList.remove('is-error');
+      validation.textContent = method === 'mock'
+        ? 'Mock entries update the current session only and remain separate from real monitoring targets.'
+        : 'Real targets are registered as awaiting backend checks. TRACS will display results after VPS-side monitoring is wired.';
+    }
+  }
+
+  function activateModalTab(modal, name) {
+    modal.querySelectorAll('[data-infra-modal-tab]').forEach((tab) => {
+      const active = tab.getAttribute('data-infra-modal-tab') === name;
+      tab.classList.toggle('is-active', active);
+      tab.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    modal.querySelectorAll('[data-infra-modal-pane]').forEach((pane) => {
+      pane.classList.toggle('is-active', pane.getAttribute('data-infra-modal-pane') === name);
+    });
+  }
+
+  function renderServerRegistry(modal, store) {
+    const target = modal?.querySelector('[data-infra-server-registry]');
+    if (!target || !store) return;
+    const snapshot = store.getSnapshot();
+    const realCount = snapshot.nodes.filter((node) => node.mode === 'real').length;
+    const mockCount = snapshot.nodes.length - realCount;
+    target.innerHTML = `
+      <div class="infra-server-registry__head">
+        <span>Current Servers</span>
+        <strong>${esc(snapshot.nodes.length)} total</strong>
+        <em>${esc(realCount)} real / ${esc(mockCount)} mock</em>
+      </div>
+      ${snapshot.nodes.length ? snapshot.nodes.map((node) => `
+        <article class="infra-server-registry__row ${statusClass(node.status)}">
+          <span class="infra-server-code">${esc(node.code)}</span>
+          <div class="infra-server-registry__main">
+            <div class="infra-server-registry__title">
+              <strong>${esc(node.name)}</strong>
+              <span class="infra-badge ${node.mode === 'real' ? 'is-real' : 'is-mock'}">${esc(modeLabel(node))}</span>
+              <span class="infra-badge is-method">${esc((node.method || 'mock').toUpperCase())}</span>
+            </div>
+            <em>${esc(node.region || '--')} / ${esc(node.country || '--')} / ${esc(node.provider || '--')}</em>
+            <small>${esc(methodLabel(node.method))}: ${esc(monitoringTarget(node))}</small>
+            ${node.mode === 'real' ? '<small class="infra-server-registry__backend">Awaiting VPS backend worker results. No real browser probing is active.</small>' : ''}
+          </div>
+          <div class="infra-server-registry__quick">
+            ${statusChip(node.status)}
+            <span>${esc(ms(node.latency))}</span>
+            <span>${esc(Number(node.packetLoss || 0).toFixed(2))}% loss</span>
+            <span>${esc(pct(node.uptime))}</span>
+            <time>${esc(node.lastChecked ? Infra.formatTime(node.lastChecked) : 'Not checked')}</time>
+          </div>
+          <div class="infra-server-registry__remove" data-infra-remove-wrap="${esc(node.code)}">
+            <button type="button" class="btn btn-ghost btn-sm" data-infra-remove-server="${esc(node.code)}">
+              <i data-lucide="trash-2" class="icon-sm"></i>Remove
+            </button>
+          </div>
+        </article>
+      `).join('') : `
+        <div class="infra-server-empty">
+          <i data-lucide="server-off" class="icon-sm"></i>
+          <strong>No servers registered</strong>
+          <p>Add a mock target for demo data or a real target for future VPS-side monitoring.</p>
+        </div>
+      `}
+    `;
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  function bindServerModal(store) {
+    const modal = document.querySelector('[data-infra-server-modal]');
+    if (!modal || modal.dataset.bound === '1') return;
+    modal.dataset.bound = '1';
+    const form = modal.querySelector('[data-infra-server-form]');
+
+    function openModal() {
+      modal.hidden = false;
+      activateModalTab(modal, 'add');
+      updateMethodUi(modal);
+      renderServerRegistry(modal, store);
+      form?.querySelector('input[name="name"]')?.focus();
+    }
+
+    function closeModal() {
+      modal.hidden = true;
+    }
+
+    document.querySelectorAll('[data-infra-manage-open]').forEach((button) => {
+      button.addEventListener('click', openModal);
+    });
+    modal.querySelectorAll('[data-infra-manage-close]').forEach((button) => {
+      button.addEventListener('click', closeModal);
+    });
+    modal.querySelectorAll('[data-infra-modal-tab]').forEach((tab) => {
+      tab.addEventListener('click', () => {
+        const name = tab.getAttribute('data-infra-modal-tab');
+        activateModalTab(modal, name);
+        if (name === 'servers') renderServerRegistry(modal, store);
+      });
+    });
+    form?.addEventListener('change', (event) => {
+      if (event.target.name === 'method') updateMethodUi(modal);
+    });
+    modal.querySelector('[data-infra-form-reset]')?.addEventListener('click', () => {
+      form.reset();
+      form.elements.method.value = 'icmp';
+      form.elements.expected_status.value = '200';
+      form.elements.packet_count.value = '4';
+      form.elements.timeout_seconds.value = '5';
+      form.elements.interval_seconds.value = '60';
+      updateMethodUi(modal);
+    });
+    modal.addEventListener('click', (event) => {
+      const remove = event.target.closest('[data-infra-remove-server]');
+      const cancelRemove = event.target.closest('[data-infra-cancel-remove]');
+      const confirmRemove = event.target.closest('[data-infra-confirm-remove]');
+      if (cancelRemove) {
+        renderServerRegistry(modal, store);
+        return;
+      }
+      if (confirmRemove) {
+        const code = confirmRemove.getAttribute('data-infra-confirm-remove');
+        const snapshot = store.getSnapshot();
+        // TODO(soft delete): deactivate this target through the backend API once persisted monitoring history exists.
+        const nodes = snapshot.nodes.filter((node) => node.code !== code);
+        if (state.selectedCode === code) state.selectedCode = nodes[0]?.code || '';
+        store.ingest({ ...snapshot, nodes });
+        renderServerRegistry(modal, store);
+        return;
+      }
+      if (!remove) return;
+      const code = remove.getAttribute('data-infra-remove-server');
+      const snapshot = store.getSnapshot();
+      const node = snapshot.nodes.find((item) => item.code === code);
+      const wrap = modal.querySelector(`[data-infra-remove-wrap="${CSS.escape(code)}"]`);
+      if (!wrap || !node) return;
+      wrap.innerHTML = `
+        <div class="infra-remove-confirm">
+          <strong>Remove this server from monitoring?</strong>
+          <p>This will remove ${esc(node.name)} / ${esc(node.code)} from the server registry. Historical monitoring data should not be deleted unless explicitly requested.</p>
+          <div>
+            <button type="button" class="btn btn-ghost btn-sm" data-infra-cancel-remove>Cancel</button>
+            <button type="button" class="btn btn-danger btn-sm" data-infra-confirm-remove="${esc(node.code)}">Remove Server</button>
+          </div>
+        </div>
+      `;
+      if (window.lucide) window.lucide.createIcons();
+    });
+    form?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const result = validateServerForm(form);
+      const validation = modal.querySelector('[data-infra-server-validation]');
+      if (result.missing.length || result.invalid.length) {
+        const missing = result.missing.map((name) => name.replace(/_/g, ' ')).join(', ');
+        const invalid = result.invalid.join(', ');
+        if (validation) {
+          validation.classList.add('is-error');
+          validation.textContent = `Complete required fields${missing ? `: ${missing}` : ''}${invalid ? `; check ${invalid}` : ''}.`;
+        }
+        return;
+      }
+      const node = nodeFromForm(form);
+      if (!node) return;
+      const snapshot = store.getSnapshot();
+      const nodes = [node, ...snapshot.nodes.filter((item) => item.code !== node.code)];
+      state.selectedCode = node.code;
+      store.ingest({ ...snapshot, nodes });
+      form.reset();
+      form.elements.method.value = 'icmp';
+      form.elements.status.value = 'healthy';
+      form.elements.latency.value = '24';
+      form.elements.packetLoss.value = '0.02';
+      form.elements.uptime.value = '99.990';
+      form.elements.expected_status.value = '200';
+      form.elements.packet_count.value = '4';
+      form.elements.timeout_seconds.value = '5';
+      form.elements.interval_seconds.value = '60';
+      updateMethodUi(modal);
+      renderServerRegistry(modal, store);
+      activateModalTab(modal, 'servers');
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !modal.hidden) closeModal();
     });
   }
 
@@ -389,8 +849,11 @@
     const tvWidgets = Array.from(document.querySelectorAll('[data-infra-tv-widget]'));
     if (!page && dashboardWidgets.length === 0 && tvWidgets.length === 0) return;
 
-    const store = Infra.createSharedStore({ intervalMs: 1000 });
+    initDashboardWidgetSliders();
+    const store = Infra.createSharedStore({ intervalMs: 4000 });
+    state.store = store;
     bindPage(page, store);
+    bindServerModal(store);
     store.subscribe((snapshot) => {
       if (page) renderPage(page, snapshot);
       dashboardWidgets.forEach((target) => renderInfrastructurePulseDashboardWidget(target, snapshot));

@@ -232,8 +232,10 @@ else if($action === 'update_agenda_item') {
 
 else if($action === 'delete_agenda_item') {
   $item_id = (int)($input['item_id'] ?? 0);
-  $MC->deleteAgendaItem($item_id);
-  respond(true, [], 'Agenda item deleted');
+  if($MC->deleteAgendaItem($item_id)) {
+    respond(true, [], 'Agenda item deleted');
+  }
+  respond(false, [], 'Not found');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -267,8 +269,10 @@ else if($action === 'add_discussion_note') {
 
 else if($action === 'delete_note') {
   $note_id = (int)($input['note_id'] ?? 0);
-  $MC->deleteNote($note_id);
-  respond(true, [], 'Note deleted');
+  if($MC->deleteNote($note_id)) {
+    respond(true, [], 'Note deleted');
+  }
+  respond(false, [], 'Not found');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -299,8 +303,10 @@ else if($action === 'add_decision') {
 
 else if($action === 'delete_decision') {
   $decision_id = (int)($input['decision_id'] ?? 0);
-  $MC->deleteDecision($decision_id);
-  respond(true, [], 'Decision deleted');
+  if($MC->deleteDecision($decision_id)) {
+    respond(true, [], 'Decision deleted');
+  }
+  respond(false, [], 'Not found');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -378,8 +384,10 @@ else if($action === 'complete_action') {
 
 else if($action === 'delete_action_item') {
   $action_id = (int)($input['action_id'] ?? 0);
-  $MC->deleteActionItem($action_id);
-  respond(true, [], 'Action deleted');
+  if($MC->deleteActionItem($action_id)) {
+    respond(true, [], 'Action deleted');
+  }
+  respond(false, [], 'Not found');
 }
 
 // ═══════════════════════════════════════════════════════════════

@@ -34,6 +34,8 @@ Current migrations:
 - `2026_05_16_add_operational_metadata.sql`
 - `2026_05_16_add_theme_preferences.sql`
 - `2026_05_16_cleanup_unused_tables.sql`
+- `2026_05_21_login_hardening.sql`
+- `2026_05_21_mandatory_2fa.sql`
 
 ## File Structure
 
@@ -66,7 +68,7 @@ config/
 
 | Module | Tables |
 | --- | --- |
-| Users/Auth | `tracs_users` |
+| Users/Auth | `tracs_users`, `tracs_login_attempts`, `tracs_auth_events` |
 | Cases | `tracs_cases` |
 | Reminders | `tracs_reminders` |
 | Checklist | `tracs_side_tasks`, `tracs_side_task_logs` |
@@ -138,3 +140,26 @@ Do not run archived SQL against production unless you have reviewed it against t
 TRACS should remain modular. Future analytics, AI summaries, SLA monitoring, escalation rules, automation, notifications, audit logs, attachments, role permissions, APIs, portals, and reporting should be added as separate schema modules plus dated migrations.
 
 Prefer stable extension tables and clear foreign keys over rewriting existing operational tables. When in doubt, add documentation first and defer deletion until usage is proven obsolete.
+
+## Login Hardening Migration
+
+Run `migrations/2026_05_21_login_hardening.sql` on existing databases. It adds:
+
+- `tracs_login_attempts`: failed-attempt counters, temporary locks, and CAPTCHA-required state by normalized identifier hash and IP address.
+- `tracs_auth_events`: authentication audit events for login success/failure, lockouts, CAPTCHA challenges, logout, and idle timeout.
+
+No passwords, session IDs, CSRF tokens, or CAPTCHA secrets are stored in these tables. Rollback is to restore the PHP/CSS files from backup and drop the two tables after exporting audit data if needed.
+
+## Mandatory 2FA Migration
+
+Run `migrations/2026_05_21_mandatory_2fa.sql` after the login-hardening and user-management migrations. It adds encrypted TOTP state to `tracs_users`:
+
+- `two_factor_enabled`
+- `two_factor_secret`
+- `two_factor_confirmed_at`
+- `two_factor_reset_required`
+- `two_factor_failed_attempts`
+- `two_factor_locked_until`
+- `two_factor_last_verified_at`
+
+Existing users are marked as requiring 2FA setup on their next successful password login. Back up the database before applying this migration. Rollback should restore the pre-migration database backup; if that is not possible, remove or ignore the `two_factor_*` columns only after confirming no encrypted 2FA secrets are still needed.

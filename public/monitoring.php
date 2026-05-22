@@ -3,6 +3,7 @@ require_once __DIR__ . '/../core/security/csrf.php';
 tracs_start_session();
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/auth/auth_check.php';
+require_once __DIR__ . '/../core/access_control.php';
 require_once __DIR__ . '/../modules/task-management/controller.php';
 require_once __DIR__ . '/../modules/alert-ticker/controller.php';
 require_once __DIR__ . '/includes/page_helpers.php';
@@ -18,14 +19,10 @@ $is_monitoring_route = str_ends_with((string)($_SERVER['SCRIPT_NAME'] ?? ''), '/
 if (!$schema_ready) {
     $actor = tracs_get_user_by_id($conn, $uid);
     if (($actor['role_slug'] ?? '') !== 'super_admin' && !tracs_user_can($conn, 'tasks.monitor')) {
-        http_response_code(403);
-        echo 'Forbidden';
-        exit;
+        tracs_abort_404();
     }
 } elseif (($is_monitoring_route && !$can_monitor) || (!tracs_user_can($conn, 'tasks.view_own') && !$can_monitor)) {
-    http_response_code(403);
-    echo 'Forbidden';
-    exit;
+    tracs_abort_404();
 }
 
 function tm_flash(string $type, string $message): void {

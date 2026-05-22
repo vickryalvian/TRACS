@@ -96,6 +96,11 @@ function tracs_permission_catalog(): array {
             'domains.view' => 'View domain records',
             'domains.manage' => 'Create and update domain records',
         ],
+        'Domain Price' => [
+            'domain_price.view' => 'View domain price crosscheck panel',
+            'domain_price.manage' => 'Create, update, and manage domain price drafts',
+            'domain_price.approve' => 'Review, lock, and approve domain price snapshots',
+        ],
         'MoM' => [
             'moms.view' => 'View meeting minutes',
             'moms.manage' => 'Create and update meeting minutes',
@@ -165,6 +170,7 @@ function tracs_default_role_permissions(string $roleSlug): array {
             'reports.export',
             'domains.view',
             'domains.manage',
+            'domain_price.view',
             'moms.view',
             'moms.manage',
             'cancellation_feedback.view',
@@ -181,6 +187,7 @@ function tracs_default_role_permissions(string $roleSlug): array {
             'checklist.view',
             'finance.view',
             'domains.view',
+            'domain_price.view',
             'moms.view',
             'reports.view',
             'cancellation_feedback.view',
@@ -203,6 +210,8 @@ function tracs_default_role_permissions(string $roleSlug): array {
             'tasks.update_own',
             'domains.view',
             'domains.manage',
+            'domain_price.view',
+            'domain_price.manage',
             'moms.view',
             'moms.manage',
             'reports.view',
@@ -253,6 +262,13 @@ function tracs_select_existing_user_columns(mysqli $conn, string $prefix = 'u'):
         'shift_preference',
         'avatar_path',
         'avatar_initials_color',
+        'two_factor_enabled',
+        'two_factor_secret',
+        'two_factor_confirmed_at',
+        'two_factor_reset_required',
+        'two_factor_failed_attempts',
+        'two_factor_locked_until',
+        'two_factor_last_verified_at',
         'created_by',
         'updated_by',
         'last_activity_at',
@@ -381,6 +397,42 @@ function tracs_get_user_by_email(mysqli $conn, string $email): ?array {
     return $row ? tracs_normalize_user_row($row) : null;
 }
 
+function tracs_get_user_by_login_identifier(mysqli $conn, string $identifier): ?array {
+    $identifier = strtolower(trim($identifier));
+    if ($identifier === '') {
+        return null;
+    }
+    if (!tracs_column_exists($conn, 'tracs_users', 'username')) {
+        return tracs_get_user_by_email($conn, $identifier);
+    }
+
+    $columns = tracs_select_existing_user_columns($conn, 'u');
+    $joins = '';
+    if (tracs_table_exists($conn, 'tracs_roles') && tracs_column_exists($conn, 'tracs_users', 'role_id')) {
+        $columns[] = 'r.name AS role_name';
+        $columns[] = 'r.slug AS role_slug';
+        $columns[] = 'r.hierarchy_level';
+        $joins .= ' LEFT JOIN tracs_roles r ON u.role_id = r.id';
+    }
+    if (tracs_table_exists($conn, 'tracs_divisions') && tracs_column_exists($conn, 'tracs_users', 'division_id')) {
+        $columns[] = 'd.name AS division_name';
+        $columns[] = 'd.code AS division_code';
+        $joins .= ' LEFT JOIN tracs_divisions d ON u.division_id = d.id';
+    }
+
+    $sql = 'SELECT ' . implode(', ', $columns) . ' FROM tracs_users u' . $joins . ' WHERE LOWER(u.email) = ? OR LOWER(u.username) = ? LIMIT 1';
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        return null;
+    }
+    $stmt->bind_param('ss', $identifier, $identifier);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    return $row ? tracs_normalize_user_row($row) : null;
+}
+
 function tracs_user_can_login(array $user): bool {
     if (isset($user['is_active']) && (int)$user['is_active'] !== 1) {
         return false;
@@ -471,6 +523,9 @@ function tracs_require_permission(mysqli $conn, string $permission): void {
         return;
     }
 
+    if (function_exists('tracs_auth_log_event')) {
+        tracs_auth_log_event($conn, 'permission_denied', 'blocked', (string)($_SESSION['user_email'] ?? ''), (int)($_SESSION['user_id'] ?? 0) ?: null, $permission);
+    }
     http_response_code(403);
     if (function_exists('tracs_is_api_request') && tracs_is_api_request()) {
         header('Content-Type: application/json; charset=utf-8');
@@ -544,15 +599,11 @@ function tracs_is_last_active_super_admin(mysqli $conn, int $userId): bool {
 }
 
 function tracs_client_ip(): string {
-    foreach (['HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR'] as $key) {
-        $value = trim((string)($_SERVER[$key] ?? ''));
-        if ($value === '') {
-            continue;
-        }
-        $parts = array_map('trim', explode(',', $value));
-        return substr($parts[0] ?? $value, 0, 45);
+    if (function_exists('tracs_auth_client_ip')) {
+        return tracs_auth_client_ip();
     }
-    return '';
+    $remote = trim((string)($_SERVER['REMOTE_ADDR'] ?? ''));
+    return filter_var($remote, FILTER_VALIDATE_IP) ? substr($remote, 0, 45) : '';
 }
 
 function tracs_scrub_sensitive(mixed $value): mixed {
@@ -711,6 +762,10 @@ function tracs_password_policy_errors(string $password, ?string $currentHash = n
     $errors = [];
     if (strlen($password) < 8) {
         $errors[] = 'Password must be at least 8 characters.';
+    }
+    $obvious = ['password', 'password123', 'admin1234', 'tracs1234', '12345678', 'qwerty123'];
+    if (in_array(strtolower($password), $obvious, true)) {
+        $errors[] = 'Password cannot be an obvious or default password.';
     }
     if ($currentHash && password_verify($password, $currentHash)) {
         $errors[] = 'New password cannot be the same as the current password.';

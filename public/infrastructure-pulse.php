@@ -4,6 +4,8 @@ tracs_start_session();
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/auth/auth_check.php';
+require_once __DIR__ . '/../core/access_control.php';
+tracs_require_page_permission($conn, 'dashboard.view');
 require_once __DIR__ . '/../modules/case/controller.php';
 require_once __DIR__ . '/../modules/reminder/controller.php';
 require_once __DIR__ . '/../modules/alert-ticker/controller.php';
@@ -45,7 +47,8 @@ $infra_js_v = @filemtime(__DIR__ . '/assets/infrastructure-pulse.js') ?: time();
       <div class="page-sub">Prototype NOC panel for IDCloudHost datacenter health, realtime latency, uptime, and incident signal.</div>
     </div>
     <div class="infra-topbar__actions">
-      <span class="infra-live-chip"><span aria-hidden="true"></span>Mock realtime / <b data-infra-generated-at>--:--:--</b></span>
+      <span class="infra-live-chip" title="Simulated telemetry only"><span aria-hidden="true"></span>Mock realtime / <b data-infra-generated-at>--:--:--</b></span>
+      <button type="button" class="btn btn-ghost btn-sm" data-infra-manage-open><i data-lucide="server-cog" class="icon-sm"></i>Manage Servers</button>
       <a href="tv-mode.php" class="btn btn-ghost btn-sm"><i data-lucide="monitor-up" class="icon-sm"></i>TV Mode</a>
     </div>
   </div>
@@ -53,94 +56,31 @@ $infra_js_v = @filemtime(__DIR__ . '/assets/infrastructure-pulse.js') ?: time();
   <section class="infra-summary-grid" data-infra-summary aria-label="Infrastructure status summary"></section>
 
   <section class="infra-layout">
-    <section class="panel infra-map-panel">
+    <section class="panel infra-report-panel">
       <div class="panel-head">
         <div>
-          <span class="panel-title">Vector Infrastructure Map</span>
-          <div class="panel-meta">SEA overview + Jabodetabek cluster zoom</div>
+          <span class="panel-title">Infrastructure Summary Report</span>
+          <div class="panel-meta">NOC handover view / mock telemetry</div>
         </div>
         <div class="panel-right">
-          <span class="panel-meta">No browser pinging / mock telemetry only</span>
+          <span class="panel-meta">No browser pinging / API-ready snapshot</span>
         </div>
       </div>
-      <div class="infra-map-wrap">
-        <svg class="infra-map" data-infra-map viewBox="0 0 960 620" role="img" aria-label="Vector radar style infrastructure map for Indonesia and Singapore datacenters">
-          <defs>
-            <pattern id="infraGrid" width="32" height="32" patternUnits="userSpaceOnUse">
-              <path d="M32 0H0V32" fill="none" stroke="rgba(148,163,184,.18)" stroke-width="1"></path>
-            </pattern>
-            <radialGradient id="infraVignette" cx="50%" cy="44%" r="70%">
-              <stop offset="0%" stop-color="rgba(34,211,238,.10)"></stop>
-              <stop offset="58%" stop-color="rgba(11,17,24,0)"></stop>
-              <stop offset="100%" stop-color="rgba(2,6,23,.72)"></stop>
-            </radialGradient>
-            <filter id="infraGlow" x="-80%" y="-80%" width="260%" height="260%">
-              <feGaussianBlur stdDeviation="3.2" result="blur"></feGaussianBlur>
-              <feMerge>
-                <feMergeNode in="blur"></feMergeNode>
-                <feMergeNode in="SourceGraphic"></feMergeNode>
-              </feMerge>
-            </filter>
-          </defs>
-
-          <rect class="infra-map-bg" x="0" y="0" width="960" height="620" rx="0"></rect>
-          <rect class="infra-map-grid" x="0" y="0" width="960" height="620"></rect>
-          <rect class="infra-map-vignette" x="0" y="0" width="960" height="620"></rect>
-
-          <path class="infra-region" d="M134 194 C190 142 318 132 398 178 C470 220 462 306 385 330 C280 363 144 316 108 254 C95 232 106 210 134 194Z"></path>
-          <path class="infra-region infra-region--sg" d="M640 112 C704 72 814 88 850 142 C884 192 836 250 759 252 C682 254 620 211 610 164 C606 142 616 126 640 112Z"></path>
-          <text class="infra-region-label" x="254" y="154" text-anchor="middle">INDONESIA EDGE</text>
-          <text class="infra-region-label" x="735" y="96" text-anchor="middle">SINGAPORE EDGE</text>
-
-          <path class="infra-connection-shadow" d="M304 236 C420 118 570 96 716 168"></path>
-          <path class="infra-connection" id="infraPulseMainLink" d="M304 236 C420 118 570 96 716 168"></path>
-          <circle class="infra-flow-particle" r="4">
-            <animateMotion dur="7s" repeatCount="indefinite" rotate="auto">
-              <mpath href="#infraPulseMainLink"></mpath>
-            </animateMotion>
-          </circle>
-          <circle class="infra-flow-particle" r="3">
-            <animateMotion dur="9s" begin="2s" repeatCount="indefinite" rotate="auto">
-              <mpath href="#infraPulseMainLink"></mpath>
-            </animateMotion>
-          </circle>
-          <circle class="infra-flow-particle" r="3.5">
-            <animateMotion dur="11s" begin="4s" repeatCount="indefinite" rotate="auto">
-              <mpath href="#infraPulseMainLink"></mpath>
-            </animateMotion>
-          </circle>
-
-          <g data-infra-overview-nodes></g>
-
-          <rect class="infra-zoom-shell" x="48" y="332" width="510" height="244" rx="14"></rect>
-          <text class="infra-zoom-title" x="72" y="362">JAKARTA / JABODETABEK CLUSTER ZOOM</text>
-          <text class="infra-region-label--small" x="72" y="382">Separated markers for clustered Indonesian facilities</text>
-          <path class="infra-region" d="M116 430 C190 356 332 348 462 407 C515 431 512 508 450 538 C328 594 140 548 100 480 C89 462 95 445 116 430Z"></path>
-
-          <rect class="infra-zoom-shell" x="604" y="300" width="288" height="176" rx="14"></rect>
-          <text class="infra-zoom-title" x="628" y="330">SINGAPORE DETAIL</text>
-          <text class="infra-region-label--small" x="628" y="350">SG3 / EGH / SNG-3</text>
-
-          <g data-infra-map-nodes></g>
-        </svg>
-        <aside class="infra-map-detail" data-infra-detail aria-live="polite"></aside>
-      </div>
-      <div class="infra-integration-note">
-        <div>Future API hooks: <code>/api/infrastructure/status</code>, <code>/api/infrastructure/metrics</code>, <code>/api/infrastructure/events</code>, and SSE <code>/api/infrastructure/stream</code>.</div>
-        <div>Integration placeholders: ticker announcements for active incidents, cases for incident ownership, reminders for maintenance windows, and TV Mode embedding via <code>renderInfrastructurePulseTVWidget()</code>.</div>
-      </div>
+      <div class="infra-report-wrap" data-infra-report aria-live="polite"></div>
     </section>
 
     <aside class="panel infra-metrics-panel">
       <div class="panel-head">
         <div>
           <span class="panel-title">Realtime Metrics</span>
-          <div class="panel-meta">1s mock update loop / sparkline history</div>
+          <div class="panel-meta">Risk-sorted view / high latency &amp; packet loss first</div>
         </div>
       </div>
       <div class="infra-metrics-list" data-infra-metrics aria-label="Datacenter metrics"></div>
     </aside>
   </section>
+
+  <section class="infra-graph-grid" data-infra-graphs aria-label="Infrastructure monitoring graphs"></section>
 
   <section class="panel infra-feed-panel">
     <div class="panel-head">
@@ -153,6 +93,146 @@ $infra_js_v = @filemtime(__DIR__ . '/assets/infrastructure-pulse.js') ?: time();
   </section>
 </div>
 </main>
+
+<div class="infra-modal" data-infra-server-modal hidden>
+  <div class="infra-modal__backdrop" data-infra-manage-close></div>
+  <section class="infra-modal__panel" role="dialog" aria-modal="true" aria-labelledby="infraServerModalTitle">
+    <div class="infra-modal__head">
+      <div>
+        <span class="panel-title">Server Registry</span>
+        <h2 id="infraServerModalTitle">Server Registry &amp; Monitoring Setup</h2>
+        <p>Prepare real VPS-side monitoring targets while keeping mock data available for demos and TV Mode testing.</p>
+      </div>
+      <button type="button" class="btn btn-ghost btn-icon" data-infra-manage-close aria-label="Close"><i data-lucide="x" class="icon-sm"></i></button>
+    </div>
+    <div class="infra-modal__tabs" role="tablist" aria-label="Server registry sections">
+      <button type="button" class="is-active" data-infra-modal-tab="add" role="tab" aria-selected="true">Add Server</button>
+      <button type="button" data-infra-modal-tab="servers" role="tab" aria-selected="false">Current Servers</button>
+      <button type="button" data-infra-modal-tab="settings" role="tab" aria-selected="false">Monitoring Settings</button>
+    </div>
+    <div class="infra-modal__body">
+      <section class="infra-modal__pane is-active" data-infra-modal-pane="add">
+        <form class="infra-server-form" data-infra-server-form novalidate>
+          <div class="infra-method-grid" role="radiogroup" aria-label="Monitoring method">
+            <label class="infra-method-card is-active" data-infra-method-card="icmp">
+              <input type="radio" name="method" value="icmp" checked>
+              <span><i data-lucide="radio-tower" class="icon-sm"></i>Network Ping</span>
+              <em>ICMP reachability, latency, and packet loss. Firewall rules can block ping.</em>
+            </label>
+            <label class="infra-method-card" data-infra-method-card="tcp">
+              <input type="radio" name="method" value="tcp">
+              <span><i data-lucide="plug-zap" class="icon-sm"></i>Port Check</span>
+              <em>Checks a specific service port such as 22, 80, 443, or 3306.</em>
+            </label>
+            <label class="infra-method-card" data-infra-method-card="http">
+              <input type="radio" name="method" value="http">
+              <span><i data-lucide="globe-2" class="icon-sm"></i>Health Endpoint</span>
+              <em>Recommended for web services, APIs, dashboards, and status URLs.</em>
+            </label>
+            <label class="infra-method-card" data-infra-method-card="mock">
+              <input type="radio" name="method" value="mock">
+              <span><i data-lucide="flask-conical" class="icon-sm"></i>Demo Data</span>
+              <em>Session-only mock telemetry for local development and TV Mode testing.</em>
+            </label>
+          </div>
+
+          <div class="infra-form-section">
+            <div class="infra-form-section__head">
+              <strong>Identity</strong>
+              <span>Required for every monitoring target.</span>
+            </div>
+            <div class="infra-server-form__grid">
+              <label><span>Server name *</span><input class="form-input" name="name" data-required-base placeholder="Jakarta Edge 1" autocomplete="off"></label>
+              <label><span>Code *</span><input class="form-input" name="code" data-required-base maxlength="8" placeholder="JKT1" autocomplete="off"></label>
+              <label><span>Region *</span><input class="form-input" name="region" data-required-base placeholder="Jabodetabek" autocomplete="off"></label>
+              <label><span>Country *</span><input class="form-input" name="country" data-required-base placeholder="Indonesia" autocomplete="off"></label>
+              <label><span>Provider *</span><input class="form-input" name="provider" data-required-base placeholder="IDCloudHost" autocomplete="off"></label>
+            </div>
+          </div>
+
+          <div class="infra-form-section" data-method-section="real">
+            <div class="infra-form-section__head">
+              <strong>Monitoring Target</strong>
+              <span>Real checks will run from the TRACS VPS backend, not browser JavaScript.</span>
+            </div>
+            <div class="infra-server-form__grid">
+              <label data-method-field="icmp tcp"><span>IP address or hostname *</span><input class="form-input" name="target_host" placeholder="server.example.com" autocomplete="off"></label>
+              <label data-method-field="tcp"><span>Port *</span><input class="form-input" name="target_port" type="number" min="1" max="65535" step="1" placeholder="443"></label>
+              <label data-method-field="http"><span>Health check URL *</span><input class="form-input" name="health_url" type="url" placeholder="https://example.com/health" autocomplete="off"></label>
+              <label data-method-field="http"><span>Expected status</span><input class="form-input" name="expected_status" type="number" min="100" max="599" step="1" value="200"></label>
+              <label data-method-field="http"><span>Expected keyword</span><input class="form-input" name="expected_keyword" placeholder="ok" autocomplete="off"></label>
+              <label data-method-field="icmp"><span>Packet count</span><input class="form-input" name="packet_count" type="number" min="1" max="10" step="1" value="4"></label>
+              <label data-method-field="icmp tcp http"><span>Timeout seconds</span><input class="form-input" name="timeout_seconds" type="number" min="1" max="30" step="1" value="5"></label>
+              <label data-method-field="icmp tcp http"><span>Check interval seconds</span><input class="form-input" name="interval_seconds" type="number" min="30" max="3600" step="5" value="60"></label>
+            </div>
+          </div>
+
+          <div class="infra-form-section" data-method-section="mock">
+            <div class="infra-form-section__head">
+              <strong>Mock Telemetry</strong>
+              <span>Demo-only values feed the existing mock realtime charts and TV Mode.</span>
+            </div>
+            <div class="infra-server-form__grid">
+              <label><span>Status</span>
+                <select class="form-select" name="status">
+                  <option value="healthy">Healthy</option>
+                  <option value="recovery">Recovery</option>
+                  <option value="degraded">Degraded</option>
+                  <option value="critical">Critical</option>
+                  <option value="maintenance">Maintenance</option>
+                </select>
+              </label>
+              <label><span>Latency ms</span><input class="form-input" name="latency" type="number" min="0" step="1" value="24"></label>
+              <label><span>Packet loss %</span><input class="form-input" name="packetLoss" type="number" min="0" step="0.01" value="0.02"></label>
+              <label><span>30D uptime %</span><input class="form-input" name="uptime" type="number" min="0" max="100" step="0.001" value="99.990"></label>
+            </div>
+          </div>
+
+          <div class="infra-method-note" data-infra-method-note role="status"></div>
+          <div class="infra-server-form__actions">
+            <div class="infra-validation" data-infra-server-validation>Required fields change based on the selected monitoring method.</div>
+            <div class="infra-server-form__buttons">
+              <button type="button" class="btn btn-ghost btn-sm" data-infra-form-reset>Reset</button>
+              <button type="submit" class="btn btn-primary btn-sm"><i data-lucide="plus" class="icon-sm"></i>Add Server</button>
+            </div>
+          </div>
+        </form>
+      </section>
+
+      <section class="infra-modal__pane" data-infra-modal-pane="servers">
+        <div class="infra-server-registry" data-infra-server-registry></div>
+      </section>
+
+      <section class="infra-modal__pane" data-infra-modal-pane="settings">
+        <div class="infra-settings-grid">
+          <article>
+            <i data-lucide="server-cog" class="icon-sm"></i>
+            <strong>Backend execution</strong>
+            <p>Browser JavaScript cannot reliably perform ICMP or TCP checks. Real monitoring should run from the TRACS VPS backend and stream results to this dashboard.</p>
+          </article>
+          <article>
+            <i data-lucide="database" class="icon-sm"></i>
+            <strong>Planned tables</strong>
+            <p><code>infrastructure_servers</code>, <code>infrastructure_monitoring_results</code>, and <code>infrastructure_incidents</code> should store targets, samples, history, and incident timelines.</p>
+          </article>
+          <article>
+            <i data-lucide="shield-check" class="icon-sm"></i>
+            <strong>Access control</strong>
+            <p>Only authorized roles should add, edit, remove, or view sensitive targets. Role-based visibility can be layered onto the server registry API.</p>
+          </article>
+          <article>
+            <i data-lucide="clock-3" class="icon-sm"></i>
+            <strong>Worker cadence</strong>
+            <p>Use lightweight agentless checks from the TRACS VPS with 30-60 second intervals by default, strict timeouts, jitter, bounded concurrency, and backoff for noisy or down targets.</p>
+          </article>
+        </div>
+        <pre class="infra-schema-note"><code>MonitoringService::checkIcmp($host)
+MonitoringService::checkTcp($host, $port)
+MonitoringService::checkHttp($url, $expectedStatus, $expectedKeyword)</code></pre>
+      </section>
+    </div>
+  </section>
+</div>
 
 <script src="assets/infrastructure-pulse-data.js?v=<?=$infra_data_v?>"></script>
 <script src="assets/infrastructure-pulse.js?v=<?=$infra_js_v?>"></script>

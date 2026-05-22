@@ -155,7 +155,10 @@ function holiday_pick(array $items, DateTimeImmutable $today): ?array {
     return null;
 }
 
-if (!empty($_GET['force_error'])) {
+$holidayDebugAllowed = in_array(strtolower((string)($_ENV['APP_ENV'] ?? getenv('APP_ENV') ?: 'production')), ['local', 'development', 'dev'], true)
+    || tracs_user_can($conn, 'settings.manage', $uid);
+
+if ($holidayDebugAllowed && !empty($_GET['force_error'])) {
     fail('Simulated holiday API error', 503);
 }
 
@@ -170,7 +173,7 @@ $today = $dateParam !== ''
 
 $year = (int)$today->format('Y');
 $sources = [];
-$forceFallback = !empty($_GET['force_fallback']);
+$forceFallback = $holidayDebugAllowed && !empty($_GET['force_fallback']);
 $items = array_merge(
     holiday_fetch_year($year, $forceFallback, $sources),
     holiday_fetch_year($year + 1, $forceFallback, $sources)

@@ -1,9 +1,11 @@
 <?php
 require_once __DIR__ . '/../core/security/csrf.php';
+require_once __DIR__ . '/../core/security/auth_hardening.php';
 require_once __DIR__ . '/../core/build_signature.php';
 tracs_start_session();
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/auth/auth_check.php';
+require_once __DIR__ . '/../core/access_control.php';
 require_once __DIR__ . '/../modules/user-management/controller.php';
 require_once __DIR__ . '/../modules/alert-ticker/controller.php';
 require_once __DIR__ . '/includes/page_helpers.php';
@@ -15,9 +17,7 @@ $schema_ready = $UM->schemaReady();
 
 $legacy_bootstrap_access = !$schema_ready && ($uid === 1 || strtolower($user_email) === 'admin@tracs.local');
 if (!$legacy_bootstrap_access && !tracs_user_can($conn, 'users.view') && !tracs_user_can($conn, 'divisions.view') && !tracs_user_can($conn, 'roles.view')) {
-    http_response_code(403);
-    echo 'Forbidden';
-    exit;
+    tracs_abort_404();
 }
 
 function um_flash(string $type, string $message): void {
@@ -43,6 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'update_user' => $UM->updateUser((int)($_POST['user_id'] ?? 0), $_POST),
             'set_user_status' => $UM->setUserStatus((int)($_POST['user_id'] ?? 0), (string)($_POST['status'] ?? ''), (string)($_POST['reason'] ?? '')),
             'reset_password' => $UM->resetPassword((int)($_POST['user_id'] ?? 0), (string)($_POST['reason'] ?? '')),
+            'reset_two_factor' => $UM->resetTwoFactor((int)($_POST['user_id'] ?? 0), (string)($_POST['reason'] ?? '')),
             'create_division' => $UM->createDivision($_POST),
             'update_division' => $UM->updateDivision((int)($_POST['division_id'] ?? 0), $_POST),
             'archive_division' => $UM->archiveDivision((int)($_POST['division_id'] ?? 0), !empty($_POST['confirm_archive']), (string)($_POST['reason'] ?? '')),
@@ -72,9 +73,14 @@ $temp_password = $_SESSION['um_temp_password'] ?? null;
 unset($_SESSION['um_temp_password']);
 
 $can_manage_settings = $schema_ready && tracs_user_can($conn, 'settings.manage');
+$security_roles = ['super_admin', 'admin', 'supervisor'];
+$can_view_auth_security = $schema_ready && in_array((string)($_SESSION['user_role_slug'] ?? ''), $security_roles, true);
 $allowed_tabs = ['users', 'roles', 'activity'];
 if ($can_manage_settings) {
     $allowed_tabs[] = 'system';
+}
+if ($can_view_auth_security) {
+    $allowed_tabs[] = 'security';
 }
 $requested_tab = (string)($_GET['tab'] ?? 'users');
 $tab = in_array($requested_tab, $allowed_tabs, true) ? $requested_tab : 'users';
@@ -104,6 +110,8 @@ $activity_filters = [
 ];
 $activity_logs = $schema_ready && $tab === 'activity' ? $UM->activity($activity_filters, (int)($_GET['limit'] ?? 100)) : [];
 $activity_actions = $schema_ready ? $UM->actionOptions() : [];
+$auth_events = $schema_ready && $tab === 'security' && $can_view_auth_security ? tracs_auth_recent_events($conn, 50) : [];
+$auth_locks = $schema_ready && $tab === 'security' && $can_view_auth_security ? tracs_auth_locked_attempts($conn, 50) : [];
 
 $can_create_user = tracs_user_can($conn, 'users.create');
 $can_update_user = tracs_user_can($conn, 'users.update');
@@ -117,6 +125,7 @@ $can_manage_permissions = tracs_user_can($conn, 'roles.manage_permissions');
 $actor = tracs_get_user_by_id($conn, $uid) ?? [];
 $actor_permissions = tracs_user_permissions($conn, $uid);
 $is_super_admin = ($actor['role_slug'] ?? '') === 'super_admin';
+$can_reset_2fa = $schema_ready && $is_super_admin && tracs_two_factor_schema_ready($conn);
 $build_signature = tracs_build_public_payload();
 
 $TC = new AlertTickerController($conn, $uid);
@@ -151,6 +160,12 @@ function um_user_payload(array $user): string {
         'avatar_path' => $user['avatar_path'] ?? '',
         'avatar_url' => tracs_user_avatar_url($user),
         'avatar_initials_color' => $user['avatar_initials_color'] ?? '',
+        'two_factor_enabled' => (int)($user['two_factor_enabled'] ?? 0),
+        'two_factor_confirmed_at' => um_dt($user['two_factor_confirmed_at'] ?? null),
+        'two_factor_reset_required' => (int)($user['two_factor_reset_required'] ?? 1),
+        'two_factor_failed_attempts' => (int)($user['two_factor_failed_attempts'] ?? 0),
+        'two_factor_locked_until' => um_dt($user['two_factor_locked_until'] ?? null),
+        'two_factor_last_verified_at' => um_dt($user['two_factor_last_verified_at'] ?? null),
         'created_at' => um_dt($user['created_at'] ?? null),
         'updated_at' => um_dt($user['updated_at'] ?? null),
         'last_login_at' => um_dt($user['last_login_at'] ?? null),
@@ -315,6 +330,7 @@ include __DIR__ . '/includes/header.php';
   <a class="filter-tab <?=$tab==='users'?'active':''?>" href="?tab=users"><i data-lucide="layout-dashboard" class="icon-sm"></i>Dashboard</a>
   <a class="filter-tab <?=$tab==='roles'?'active':''?>" href="?tab=roles"><i data-lucide="shield-check" class="icon-sm"></i>Roles & Permissions</a>
   <a class="filter-tab <?=$tab==='activity'?'active':''?>" href="?tab=activity"><i data-lucide="history" class="icon-sm"></i>Activity Log</a>
+  <?php if($can_view_auth_security): ?><a class="filter-tab <?=$tab==='security'?'active':''?>" href="?tab=security"><i data-lucide="shield-alert" class="icon-sm"></i>Login Security</a><?php endif; ?>
   <?php if($can_manage_settings): ?><a class="filter-tab <?=$tab==='system'?'active':''?>" href="?tab=system"><i data-lucide="settings" class="icon-sm"></i>System</a><?php endif; ?>
 </div>
 
@@ -466,7 +482,7 @@ include __DIR__ . '/includes/header.php';
     <?php endforeach; ?>
   </div>
 
-  <form method="post" class="panel um-permission-panel" onsubmit="return confirm('Save role permission changes? This affects every user assigned to those roles.')">
+  <form method="post" class="panel um-permission-panel" onsubmit="return tracsConfirmSubmit(this, {type:'warning', title:'Save permission matrix', message:'Save role permission changes? This affects every user assigned to those roles.', confirmText:'Save changes', destructive:false})">
     <?=csrf_input()?><input type="hidden" name="action" value="update_permissions">
     <div class="panel-head">
       <span class="panel-title">Permission Matrix</span>
@@ -549,6 +565,55 @@ include __DIR__ . '/includes/header.php';
         <?php endforeach; ?>
       </div>
     <?php endif; ?>
+  </div>
+<?php endif; ?>
+
+<?php if($tab === 'security' && $can_view_auth_security): ?>
+  <div class="um-security-grid">
+    <section class="panel um-panel">
+      <div class="panel-head"><span class="panel-title">Active Login Protections</span><span class="panel-counter"><?=count($auth_locks)?></span></div>
+      <?php if(!$auth_locks): ?>
+        <div class="um-empty-state"><div class="empty-ic"><i data-lucide="shield-check"></i></div><div class="empty-t">No active failed-attempt records</div></div>
+      <?php else: ?>
+        <div class="table-wrap">
+          <table class="tracs-table">
+            <thead><tr><th>Identifier</th><th>IP Address</th><th>Fails</th><th>Lock Until</th><th>CAPTCHA Until</th><th>Last Failed</th></tr></thead>
+            <tbody>
+              <?php foreach($auth_locks as $lock): ?>
+                <tr>
+                  <td><?=esc($lock['identifier_display'] ?: 'unknown')?></td>
+                  <td><?=esc($lock['ip_address'] ?: 'unknown')?></td>
+                  <td><?=esc($lock['failed_attempts'] ?? 0)?></td>
+                  <td><?=um_dt($lock['locked_until'] ?? null)?></td>
+                  <td><?=um_dt($lock['captcha_required_until'] ?? null)?></td>
+                  <td><?=um_dt($lock['last_failed_at'] ?? null)?></td>
+                </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+      <?php endif; ?>
+    </section>
+
+    <section class="panel um-panel">
+      <div class="panel-head"><span class="panel-title">Recent Authentication Events</span><span class="panel-counter"><?=count($auth_events)?></span></div>
+      <?php if(!$auth_events): ?>
+        <div class="um-empty-state"><div class="empty-ic"><i data-lucide="history"></i></div><div class="empty-t">No authentication events found</div></div>
+      <?php else: ?>
+        <div class="um-timeline">
+          <?php foreach($auth_events as $event): ?>
+            <div class="um-log-row">
+              <div class="act-ic"><i data-lucide="shield-alert" class="icon-sm"></i></div>
+              <div class="flex1">
+                <div class="act-text"><strong><?=esc(str_replace('_',' ', $event['event_type']))?></strong><span>· <?=esc($event['result'])?></span></div>
+                <div class="act-desc">Identifier: <?=esc($event['identifier'] ?: 'unknown')?><?php if(!empty($event['user_name'])): ?> · User: <?=esc($event['user_name'])?><?php endif; ?><?php if(!empty($event['reason'])): ?> · Reason: <?=esc($event['reason'])?><?php endif; ?></div>
+                <div class="act-time"><?=um_dt($event['created_at'])?><?php if(!empty($event['ip_address'])): ?> · <?=esc($event['ip_address'])?><?php endif; ?></div>
+              </div>
+            </div>
+          <?php endforeach; ?>
+        </div>
+      <?php endif; ?>
+    </section>
   </div>
 <?php endif; ?>
 
@@ -638,6 +703,32 @@ include __DIR__ . '/includes/header.php';
     <div class="modal-foot"><button type="button" class="btn btn-ghost" onclick="closeModal('userForm')">Cancel</button><button type="submit" class="btn btn-primary"><i data-lucide="check" class="icon-sm"></i>Save User</button></div>
   </form>
 </div>
+
+<?php if($can_reset_2fa): ?>
+<div class="modal-overlay hidden" id="twoFactorResetModal">
+  <form method="post" class="modal" onsubmit="return umConfirmTwoFactorResetSubmit(this)">
+    <?=csrf_input()?>
+    <input type="hidden" name="action" value="reset_two_factor">
+    <input type="hidden" name="user_id" id="umTwoFactorResetUserId" value="">
+    <input type="hidden" name="reason" id="umTwoFactorResetReason" value="">
+    <div class="modal-head">
+      <div><div class="modal-title">Reset two-factor authentication</div><div class="modal-sub" id="umTwoFactorResetSub">This user will need to set up 2FA again.</div></div>
+      <button type="button" class="modal-close" onclick="closeModal('twoFactorReset')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="um-permission-note warning"><i data-lucide="shield-alert" class="icon-sm"></i><span>Resetting 2FA clears the existing authenticator secret and requires the user to complete setup again on their next login. This action is logged.</span></div>
+      <div class="form-group">
+        <label class="form-label" for="umTwoFactorResetReasonInput">Reason</label>
+        <textarea class="form-textarea" id="umTwoFactorResetReasonInput" rows="3" placeholder="Optional operational note"></textarea>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-ghost" onclick="closeModal('twoFactorReset')">Cancel</button>
+      <button type="submit" class="btn btn-danger"><i data-lucide="shield-off" class="icon-sm"></i>Reset 2FA</button>
+    </div>
+  </form>
+</div>
+<?php endif; ?>
 
 <div class="modal-overlay hidden" id="divisionFormModal">
   <form method="post" class="modal">
@@ -729,10 +820,38 @@ include __DIR__ . '/includes/header.php';
 const UM_PERMISSION_CATALOG = <?=json_encode($permission_catalog_payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)?>;
 const UM_ROLE_PERMISSIONS = <?=json_encode($role_permission_payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)?>;
 const UM_CAN_MANAGE_PERMISSIONS = <?=json_encode($can_manage_permissions)?>;
+const UM_CAN_RESET_2FA = <?=json_encode($can_reset_2fa)?>;
 const UM_ACTOR_ROLE_ID = <?=json_encode((int)($actor['role_id'] ?? 0))?>;
 const UM_IS_SUPER_ADMIN = <?=json_encode($is_super_admin)?>;
 function umEsc(value){ return String(value ?? '').replace(/[&<>"']/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch])); }
 function umData(btn, key){ try { return JSON.parse(btn.dataset[key] || '{}'); } catch(e) { return {}; } }
+function umAllowDialogSubmit(form){
+  if(form?.dataset?.tracsConfirmed === '1'){
+    delete form.dataset.tracsConfirmed;
+    return true;
+  }
+  return false;
+}
+function umSubmitAfterDialog(form){
+  if(!form) return;
+  form.dataset.tracsConfirmed='1';
+  if(typeof form.requestSubmit === 'function') form.requestSubmit();
+  else form.submit();
+}
+async function umPromptText(options){
+  const value=await tracsPrompt({
+    type: options.type || 'info',
+    title: options.title || 'Reason required',
+    subtitle: options.subtitle || 'Audited user management action',
+    message: options.message || '',
+    inputLabel: options.inputLabel || 'Reason',
+    placeholder: options.placeholder || '',
+    required: !!options.required,
+    confirmText: options.confirmText || 'Continue',
+    cancelText: options.cancelText || 'Cancel'
+  });
+  return (value || '').trim();
+}
 function umSetValue(id, value){ const el=document.getElementById(id); if(el) el.value=value ?? ''; }
 function umInitials(u){ return (u.name||u.email||'U').split(/\s+/).map(x=>x[0]).join('').slice(0,2).toUpperCase(); }
 function umSetAvatarNode(node, u){
@@ -817,12 +936,30 @@ function umEditDivision(btn){
   openModal('divisionForm'); window.TRACSDropdowns?.syncAll();
 }
 function umSubmitReason(form, promptText){
-  const reason=prompt(promptText);
-  if(!reason || !reason.trim()) return false;
-  form.querySelector('[name="reason"]').value=reason.trim();
-  return confirm('Confirm this account status change?');
+  if(umAllowDialogSubmit(form)) return true;
+  (async()=>{
+    const reason=await umPromptText({
+      type:'warning',
+      title:'Status change reason',
+      message:promptText,
+      required:true,
+      confirmText:'Review change'
+    });
+    if(!reason) return;
+    form.querySelector('[name="reason"]').value=reason;
+    const ok=await tracsConfirm({
+      type:'warning',
+      title:'Confirm account status change',
+      message:'Confirm this account status change?',
+      confirmText:'Confirm',
+      destructive:true
+    });
+    if(ok) umSubmitAfterDialog(form);
+  })();
+  return false;
 }
 function umUserFormSubmit(form){
+  if(umAllowDialogSubmit(form)) return true;
   const action=form.querySelector('[name="action"]')?.value;
   const original=form.querySelector('[name="original_status"]')?.value || '';
   const next=form.querySelector('[name="status"]')?.value || '';
@@ -833,34 +970,108 @@ function umUserFormSubmit(form){
     if(!university || !start || !end){ toast('University, start date, and end date are required for interns.','error'); return false; }
     if(new Date(end) <= new Date(start)){ toast('Internship end date must be after start date.','error'); return false; }
   }
-  if(action === 'update_user' && original && original !== next && next !== 'active'){
-    const reason=prompt('Reason for account status change:') || '';
-    if(!reason.trim()) return false;
-    form.querySelector('[name="reason"]').value=reason.trim();
-  }
   if(action === 'update_user' && original && original !== next){
-    return confirm('Save this account status change?');
+    (async()=>{
+      if(next !== 'active'){
+        const reason=await umPromptText({
+          type:'warning',
+          title:'Status change reason',
+          message:'Provide a reason for this account status change.',
+          required:true,
+          confirmText:'Review change'
+        });
+        if(!reason) return;
+        form.querySelector('[name="reason"]').value=reason;
+      }
+      const ok=await tracsConfirm({
+        type:'warning',
+        title:'Save account status change',
+        message:'Save this account status change?',
+        confirmText:'Save change',
+        destructive:next !== 'active'
+      });
+      if(ok) umSubmitAfterDialog(form);
+    })();
+    return false;
   }
   return true;
 }
 function umConfirmReset(form){
-  const reason=prompt('Reason for password reset (optional):') || '';
-  form.querySelector('[name="reason"]').value=reason.trim();
-  return confirm('Generate a temporary password for this user? It will be shown once.');
+  if(umAllowDialogSubmit(form)) return true;
+  (async()=>{
+    const reason=await umPromptText({
+      type:'warning',
+      title:'Password reset reason',
+      message:'Add an optional reason for this password reset.',
+      inputLabel:'Reason (optional)',
+      required:false,
+      confirmText:'Continue'
+    });
+    form.querySelector('[name="reason"]').value=reason;
+    const ok=await tracsConfirm({
+      type:'warning',
+      title:'Generate temporary password',
+      message:'Generate a temporary password for this user? It will be shown once.',
+      confirmText:'Generate',
+      destructive:true
+    });
+    if(ok) umSubmitAfterDialog(form);
+  })();
+  return false;
+}
+function umOpenTwoFactorResetModal(btn){
+  umOpenTwoFactorResetModalForUser(umData(btn,'user'));
+}
+function umOpenTwoFactorResetModalForUser(u){
+  if(!UM_CAN_RESET_2FA || !u?.id) return;
+  umSetValue('umTwoFactorResetUserId', u.id);
+  umSetValue('umTwoFactorResetReason', '');
+  const reasonInput=document.getElementById('umTwoFactorResetReasonInput');
+  if(reasonInput) reasonInput.value='';
+  const sub=document.getElementById('umTwoFactorResetSub');
+  if(sub) sub.textContent=`${u.name || u.email || 'This user'} will need to set up 2FA again on their next login.`;
+  openModal('twoFactorReset');
+}
+function umConfirmTwoFactorResetSubmit(form){
+  if(umAllowDialogSubmit(form)) return true;
+  const reasonInput=document.getElementById('umTwoFactorResetReasonInput');
+  form.querySelector('[name="reason"]').value=(reasonInput?.value || '').trim();
+  tracsConfirm({
+    type:'warning',
+    title:'Reset user 2FA',
+    message:'Reset this user\'s 2FA now? They will not be able to access TRACS until setup is completed again.',
+    confirmText:'Reset 2FA',
+    destructive:true
+  }).then(ok=>{ if(ok) umSubmitAfterDialog(form); });
+  return false;
 }
 function umArchiveDivision(form, activeCount){
-  let reason='';
-  if(activeCount > 0){
-    reason=prompt('This division still has active users. Type a reason to archive anyway:') || '';
-    if(!reason.trim()) return false;
+  if(umAllowDialogSubmit(form)) return true;
+  (async()=>{
+    let reason='Archived empty division';
+    if(activeCount > 0){
+      reason=await umPromptText({
+        type:'warning',
+        title:'Archive active division',
+        message:'This division still has active users. Type a reason to archive anyway.',
+        required:true,
+        confirmText:'Review archive'
+      });
+      if(!reason) return;
+    }
+    const ok=await tracsConfirm({
+      type:'warning',
+      title:'Archive division',
+      message:'Archive this division?',
+      confirmText:'Archive',
+      destructive:true
+    });
+    if(!ok) return;
     form.querySelector('[name="confirm_archive"]').value='1';
-  } else {
-    if(!confirm('Archive this division?')) return false;
-    reason='Archived empty division';
-    form.querySelector('[name="confirm_archive"]').value='1';
-  }
-  form.querySelector('[name="reason"]').value=reason.trim();
-  return true;
+    form.querySelector('[name="reason"]').value=reason;
+    umSubmitAfterDialog(form);
+  })();
+  return false;
 }
 function umCopy(id){
   const input=document.getElementById(id); if(!input)return;
@@ -872,7 +1083,8 @@ function umOpenUserDrawer(btn){
   document.getElementById('umDrawerName').textContent=u.name || 'User';
   document.getElementById('umDrawerEmail').textContent=`${u.email} · @${u.username}`;
   document.getElementById('umDrawerBadges').innerHTML=`<span class="badge ${u.role_slug==='super_admin'?'b-critical':u.role_slug==='admin'?'b-active':u.role_slug==='supervisor'?'b-info':u.role_slug==='viewer'?'b-done':'b-low'}">${umEsc(u.role_name)}</span><span class="badge ${u.status==='active'?'b-active':u.status==='suspended'?'b-critical':'b-done'}">${umEsc(u.status)}</span><span class="badge ${u.division_name==='No Division'?'b-done':'b-info'}">${umEsc(u.division_name)}</span>`;
-  const details=[['Position',u.position||'—'],['Phone',u.phone||'—'],['Shift',u.shift_preference||'—'],['Created',u.created_at],['Updated',u.updated_at],['Last Login',u.last_login_at],['Last Activity',u.last_activity_at],['Last Password Change',u.last_password_change_at]];
+  const twoFactorState = Number(u.two_factor_enabled) === 1 && Number(u.two_factor_reset_required) !== 1 ? 'Enabled' : 'Setup required';
+  const details=[['Position',u.position||'—'],['Phone',u.phone||'—'],['Shift',u.shift_preference||'—'],['2FA',twoFactorState],['2FA Confirmed',u.two_factor_confirmed_at],['2FA Last Verified',u.two_factor_last_verified_at],['Created',u.created_at],['Updated',u.updated_at],['Last Login',u.last_login_at],['Last Activity',u.last_activity_at],['Last Password Change',u.last_password_change_at]];
   document.getElementById('umDrawerDetails').innerHTML=details.map(([k,v])=>`<div><span>${umEsc(k)}</span><strong>${umEsc(v||'—')}</strong></div>`).join('');
   const summary=Object.entries(u.created_summary||{});
   document.getElementById('umDrawerSummary').innerHTML=summary.length?summary.map(([k,v])=>`<div><span>${umEsc(k)}</span><strong>${umEsc(v)}</strong></div>`).join(''):'<div class="um-empty-mini">No created item summary available.</div>';
@@ -899,10 +1111,14 @@ function umOpenUserDrawer(btn){
     }
   }
   window.UM_DRAWER_USER = u;
-  document.getElementById('umDrawerActions').innerHTML=[
+  const drawerActions=[
     `<button type="button" class="btn btn-ghost btn-sm" onclick="umRenderPermissionDrawer(window.UM_DRAWER_USER || {})"><i data-lucide="shield-check" class="icon-sm"></i>Permissions</button>`,
     `<a class="btn btn-ghost btn-sm" href="?tab=activity&target_user_id=${u.id}"><i data-lucide="history" class="icon-sm"></i>Activity</a>`
-  ].join('');
+  ];
+  if(UM_CAN_RESET_2FA){
+    drawerActions.push(`<button type="button" class="btn btn-ghost btn-sm" onclick="umOpenTwoFactorResetModalForUser(window.UM_DRAWER_USER || {})"><i data-lucide="shield-off" class="icon-sm"></i>Reset 2FA</button>`);
+  }
+  document.getElementById('umDrawerActions').innerHTML=drawerActions.join('');
   document.getElementById('umUserDrawer').classList.add('is-open');
   document.getElementById('umDrawerScrim').classList.add('is-open');
   lucide?.createIcons();
@@ -940,8 +1156,14 @@ function umTogglePermissionModule(toggle){
   const module=toggle.closest('.um-permission-module');
   module?.querySelectorAll('.um-permission-toggle input[type="checkbox"]:not(:disabled)').forEach(input=>input.checked=toggle.checked);
 }
-function umConfirmPermissionSave(){
-  return confirm('Save role permission changes? This affects every user assigned to this role and will be audited.');
+function umConfirmPermissionSave(form){
+  return tracsConfirmSubmit(form, {
+    type:'warning',
+    title:'Save role permissions',
+    message:'Save role permission changes? This affects every user assigned to this role and will be audited.',
+    confirmText:'Save permissions',
+    destructive:false
+  });
 }
 function umCloseDrawers(){
   document.getElementById('umUserDrawer')?.classList.remove('is-open');

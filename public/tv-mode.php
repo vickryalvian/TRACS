@@ -5,6 +5,12 @@ tracs_start_session();
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/auth/auth_check.php';
+require_once __DIR__ . '/../core/access_control.php';
+
+$tv_user = tracs_get_user_by_id($conn, (int)($_SESSION['user_id'] ?? 0));
+if (!$tv_user || !in_array((string)($tv_user['role_slug'] ?? ''), ['super_admin', 'admin', 'supervisor'], true)) {
+    tracs_abort_404();
+}
 
 $css_v = @filemtime(__DIR__ . '/assets/tracs.css') ?: time();
 $tv_css_v = @filemtime(__DIR__ . '/assets/tv-mode.css') ?: time();
