@@ -1,77 +1,103 @@
 # TRACS VPS Security Configuration
 
-This checklist is the recommended production baseline for deploying TRACS on a VPS. It assumes a Linux server running PHP-FPM, a web server, and MySQL/MariaDB.
+Production baseline for Ubuntu 24.04 LTS. TRACS can run behind Nginx or Apache, but the recommended VPS shape is Nginx + PHP-FPM + MySQL/MariaDB. Docker is documented for local development only.
 
 ## Required Services
 
-| Service | Recommended production role |
-|---|---|
-| Web server | Apache 2.4 with `.htaccess` enabled, or Nginx with equivalent deny/header rules. |
-| PHP | PHP 8.2+ with PHP-FPM, `mysqli`, `curl`, `gd`, `mbstring`, `json`, `openssl`, and session support. |
-| Database | MySQL 8+ or MariaDB 10.6+ bound to localhost or a private network only. |
-| TLS | Let’s Encrypt or another trusted certificate authority with automatic renewal. |
-| Firewall | UFW, firewalld, nftables, or cloud firewall rules. |
-| Monitoring | System logs, web logs, PHP-FPM logs, TRACS auth/application logs, disk/CPU/RAM, backups, and certificate expiry. |
+| Service | Production baseline |
+| --- | --- |
+| OS | Ubuntu 24.04 LTS with current security updates. |
+| Web | Nginx, or Apache 2.4 with equivalent deny/header rules. |
+| PHP | PHP 8.2+ PHP-FPM with `mysqli`, `curl`, `gd`, `mbstring`, `json`, `openssl`, and sessions. |
+| Database | MySQL 8+ or MariaDB 10.6+, localhost/private bind only. |
+| TLS | Let's Encrypt or another trusted CA with automatic renewal. |
+| Firewall | UFW plus cloud firewall where available. |
+| Abuse protection | Fail2ban for SSH and relevant web/auth patterns. |
+| Updates | `unattended-upgrades` for security updates. |
+| Scheduler | Cron for `bin/tracs-notification-worker.php`. |
 
-## Ports
+## Network Exposure
 
 | Port | Exposure | Purpose |
-|---|---|---|
-| `22/tcp` | Restricted to admin IPs when possible | SSH administration. |
-| `80/tcp` | Public | HTTP redirect to HTTPS and ACME renewal. |
-| `443/tcp` | Public | HTTPS application traffic. |
-| `3306/tcp` | Private only, preferably localhost | MySQL/MariaDB. Do not expose publicly. |
-| PHP-FPM socket/port | Local only | Web server to PHP-FPM. |
+| --- | --- | --- |
+| `22/tcp` | Trusted admin IPs where possible | SSH. |
+| `80/tcp` | Public | Redirect to HTTPS and ACME. |
+| `443/tcp` | Public | TRACS HTTPS. |
+| `3306/tcp` | Local/private only | MySQL/MariaDB. Never public. |
+| PHP-FPM socket | Local only | Web server to PHP. |
 
-## First Deploy Checklist
+## Initial Server Hardening
 
-- [ ] Create a dedicated Linux user for TRACS deployment.
-- [ ] Set the webroot to `/path/to/tracs/public`.
-- [ ] Keep repository root, `config/`, `core/`, `modules/`, `logs/`, `backups/`, and `.env` outside public URL access.
-- [ ] Install PHP 8.2+ and required extensions.
-- [ ] Create a dedicated database and least-privilege database user.
-- [ ] Import schema and migrations.
-- [ ] Create `.env` with production values and strict permissions.
-- [ ] Set `APP_ENV=production`.
-- [ ] Configure HTTPS and redirect all HTTP traffic to HTTPS.
-- [ ] Confirm security headers are present on HTTPS responses.
-- [ ] Confirm session cookies are `HttpOnly`, `SameSite=Lax`, and `Secure` over HTTPS.
-- [ ] Confirm `/uploads/*.php`, backup-named assets, `.env`, Markdown, SQL, logs, and dotfiles return 403 or 404.
-- [ ] Confirm Super Admin can log in, complete 2FA, and reset another user’s 2FA for recovery.
-- [ ] Confirm normal users cannot access admin/user-management/domain-price/finance/report exports by direct URL unless permitted.
-- [ ] Configure backups, log rotation, monitoring, and alerting before production traffic starts.
+```bash
+sudo apt update
+sudo apt full-upgrade -y
+sudo apt install -y nginx mysql-server php-fpm php-mysql php-curl php-gd php-mbstring php-xml php-opcache unzip ufw fail2ban unattended-upgrades
+sudo dpkg-reconfigure -plow unattended-upgrades
+```
 
-## File And Folder Permissions
+- Create a non-root deploy user.
+- Install and verify SSH keys before disabling password login.
+- Set `PermitRootLogin no` and `PasswordAuthentication no`.
+- Restrict SSH with `AllowUsers`/`AllowGroups` and firewall source rules.
+- Enable and review Fail2ban jails.
+- Reboot after kernel/security updates when required.
+
+## UFW Baseline
+
+```bash
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw allow from <admin-ip> to any port 22 proto tcp
+sudo ufw enable
+sudo ufw status verbose
+```
+
+Do not open MySQL publicly. If SSH cannot be IP-restricted, use key-only auth, Fail2ban, and conservative rate limits.
+
+## Deployment Layout
+
+- Deploy the repository outside a publicly browsable parent.
+- Set web root to `/path/to/tracs/public`.
+- Keep `config/`, `core/`, `modules/`, `logs/`, backups, SQL, Markdown, and environment files outside URL access.
+- Keep only runtime upload/cache/log directories writable.
+- Do not run PHP-FPM or deployment commands as root.
 
 Recommended ownership:
 
 ```text
-deploy-user:www-data  repository files
-www-data:www-data     runtime writable directories only when required
+deploy-user:www-data  application files
+www-data:www-data     runtime directories only where writes are required
 ```
 
-Recommended permissions:
+Baseline permissions:
 
-```text
-find /path/to/tracs -type d -exec chmod 755 {} \;
-find /path/to/tracs -type f -exec chmod 644 {} \;
-chmod 640 /path/to/tracs/.env
-chmod -R 750 /path/to/tracs/logs
-chmod -R 750 /path/to/tracs/backups
-chmod -R 755 /path/to/tracs/public/uploads
+```bash
+sudo find /path/to/tracs -type d -exec chmod 755 {} \;
+sudo find /path/to/tracs -type f -exec chmod 644 {} \;
+sudo chmod 640 /path/to/tracs/.env
+sudo chmod 750 /path/to/tracs/deploy.sh
 ```
 
-Writable directories should be as narrow as possible:
-- `public/uploads/avatars`
-- `public/uploads/mom`
-- `public/cache/holidays` if the TV holiday cache is used
-- `logs` if TRACS/PHP writes application logs there
+`deploy.sh` then applies the scoped exceptions below and verifies them after sync:
 
-Do not make the full repository writable by the web server user.
+| Path | Owner:group | Directories | Files | Access reason |
+| --- | --- | ---: | ---: | --- |
+| Application source | `deploy-user:www-data` | `755` | `644` | PHP reads source; web user cannot modify it |
+| `.env`, `config/.env`, `config/database.php` | `deploy-user:www-data` | parent baseline | `640` | PHP reads private configuration |
+| `public/uploads` and declared upload subfolders | `www-data:www-data` | `750` | `640` | PHP writes validated uploads |
+| `public/cache` and `public/cache/holidays` | `www-data:www-data` | `750` | `640` | PHP writes generated holiday cache |
+| `logs` | `www-data:www-data` | `750` | `640` | PHP/application logs |
+| `storage`, `storage/deployment` | `deploy-user:www-data` | `750` | `640` | PHP reads deployment metadata but cannot write it |
+| External backup root | `deploy-user:deploy-group` | `700` | `600` | Deployment-only backup access |
+| `deploy.sh` | `deploy-user:www-data` | n/a | `750` | Restricted execution |
 
-## Environment Variables
+No folder or file may use mode `777`. Runtime folders use owner-write access rather than broad group/world write access.
 
-Required or recommended production values:
+## Environment
+
+`config/database.php` reads database values from PHP `$_ENV`. Ensure PHP-FPM receives the variables; a root `.env` file is not automatically parsed by the application.
 
 ```dotenv
 APP_ENV=production
@@ -80,165 +106,180 @@ DB_HOST=127.0.0.1
 DB_PORT=3306
 DB_NAME=tracs
 DB_USER=tracs_app
-DB_PASS=change-this-long-random-password
+DB_PASS=replace-with-a-long-random-password
 
-TRACS_2FA_SECRET_KEY=base64:replace-with-32-byte-random-key
+TRACS_LOGIN_MAX_FAILED_ATTEMPTS=5
+TRACS_LOGIN_WINDOW_MINUTES=15
+TRACS_LOGIN_LOCK_MINUTES=15
+TRACS_LOGIN_CAPTCHA_AFTER=3
+TRACS_SESSION_IDLE_TIMEOUT_MINUTES=2880
+
+TRACS_2FA_SECRET_KEY=base64:replace-with-a-stable-32-byte-key
 TRACS_2FA_ISSUER=TRACS
 TRACS_2FA_TIMEOUT_MINUTES=10
 TRACS_2FA_MAX_FAILED_ATTEMPTS=5
 TRACS_2FA_LOCK_MINUTES=15
 TRACS_2FA_VALID_WINDOW_STEPS=1
 
-TRACS_AUTH_MAX_ATTEMPTS=5
-TRACS_AUTH_CAPTCHA_AFTER=3
-TRACS_AUTH_LOCK_MINUTES=15
-TRACS_AUTH_WINDOW_MINUTES=15
-TRACS_AUTH_IDLE_TIMEOUT_MINUTES=480
-
 TRACS_TRUSTED_PROXIES=127.0.0.1
-TRACS_LOGIN_HELP_CONTACT=security@example.com
 ```
 
-Optional when using Cloudflare Turnstile:
+Optional Turnstile:
 
 ```dotenv
+TRACS_CAPTCHA_PROVIDER=turnstile
 TRACS_TURNSTILE_SITE_KEY=...
 TRACS_TURNSTILE_SECRET_KEY=...
 ```
 
-Generate a strong 2FA encryption key once and keep it stable. Rotating `TRACS_2FA_SECRET_KEY` without a migration plan can invalidate stored TOTP secrets.
+Do not rotate `TRACS_2FA_SECRET_KEY` without a migration plan for existing encrypted TOTP secrets.
 
-## Web Server Rules
+## Nginx Baseline
 
-Apache:
-- Set `DocumentRoot` to `/path/to/tracs/public`.
-- Enable `AllowOverride All` or at least the override classes required for rewrite/header/access rules.
-- Enable `mod_rewrite` and `mod_headers`.
-- Keep the repository-root `.htaccess` in place as a secondary safety net.
+Use [docs/nginx-tracs.conf.example](docs/nginx-tracs.conf.example) as the reviewed template. It sets `public/` as root, disables directory listing, limits request bodies, denies hidden/sensitive/backup files, blocks direct `includes/`, `modules/`, and API helpers, denies all protected uploads, permits only generated avatar image names, and places upload deny rules before the PHP handler.
 
-Nginx:
-- Set `root /path/to/tracs/public;`.
-- Deny dotfiles, `.env`, `.sql`, `.log`, `.md`, `.bak`, `.backup`, `.old`, `.orig`, `.save`, `.swp`, `.ini`, `.toml`, `.lock`.
-- Deny internal folders if the root is ever changed: `/config/`, `/core/`, `/modules/`, `/logs/`, `/backups/`.
-- Deny `public/modules` direct access.
-- Deny script execution inside `/uploads/`.
-- Add equivalent security headers:
+Adjust the PHP-FPM socket to the installed version. If Apache is used, set `DocumentRoot` to `public/`, enable rewrite/headers, and preserve the repository/public `.htaccess` protections.
 
-```nginx
-add_header X-Content-Type-Options "nosniff" always;
-add_header X-Frame-Options "SAMEORIGIN" always;
-add_header Referrer-Policy "same-origin" always;
-add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()" always;
-add_header Content-Security-Policy "frame-ancestors 'self'; base-uri 'self'; object-src 'none'" always;
-add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+## PHP-FPM
+
+- `display_errors=Off`
+- `log_errors=On`
+- Set a restricted `error_log`.
+- Set upload/body limits above the application's per-file limit only as needed.
+- Keep OPcache enabled.
+- Expose required environment variables to the FPM pool or service manager.
+- Restart PHP-FPM after configuration changes.
+
+## Database
+
+- Bind to `127.0.0.1` or a private interface.
+- Run `mysql_secure_installation` or equivalent hardening.
+- Create a dedicated TRACS database/user with privileges only on that database.
+- Disable remote database root login.
+- Import `config/install.sql` for fresh installs or apply dated migrations after backup.
+- Encrypt off-server database backups.
+- Monitor connection errors, slow queries, and disk capacity.
+
+## Notification Worker
+
+Run once per minute:
+
+```cron
+* * * * * /usr/bin/php /path/to/tracs/bin/tracs-notification-worker.php >> /path/to/tracs/logs/notification-worker.log 2>&1
 ```
 
-## Database Security
-
-- Bind MySQL/MariaDB to `127.0.0.1` or a private interface only.
-- Do not expose `3306/tcp` publicly.
-- Create a dedicated TRACS database user.
-- Grant only needed privileges on the TRACS database.
-- Use a long random database password stored only in `.env` and the password manager.
-- Disable remote root login for MySQL/MariaDB.
-- Back up with a dedicated backup user if possible.
-- Encrypt database backups before moving them off-server.
-
-## Firewall Baseline
-
-Example UFW baseline:
-
-```bash
-ufw default deny incoming
-ufw default allow outgoing
-ufw allow 80/tcp
-ufw allow 443/tcp
-ufw allow from <admin-ip> to any port 22 proto tcp
-ufw enable
-ufw status verbose
-```
-
-If SSH must be public, use key-only authentication, Fail2ban, and rate limits. Never expose MySQL publicly.
-
-## SSH Hardening
-
-- [ ] Use SSH keys, not passwords.
-- [ ] Disable root login: `PermitRootLogin no`.
-- [ ] Disable password login after keys are confirmed: `PasswordAuthentication no`.
-- [ ] Restrict SSH users with `AllowUsers` or `AllowGroups`.
-- [ ] Limit SSH to trusted IPs in firewall rules when possible.
-- [ ] Install and enable Fail2ban or equivalent.
-- [ ] Keep the OS patched.
-- [ ] Use a non-root deploy user with `sudo` only where needed.
-- [ ] Rotate keys when staff changes.
-
-## HTTPS And Cookies
-
-- Use HTTPS for all production traffic.
-- Redirect HTTP to HTTPS.
-- Enable HSTS after confirming HTTPS is stable.
-- If behind Cloudflare, a load balancer, or a reverse proxy, configure `TRACS_TRUSTED_PROXIES` so the app trusts forwarded HTTPS headers only from known proxy IPs.
-- Verify in the browser that the PHP session cookie is `Secure`, `HttpOnly`, and `SameSite=Lax`.
+- Run as the deploy/application user, not root.
+- Keep the log outside public access and rotate it.
+- Alert when the worker stops, repeatedly fails, or creates unexpected volumes.
+- Verify the PHP CLI receives the same DB and security environment as PHP-FPM.
 
 ## Upload Security
 
-- Keep upload directories under `public/uploads`.
-- Allow only expected image types for avatars and MoM screenshots.
-- Keep `public/uploads/.htaccess` and `public/uploads/avatars/.htaccess`.
-- Deny PHP and executable script extensions in web server config.
-- Do not allow user-controlled filenames to become executable paths.
-- Periodically scan uploads for unexpected extensions.
+- Accept only application-supported image MIME types.
+- Confirm GD is installed so case/shift uploads can be decoded and re-encoded.
+- Deny script execution under every upload directory.
+- Use controlled stored filenames; never execute or include user uploads.
+- Serve protected case/shift images through their API endpoints.
+- Back up uploads separately from source code.
+- Monitor unexpected extension, file count, and disk growth.
 
-## Backup Strategy
+## TLS And Proxying
 
-- Back up the database at least daily.
-- Back up `.env`, uploaded files, and deployment metadata separately from the code repository.
-- Encrypt backups before storing them off-server.
-- Keep at least one off-server backup location.
-- Use retention such as daily for 7 days, weekly for 4 weeks, monthly for 6-12 months.
-- Test restore procedures at least quarterly.
-- Restrict backup directory permissions to deployment/admin users only.
-- Do not store public web-accessible backups under `public/`.
+- Redirect all HTTP traffic to HTTPS.
+- Enable certificate renewal and expiry alerts.
+- Enable HSTS only after HTTPS is stable.
+- If Cloudflare/load balancer is used, set `TRACS_TRUSTED_PROXIES` only to actual proxy addresses/ranges.
+- Verify the browser session cookie is `Secure`, `HttpOnly`, and `SameSite=Lax`.
 
-Suggested backup contents:
-- Database dump
-- `.env`
+## Backups
+
+Back up:
+
+- Database
+- deployment environment/secrets
 - `public/uploads`
-- Deployment version/commit hash
-- Web server virtual host config
-- Cron/automation config
+- web server and PHP-FPM configuration
+- cron/systemd units
+- deployment commit/version
 
-## Log Rotation And Monitoring
+Use encrypted off-server storage, retention such as 7 daily/4 weekly/6-12 monthly, restricted permissions, and quarterly restore tests.
 
-Rotate and retain:
-- Web server access/error logs
-- PHP-FPM error logs
+## Logging And Monitoring
+
+Rotate and monitor:
+
+- Nginx/Apache access and error logs
+- PHP-FPM logs
 - TRACS application logs
-- TRACS auth/security events
-- Database slow/error logs
-- Backup job logs
+- authentication/security events
+- notification worker log
+- database error/slow logs
+- Fail2ban and SSH auth logs
+- backup and certificate-renewal logs
 
-Monitor and alert on:
-- Repeated `login_failed`, `login_lock`, `captcha_challenge`
-- Repeated `two_factor_failed`, `two_factor_lock`
-- `permission_denied` and `suspicious_access_attempt`
-- 5xx spikes
-- PHP fatal errors
-- Disk usage above 80%
-- Memory/CPU saturation
-- Database connection failures
-- Backup failures
-- Certificate expiry within 14 days
-- Unexpected files in `public/uploads`
+Alert on repeated login/2FA failures, permission denials, 5xx spikes, PHP fatals, DB failures, worker failure, backup failure, certificate expiry, disk above 80%, and unexpected uploads.
 
-## Future Audit Checklist
+### Server Health & Logs
 
-- [ ] Run `php -l` against changed PHP files.
-- [ ] Verify login, 2FA setup, 2FA verification, logout, and idle timeout.
-- [ ] Verify Super Admin 2FA reset.
-- [ ] Verify direct URL access for each restricted page with a lower-privilege account.
-- [ ] Verify API endpoints return 401 unauthenticated, 403 unauthorized, and no sensitive DB details.
-- [ ] Verify invalid object IDs return generic 404 where appropriate.
-- [ ] Verify uploads reject executable files and non-image content.
-- [ ] Verify backup/config files cannot be fetched over HTTP.
-- [ ] Verify HTTPS headers and cookie flags after every web server change.
+The in-app route is `/server-health.php`; data comes from `/api/server-health.php`. Both require a fully authenticated exact `super_admin` role. Admin, Supervisor, Agent, Intern, Viewer, pending-2FA, and unauthenticated users are blocked. The API rejects every query parameter, including `path=../../`, accepts no command input, returns JSON only, and rate-limits refreshes to once every five seconds per session.
+
+Allowed metrics:
+
+| Metric | Safe source |
+| --- | --- |
+| CPU usage | Two bounded reads from `/proc/stat` |
+| RAM usage | `/proc/meminfo` |
+| Disk used/free | PHP `disk_total_space()` / `disk_free_space()` on the TRACS root |
+| TRACS/uploads/logs size | Bounded non-symlink traversal of fixed project paths |
+| Backups size | Fixed local `backups/` or default `/var/backups/tracs`; unavailable if private permissions prevent reading |
+| Database size | Fixed `information_schema` aggregate for the current database |
+| Uptime | `/proc/uptime` |
+| PHP version | `PHP_VERSION` |
+| MySQL/MariaDB version | Fixed `SELECT VERSION()` with version-only parsing |
+| Nginx version | Version-only parsing from server software, otherwise unavailable |
+| Last deploy/version/commit | `storage/deployment/deployment.meta` written by `deploy.sh` |
+| Error log summary | Fixed `logs/error.log`, bounded tail, aggressive redaction |
+
+Monitored paths:
+
+| Label | Fixed path relationship |
+| --- | --- |
+| TRACS folder | `WEB_ROOT` |
+| Uploads | `WEB_ROOT/public/uploads` |
+| Logs | `WEB_ROOT/logs` |
+| Deployment metadata | `WEB_ROOT/storage/deployment/deployment.meta` |
+| Backups | `BACKUP_DIR` default `/var/backups/tracs`; normally unavailable to PHP because it remains `700/600` |
+
+Thresholds are Healthy below `70%`, Warning from `70%` through `84.9%`, and Critical at `85%` or above. Folder size progress is relative to the TRACS filesystem capacity, not an upload quota.
+
+Security limitations:
+
+- Linux `/proc` metrics are unavailable on hosts without readable `/proc`.
+- Nginx version is unavailable when the server software value is hidden.
+- Private external backups should normally remain unavailable to PHP. Do not grant access merely to populate the card.
+- The error panel is not a raw log viewer. SQL, stack, credential, path, IP, URL, and email details are redacted.
+- Folder scans stop after the fixed time/entry budget and return `Unavailable` rather than hanging.
+
+## Post-Deploy Verification
+
+- [ ] Login, mandatory 2FA, logout, and idle timeout work.
+- [ ] Dashboard and stat strip load without stale assets.
+- [ ] Database connection and migrations are correct.
+- [ ] Cases open the shared ticket and Resolve works by permission.
+- [ ] Case and shift uploads work and cannot execute scripts.
+- [ ] Task assignment creates linked checklist/reminder records as expected.
+- [ ] Notification worker creates due reminders without duplicates.
+- [ ] Browser permission granted/denied paths both remain usable.
+- [ ] Shift handover reminder timing is correct.
+- [ ] Domain Price canonical and legacy redirect routes work.
+- [ ] Infrastructure Pulse clearly displays mock/prototype state.
+- [ ] TV Mode loads in normal, fullscreen, smaller viewport, and dark mode.
+- [ ] Restricted pages/APIs fail correctly for lower-privilege roles.
+- [ ] Super Admin can open `/server-health.php` and refresh `/api/server-health.php`.
+- [ ] Admin, Supervisor, Agent, Intern, Viewer, and unauthenticated requests cannot open either monitoring route.
+- [ ] Path traversal such as `/api/server-health.php?path=../../` returns `400` and no filesystem data.
+- [ ] Rapid monitoring refresh returns `429`.
+- [ ] Missing metrics render `Unavailable` without changing folder permissions.
+- [ ] Sanitized logs contain no filesystem path, SQL text, credentials, token, cookie, internal IP, or stack trace.
+- [ ] `.env`, SQL, Markdown, logs, backups, and repository internals return 403/404.
+- [ ] Backup and restore procedures have been tested.

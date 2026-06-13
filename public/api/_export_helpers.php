@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../../core/security/direct_access.php';
+tracs_deny_direct_script_access(__FILE__);
 require_once __DIR__ . '/../../core/security/csrf.php';
 tracs_start_session();
 header('X-Content-Type-Options: nosniff');
@@ -42,6 +44,14 @@ if (!$authUser || !tracs_user_can_login($authUser)) {
 }
 tracs_sync_session_user($authUser);
 tracs_touch_user_activity($conn, $uid);
+
+if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET')) !== 'GET') {
+    http_response_code(405);
+    header('Allow: GET');
+    header('Content-Type: text/plain; charset=utf-8');
+    echo 'Method not allowed';
+    exit;
+}
 
 function export_fail(string $message, int $code = 400): void {
     http_response_code($code);

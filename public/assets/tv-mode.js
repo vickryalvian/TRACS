@@ -32,6 +32,15 @@
     "'": '&#39;',
   })[ch]);
 
+  function syncViewportMode() {
+    const width = window.innerWidth || document.documentElement.clientWidth || 0;
+    const height = window.innerHeight || document.documentElement.clientHeight || 0;
+    root.classList.toggle('tv-compact', height > 0 && height < 850);
+    root.classList.toggle('tv-mode--height-compact', height > 0 && height < 850);
+    root.classList.toggle('tv-mode--narrow', width > 0 && width < 1120);
+    root.classList.toggle('tv-mode--4k', width >= 2560);
+  }
+
   function setClock() {
     const now = new Date();
     const time = now.toLocaleTimeString('en-GB', { hour12: false });
@@ -40,10 +49,12 @@
       day: '2-digit',
       month: 'short',
     });
+    const year = now.toLocaleDateString('en-GB', { year: 'numeric' });
     const date = now.toLocaleDateString('en-GB', {
       weekday: 'short',
       day: '2-digit',
       month: 'short',
+      year: 'numeric',
     });
     root.querySelectorAll('[data-tv-clock]').forEach((el) => { el.textContent = time; });
     root.querySelectorAll('[data-tv-date]').forEach((el) => {
@@ -51,9 +62,11 @@
         el.replaceChildren();
         const day = document.createElement('span');
         const rest = document.createElement('strong');
+        const yearEl = document.createElement('em');
         day.textContent = weekday;
         rest.textContent = dayMonth;
-        el.append(day, rest);
+        yearEl.textContent = year;
+        el.append(day, rest, yearEl);
       } else {
         el.textContent = date;
       }
@@ -101,52 +114,36 @@
     return `<div class="tv-empty">${esc(label)}</div>`;
   }
 
-  function holidayIconKey(name) {
-    const text = String(name || '').toLowerCase();
-    if (/idul fitri|eid al-fitr/.test(text)) return 'eid-spark';
-    if (/idul adha|eid al-adha|masjid|mosque/.test(text)) return 'crescent';
-    if (/ramadan|isra|mi'?raj|maulid|muharram|islam/.test(text)) return 'crescent';
-    if (/natal|christmas/.test(text)) return 'star';
-    if (/wafat|paskah|easter|yesus|isa/.test(text)) return 'cross';
-    if (/imlek|kongzili|chinese/.test(text)) return 'lantern';
-    if (/nyepi|saka/.test(text)) return 'quiet-moon';
-    if (/waisak|buddha/.test(text)) return 'lotus';
-    if (/kemerdekaan|republik indonesia|proklamasi/.test(text)) return 'flag';
-    if (/pancasila/.test(text)) return 'shield';
-    if (/buruh|labou?r/.test(text)) return 'briefcase';
-    if (/tahun baru 20|new year|masehi/.test(text)) return 'calendar-spark';
-    if (/kenaikan|ascension/.test(text)) return 'arrow-light';
-    return 'calendar';
-  }
-
-  function holidayIconSvg(key) {
-    const icons = {
-      'eid-spark': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.8 4.7a7.8 7.8 0 1 0 2.5 11.2A7 7 0 1 1 16.8 4.7Z"/><path d="M17.5 6.5v3M16 8h3M20 12v2.6M18.7 13.3h2.6"/></svg>',
-      crescent: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.8 4.7a7.8 7.8 0 1 0 2.5 11.2A7 7 0 1 1 16.8 4.7Z"/><path d="M6 18h12M8 18v-4.2L12 11l4 2.8V18"/></svg>',
-      star: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.4 5 5.6.8-4 3.9.9 5.5-4.9-2.6-5 2.6 1-5.5-4-3.9 5.5-.8L12 3Z"/></svg>',
-      cross: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16M7 9h10"/><path d="M5 20h14"/></svg>',
-      lantern: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5h8M8 19h8M7 8c0-1.7 10-1.7 10 0v7c0 1.7-10 1.7-10 0V8Z"/><path d="M12 3v2M12 19v2"/></svg>',
-      'quiet-moon': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.8 4.7a7.8 7.8 0 1 0 2.5 11.2A7 7 0 1 1 16.8 4.7Z"/><path d="M7 19h10"/></svg>',
-      lotus: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19c-2.6-2.2-3.8-4.5-3.8-7 2.1.6 3.3 1.8 3.8 3.6.5-1.8 1.7-3 3.8-3.6 0 2.5-1.2 4.8-3.8 7Z"/><path d="M4 13c2.4.3 4.4 1.7 6 4M20 13c-2.4.3-4.4 1.7-6 4M6 20h12"/></svg>',
-      flag: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4M7 5h10l-1 4 1 4H7"/></svg>',
-      shield: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 19 6v5c0 4.4-2.7 7.7-7 10-4.3-2.3-7-5.6-7-10V6l7-3Z"/><path d="M12 7v9M8.8 10h6.4"/></svg>',
-      briefcase: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7V5h6v2M5 8h14v10H5z"/><path d="M5 12h14"/></svg>',
-      'calendar-spark': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v3M17 3v3M5 8h14M6 5h12v15H6z"/><path d="M16 11v3M14.5 12.5h3"/></svg>',
-      'arrow-light': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M7 10l5-5 5 5"/><path d="M5 20h14"/></svg>',
-      calendar: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v3M17 3v3M5 8h14M6 5h12v15H6z"/><path d="M12 14h.1"/></svg>',
-    };
-    return icons[key] || icons.calendar;
-  }
-
   function formatHolidayDate(value) {
     const date = new Date(`${value}T00:00:00+07:00`);
     return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   }
 
+  function holidayDisplayName(name) {
+    const text = String(name || '').toLowerCase();
+    if (/cuti bersama/.test(text)) return 'Joint Leave';
+    if (/waisak|vesak|buddha/.test(text)) return 'Vesak Day';
+    if (/idul fitri|eid al-fitr/.test(text)) return 'Eid al-Fitr';
+    if (/idul adha|eid al-adha/.test(text)) return 'Eid al-Adha';
+    if (/maulid/.test(text)) return "Prophet Muhammad's Birthday";
+    if (/isra|mi'?raj/.test(text)) return "Isra and Mi'raj";
+    if (/tahun baru islam|muharram/.test(text)) return 'Islamic New Year';
+    if (/nyepi|saka/.test(text)) return 'Nyepi';
+    if (/imlek|kongzili|chinese|lunar new year/.test(text)) return 'Lunar New Year';
+    if (/natal|christmas/.test(text)) return 'Christmas Day';
+    if (/good friday|jumat agung|wafat yesus/.test(text)) return 'Good Friday';
+    if (/paskah|easter/.test(text)) return 'Easter';
+    if (/kenaikan|ascension/.test(text)) return 'Ascension Day';
+    if (/kemerdekaan|republik indonesia|proklamasi|independence/.test(text)) return 'Indonesian Independence Day';
+    if (/pancasila/.test(text)) return 'Pancasila Day';
+    if (/buruh|labou?r/.test(text)) return 'Labour Day';
+    if (/tahun baru|new year|masehi/.test(text)) return "New Year's Day";
+    return String(name || 'Public Holiday');
+  }
+
   function renderHoliday(data, stateName = 'ready') {
     const panel = $('[data-tv-holiday]');
     if (!panel) return;
-    const icon = panel.querySelector('[data-tv-holiday-icon]');
     const title = panel.querySelector('[data-tv-holiday-title]');
     const subtitle = panel.querySelector('[data-tv-holiday-subtitle]');
     const countdown = panel.querySelector('[data-tv-holiday-countdown]');
@@ -155,18 +152,16 @@
 
     if (stateName === 'loading') {
       panel.classList.add('is-loading');
-      icon.innerHTML = holidayIconSvg('calendar');
-      title.textContent = 'Loading holiday calendar';
+      title.textContent = 'Loading public holiday calendar';
       subtitle.textContent = 'Checking Indonesian public holidays';
       countdown.textContent = 'Syncing';
-      type.textContent = 'Holiday';
+      type.textContent = 'Calendar';
       return;
     }
 
     if (stateName === 'error') {
       panel.classList.add('is-error');
-      icon.innerHTML = holidayIconSvg('calendar');
-      title.textContent = 'Holiday calendar unavailable';
+      title.textContent = 'Public holiday calendar unavailable';
       subtitle.textContent = 'Showing clock only until the next sync';
       countdown.textContent = 'Retrying';
       type.textContent = 'Error';
@@ -175,26 +170,24 @@
 
     if (!data || data.status === 'empty' || !data.date) {
       panel.classList.add('is-empty');
-      icon.innerHTML = holidayIconSvg('calendar');
-      title.textContent = 'No upcoming tanggal merah';
-      subtitle.textContent = 'Current and next year are clear';
-      countdown.textContent = 'Empty';
-      type.textContent = 'Observance';
+      title.textContent = 'No public holiday today';
+      subtitle.textContent = 'No upcoming public holiday is available';
+      countdown.textContent = 'Clear';
+      type.textContent = 'Public Holiday';
       return;
     }
 
-    const key = holidayIconKey(data.name);
     const days = Number(data.daysUntil ?? 0);
     const isHot = data.isToday || days <= 1;
+    const displayName = holidayDisplayName(data.name);
     if (isHot) panel.classList.add('is-hot');
     panel.classList.add(`is-${data.type || 'observance'}`);
-    icon.innerHTML = holidayIconSvg(key);
-    title.textContent = data.isToday ? `Today: ${data.name}` : `Next Holiday: ${data.name}`;
+    title.textContent = data.isToday ? `Today is ${displayName}` : `Upcoming Holiday: ${displayName}`;
     subtitle.textContent = data.isToday
-      ? `Tanggal merah today · ${formatHolidayDate(data.date)}`
-      : `${days} ${days === 1 ? 'day' : 'days'} to ${data.name} · ${formatHolidayDate(data.date)}`;
+      ? `Public holiday today · ${formatHolidayDate(data.date)}`
+      : `${days} ${days === 1 ? 'day' : 'days'} to ${displayName} · ${formatHolidayDate(data.date)}`;
     countdown.textContent = data.isToday ? 'Today' : `${days} days left`;
-    type.textContent = data.typeLabel || 'Observance';
+    type.textContent = data.typeLabel || 'Public Holiday';
   }
 
   async function loadHoliday() {
@@ -474,6 +467,20 @@
     });
   }
 
+  function bindViewportMode() {
+    let raf = 0;
+    const schedule = () => {
+      if (raf) window.cancelAnimationFrame(raf);
+      raf = window.requestAnimationFrame(() => {
+        raf = 0;
+        syncViewportMode();
+      });
+    };
+    syncViewportMode();
+    window.addEventListener('resize', schedule, { passive: true });
+    window.visualViewport?.addEventListener('resize', schedule, { passive: true });
+  }
+
   function normalizeThemePreference(value) {
     return value === 'dark' || value === 'light' ? value : 'light';
   }
@@ -505,6 +512,7 @@
   }, 5000);
   setInterval(advanceSpotlight, 7000);
   syncThemeMenu(document.documentElement.getAttribute('data-theme'));
+  bindViewportMode();
   bindControls();
   loadHoliday();
   setInterval(loadHoliday, 30 * 60 * 1000);

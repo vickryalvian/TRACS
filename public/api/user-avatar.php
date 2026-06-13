@@ -2,6 +2,8 @@
 require_once __DIR__ . '/_bootstrap.php';
 require_once __DIR__ . '/../../modules/user-management/controller.php';
 
+api_require_any_permission(['profile.update_own', 'users.update']);
+
 const TRACS_AVATAR_UPLOAD_MAX = 5242880;
 const TRACS_AVATAR_FINAL_MAX = 1258291;
 
@@ -15,7 +17,7 @@ function avatar_storage_dir(): string {
         avatar_fail_upload('Upload storage is not available.', 500);
     }
     $avatarDir = $dir . DIRECTORY_SEPARATOR . 'avatars';
-    if (!is_dir($avatarDir) && !mkdir($avatarDir, 0755, true)) {
+    if (!is_dir($avatarDir) && !mkdir($avatarDir, 0750, true)) {
         avatar_fail_upload('Avatar storage is not writable.', 500);
     }
     return $avatarDir;
@@ -108,7 +110,7 @@ function avatar_store_uploaded_file(array $file, int $targetUserId): string {
             @unlink($dest);
             avatar_fail_upload('Optimized profile picture is too large.');
         }
-        @chmod($dest, 0644);
+        @chmod($dest, 0640);
         return avatar_public_path(basename($dest));
     }
 
@@ -119,7 +121,7 @@ function avatar_store_uploaded_file(array $file, int $targetUserId): string {
     if (!move_uploaded_file($tmpName, $dest)) {
         avatar_fail_upload('Unable to save profile picture.', 500);
     }
-    @chmod($dest, 0644);
+    @chmod($dest, 0640);
     return avatar_public_path(basename($dest));
 }
 

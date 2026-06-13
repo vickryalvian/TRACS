@@ -6,21 +6,25 @@
 require_once __DIR__ . '/creator_tracking.php';
 
 function tracs_table_exists(mysqli $conn, string $table): bool {
-    $stmt = $conn->prepare("
-        SELECT 1
-        FROM information_schema.TABLES
-        WHERE TABLE_SCHEMA = DATABASE()
-          AND TABLE_NAME = ?
-        LIMIT 1
-    ");
-    if (!$stmt) {
+    try {
+        $stmt = $conn->prepare("
+            SELECT 1
+            FROM information_schema.TABLES
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = ?
+            LIMIT 1
+        ");
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('s', $table);
+        $stmt->execute();
+        $exists = $stmt->get_result()->num_rows > 0;
+        $stmt->close();
+        return $exists;
+    } catch (Throwable) {
         return false;
     }
-    $stmt->bind_param('s', $table);
-    $stmt->execute();
-    $exists = $stmt->get_result()->num_rows > 0;
-    $stmt->close();
-    return $exists;
 }
 
 function tracs_user_management_schema_ready(mysqli $conn): bool {
@@ -32,6 +36,82 @@ function tracs_user_management_schema_ready(mysqli $conn): bool {
         && tracs_column_exists($conn, 'tracs_users', 'role_id')
         && tracs_column_exists($conn, 'tracs_users', 'status')
         && tracs_column_exists($conn, 'tracs_users', 'username');
+}
+
+function tracs_normalize_visual_theme(mixed $value): string {
+    // TRACS V2 is intentionally disabled; legacy saved values fall back here.
+    return 'default';
+}
+
+function tracs_visual_theme_data_value(mixed $value): string {
+    return 'default';
+}
+
+function tracs_ensure_user_preferences_table(mysqli $conn): bool {
+    if (tracs_table_exists($conn, 'tracs_user_preferences')) {
+        return true;
+    }
+
+    try {
+        $sql = "
+            CREATE TABLE IF NOT EXISTS `tracs_user_preferences` (
+              `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+              `user_id` INT NOT NULL,
+              `preference_key` VARCHAR(100) NOT NULL,
+              `preference_value` TEXT DEFAULT NULL,
+              `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              PRIMARY KEY (`id`),
+              UNIQUE KEY `uq_user_preference` (`user_id`, `preference_key`),
+              INDEX `idx_user_preferences_user` (`user_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ";
+        return $conn->query($sql) === true && tracs_table_exists($conn, 'tracs_user_preferences');
+    } catch (Throwable) {
+        return false;
+    }
+}
+
+function tracs_get_user_preferences(mysqli $conn, int $userId): array {
+    if ($userId <= 0 || !tracs_table_exists($conn, 'tracs_user_preferences')) {
+        return [];
+    }
+    try {
+        $stmt = $conn->prepare('SELECT preference_key, preference_value FROM tracs_user_preferences WHERE user_id = ?');
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('i', $userId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $prefs = [];
+        while ($row = $result->fetch_assoc()) {
+            $prefs[(string)$row['preference_key']] = (string)($row['preference_value'] ?? '');
+        }
+        $stmt->close();
+        return $prefs;
+    } catch (Throwable) {
+        return [];
+    }
+}
+
+function tracs_get_user_preference(mysqli $conn, int $userId, string $key, ?string $default = null): ?string {
+    if ($userId <= 0 || $key === '' || !tracs_table_exists($conn, 'tracs_user_preferences')) {
+        return $default;
+    }
+    try {
+        $stmt = $conn->prepare('SELECT preference_value FROM tracs_user_preferences WHERE user_id = ? AND preference_key = ? LIMIT 1');
+        if (!$stmt) {
+            return $default;
+        }
+        $stmt->bind_param('is', $userId, $key);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        return $row ? (string)($row['preference_value'] ?? '') : $default;
+    } catch (Throwable) {
+        return $default;
+    }
 }
 
 function tracs_permission_catalog(): array {
@@ -72,6 +152,7 @@ function tracs_permission_catalog(): array {
         'Cases' => [
             'cases.view' => 'View cases',
             'cases.manage' => 'Create and update cases',
+            'cases.delete' => 'Delete operational cases',
         ],
         'Reminders' => [
             'reminders.view' => 'View reminders',
@@ -110,6 +191,12 @@ function tracs_permission_catalog(): array {
             'reports.create' => 'Create reports',
             'reports.update' => 'Update reports',
             'reports.export' => 'Export reports',
+        ],
+        'Workforce Schedule' => [
+            'shifts.view' => 'View shifting assignments and workload recap',
+            'shifts.manage' => 'Create and update shifting assignments',
+            'shifts.settings' => 'Manage shift templates, holidays, coverage rules, and workload settings',
+            'shifts.export' => 'Export shifting assignments and workload recap',
         ],
         'Cancellation Feedback' => [
             'cancellation_feedback.view' => 'View cancellation feedback',
@@ -168,6 +255,9 @@ function tracs_default_role_permissions(string $roleSlug): array {
             'reports.create',
             'reports.update',
             'reports.export',
+            'shifts.view',
+            'shifts.manage',
+            'shifts.export',
             'domains.view',
             'domains.manage',
             'domain_price.view',
@@ -190,6 +280,7 @@ function tracs_default_role_permissions(string $roleSlug): array {
             'domain_price.view',
             'moms.view',
             'reports.view',
+            'shifts.view',
             'cancellation_feedback.view',
         ]))),
         'intern' => array_values(array_unique(array_merge($profile, [
@@ -197,6 +288,7 @@ function tracs_default_role_permissions(string $roleSlug): array {
             'checklist.view',
             'tasks.view_own',
             'tasks.update_own',
+            'shifts.view',
         ]))),
         default => array_values(array_unique(array_merge($profile, [
             'dashboard.view',
@@ -215,6 +307,7 @@ function tracs_default_role_permissions(string $roleSlug): array {
             'moms.view',
             'moms.manage',
             'reports.view',
+            'shifts.view',
             'cancellation_feedback.view',
             'cancellation_feedback.manage',
         ]))),

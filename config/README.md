@@ -34,8 +34,28 @@ Current migrations:
 - `2026_05_16_add_operational_metadata.sql`
 - `2026_05_16_add_theme_preferences.sql`
 - `2026_05_16_cleanup_unused_tables.sql`
+- `2026_05_17_cancellation_feedback_multiselect.sql`
+- `2026_05_17_intern_user_management.sql`
+- `2026_05_17_user_management.sql`
+- `2026_05_18_task_management.sql`
+- `2026_05_18_task_metrics.sql`
+- `2026_05_18_user_avatars.sql`
+- `2026_05_20_domain_price_crosscheck.sql`
+- `2026_05_21_domain_price_crosscheck_audit.sql`
 - `2026_05_21_login_hardening.sql`
 - `2026_05_21_mandatory_2fa.sql`
+- `2026_05_22_domain_price_crosscheck_sources.sql`
+- `2026_05_23_domain_price_task_links.sql`
+- `2026_05_23_domain_price_workflow.sql`
+- `2026_05_24_case_attachments.sql`
+- `2026_05_24_shift_report_attachments.sql`
+- `2026_05_24_tracs_ui_theme_cleanup.sql`
+- `2026_05_25_domain_price_matrix_registrar_defaults.sql`
+- `2026_05_26_domain_price_computed_summaries.sql`
+- `2026_05_26_notifications.sql`
+- `2026_05_26_shift_report_resolved_status.sql`
+- `2026_05_27_case_in_progress_status.sql`
+- `2026_05_27_domain_price_cctld_pricing.sql`
 
 ## File Structure
 
@@ -69,17 +89,19 @@ config/
 | Module | Tables |
 | --- | --- |
 | Users/Auth | `tracs_users`, `tracs_login_attempts`, `tracs_auth_events` |
-| Cases | `tracs_cases` |
+| Cases | `tracs_cases`, `case_attachments` |
 | Reminders | `tracs_reminders` |
 | Checklist | `tracs_side_tasks`, `tracs_side_task_logs` |
 | Finance | `balance_transfers`, `tracs_finance_transfers` |
 | Domain Transfers | `domain_transfers`, `activity_feed`, `tracs_domains` |
 | MoM | `tracs_moms`, `tracs_mom_agenda`, `tracs_mom_notes`, `tracs_mom_decisions`, `tracs_mom_actions`, `tracs_mom_case_links`, `tracs_mom_screenshots`, `tracs_mom_audit_log` |
-| Shift Reports | `tracs_shift_reports`, `tracs_shift_activities` |
+| Task Management | `tracs_tasks`, `tracs_task_assignments`, `tracs_task_logs`, `tracs_task_reviews`, `tracs_task_reminders` |
+| Shift Reports | `tracs_shift_reports`, `tracs_shift_activities`, `shift_report_attachments` |
 | Activity Logs | `tracs_activity_logs` |
-| Ticker/Notifications | `tracs_ticker_messages`, `tracs_ticker_events` |
+| Ticker/Notifications | `tracs_ticker_messages`, `tracs_ticker_events`, `tracs_notifications`, `tracs_notification_triggers`, `tracs_notification_logs` |
 | Theme/User Preferences | `tracs_user_preferences` |
 | Shared/Ops | `ops_status`, `tracs_currency_history` |
+| Domain Price Crosscheck | `domain_price_months`, `domain_price_tlds`, `domain_price_sources`, `domain_price_entries`, `domain_price_summaries`, `domain_price_audit_logs`, `domain_price_tld_notes`, `domain_price_task_links` |
 
 ## Naming Conventions
 

@@ -394,8 +394,10 @@ include 'includes/header.php';
               <select class="form-select" id="momCaseStatus<?=$cid?>">
                 <option value="completed" <?=$cstat==='completed'?'selected':''?>>Solved</option>
                 <option value="active" <?=$cstat==='active'?'selected':''?>>Active</option>
+                <option value="in_progress" <?=$cstat==='in_progress'?'selected':''?>>In Progress</option>
                 <option value="pending" <?=$cstat==='pending'?'selected':''?>>Pending</option>
                 <option value="stuck" <?=$cstat==='stuck'?'selected':''?>>Stuck</option>
+                <option value="on_hold" <?=$cstat==='on_hold'?'selected':''?>>On Hold</option>
               </select>
               <input class="form-input" id="momCaseNote<?=$cid?>" placeholder="Add resolution note or follow-up detail">
               <button class="btn btn-primary btn-sm" onclick="resolveLinkedCaseFromMOM(<?=$mom_id?>, <?=$cid?>)">Update</button>
@@ -463,8 +465,8 @@ include 'includes/header.php';
           <p class="empty-text">No screenshots uploaded</p>
         <?php else: foreach($screenshots as $shot): ?>
           <div class="mom-shot-item" data-shot-id="<?=intval($shot['id']??0)?>">
-            <button class="mom-shot-link" type="button" data-mom-screenshot-src="uploads/mom/<?=esc($shot['filename']??'')?>" onclick="openMOMScreenshotLightbox(this)" title="Open screenshot">
-              <img class="mom-shot-thumb" src="uploads/mom/<?=esc($shot['filename']??'')?>" alt="MOM screenshot">
+            <button class="mom-shot-link" type="button" data-mom-screenshot-src="/api/mom-screenshot.php?id=<?=esc((string)($shot['id']??0))?>" onclick="openMOMScreenshotLightbox(this)" title="Open screenshot">
+              <img class="mom-shot-thumb" src="/api/mom-screenshot.php?id=<?=esc((string)($shot['id']??0))?>" alt="MOM screenshot">
             </button>
             <button class="btn btn-danger btn-icon btn-xs mom-shot-remove mom-sidebar-edit" onclick="markMOMScreenshotForRemoval(this)" title="Delete Screenshot"><i data-lucide="trash-2" class="icon-xs"></i></button>
           </div>
@@ -646,8 +648,8 @@ function render_mom_table($items, $MC, $mode='upcoming') {
             <?php else: ?>
             <div class="mom-preview-shots">
               <?php foreach(array_slice($preview['screenshots'], 0, 4) as $shot): ?>
-              <button class="mom-preview-shot-link" type="button" data-mom-screenshot-src="uploads/mom/<?=esc($shot['filename'] ?? '')?>" onclick="openMOMScreenshotLightbox(this)" title="Open screenshot">
-                <img src="uploads/mom/<?=esc($shot['filename'] ?? '')?>" alt="MOM screenshot">
+              <button class="mom-preview-shot-link" type="button" data-mom-screenshot-src="/api/mom-screenshot.php?id=<?=esc((string)($shot['id']??0))?>" onclick="openMOMScreenshotLightbox(this)" title="Open screenshot">
+                <img src="/api/mom-screenshot.php?id=<?=esc((string)($shot['id']??0))?>" alt="MOM screenshot">
               </button>
               <?php endforeach; ?>
             </div>

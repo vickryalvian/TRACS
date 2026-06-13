@@ -10,6 +10,7 @@ require_once __DIR__.'/../core/access_control.php';
 tracs_require_page_permission($conn, 'reports.view');
 require_once __DIR__.'/../modules/shift-reports/controller.php';
 require_once __DIR__.'/../modules/alert-ticker/controller.php';
+require_once __DIR__.'/api/shift-attachment-lib.php';
 require_once __DIR__.'/includes/page_helpers.php';
 
 $uid = (int)($_SESSION['user_id']??0);
@@ -30,6 +31,34 @@ $limit = 50;
 $offset = ($page - 1) * $limit;
 
 $history = $SC->getHistory($filters, $limit, $offset);
+shift_attachment_ensure_table($conn);
+foreach ($history as &$report_for_attachments) {
+    $report_for_attachments['attachments'] = shift_attachment_list_for_report($conn, (int)($report_for_attachments['id'] ?? 0));
+}
+unset($report_for_attachments);
+$history_groups = [];
+foreach ($history as $report) {
+    $group_key = (string)($report['active_date'] ?? '') . '|' . (string)($report['shift_name'] ?? '');
+    if (!isset($history_groups[$group_key])) {
+        $history_groups[$group_key] = [
+            'date' => (string)($report['active_date'] ?? ''),
+            'shift' => (string)($report['shift_name'] ?? ''),
+            'reports' => [],
+            'agents' => [],
+            'active' => 0,
+            'on_hold' => 0,
+            'resolved' => 0,
+            'critical' => 0,
+        ];
+    }
+    $agent = tracs_creator_label($report);
+    $history_groups[$group_key]['agents'][$agent] = true;
+    $history_groups[$group_key]['reports'][] = $report;
+    if (($report['status'] ?? '') === 'resolved') $history_groups[$group_key]['resolved']++;
+    elseif (($report['status'] ?? '') === 'on_hold') $history_groups[$group_key]['on_hold']++;
+    else $history_groups[$group_key]['active']++;
+    if (($report['status'] ?? '') === 'active' && ($report['priority'] ?? '') === 'critical') $history_groups[$group_key]['critical']++;
+}
 $stats = $SC->getTodayStats();
 $critical_count = (int)($stats['critical'] ?? 0);
 $today = date('Y-m-d');
@@ -43,6 +72,10 @@ $intel = $SC->buildOperationalIntelligence($today_reports, $yesterday_reports, $
 $handover_shift = $filters['shift'] ?: $SC->detectCurrentShift();
 $handover_date = $filters['date'] ?: date('Y-m-d');
 $handover = $SC->getCurrentHandover($handover_shift, $handover_date);
+$handover_manual_reports = $SC->getHistory(['date' => $handover_date, 'shift' => $handover_shift], 200, 0);
+$handover_needs = array_values(array_filter($handover_manual_reports, fn($r) => ($r['status'] ?? '') === 'active'));
+$handover_hold = array_values(array_filter($handover_manual_reports, fn($r) => ($r['status'] ?? '') === 'on_hold'));
+$handover_resolved = array_values(array_filter($handover_manual_reports, fn($r) => ($r['status'] ?? '') === 'resolved'));
 
 $tab_base = [
   'date' => $filters['date'],
@@ -62,6 +95,12 @@ $filter_tabs = [
     'params' => $tab_base + ['status' => 'active']
   ],
   [
+    'key' => 'on_hold',
+    'label' => 'On Hold',
+    'count' => $stats['on_hold'] ?? 0,
+    'params' => $tab_base + ['status' => 'on_hold']
+  ],
+  [
     'key' => 'resolved',
     'label' => 'Resolved',
     'count' => $stats['resolved'],
@@ -76,7 +115,7 @@ $filter_tabs = [
 ];
 $active_tab = (($filters['status'] ?? '') === 'active' && ($filters['priority'] ?? '') === 'critical')
   ? 'critical'
-  : ((($filters['status'] ?? '') === 'active') ? 'active' : ((($filters['status'] ?? '') === 'resolved') ? 'resolved' : 'all'));
+  : ((($filters['status'] ?? '') === 'active') ? 'active' : ((($filters['status'] ?? '') === 'on_hold') ? 'on_hold' : ((($filters['status'] ?? '') === 'resolved') ? 'resolved' : 'all')));
 
 $page_title='Shift Reports'; $active_page='shift-reports';
 include 'includes/header.php';
@@ -150,6 +189,48 @@ include 'includes/header.php';
         <?=esc(safe_dt($handover['window']['start'], 'H:i'))?> - <?=esc(safe_dt($handover['window']['end'], 'H:i'))?>
       </div>
     </aside>
+  </div>
+
+  <!-- SHIFT SUMMARY ITEMS -->
+  <div class="shift-summary-status-grid">
+    <?php
+      $summaryGroups = [
+        ['title' => 'Needs Handover', 'icon' => 'radio-tower', 'items' => $handover_needs, 'badge' => 'b-active', 'empty' => 'No active handover items for this shift.'],
+        ['title' => 'On Hold / Monitoring', 'icon' => 'pause-circle', 'items' => $handover_hold, 'badge' => 'b-hold', 'empty' => 'No monitoring items on hold.'],
+        ['title' => 'Resolved This Shift', 'icon' => 'check-check', 'items' => $handover_resolved, 'badge' => 'b-resolved', 'empty' => 'No resolved informational items recorded.'],
+      ];
+    ?>
+    <?php foreach($summaryGroups as $summaryGroup): ?>
+    <section class="panel shift-summary-status-card <?= $summaryGroup['title'] === 'Resolved This Shift' ? 'is-muted' : '' ?>">
+      <div class="panel-head">
+        <span class="panel-title">
+          <i data-lucide="<?=esc($summaryGroup['icon'])?>" class="icon-sm"></i>
+          <?=esc($summaryGroup['title'])?>
+        </span>
+        <span class="panel-meta"><?=count($summaryGroup['items'])?></span>
+      </div>
+      <?php if(empty($summaryGroup['items'])): ?>
+        <div class="shift-empty-line"><?=esc($summaryGroup['empty'])?></div>
+      <?php else: ?>
+        <div class="shift-summary-status-list">
+          <?php foreach($summaryGroup['items'] as $item): ?>
+          <div class="shift-summary-status-row">
+            <span class="badge <?=$summaryGroup['badge']?>"><?=esc(ucwords(str_replace('_', ' ', $item['status'] ?? 'active')))?></span>
+            <div>
+              <div class="shift-activity-title"><?=esc($item['title'] ?? 'Untitled')?></div>
+              <?php
+                $resolution = trim((string)($item['resolution_note'] ?? ''));
+                $resolvedAt = !empty($item['resolved_at']) ? 'resolved at '.safe_dt($item['resolved_at'], 'H:i') : '';
+                $detailLine = trim($resolution . ($resolution && $resolvedAt ? ' - ' : '') . $resolvedAt);
+              ?>
+              <?php if($detailLine !== ''): ?><div class="shift-activity-desc"><?=esc($detailLine)?></div><?php endif; ?>
+            </div>
+          </div>
+          <?php endforeach; ?>
+        </div>
+      <?php endif; ?>
+    </section>
+    <?php endforeach; ?>
   </div>
 
   <!-- CURRENT SHIFT HANDOVER -->
@@ -307,69 +388,77 @@ include 'includes/header.php';
     <?php if(empty($history)):?>
     <div class="empty"><div class="empty-ic"><i data-lucide="clipboard-list"></i></div><div class="empty-t">No reports found</div><div class="empty-s">Try a different filter or create a new report</div></div>
     <?php else: ?>
-    <div class="table-wrap">
-      <table class="tracs-table shift-report-table">
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Submitter</th>
-            <th>Shift</th>
-            <th>Title</th>
-            <th>Priority</th>
-            <th>Status</th>
-            
-          </tr>
-        </thead>
-        <tbody>
-        <?php foreach($history as $r):
-          $id=intval($r['id']??0);
-          $title=esc($r['title']??'');
-          $shift=esc($r['shift_name']??'');
-          $status=$r['status']??'active';
-          $prio=strtolower($r['priority']??'medium');
-          $details=esc($r['details']??'');
-          $submitter=tracs_creator_label($r);
-          
-          $pb=prio_badge($prio);
-          $sb=($status==='resolved')?'b-done':'b-active';
-          $dt_disp=safe_dt($r['active_date']??null, 'd M Y');
-        ?>
-        <tr class="shift-tr" data-id="<?=$id?>" data-title="<?=$title?>" data-shift="<?=$shift?>" data-prio="<?=$prio?>" data-status="<?=$status?>" data-details="<?=$details?>" data-date="<?=$r['active_date']??''?>">
-          <td style="white-space:nowrap"><?=$dt_disp?></td>
-          <td>
-            <div class="user-cell">
-              <div class="avatar"><?=esc(strtoupper(substr($submitter, 0, 1) . substr(explode(' ', $submitter)[1] ?? '', 0, 1)))?></div>
-              <div class="user-info">
-                <div class="user-name"><?=esc($submitter)?></div>
+    <div class="shift-group-list">
+      <?php foreach($history_groups as $group):
+        $agents = array_keys($group['agents']);
+        $group_status = $group['critical'] > 0 ? 'critical' : ($group['active'] > 0 ? 'active' : (($group['on_hold'] ?? 0) > 0 ? 'on_hold' : 'resolved'));
+        $group_badge = $group_status === 'critical' ? 'b-critical' : ($group_status === 'active' ? 'b-active' : ($group_status === 'on_hold' ? 'b-hold' : 'b-resolved'));
+      ?>
+      <section class="shift-report-group is-<?=esc($group_status)?>">
+        <div class="shift-report-group-head">
+          <div>
+            <div class="shift-report-group-title"><?=esc($group['shift'])?> · <?=esc(safe_dt($group['date'], 'd M Y'))?></div>
+            <div class="shift-report-group-agents"><?=esc(implode(', ', $agents))?></div>
+          </div>
+          <div class="shift-report-group-meta">
+            <span class="badge <?=$group_badge?>"><?=esc($group['active'])?> active</span>
+            <span class="badge b-hold"><?=esc($group['on_hold'] ?? 0)?> on hold</span>
+            <span class="badge b-resolved"><?=esc($group['resolved'])?> resolved</span>
+          </div>
+        </div>
+        <div class="shift-report-items">
+          <?php foreach($group['reports'] as $r):
+            $id=intval($r['id']??0);
+            $title=esc($r['title']??'');
+            $shift=esc($r['shift_name']??'');
+            $status=$r['status']??'active';
+            $prio=strtolower($r['priority']??'medium');
+            $details=esc($r['details']??'');
+            $submitter=tracs_creator_label($r);
+            $pb=prio_badge($prio);
+            $sb=($status==='resolved')?'b-resolved':(($status==='on_hold')?'b-hold':'b-active');
+            $statusLabel = $status === 'active' ? 'Need Handover' : ucwords(str_replace('_', ' ', $status));
+          ?>
+          <article class="shift-report-item shift-tr" data-id="<?=$id?>" data-title="<?=$title?>" data-shift="<?=$shift?>" data-prio="<?=$prio?>" data-status="<?=$status?>" data-details="<?=$details?>" data-date="<?=$r['active_date']??''?>" data-resolution-note="<?=esc($r['resolution_note']??'')?>" data-resolved-at="<?=esc($r['resolved_at']??'')?>">
+            <div class="shift-report-item-main">
+              <div class="shift-report-item-title search-text"><?=$title?></div>
+              <?php if($details):?><p title="<?=$details?>"><?=$details?></p><?php endif;?>
+              <?php if($status === 'resolved' && (!empty($r['resolution_note']) || !empty($r['resolved_at']))): ?>
+              <p class="shift-resolution-line"><?=esc(trim((string)($r['resolution_note'] ?? '') . (!empty($r['resolved_at']) ? ' - resolved at ' . safe_dt($r['resolved_at'], 'H:i') : '')))?></p>
+              <?php endif; ?>
+              <div class="shift-report-item-agent"><?=tracs_creator_meta($r)?></div>
+              <?php if(!empty($r['attachments'])): ?>
+              <div class="shift-photo-grid">
+                <?php foreach($r['attachments'] as $attachment): ?>
+                <a href="<?=esc($attachment['image_url'])?>" target="_blank" rel="noopener noreferrer" class="shift-photo-thumb" title="<?=esc($attachment['original_filename'])?>">
+                  <img src="<?=esc($attachment['thumbnail_url'])?>" alt="<?=esc($attachment['original_filename'])?>" loading="lazy">
+                </a>
+                <?php endforeach; ?>
               </div>
+              <?php endif; ?>
             </div>
-          </td>
-          <td><span class="badge b-info"><?=$shift?></span></td>
-          <td style="max-width:300px">
-            <div class="search-text" style="font-weight:500;color:var(--tx1);<?=$status==='resolved'?'text-decoration:line-through;color:var(--tx3)':''?>"><?=$title?></div>
-            <?php if($details):?><div style="font-size:10px;color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="<?=$details?>"><?=$details?></div><?php endif;?>
-            <?=tracs_creator_meta($r)?>
-          </td>
-          <td><span class="badge <?=$pb?>"><?=ucfirst($prio)?></span></td>
-          <td class="shift-actions-cell">
-            <span class="badge <?=$sb?>"><?=ucfirst($status)?></span>
+            <div class="shift-report-item-status">
+              <span class="badge <?=$pb?>"><?=ucfirst($prio)?></span>
+              <span class="badge <?=$sb?>"><?=esc($statusLabel)?></span>
+              <span class="shift-report-submit"><?=esc($submitter)?></span>
+            </div>
             <div class="shift-row-controls">
-              <?php if($status==='active'):?>
-              <button class="btn btn-ghost btn-icon shift-resolve-btn" onclick="resolveShiftReport(<?=$id?>)" title="Resolve"><i data-lucide="check-circle" class="icon-sm"></i></button>
+              <?php if($status!=='resolved'):?>
+              <button class="btn btn-ghost btn-icon shift-resolve-btn" onclick="resolveShiftReport(<?=$id?>,this)" title="Resolve"><i data-lucide="check-circle" class="icon-sm"></i></button>
               <?php endif;?>
               <details class="row-action-menu">
                 <summary class="btn btn-ghost btn-icon" title="Actions" aria-label="Row actions"><i data-lucide="more-vertical" class="icon-sm"></i></summary>
                 <div class="row-action-popover">
                   <button class="btn btn-ghost btn-sm" type="button" onclick="openEditShiftReport(<?=$id?>)">Edit</button>
-                  <button class="btn btn-danger btn-sm" type="button" onclick="deleteShiftReport(<?=$id?>)">Delete</button>
+                  <button class="btn btn-danger btn-sm" type="button" onclick="deleteShiftReport(<?=$id?>,this)">Delete</button>
                 </div>
               </details>
             </div>
-          </td>
-        </tr>
-        <?php endforeach; ?>
-        </tbody>
-      </table>
+          </article>
+          <?php endforeach; ?>
+        </div>
+      </section>
+      <?php endforeach; ?>
     </div>
     <?php if(count($history) === $limit): ?>
     <div class="tracs-pagination">

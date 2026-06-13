@@ -1,148 +1,203 @@
-# TRACS — Architecture
+# TRACS - Architecture
 
 ## Overview
 
-TRACS is a vanilla PHP operational dashboard. It uses server-rendered pages under `/public`, authenticated JSON endpoints under `/public/api`, business controllers/models under `/modules`, shared helpers under `/core`, and a MySQL/MariaDB schema managed from `config/install.sql` plus dated migrations.
+TRACS is a modular, server-rendered PHP operations application. Pages under `public/` assemble data from module controllers/models, shared includes render the application shell, and authenticated APIs handle mutations and exports.
 
 ```text
 Browser
-  -> public/*.php page
-      -> core/security/csrf.php
-      -> config/database.php
-      -> public/auth/auth_check.php
-      -> modules/* controller/model
-      -> public/includes/header.php
-      -> page HTML
-      -> public/includes/footer.php
+  -> public/*.php
+     -> hardened session + auth guard
+     -> page permission check
+     -> modules/* controller/model
+     -> public/includes/header.php
+     -> page HTML
+     -> public/includes/footer.php
 
-Browser JS
+Browser JavaScript
   -> public/api/*.php
-      -> public/api/_bootstrap.php
-      -> module controller/model
-      -> JSON or CSV response
+     -> public/api/_bootstrap.php
+     -> full-auth, account, permission, and CSRF checks
+     -> module/controller or focused endpoint logic
+     -> JSON, CSV, or permission-checked image response
 ```
 
-## Folder And File Structure
+## Runtime Structure
 
-| Path | Purpose |
+| Path | Responsibility |
 | --- | --- |
-| [public](/tracs/public) | Web root and page entry points. |
-| [public/api](/tracs/public/api) | Authenticated API/export endpoints. |
-| [public/auth](/tracs/public/auth) | Login, logout, auth guard. |
-| [public/includes](/tracs/public/includes) | Header/sidebar/ticker, footer/modals/scripts, theme bootstrap, page helpers. |
-| [public/assets](/tracs/public/assets) | `tracs.css`, `tracs.js`, MoM assets, TV mode assets, logo. |
-| [modules](/tracs/modules) | Controllers/models for operational modules. |
-| [core](/tracs/core) | CSRF, build signature, user management, creator tracking. |
-| [config](/tracs/config) | Database config, installer, schema modules, migrations, archive. |
-| [Dockerfile](/tracs/Dockerfile) | PHP Apache image for local/container deployment. |
-| [docker-compose.yml](/tracs/docker-compose.yml) | Local app + MySQL stack. |
+| `public/` | Web root and page routes. |
+| `public/api/` | Authenticated JSON, CSV, and attachment endpoints. |
+| `public/auth/` | Login, logout, and full-auth guard. |
+| `public/includes/` | Shared header/sidebar/ticker, footer/modals/scripts, theme bootstrap, and page helpers. |
+| `public/assets/` | Shared CSS/JS plus module-specific assets. |
+| `public/uploads/` | Runtime image storage. Avatars are intentional public images; case, shift, and MoM evidence is served through authenticated endpoints. |
+| `public/cache/` | PHP-writable generated cache. |
+| `modules/` | Business controllers and models. |
+| `core/` | Access control, CSRF/session hardening, user management, creator tracking, notifications, shift configuration, and build signature. |
+| `config/` | Database connection, fresh installer, focused schemas, and dated migrations. |
+| `bin/tracs-notification-worker.php` | CLI scheduler for due reminders, meetings, and shift-handover notifications. |
+| `logs/` | Private application/PHP logs; never a web route. |
+| `storage/deployment/` | Private deploy metadata read by Super Admin monitoring. |
 
-## Authentication And Permissions
+Only `public/` is a browser document root. Even inside `public/`, `includes/`, `modules/`, API bootstrap/helper files, and protected upload folders are internal and denied by Nginx/Apache plus PHP direct-access guards.
 
-- Login form: [public/login.php](/tracs/public/login.php).
-- Login handler: [public/auth/login.php](/tracs/public/auth/login.php).
-- 2FA setup page: [public/two-factor-setup.php](/tracs/public/two-factor-setup.php).
-- 2FA verification page: [public/two-factor-verify.php](/tracs/public/two-factor-verify.php).
-- Auth guard: [public/auth/auth_check.php](/tracs/public/auth/auth_check.php).
-- User/role/permission helpers: [core/user_management.php](/tracs/core/user_management.php).
-- CSRF helpers: [core/security/csrf.php](/tracs/core/security/csrf.php).
-- Auth hardening helpers: [core/security/auth_hardening.php](/tracs/core/security/auth_hardening.php).
-- Build signature metadata: [core/build_signature.php](/tracs/core/build_signature.php).
+## Authentication And Session Layer
 
-Login uses CSRF validation, generic failure messages, `password_verify()`, session ID regeneration after password verification, a temporary pending-2FA state, mandatory TOTP setup/verification, session ID regeneration after 2FA, idle timeout, failed-attempt tracking, CAPTCHA escalation, and temporary lockouts by identifier and IP address. Protected pages, APIs, and exports require `tracs_auth_state = full`; a password-verified pending session cannot access TRACS. User-management schema adds roles, permissions, divisions, intern profiles, user activity logs, password reset tokens, and Super Admin-only 2FA reset. Navigation in `header.php` is role/permission aware: monitoring, TV mode, and user management are only visible to eligible users.
+- `public/login.php` renders login; `public/auth/login.php` verifies credentials.
+- Login uses generic failures, a dummy hash for unknown accounts, failed-attempt tracking, CAPTCHA escalation, and temporary lockouts.
+- Password success creates only a pending-2FA session.
+- `public/two-factor-setup.php` and `public/two-factor-verify.php` complete mandatory TOTP authentication.
+- Session IDs regenerate after password verification and after successful 2FA.
+- Protected pages, APIs, and exports require a full auth state and refresh the idle timer.
+- Session cookies are `HttpOnly`, `SameSite=Lax`, and `Secure` when HTTPS is detected.
 
-## Main Pages And Modules
+## Roles And Permissions
 
-| Page | Module/controller | Notes |
-| --- | --- | --- |
-| `index.php` | case, reminder, checklist, ticker, activity, ops status, shift reports, MoM | Main dashboard; also includes currency converter widget. |
-| `cases.php` | `modules/case` | Case list, CRUD modal, search/filter/export, next-check tracking. |
-| `reminders.php` | `modules/reminder` | Reminder list, CRUD modal, due state, completion. |
-| `checklist.php` | `modules/checklist` | Checklist tasks, progress, linked task-assignment sync. |
-| `shift-reports.php` | `modules/shift-reports` | Handover reports and activity snapshots. |
-| `monitoring.php` / `tasks.php` | `modules/task-management` | Task assignment, assignee progress, review/monitoring. |
-| `mom.php` | `modules/mom` -> `public/modules/mom/controller.php` | Meeting schedule, agenda, notes, decisions, actions, cases, reminders, screenshots, history. |
-| `domains.php` | page-local SQL plus ticker integration | Domain transfers, expiry/transfer tracking, activity feed. |
-| `finance.php` | finance/balance transfer flows | Balance transfer log, filters, export. |
-| `cancellation_feedback.php` | `modules/cancellation-feedback` | Cancellation intelligence, multi-select values, export. |
-| `user-management.php` | `modules/user-management` | Users, roles, permissions, divisions, activity. |
-| `intern-management.php` | user-management | Intern profiles and intern-focused admin views. |
-| `profile.php` | user helpers/preferences | Profile, security, theme/preferences. |
-| `activity.php` | `modules/activity-log` | Audit/activity browser. |
-| `tv-mode.php` | `public/api/tv-mode-summary.php` | Role-gated wall display. |
-| `domain_price_crosscheck.php` | `modules/domain-price-crosscheck` | Compare domain cost vs website/PAAS selling prices. See [DOMAIN_PRICE_CROSSCHECK_ARCHITECTURE.md](file:///Users/ulfahanifah/Documents/tracs/docs/DOMAIN_PRICE_CROSSCHECK_ARCHITECTURE.md). |
+System roles are Super Admin, Admin, Supervisor / Leader, Agent, Intern, and Viewer / Auditor. Effective access comes from permission records, not role labels alone.
 
-## Frontend Assets
+- Super Admin receives the full permission catalog and owns sensitive recovery actions such as another user's 2FA reset.
+- Admin receives all default permissions except role deletion and sensitive settings management.
+- Supervisor has team operations, task monitoring/review, reports, domains, MoM, and selected user controls.
+- Agent has normal operational create/update permissions but no User Management.
+- Intern has dashboard, checklist, and own-task access by default.
+- Viewer / Auditor has read-oriented access.
 
-- [public/assets/tracs.css](/tracs/public/assets/tracs.css): main design system and page styling.
-- [public/assets/tracs.js](/tracs/public/assets/tracs.js): shared modal, toast, CRUD, theme, export, and utility behavior.
-- [public/assets/mom-styles.css](/tracs/public/assets/mom-styles.css): MoM-specific styles loaded for dashboard and MoM pages.
-- [public/assets/mom-functions.js](/tracs/public/assets/mom-functions.js): MoM interactions.
-- [public/assets/tv-mode.css](/tracs/public/assets/tv-mode.css) and [public/assets/tv-mode.js](/tracs/public/assets/tv-mode.js): wall-display experience.
+`core/user_management.php` is the source of truth for the catalog and default role mappings. `public/includes/header.php` derives navigation visibility from permissions.
 
-The header loads Google Fonts, lucide, flatpickr, the theme bootstrap, and cache-busted asset links using `filemtime`.
+Server Health & Logs is deliberately role-based rather than permission-based: only the exact `super_admin` role can discover the menu, open `public/server-health.php`, or call `public/api/server-health.php`. Admin, Supervisor, Agent, Intern, Viewer, unauthenticated, and pending-2FA sessions are blocked.
 
-## Database And Config
+## Server Health And Logs
 
-- DB connection: [config/database.php](/tracs/config/database.php).
-- Fresh install: [config/install.sql](/tracs/config/install.sql).
-- Active schema fragments: [config/schema](/tracs/config/schema).
-- Existing-install migrations: [config/migrations](/tracs/config/migrations).
-- Archived/superseded SQL: [config/archive](/tracs/config/archive).
+`core/server_monitoring.php` reads a strict fixed metric set. It accepts no path or command input, does not follow symlinks, bounds folder scans by time and entry count, and never scans the whole server filesystem. Linux CPU/RAM/uptime use fixed `/proc` files; disk uses PHP filesystem functions; database size/version use fixed queries; Nginx version is parsed only from the server software value; deployment version/time/commit come from `storage/deployment/deployment.meta`.
 
-`database.php` reads `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASS`, and `DB_NAME` from PHP `$_ENV`, then sets `utf8mb4` and `Asia/Jakarta` time. Docker config ensures `$_ENV` is populated.
+Recent `logs/error.log` entries are aggressively sanitized before JSON output. SQL/stack/credential details are replaced, and paths, IPs, URLs, and email addresses are redacted. If the log or a server metric is not safely readable, the API reports `Unavailable`.
 
-## Important Tables
+## Dashboard Layer
 
-| Area | Tables |
+`public/index.php` is the operational landing page.
+
+- Uses the restored five-item `dashboard-stat-strip`; the grouped dashboard stat-card experiment is not current.
+- Cases open the same shared ticket modal used from `cases.php`.
+- Operations summary slider includes Infrastructure Pulse and Shift Summary.
+- Main workspace includes Task Monitoring, Shift Handover, and Currency Converter.
+- The notification bell combines stored notifications, time-sensitive alerts, and workload summaries.
+
+## Cases
+
+Files: `modules/case/*`, `public/cases.php`, `public/api/case-*.php`, and the shared ticket modal in `public/includes/footer.php`.
+
+- Statuses: `active`, `pending`, `in_progress`, `stuck`, `on_hold`, `completed`.
+- Dashboard and case-list rows call `openCaseTicket()` and use `case-get.php`.
+- Ticket timeline: Created, Assigned, In Progress, Waiting, Resolved.
+- Resolve is the right-side primary footer action. Close remains in the header. Edit/Delete are under the icon-only More trigger.
+- Case attachments accept JPEG, PNG, and WebP up to 5 MB, are re-encoded with GD, receive thumbnails, and are served through `case-attachment.php`.
+
+## Task Monitoring
+
+The dashboard widget and the full assignment page are related but separate surfaces.
+
+Dashboard tabs:
+
+1. `Checklist and Reminder`
+2. `Assignments`
+3. `Activity`
+
+There is no separate Reminder dashboard tab. Reminder List is embedded in the combined tab. `public/reminders.php` remains the full reminder page.
+
+The full task assignment route is `monitoring.php`; `tasks.php` includes it as a compatibility entry. Task creation can target users, roles, or divisions. Each assignment creates a linked checklist item, creates a linked reminder when a due date exists, queues assignment/reminder notifications, and maintains assignment logs/review state.
+
+## Shift Summary And Handover
+
+Files: `modules/shift-reports/*`, `public/shift-reports.php`, and `public/api/shift-*.php`.
+
+- Statuses: Active, On Hold, Resolved.
+- Active items are handover work; on-hold items provide monitoring context; resolved items remain visible for context.
+- Dashboard reminders begin 30 minutes before the configured shift change.
+- Notification scheduler creates shift reminders in the final 15 minutes when actionable handover remains.
+- Shift report image attachments are stored in `shift_report_attachments` and served through the permission-checked attachment API.
+
+## MoM And Schedule Relationship
+
+`public/mom.php` uses the bridge in `modules/mom/controller.php` to the integrated controller under `public/modules/mom/`.
+
+- Meetings store schedule and lifecycle state.
+- Scheduled meetings create reminders, ops-status windows, and ticker events.
+- Agenda, notes, decisions, actions, screenshots, cases, and history remain part of the MoM page.
+- Action items can create reminders or cases.
+- MoM reminders appear through the normal reminder data flow and can surface in the dashboard Reminder List.
+
+See `README_MOM.md` for current behavior. Files under `MOM README/` are legacy package documentation.
+
+## Notifications
+
+`core/notifications.php` owns schema tolerance, permission checks, dedupe keys, in-app records, browser push state, logs, and scheduled trigger generation.
+
+Implemented triggers:
+
+- New case
+- Reminder created, due in 15/10 minutes, and due now
+- Task assigned
+- Meeting starts in 15/10 minutes or now
+- Shift handover in 15 minutes
+
+`public/assets/tracs.js` polls `notifications-list.php` every 60 seconds and uses `public/tracs-sw.js` for browser notification clicks. Production should run `bin/tracs-notification-worker.php` every minute from cron. Infrastructure notifications are not connected because monitoring is still a prototype.
+
+## Infrastructure Pulse
+
+**Partially Implemented.**
+
+- Full page: `public/infrastructure-pulse.php`
+- Shared mock/API-ready store: `public/assets/infrastructure-pulse-data.js`
+- Rendering: `public/assets/infrastructure-pulse.js`
+- Dashboard mini widget: `public/index.php`
+- TV widget: `public/tv-mode.php`
+
+All three views share session-only mock telemetry. Backend probes, persistent server registry, monitoring result tables, incidents, cache, and streaming endpoints are planned.
+
+## Domain Price Crosscheck
+
+- Canonical route: `public/domain-price-crosscheck.php`
+- Legacy redirect: `public/domain_price_crosscheck.php` (308)
+- Logic: `modules/domain-price-crosscheck/*`
+- Assets: `public/assets/domain-price-crosscheck.*`
+
+The page is under `Tasks & Monitoring` and includes monthly snapshots, exchange-rate handling, gTLD/ccTLD matrices, registrar source and extension management, intelligence summaries, website price adjustment, action buckets, notes/follow-ups, approval locking, task assignment, CSV export, and an operational audit trail.
+
+See `docs/DOMAIN_PRICE_CROSSCHECK.md` and `docs/DOMAIN_PRICE_CROSSCHECK_ARCHITECTURE.md`.
+
+## Domain Transfer, Finance, Users, And TV Mode
+
+- Domain Transfer Log: `public/domains.php`; retained legacy tables include `domain_transfers` and `activity_feed`.
+- Finance: `public/finance.php`; retained legacy storage includes `balance_transfers`.
+- User Management: `public/user-management.php`, `public/intern-management.php`, and `modules/user-management/*`.
+- Settings are under the avatar menu and route to `profile.php?section=preferences`.
+- TV Mode: `public/tv-mode.php`, role-gated to Super Admin/Admin/Supervisor, with responsive compact/narrow/4K modes and data from `public/api/tv-mode-summary.php`.
+
+## Database Overview
+
+| Area | Important tables |
 | --- | --- |
-| Users/Auth | `tracs_users`, `tracs_login_attempts`, `tracs_auth_events`, `tracs_roles`, `tracs_permissions`, `tracs_role_permissions`, `tracs_divisions`, `user_intern_profiles` |
-| Cases/Reminders/Checklist | `tracs_cases`, `tracs_reminders`, `tracs_side_tasks`, `tracs_side_task_logs` |
-| Task Management | `tracs_tasks`, `tracs_task_assignments`, `tracs_task_logs`, `tracs_task_reviews`, `tracs_task_reminders` |
-| MoM | `tracs_moms`, `tracs_mom_agenda`, `tracs_mom_notes`, `tracs_mom_decisions`, `tracs_mom_actions`, `tracs_mom_case_links`, `tracs_mom_screenshots`, `tracs_mom_audit_log` |
-| Shift Reports | `tracs_shift_reports`, `tracs_shift_activities` |
-| Alerts/Activity | `tracs_ticker_messages`, `tracs_ticker_events`, `tracs_activity_logs`, `tracs_user_activity_logs`, `ops_status` |
-| Finance/Domains | `tracs_finance_transfers`, `balance_transfers`, `tracs_domains`, `domain_transfers`, `activity_feed` |
-| Feedback/Utility | `tracs_cancellation_feedback`, `tracs_currency_history`, `tracs_user_preferences` |
-| Domain Price Crosscheck | `domain_price_months`, `domain_price_tlds`, `domain_price_sources`, `domain_price_entries`, `domain_price_summaries`, `domain_price_audit_logs` |
+| Auth/users | `tracs_users`, `tracs_login_attempts`, `tracs_auth_events`, `tracs_roles`, `tracs_permissions`, `tracs_role_permissions`, `tracs_divisions`, `user_intern_profiles` |
+| Cases | `tracs_cases`, `case_attachments` |
+| Checklist/reminders/tasks | `tracs_side_tasks`, `tracs_side_task_logs`, `tracs_reminders`, `tracs_tasks`, `tracs_task_assignments`, `tracs_task_logs`, `tracs_task_reviews`, `tracs_task_reminders` |
+| Shift | `tracs_shift_reports`, `tracs_shift_activities`, `shift_report_attachments` |
+| MoM | `tracs_moms` and `tracs_mom_*` tables |
+| Notifications/activity | `tracs_notifications`, `tracs_notification_triggers`, `tracs_notification_logs`, `tracs_ticker_messages`, `tracs_ticker_events`, `tracs_activity_logs`, `tracs_user_activity_logs`, `ops_status` |
+| Domain price | `domain_price_months`, `domain_price_tlds`, `domain_price_sources`, `domain_price_entries`, `domain_price_summaries`, `domain_price_audit_logs`, `domain_price_tld_notes`, `domain_price_task_links` |
 
-## Operational Flow
+Use `config/install.sql` for a fresh database and dated files in `config/migrations/` for existing installs.
 
-1. User submits username/email and password.
-2. Valid credentials create a temporary password-verified session and route to mandatory 2FA setup or verification.
-3. Successful 2FA creates the full authenticated session and stores user identity.
-4. Page includes DB/auth/controllers and prepares formatted data.
-5. Header renders ticker, sidebar, theme/user menus, and role-aware navigation.
-6. Page body renders compact panels, tables, forms, and action buttons.
-7. Footer renders shared modals and loads JS.
-8. JS posts to `/api/*.php`; `_bootstrap.php` checks full auth and CSRF.
-9. Controllers update tables, log activity, and optionally create ticker events, reminders, checklist items, or ops-status records.
+## Frontend Design System
 
-## Cross-Module Integrations
+- Primary tokens and components live in `public/assets/tracs.css`.
+- Font stack is `Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif`.
+- Prefer compact panels, consistent gaps/padding, contextual icons, readable completed states, and blue only for active/highlighted state.
+- Use shared modal, toast, loading, error, dropdown, and theme helpers before adding module-specific copies.
 
-- Ticker aggregates critical cases, reminders, domain/finance/shift/MoM signals, custom ticker messages, and ticker events.
-- Task management creates linked checklist tasks and reminders for assignees.
-- MoM schedules create reminders and ops-status rows; action items can create reminders or cases; meetings can link and update cases.
-- Shift reports collect operational snapshots from checklist, reminders, cases, domains, finance, meetings, and ticker signals.
-- User management permissions control task monitoring, user management, and TV mode visibility.
+## Deployment And Docker
 
-## Docker Architecture
-
-`docker-compose.yml` runs:
-
-- `app`: PHP 8.2 Apache, document root `/var/www/html/public`, source mounted at `/var/www/html`, logs mounted to `./logs`, environment variables passed for DB.
-- `db`: MySQL 8.0, healthcheck, persistent `tracs_db` volume, first-run import of `config/install.sql`.
-
-`Dockerfile` enables `mysqli`, `rewrite`, and `headers`, configures Apache for `/public`, and sets PHP `variables_order=EGPCS` so Docker environment variables reach `$_ENV`.
-
-## ISO 9001 And Measurement Direction
-
-TRACS is moving toward more measurable operational management:
-
-- Task assignments and reviews provide accountability evidence.
-- Shift reports and activity logs provide traceability.
-- Cancellation feedback provides customer-loss intelligence.
-- MoM decisions/actions provide decision and follow-up records.
-- Future measurement work should add KPI/achievement tracking, SLA summaries, exportable evidence, and possibly a dedicated measurement page or subdomain.
-
-Keep measurement features additive and auditable. Prefer new reporting tables/views and exports over disruptive rewrites of core operational flows.
+- Production target: Ubuntu 24.04-class VPS with Nginx or Apache, PHP-FPM, MySQL/MariaDB, HTTPS, cron, backups, and monitoring.
+- Docker is **Local Development Only**. Compose runs PHP 8.2 Apache on port 8080 and MySQL 8 on host port 3307.
+- The current Docker image enables `mysqli`, rewrite, and headers, but not GD. Attachment image processing needs a Dockerfile follow-up before Docker can exercise the complete upload flow.
+- Never expose the repository root or MySQL publicly.

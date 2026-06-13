@@ -3,6 +3,8 @@
  * Shift activity collection for operational handover.
  */
 
+require_once __DIR__ . '/../../core/shift_config.php';
+
 class ShiftActivityService {
     private mysqli $conn;
     private int $uid;
@@ -15,27 +17,11 @@ class ShiftActivityService {
     }
 
     public function detectCurrentShift(?DateTimeInterface $now = null): string {
-        $now = $now ?: new DateTimeImmutable('now');
-        $hour = (int)$now->format('G');
-        if ($hour >= 0 && $hour < 8) return 'Shift 1';
-        if ($hour >= 8 && $hour < 16) return 'Shift 2';
-        return 'Shift 3';
+        return tracs_detect_shift($now);
     }
 
     public function currentShiftWindow(?string $shift = null, ?string $date = null): array {
-        $shift = $shift ?: $this->detectCurrentShift();
-        $date = $date ?: date('Y-m-d');
-        $ranges = [
-            'Shift 1' => ['00:00:00', '08:00:00'],
-            'Shift 2' => ['08:00:00', '16:00:00'],
-            'Shift 3' => ['16:00:00', '23:59:59'],
-        ];
-        [$start, $end] = $ranges[$shift] ?? $ranges['Shift 1'];
-        return [
-            'shift_name' => $shift,
-            'start' => "{$date} {$start}",
-            'end' => "{$date} {$end}",
-        ];
+        return tracs_current_shift_window($shift, $date);
     }
 
     public function logActivity(
@@ -112,7 +98,7 @@ class ShiftActivityService {
             SELECT id
             FROM tracs_shift_reports
             WHERE created_by=? AND active_date=CURDATE() AND shift_name=?
-            ORDER BY FIELD(status, 'active', 'resolved'), created_at DESC
+            ORDER BY FIELD(status, 'active', 'on_hold', 'resolved'), created_at DESC
             LIMIT 1
         ");
         if (!$stmt) return null;
@@ -215,7 +201,7 @@ class ShiftActivityService {
             SELECT id, title, status, priority, updated_at
             FROM tracs_cases
             WHERE user_id=? AND updated_at BETWEEN ? AND ?
-              AND (priority IN ('critical','high') OR status IN ('stuck','active','pending'))
+              AND (priority IN ('critical','high') OR status IN ('stuck','active','in_progress','pending'))
             ORDER BY updated_at DESC
             LIMIT 12
         ");

@@ -1,0 +1,3 @@
+/*! Legacy compatibility alias for the TRACS V2 visual theme.
+   Active pages load tracs-v2.css directly. */
+@import url("./tracs-v2.css");

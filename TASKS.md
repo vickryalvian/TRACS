@@ -1,98 +1,98 @@
-# TRACS — Tasks & Roadmap
+# TRACS - Tasks & Roadmap
+
+Status labels in this file are deliberate: `Completed`, `In Progress`, `Partially Implemented`, `Planned`, and `Legacy`.
 
 ## Completed
 
-- [x] Core dashboard with cases, reminders, checklist, activity feed, ticker, and operational stats.
-- [x] Session login/logout and auth guard.
-- [x] CSRF helpers and mutating API verification.
-- [x] Cases CRUD, search, filters, and export.
-- [x] Reminders CRUD, due-state filters, completion, and dashboard/ticker integration.
-- [x] Checklist CRUD and progress tracking.
-- [x] Shift reports and shift activity snapshots.
-- [x] MoM module with meeting schedule, agenda, notes, decisions, actions, reminders, case links, screenshots, history, and export.
-- [x] Finance/balance transfer logging and export.
-- [x] Domain tracking and export.
-- [x] Cancellation feedback dashboard with multi-select values and retention intelligence.
-- [x] User management with roles, permissions, divisions, intern profiles, and activity logs.
-- [x] Task assignment/monitoring with checklist/reminder sync.
-- [x] Profile, password, and theme preferences.
-- [x] TV mode wall display.
-- [x] Docker app + MySQL setup.
-- [x] Documentation/config audit backup created under `backup/docs-config/20260518-1434/`.
+- [x] Restored dashboard stat-strip layout.
+- [x] Dashboard Task Monitoring tabs: Checklist and Reminder, Assignments, Activity.
+- [x] Assignment-to-checklist sync and optional assignment-to-reminder sync.
+- [x] Shared case ticket detail from dashboard and case page.
+- [x] Case `in_progress` status, Resolve action, timeline, and image attachments.
+- [x] Shift Active/On Hold/Resolved status model and shift image attachments.
+- [x] Notification tables, dedupe/logging, in-app center, browser permission flow, and service worker click handling.
+- [x] Canonical Domain Price route `domain-price-crosscheck.php` with legacy 308 redirect.
+- [x] Domain Price overview, matrix, intelligence, ccTLD, adjustment, action bucket, notes, audit, source, and extension surfaces.
+- [x] Settings moved to avatar/profile menu.
+- [x] Mandatory 2FA, login throttling, CAPTCHA escalation, session hardening, and permission-aware routes.
 
 ## In Progress
 
-- [ ] Stabilize and verify task monitoring flows after recent edits.
-- [ ] Validate TV mode and user-management changes currently present in the dirty worktree.
-- [ ] Confirm current `config/install.sql` fully matches every active module and migration.
-- [ ] Verify Docker fresh boot with a clean database volume.
+- [ ] Validate current documentation against every post-May 27 migration after deployment testing.
+- [ ] Verify notification scheduler under a real one-minute cron and inspect dedupe/log volume.
+- [ ] Confirm clean install from `config/install.sql`.
+- [ ] Confirm chronological migrations against a copy of an older database.
+- [ ] Stabilize Task Monitoring nested scroll behavior and compact row sizing at all breakpoints.
+- [ ] Validate case/shift attachment upload, delete, and permission flows in production.
+- [ ] Consolidate MoM current/legacy API behavior after caller inventory.
 
-## High Priority
+## Partially Implemented
 
-- [ ] Change default admin password after every fresh install.
-- [ ] Add a visible system/schema readiness checklist for admin users.
-- [ ] Add or document a repeatable migration command/runbook.
-- [ ] Clean up stale MoM messages that reference `config/mom_database_schema.sql`.
-- [ ] Decide whether root `.env` should be officially supported by including `config/env.php` or documenting environment-only config.
+- [ ] Infrastructure Pulse: UI, mock store, dashboard widget, and TV widget exist; backend probes, persistence, incidents, and alerts do not.
+- [ ] TV Mode responsive states exist; full device/resolution verification remains pending.
+- [ ] Browser notifications work while the application/browser permission path is available; they are not a remote web-push subscription system.
+- [ ] Docker local stack works for core PHP/MySQL flows; attachment processing is incomplete because GD is absent from the current image.
 
-## UI/UX Polish
+## UI/UX Follow-Up
 
-- [ ] Review dashboard density on small screens.
-- [ ] Ensure table actions and filter/export menus are consistent across cases, domains, finance, feedback, MoM, and shift reports.
-- [ ] Polish TV mode empty/error/loading states.
-- [ ] Confirm all button labels fit on mobile widths.
-- [ ] Audit inline styles in modals/pages and migrate reusable patterns into `tracs.css` where worthwhile.
+- [ ] Check dashboard stat strip at 1400, 1200, 960, and mobile breakpoints.
+- [ ] Check Task Monitoring viewport height, empty space, and checklist/reminder column balance.
+- [ ] Keep checklist rows as compact as case rows.
+- [ ] Verify completed checklist/task rows remain readable in light and dark modes.
+- [ ] Confirm case timeline animation stops at the current dot and respects reduced motion.
+- [ ] Confirm Resolve remains right-aligned and Close appears only in the ticket header.
+- [ ] Review whether the Edit menu item should become a direct icon-only action.
+- [ ] Test Domain Price sticky matrix columns, dropdowns, source/extension modals, tabs, and Audit Trail.
+- [ ] Verify holiday/special-day labels and icon treatments remain contextually correct.
 
-## Bugs
+## TV Mode Verification
 
-- [ ] Test MoM screenshot upload path and permissions on Docker and production hosting.
-- [ ] Verify MoM action-to-case/status update behavior against current API.
-- [ ] Confirm root `.env` expectations do not mislead local developers.
-- [ ] Check whether all export endpoints enforce auth and expected permissions.
-- [ ] Confirm API paths use `/api/...` consistently when app is deployed below a subdirectory.
+- [ ] macOS browser window.
+- [ ] Fullscreen browser.
+- [ ] 1920x1080 TV display.
+- [ ] Smaller display/short viewport.
+- [ ] 4K display.
+- [ ] Dark mode.
+- [ ] No overlap, cropping, unreadable text, horizontal overflow, or excessive scrolling.
+- [ ] Infrastructure widget clearly indicates prototype/mock state where appropriate.
 
-## Security
+## Security And Deployment
 
-- [ ] Add login rate limiting.
-- [ ] Set production session flags: `cookie_secure`, `cookie_httponly`, `cookie_samesite`.
-- [ ] Review upload validation and storage for MoM screenshots.
-- [ ] Review permission coverage for finance, domains, feedback, exports, and TV summary APIs.
-- [ ] Disable display errors in production pages that currently enable them during development.
-- [ ] Add backup/restore instructions for database and uploads.
+- [ ] Run the full application checklist in `SECURITY_AUDIT_CHECKLIST.md`.
+- [ ] Configure Ubuntu 24.04 VPS, Nginx/Apache, PHP-FPM, MySQL/MariaDB, UFW, Fail2ban, unattended upgrades, TLS, backups, and log monitoring.
+- [ ] Set all production secrets outside source control.
+- [ ] Verify proxy trust configuration and Secure cookies.
+- [ ] Ensure repository root, Markdown, SQL, logs, backups, and environment files are not web-accessible.
+- [ ] Review permission maps whenever a page/API is added.
+- [ ] Add rate limiting or abuse controls to sensitive non-login endpoints where needed.
+- [ ] Test backup and restore for database plus uploads.
 
-## Database / Config
+## Database And Runtime
 
-- [ ] Test clean install from `config/install.sql`.
-- [ ] Test chronological migrations on a copy of an older database.
-- [ ] Decide long-term fate of legacy tables: `balance_transfers`, `domain_transfers`, `activity_feed`, `ops_status`.
-- [ ] Update `config/README.md` migration list to include all current migrations.
-- [ ] Add indexes for heavy dashboard/report filters after real data volume is known.
-- [ ] Add a script or admin diagnostic to report missing tables/columns.
+- [ ] Add GD to the Docker image and document any required JPEG/WebP build packages.
+- [ ] Add a repeatable migration runner or explicit migration ledger.
+- [ ] Update `config/README.md` whenever a schema fragment or migration is added.
+- [ ] Decide the long-term fate of `balance_transfers`, `domain_transfers`, `activity_feed`, and `ops_status`.
+- [ ] Add indexes only after measuring real query volume.
+- [ ] Add an admin diagnostic for missing tables/columns and worker health.
 
-## Future Features
+## Planned
 
-- [ ] Global search across cases, reminders, checklist, tasks, MoM, domains, finance, and feedback.
-- [ ] Case detail timeline with notes/comments and linked MoM/task/reminder history.
-- [ ] In-app notification center.
+- [ ] Real Infrastructure Pulse workers for ICMP/TCP/HTTP checks.
+- [ ] Infrastructure server/result/incident tables and alert correlation.
+- [ ] Dedicated Infrastructure-only TV route, if operationally required.
+- [ ] Domain Price CSV/Excel import and registrar/WHMCS API integration.
+- [ ] Global search across operational modules.
 - [ ] Calendar/timeline view for reminders, cases, MoM, and task due dates.
-- [ ] Attachment management for cases and shift reports.
-- [ ] PDF/print reports for management review.
-- [ ] Optional email/WhatsApp reminders.
-- [ ] Self-host CDN assets for offline/privacy-sensitive deployments.
+- [ ] PDF/print evidence reports.
+- [ ] KPI/SLA/achievement tracking and management-review exports.
+- [ ] Optional email/WhatsApp delivery.
+- [ ] Self-hosted frontend assets for offline/privacy-sensitive deployments.
 
-## ISO 9001 / Measurement Tracking
+## Legacy
 
-- [ ] Define KPIs for response, follow-up, completion, overdue work, cancellation reasons, and shift handover quality.
-- [ ] Add measurement dashboard/page or dedicated measurement subdomain.
-- [ ] Add achievement tracking by user/division/team.
-- [ ] Add evidence exports for audits: MoM decisions/actions, task completion, shift reports, cancellation insights, activity logs.
-- [ ] Add monthly management-review report.
-- [ ] Map modules to ISO 9001 evidence categories and retention periods.
-
-## Legacy / Archived Notes
-
-- Old post-deploy tasks such as “delete install.sql from server” are not universal. Prefer restricting access and keeping source-controlled installer available for fresh deployments.
-- Old “multi-user roles” task is complete as user management/roles/permissions, but permission coverage still needs audit.
-- Old “dark/light toggle” task is complete through theme preferences.
-- Old “due date to tasks” task is superseded by the newer task-management module.
-- Old “finance edit endpoint” remains a product decision; audit-log style immutable finance entries may be preferred.
+- The separate dashboard Reminder tab is legacy and must not be recreated without an explicit decision.
+- `public/domain_price_crosscheck.php` is a redirect-only compatibility route.
+- Historical package instructions under `MOM README/` are not current deployment guidance.
+- Docker is local-development tooling, not the documented production runtime.
+- Old grouped dashboard stat-card experiments are not the current dashboard design.

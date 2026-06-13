@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../../core/user_management.php';
+require_once __DIR__ . '/../../core/notifications.php';
 
 class TaskManagementModel {
     private mysqli $conn;
@@ -126,6 +127,7 @@ class TaskManagementModel {
     }
 
     public function createTask(array $data, array $assigneeIds, int $actorId, string $actorName): int {
+        tracs_notifications_ensure_schema($this->conn);
         $this->conn->begin_transaction();
         try {
             $stmt = $this->conn->prepare("
@@ -229,6 +231,10 @@ class TaskManagementModel {
                 $stmt->execute();
                 $stmt->close();
             }
+        }
+        tracs_notify_task_assigned($this->conn, $taskId, $assignmentId, $userId, $title, $data['due_at'] ?? null, $actorId);
+        if ($reminderId) {
+            tracs_notify_reminder_created($this->conn, $reminderId, $userId, $title, $data['due_at'] ?? null, $actorId);
         }
         return $assignmentId;
     }

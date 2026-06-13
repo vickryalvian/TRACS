@@ -117,9 +117,9 @@ try {
     $now = date('Y-m-d H:i:s');
 
     $metrics = [
-        'open_cases' => tv_table_exists($conn, 'tracs_cases') ? tv_scalar($conn, "SELECT COUNT(*) n FROM tracs_cases WHERE status IN ('active','pending','stuck')") : 0,
+        'open_cases' => tv_table_exists($conn, 'tracs_cases') ? tv_scalar($conn, "SELECT COUNT(*) n FROM tracs_cases WHERE status IN ('active','pending','in_progress','stuck','on_hold')") : 0,
         'pending_cases' => tv_table_exists($conn, 'tracs_cases') ? tv_scalar($conn, "SELECT COUNT(*) n FROM tracs_cases WHERE status='pending'") : 0,
-        'stuck_cases' => tv_table_exists($conn, 'tracs_cases') ? tv_scalar($conn, "SELECT COUNT(*) n FROM tracs_cases WHERE status IN ('active','pending','stuck') AND (status='stuck' OR created_at < DATE_SUB(NOW(), INTERVAL 24 HOUR) OR next_check_at < NOW())") : 0,
+        'stuck_cases' => tv_table_exists($conn, 'tracs_cases') ? tv_scalar($conn, "SELECT COUNT(*) n FROM tracs_cases WHERE status IN ('active','pending','in_progress','stuck','on_hold') AND (status='stuck' OR created_at < DATE_SUB(NOW(), INTERVAL 24 HOUR) OR next_check_at < NOW())") : 0,
         'solved_today' => tv_table_exists($conn, 'tracs_cases') ? tv_scalar($conn, "SELECT COUNT(*) n FROM tracs_cases WHERE status='completed' AND DATE(updated_at)=CURDATE()") : 0,
         'active_reminders' => tv_table_exists($conn, 'tracs_reminders') ? tv_scalar($conn, "SELECT COUNT(*) n FROM tracs_reminders WHERE is_completed=0") : 0,
         'overdue_reminders' => tv_table_exists($conn, 'tracs_reminders') ? tv_scalar($conn, "SELECT COUNT(*) n FROM tracs_reminders WHERE is_completed=0 AND due_date < NOW()") : 0,
@@ -134,7 +134,7 @@ try {
                COALESCE(NULLIF(c.created_by_name,''), NULLIF(u.name,''), u.email, 'Team') AS owner
         FROM tracs_cases c
         LEFT JOIN tracs_users u ON c.created_by = u.id
-        WHERE c.status IN ('active','pending','stuck')
+        WHERE c.status IN ('active','pending','in_progress','stuck','on_hold')
         ORDER BY
           CASE WHEN c.priority='critical' THEN 1 WHEN c.status='stuck' THEN 2 WHEN c.next_check_at < NOW() THEN 3 WHEN c.priority='high' THEN 4 ELSE 5 END,
           COALESCE(c.next_check_at, c.created_at) ASC
@@ -196,12 +196,13 @@ try {
         SELECT shift_name, title, priority, status, active_date, updated_at
         FROM tracs_shift_reports
         WHERE active_date >= DATE_SUB(CURDATE(), INTERVAL 1 DAY)
-        ORDER BY CASE WHEN status='active' THEN 1 ELSE 2 END, FIELD(priority,'critical','high','medium','low'), updated_at DESC
-        LIMIT 4
+        ORDER BY FIELD(status, 'active', 'on_hold', 'resolved'), FIELD(priority,'critical','high','medium','low'), updated_at DESC
+        LIMIT 6
     ") : [];
     $handover = [
         'current_shift' => tv_current_shift(),
         'active_count' => count(array_filter($shiftRows, fn($r) => ($r['status'] ?? '') === 'active')),
+        'on_hold_count' => count(array_filter($shiftRows, fn($r) => ($r['status'] ?? '') === 'on_hold')),
         'resolved_today' => tv_table_exists($conn, 'tracs_shift_reports') ? tv_scalar($conn, "SELECT COUNT(*) n FROM tracs_shift_reports WHERE status='resolved' AND DATE(resolved_at)=CURDATE()") : 0,
         'items' => array_map(fn($r) => [
             'title' => tv_clean_title($r['title'] ?? '', 58),

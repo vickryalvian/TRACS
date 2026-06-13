@@ -1,65 +1,121 @@
-# TRACS Operational Dashboard — Handoff & Status
+# TRACS Operational Dashboard - Handoff
 
-## Module: Domain Price Crosscheck (Phase 1-8 Complete)
+## Current State
 
-### Current Status
-The Domain Price Crosscheck module is **fully operational** up to Phase 8. The UI, logic, task assignments, intern gating, and spreadsheet-like Pricing Matrix have been completely implemented, verified, and styled with responsive constraints.
+TRACS is an integrated operational dashboard with active work in the current dirty worktree. Do not revert unrelated PHP, CSS, JavaScript, SQL, documentation, logs, uploads, or backup folders.
 
-### Phase 8 QA Report
+Current implementation highlights:
 
-**Navigation Update**
-- Domain Price Crosscheck is now accessed from **Domains → Crosscheck Pricing** in the sidebar.
-- Domain Transfer remains under **Domains → Domain Transfer** and still routes to the existing transfer tracker.
+- Restored five-item dashboard stat strip.
+- Shared case ticket detail from dashboard and `cases.php`.
+- Case `in_progress` status, resolve action, progress timeline, and image attachments.
+- Dashboard Task Monitoring tabs: Checklist and Reminder, Assignments, Activity.
+- Task assignments sync into checklist and optional reminders.
+- Shift reports support Active, On Hold, Resolved, and image attachments.
+- In-app/browser notification center with scheduler worker.
+- Infrastructure Pulse full page, dashboard widget, and TV widget using shared mock data.
+- Domain Price Crosscheck uses canonical route `domain-price-crosscheck.php` and a compact tabbed operational layout.
+- Settings are in the avatar/profile menu.
 
-**Create Flow UI Update**
-- The New Monthly Record button is aligned in the right-side page header action area.
-- The create modal now uses Month and Year dropdowns, generates `YYYY-MM` internally, previews the selected period/month code, defaults to the next available period, and carries forward the latest exchange rate when available.
-- Duplicate month creation is blocked with a readable message such as “A monthly record for May 2026 already exists. Please select the existing record instead.”
+## Do Not Revert
 
-**Pricing Intelligence Summary Update**
-- Added a Pricing Intelligence Summary for internal registrar cost vs IDCH Website Pricing only. External market pricing is out of scope.
-- Summary uses the 30% target margin formula, recommended website price, gap to recommended, suggested rounded website price, margin risk, registrar source summary, exchange-rate impact, previous-month changes, and action buckets.
-- Severity logic: Below Cost = Critical, Below Target Margin = Warning, Missing Data = Missing, significant registrar cost/source changes = Review/Warning, Safe = Safe.
+- Do not restore grouped dashboard stat sections; the current dashboard uses the compact stat strip.
+- Do not recreate a separate dashboard Reminder tab.
+- Do not move Domain Pricing Crosscheck or Domain Transfer Log out of `Tasks & Monitoring` without an explicit navigation decision.
+- Do not describe `domain_price_crosscheck.php` as current; it is only a 308 compatibility redirect.
+- Do not remove resolved shift items from context views simply because they no longer need handover.
+- Do not replace the shared case ticket modal with separate dashboard/case-page implementations.
+- Do not treat Infrastructure Pulse mock incidents as real monitoring data.
+- Do not remove or modify build/authorship signatures.
 
-**ccTLD and Template Duplication Update**
-- Added separate gTLD Pricing and ccTLD Pricing sections in Domain Price Crosscheck.
-- ccTLD pricing uses PANDI Registry Pricing vs IDCH ccTLD Pricing with Register, Renewal, and Redemption rows for `.AC.ID`, `.BIZ.ID`, `.CO.ID`, `.ID`, `.MY.ID`, `.OR.ID`, `.PONPES.ID`, `.SCH.ID`, `.WEB.ID`, and `.NET.ID`.
-- New/Duplicate monthly records can copy previous month price entries as editable Draft template data. Approval metadata, audit logs, and task state are not copied; notes copy only when selected.
-- Scoped button styling was added for dark/light mode readability across Duplicate Month, Recalculate Summary, Save Matrix, modal actions, disabled buttons, and warning/danger actions.
+## UI Direction
 
-**1. Files Created/Modified**
-- `public/domain_price_crosscheck.php` (Removed placeholder grid, built full Matrix HTML table)
-- `public/api/domain-price-matrix.php` (Created dedicated API endpoint for saving matrix inputs)
-- `public/assets/domain-price-crosscheck.css` (Added sticky columns, scrollbar tracking, and spacing improvements)
-- `public/assets/domain-price-crosscheck.js` (Added AJAX matrix saving and recalculate trigger)
-- `docs/DOMAIN_PRICE_CROSSCHECK.md` (Updated user documentation)
-- `docs/DOMAIN_PRICE_CROSSCHECK_ARCHITECTURE.md` (Updated system documentation)
+- Clean, compact, operational-first, low visual noise.
+- Consistent widget spacing, internal padding, row height, and scroll areas.
+- Blue is for active/highlighted state.
+- Completed work remains readable.
+- Holiday/special-day icons and labels must match the actual context.
+- Preserve light/dark mode and the shared Inter/system font stack.
 
-**2. UI/UX Improvements**
-- Replaced the textual placeholder with an actual dense spreadsheet grid.
-- Mapped professional naming conventions directly to row headers (`Liquid Registrar`, `IDCH Website Pricing`, etc.).
-- Improved visual separation between USD rows, IDR rows, Internal rows, and Selling Price rows.
+## Behavior Notes
 
-**3. Responsive/iPad Compatibility Improvements**
-- Wrapped the matrix table in a `.table-container` with `overflow-x: auto` ensuring lateral scrolling on smaller screens without breaking the vertical bounds of the page.
-- Utilized `position: sticky` on the first two table columns (`Source Group` and `Type`), ensuring users don't lose context while horizontally scrolling through dozens of TLDs on an iPad.
+### Dashboard
 
-**4. Dark/Light Mode Improvements**
-- Tuned matrix input backgrounds to be transparent (`background: transparent !important`), inheriting the correct wrapper theme.
-- The sticky columns correctly map to `var(--s1)` and `var(--s2)` to prevent overlapping text bleeding through in dark mode.
+- Cases, Task Monitoring, Shift Handover, Currency Converter, and Infrastructure Pulse are active.
+- Dashboard case rows call the same `openCaseTicket()` flow as case-list rows.
+- Infrastructure Pulse and Shift Summary share the left-side summary slider.
 
-**5. Accessibility Improvements**
-- Inputs are given clear `:focus-within` blue glow states.
-- The "Save Matrix" button receives a disabled state with a loader icon during AJAX transit, preventing accidental double-clicks.
+### Task Monitoring
 
-**6. Functional Regression Tests**
-- Month selection, Draft Creation, and Task Assignments still function normally.
-- Interns are correctly isolated from privileged controls, and cannot see unassigned months.
-- Saving matrix inputs routes properly to `domain-price-matrix.php` using CSRF validation.
+- `Checklist and Reminder` contains Operational Checklist plus Reminder List.
+- `Assignments` shows assignment rows and assignment alerts.
+- `Activity` shows recent activity and the active Reminder List.
+- The full assignment workflow remains at `monitoring.php`; `tasks.php` is a compatibility include.
 
-### Recommended Next Phases (Future)
-If the project continues later, **Phase 9** should focus on:
-1. Building a CSV/Excel import parser to automatically bulk-fill the matrix.
-2. Hooking up automated API checks to fetch prices directly from WHMCS or Liquid/Webnic endpoints.
+### Case Ticket
 
-> The system is ready for production use as a manual operational ledger.
+- Resolve is the primary right-side footer action.
+- Close is only in the header.
+- Edit/Delete are inside the icon-only More trigger.
+- Timeline animation is clipped to current progress; resolved state stops animation.
+
+### Shift Handover
+
+- Active = needs handover.
+- On Hold = monitoring context.
+- Resolved = informational context.
+- Dashboard reminder starts 30 minutes before shift change.
+- Stored notification creation is in the final 15 minutes and depends on the worker or dashboard execution.
+
+### Notifications
+
+- Stored types cover case creation, reminder creation/due timing, task assignment, meeting timing, and shift handover.
+- Browser permission is optional; in-app notification behavior remains available.
+- Production cron should run `bin/tracs-notification-worker.php` every minute.
+
+### Infrastructure Pulse
+
+- **Partially Implemented:** UI and shared mock store are functional.
+- Real ICMP/TCP/HTTP workers, persistent target registry, incidents, and alert correlation are planned.
+- TV Mode includes an Infrastructure Pulse widget, not a separate Infrastructure-only TV route.
+
+## Bug-Prone Areas
+
+- Dashboard widget spacing and stat-strip breakpoints.
+- Task Monitoring viewport height, nested scrolling, and checklist/reminder column balance.
+- Assigned-task awareness appearing in both checklist and assignment views without duplicate confusion.
+- Case timeline animation, reduced-motion behavior, and modal action visibility by permission.
+- Shift report reminder timing around shift boundaries.
+- TV Mode overlap, cropped content, small text, overflow, and excessive scrolling across resolutions.
+- Infrastructure mock labels accidentally being presented as live telemetry.
+- Domain Price matrix sticky columns, dropdowns, modals, tab state, and audit visibility.
+- Holiday naming/icon relevance.
+- Role and object-level permission checks.
+- Case and shift attachment authorization, file validation, and writable directories.
+- Docker attachment testing because GD is not installed in the current image.
+
+## Recommended Verification
+
+1. Test dashboard, cases, Task Monitoring, shift reports, notifications, and Domain Price as Admin and Agent.
+2. Test Intern access to own tasks and restricted modules.
+3. Test case ticket open/resolve/edit permissions from both dashboard and case page.
+4. Run the notification worker manually, then verify cron, dedupe, browser permission denial, and click-through routes.
+5. Test TV Mode in macOS browser, fullscreen, 1920x1080, a smaller viewport, and dark mode.
+6. Confirm Infrastructure Pulse clearly says mock/session-only.
+7. Test Domain Price tabs, matrix save/recalculate, audit trail, extension/source management, and legacy redirect.
+8. Test Docker fresh boot; record the expected attachment failure until GD is added.
+9. Test a clean installer and chronological migrations against a database backup.
+
+## Documentation Map
+
+- `README.md`: project entry point, quick start, modules, and documentation index.
+- `ARCHITECTURE.md`: technical structure and module relationships.
+- `AI_MEMORY.md`: durable product and implementation rules.
+- `HANDOFF.md`: continuation context and regression hotspots.
+- `TASKS.md`: roadmap, known issues, and status labels.
+- `README_MOM.md`: current MoM behavior.
+- `SECURITY_AUDIT_CHECKLIST.md`: application security review.
+- `VPS_SECURITY_CONFIGURATION.md`: production server baseline.
+- `docs/`: focused Domain Price, Infrastructure Pulse, 2FA, and signature notes.
+
+Update the closest existing file first. Create a new document only when it reduces duplication or prevents an existing file from becoming unwieldy.

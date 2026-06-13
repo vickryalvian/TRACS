@@ -23,7 +23,7 @@ if (in_array($shift, ['Shift 1', 'Shift 2', 'Shift 3'], true)) {
     $types .= 's';
     $params[] = $shift;
 }
-if (in_array($status, ['active', 'resolved'], true)) {
+if (in_array($status, ['active', 'on_hold', 'resolved'], true)) {
     $where[] = 'r.status = ?';
     $types .= 's';
     $params[] = $status;
@@ -41,26 +41,28 @@ if ($q !== '') {
 }
 export_add_date_filter($where, $types, $params, 'r.active_date', $from, $to);
 
-$sql = 'SELECT r.active_date, r.shift_name, r.title, r.details, r.priority, r.status,
+$sql = 'SELECT r.active_date, r.shift_name, r.title, r.details, r.priority, r.status, r.resolution_note,
                COALESCE(NULLIF(r.created_by_name,\'\'), NULLIF(u.name,\'\'), u.email, \'System\') AS creator_name,
                r.resolved_at, r.created_at, r.updated_at
         FROM tracs_shift_reports r
         LEFT JOIN tracs_users u ON r.created_by = u.id
         WHERE ' . implode(' AND ', $where) . '
-        ORDER BY r.active_date DESC, r.created_at DESC';
+        ORDER BY r.active_date DESC, FIELD(r.status, \'active\', \'on_hold\', \'resolved\'), r.created_at DESC';
 
 $result = export_query($conn, $sql, $types, $params);
 export_send_csv(
     export_filename('shift_reports', $from, $to),
-    ['Active Date', 'Shift', 'Title', 'Details', 'Priority', 'Status', 'Created By', 'Resolved At', 'Created At', 'Updated At'],
+    ['Section', 'Active Date', 'Shift', 'Title', 'Details', 'Priority', 'Status', 'Resolution Note', 'Created By', 'Resolved At', 'Created At', 'Updated At'],
     $result,
     fn(array $row) => [
+        ($row['status'] ?? '') === 'resolved' ? 'Resolved This Shift' : ((($row['status'] ?? '') === 'on_hold') ? 'On Hold / Monitoring' : 'Needs Handover'),
         $row['active_date'] ?? '',
         $row['shift_name'] ?? '',
         $row['title'] ?? '',
         $row['details'] ?? '',
         $row['priority'] ?? '',
         $row['status'] ?? '',
+        $row['resolution_note'] ?? '',
         $row['creator_name'] ?? '',
         $row['resolved_at'] ?? '',
         $row['created_at'] ?? '',

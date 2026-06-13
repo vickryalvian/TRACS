@@ -101,7 +101,7 @@ include 'includes/header.php';
         $scls=rem_status_class($rstat);$pb=prio_badge($rprio);
       ?>
       <tr class="checkable-row <?=$rdone?'is-completed':''?>" data-rid="<?=$rid?>" data-completed="<?=$rdone?'1':'0'?>" data-title="<?=esc($r['title']??'')?>" data-priority="<?=esc($rprio)?>" data-due="<?=$rdue_dt?>" data-desc="<?=esc($r['description']??'')?>">
-        <td style="text-align:center"><input type="checkbox" class="rem-check" <?=$rdone?'checked':''?> onchange="toggleReminder(<?=$rid?>,this.checked)"></td>
+        <td style="text-align:center"><input type="checkbox" class="rem-check" <?=$rdone?'checked':''?> onchange="toggleReminder(<?=$rid?>,this)"></td>
         <td style="max-width:300px">
           <div style="font-weight:500;color:var(--tx1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" class="rem-title <?=$rdone?'done':''?>"><?=$rtit?></div>
           <?php if($rdesc):?><div class="rem-desc-inline" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="<?=$rdesc?>"><?=$rdesc?></div><?php endif;?>
@@ -115,11 +115,11 @@ include 'includes/header.php';
         <td>
           <div class="rem-table-actions">
             <?php if($rdone): ?>
-            <button class="btn btn-ghost btn-sm rem-primary-action" type="button" onclick="toggleReminder(<?=$rid?>,false)" title="Reopen reminder">
+            <button class="btn btn-ghost btn-sm rem-primary-action" type="button" onclick="toggleReminder(<?=$rid?>,false,this)" title="Reopen reminder">
               <i data-lucide="rotate-ccw" class="icon-xs"></i>Reopen
             </button>
             <?php else: ?>
-            <button class="btn btn-success btn-sm rem-done-btn rem-primary-action" type="button" onclick="completeReminder(<?=$rid?>)" title="Mark reminder as done">
+            <button class="btn btn-success btn-sm rem-done-btn rem-primary-action" type="button" onclick="completeReminder(<?=$rid?>,this)" title="Mark reminder as done">
               <i data-lucide="check" class="icon-xs"></i>Mark Done
             </button>
             <?php endif; ?>
@@ -127,7 +127,7 @@ include 'includes/header.php';
             <summary class="btn btn-ghost btn-icon" title="Actions" aria-label="Row actions"><i data-lucide="more-vertical" class="icon-sm"></i></summary>
             <div class="row-action-popover">
               <button class="btn btn-ghost btn-sm" type="button" onclick="openEditReminder(<?=$rid?>)"><i data-lucide="pencil" class="icon-xs"></i>Edit</button>
-              <button class="btn btn-danger btn-sm" type="button" onclick="deleteReminder(<?=$rid?>)"><i data-lucide="trash-2" class="icon-xs"></i>Delete</button>
+              <button class="btn btn-danger btn-sm" type="button" onclick="deleteReminder(<?=$rid?>,this)"><i data-lucide="trash-2" class="icon-xs"></i>Delete</button>
             </div>
           </details>
           </div>

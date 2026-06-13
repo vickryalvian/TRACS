@@ -1,6 +1,10 @@
 # Infrastructure Pulse
 
-Infrastructure Pulse is a mock/API-ready NOC summary page for TRACS. It shows a shift-style infrastructure report, realtime-style server metrics, graph panels, and an incident feed.
+**Status: Partially Implemented.**
+
+Infrastructure Pulse is a mock/API-ready NOC summary page for TRACS. It shows a shift-style infrastructure report, realtime-style server metrics, graph panels, and an incident feed. The full page, dashboard mini widget, and TV Mode widget share the same mock/session store.
+
+Real backend probes, persistent server records, monitoring-result/incident tables, and infrastructure notifications are not implemented.
 
 ## Use The Page
 
@@ -8,7 +12,7 @@ Infrastructure Pulse is a mock/API-ready NOC summary page for TRACS. It shows a 
 2. Review the summary cards at the top for global status, incidents, latency, uptime, Indonesia status, and Singapore status.
 3. Use the `Infrastructure Summary Report` panel for handover-style context.
 4. Click a server in `Realtime Metrics`, `Needs Attention`, or `Stable Nodes` to focus the report and graphs on that server.
-5. Use `TV Mode` when the page needs to be displayed on a NOC screen.
+5. Use `TV Mode` when the page needs to be displayed on a NOC screen. This opens the general TRACS TV Mode with an Infrastructure Pulse widget; there is no standalone Infrastructure-only TV route.
 
 ## Add A Server In The UI
 

@@ -9,8 +9,11 @@ The Domain Price Crosscheck module is a specialized operational dashboard used t
 - The goal is to ensure IDCH Website Pricing does not go below registrar cost and meets the 30% target margin.
 
 ## Navigation
-- Primary sidebar location: **Domains → Crosscheck Pricing**.
-- The module still integrates with Task Management for monthly assignment and workflow, but it is not a top-level Task Management navigation item.
+- Primary sidebar location: **Tasks & Monitoring → Domain Pricing Crosscheck**.
+- Canonical route: `domain-price-crosscheck.php`.
+- Legacy route `domain_price_crosscheck.php` is redirect-only and returns a 308 to the canonical route.
+- Domain Transfer Log is a sibling item under the same **Tasks & Monitoring** submenu.
+- Visibility follows `domain_price.view`; management and approval actions use separate permissions.
 
 ## Monthly Record Creation
 - The page header keeps the title/subtitle on the left and the **New Monthly Record** action on the far right of the header action row.
@@ -27,15 +30,20 @@ The Domain Price Crosscheck module is a specialized operational dashboard used t
 - The empty state invites users to create the first monthly record and explains that records compare registrar cost, IDCH Website Pricing, and PAAS Pricing.
 
 ## Key Features
+- **Compact Module Tabs**: Overview, Price Matrix, Intelligence Summary, ccTLD Check, Website Price Adjustment, Action Buckets, Notes & Follow-ups, and Audit Trail.
 - **Monthly Snapshots**: All pricing records are scoped to a specific month.
 - **Pricing Matrix**: A spreadsheet-like grid allowing administrators to input USD costs for international registrars and IDR costs for internal sources.
 - **ccTLD Pricing Matrix**: A separate spreadsheet-like section for Indonesian ccTLD pricing using PANDI Registry Pricing and IDCH ccTLD Pricing.
 - **Automatic Conversions**: If a USD cost is entered, the system automatically translates it into IDR using the month's locked exchange rate.
+- **Live KURS Preview**: USD registrar inputs now update the visible IDR preview immediately in the browser. This is a preview only; Save Matrix and Recalculate Summary still control persisted entries, reports, monthly records, and final metrics history.
+- **Derived Internal Pricing**: For editable drafts, IDCH Internal Pricing uses `lowest active registrar USD × monthly KURS × 1.30`. Registrar matrix order is the tie-breaker when USD values are equal. The derived value is only persisted when the user explicitly saves the matrix.
+- USD prices are presentation-formatted to two decimal places in registrar inputs, live previews, and ccTLD `Harga USD`; stored raw values are not rewritten by display formatting.
 - **Pricing Intelligence Summary**: Operational decision support for below-cost prices, below-target margins, recommended website price adjustments, registrar source changes, and exchange-rate impact.
 - **Review & Approval Workflow**: Drafts are submitted for review and then approved. Approved snapshots are completely locked against modifications to preserve audit integrity.
 - **Task Management**: Monthly audits can be assigned to specific team members.
 - **Intern Isolation**: Interns can only view the specific monthly snapshots assigned to them.
 - **Comprehensive Audit Logs**: Every price tweak, status change, and note is securely logged.
+- **Matrix Management**: Authorized users can manage registrar sources, domain extensions, category, and display order without deleting historical monthly data.
 
 ## Status Workflow
 1. **Draft**: The month is created. The exchange rate and prices can be modified freely.
@@ -60,6 +68,7 @@ The Domain Price Crosscheck module is a specialized operational dashboard used t
 - ccTLD formulas:
   - `lowest_cost_idr = PANDI Registry Pricing`
   - `recommended_price = lowest_cost_idr × 1.30`
+  - `harga_usd = ceil_to_2_decimals((lowest_cost_idr / monthly_usd_idr_kurs) × 1.30)` because the stored ccTLD base price is IDR and the page KURS is USD → IDR.
   - `margin_amount = IDCH ccTLD Pricing - lowest_cost_idr`
   - `margin_percent = margin_amount / lowest_cost_idr × 100`
   - `gap_to_recommended = recommended_price - IDCH ccTLD Pricing`
@@ -75,13 +84,17 @@ The Domain Price Crosscheck module is a specialized operational dashboard used t
   - `gap_to_recommended = recommended_website_price - current_idch_website_price`
 - Executive cards show Total TLDs Checked, Below Cost, Below Target Margin, Safe, Missing Data, Recommended Website Adjustments, Estimated Margin Risk, and Pending Review.
 - Priority findings are ordered as Critical Below Cost, Below Target Margin, Missing Data, Registrar Cost Increased, Recommended Source Changed, and Safe.
+- Priority findings are displayed in two compact columns, Register and Renewal, so same-extension issues can be compared more quickly.
 - Recommended Website Price Adjustment table shows current website price, lowest registrar cost, target margin, recommended price, required increase, suggested rounded website price, status, and suggested action.
 - Suggested rounded website price is calculated by rounding the recommended website price up to the next Rp1,000.
 - Registrar Source Summary counts which internal registrar source is cheapest most often.
+- Registrar cost cells are compared by extension and price type. All valid registrar USD values participate, empty/invalid values are ignored, and every matching cheapest value is subtly highlighted in green so ties remain visible. The UI is data-driven and can support more registrar sources beyond Liquid and Webnic.
 - Exchange Rate Impact Summary shows previous/current exchange rate differences and affected USD-based registrar costs when previous month data exists.
 - Previous Month Change Summary compares lowest registrar cost, recommended website price, current IDCH Website Pricing, and recommended source changes.
 - Action buckets group work into Increase Website Price Immediately, Adjust Website Price to Target Margin, Complete Missing Data, Review Registrar Cost Change, and Keep Current Website Price.
 - The summary also includes ccTLD cards and findings for PANDI Registry Pricing vs IDCH ccTLD Pricing.
+- Manage Domain Extensions displays each extension's category selector and sort order; category edits are saved through the existing module controller/model without changing monthly price data. Superadmins can soft-delete extensions from active matrices while preserving historical monthly records.
+- Operational Audit Trail is a visible page tab and the Overview includes a latest-audit preview.
 
 ## Button and Theme Behavior
 - Duplicate Month, New Monthly Record, Save Matrix, Recalculate Summary, modal, disabled, warning, and locked-state buttons use scoped Domain Price Crosscheck styles for readable dark/light theme contrast.

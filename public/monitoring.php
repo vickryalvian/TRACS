@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../core/security/csrf.php';
+require_once __DIR__ . '/../core/security/error_response.php';
 tracs_start_session();
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/auth/auth_check.php';
@@ -31,6 +32,21 @@ function tm_flash(string $type, string $message): void {
 function tm_redirect(string $tab = 'my'): never {
     $base = str_ends_with((string)($_SERVER['SCRIPT_NAME'] ?? ''), '/tasks.php') ? '/tasks.php' : '/monitoring.php';
     header('Location: ' . $base . '?tab=' . urlencode($tab));
+    exit;
+}
+function tm_is_ajax_request(): bool {
+    return strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest'
+        || str_contains(strtolower((string)($_SERVER['HTTP_ACCEPT'] ?? '')), 'application/json');
+}
+function tm_json_response(bool $success, string $message, string $tab = 'my', int $status = 200): never {
+    $base = str_ends_with((string)($_SERVER['SCRIPT_NAME'] ?? ''), '/tasks.php') ? '/tasks.php' : '/monitoring.php';
+    http_response_code($status);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode([
+        'success' => $success,
+        'message' => $message,
+        'redirect' => $base . '?tab=' . urlencode($tab),
+    ], JSON_UNESCAPED_SLASHES);
     exit;
 }
 function tm_badge_class(string $value, string $kind = 'status'): string {
@@ -77,6 +93,9 @@ function tm_time_delta(?string $dueAt, string $status): array {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
     if (!$schema_ready) {
+        if (tm_is_ajax_request()) {
+            tm_json_response(false, 'Run config/migrations/2026_05_18_task_management.sql before saving tasks.', 'my', 422);
+        }
         tm_flash('error', 'Run config/migrations/2026_05_18_task_management.sql before saving tasks.');
         tm_redirect('my');
     }
@@ -87,11 +106,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'update_assignment' => $TM->updateAssignment($_POST),
             default => throw new InvalidArgumentException('Unknown task action.'),
         };
+        $return_tab = (string)($_POST['return_tab'] ?? 'my');
+        if (tm_is_ajax_request()) {
+            tm_json_response(true, $result['message'] ?? 'Saved.', $return_tab);
+        }
         tm_flash('success', $result['message'] ?? 'Saved.');
-        tm_redirect((string)($_POST['return_tab'] ?? 'my'));
+        tm_redirect($return_tab);
     } catch (Throwable $e) {
-        tm_flash('error', $e->getMessage());
-        tm_redirect((string)($_POST['return_tab'] ?? 'my'));
+        error_log('TRACS task monitoring action failed: ' . $e->getMessage());
+        $publicMessage = tracs_public_exception_message($e, 'The task action could not be completed.');
+        $return_tab = (string)($_POST['return_tab'] ?? 'my');
+        if (tm_is_ajax_request()) {
+            tm_json_response(false, $publicMessage, $return_tab, 422);
+        }
+        tm_flash('error', $publicMessage);
+        tm_redirect($return_tab);
     }
 }
 
@@ -320,9 +349,9 @@ include __DIR__ . '/includes/header.php';
 
 <?php if($schema_ready && $can_create): ?>
 <div class="modal-overlay hidden" id="tmTaskModal">
-  <form method="post" class="modal modal-lg">
+  <form method="post" class="modal modal-lg" data-tracs-modal-ajax data-close-delay="1000">
     <?=csrf_input()?><input type="hidden" name="action" value="create_task"><input type="hidden" name="return_tab" value="<?=esc($tab)?>">
-    <div class="modal-head"><div><div class="modal-title">Add Task</div><div class="modal-sub">Assign once or daily, with checklist and reminder sync.</div></div><button type="button" class="modal-close" onclick="closeModal('tmTask')"><i data-lucide="x"></i></button></div>
+    <div class="modal-head"><div><div class="modal-title">Add Task Assignment</div><div class="modal-sub">Assign once or daily, with checklist and reminder sync.</div></div><button type="button" class="modal-close" onclick="closeModal('tmTask')"><i data-lucide="x"></i></button></div>
     <div class="modal-body tm-form">
       <div class="form-row"><div class="form-group"><label class="form-label">Task Title</label><input class="form-input" name="title" required></div><div class="form-group"><label class="form-label">Category</label><select class="form-select" name="category"><?php foreach(['daily_checklist','case_follow_up','domain_transfer','balance_transfer','finance_log_mutasi','ssl_check','mom_follow_up','training_task','intern_task','custom'] as $c): ?><option value="<?=$c?>"><?=tm_label($c)?></option><?php endforeach; ?></select></div></div>
       <div class="form-group"><label class="form-label">Instruction</label><textarea class="form-textarea" name="description" rows="4"></textarea></div>
@@ -339,7 +368,7 @@ include __DIR__ . '/includes/header.php';
 
 <?php if($schema_ready): ?>
 <div class="modal-overlay hidden" id="tmUpdateModal">
-  <form method="post" class="modal">
+  <form method="post" class="modal" data-tracs-modal-ajax data-close-delay="1000">
     <?=csrf_input()?><input type="hidden" name="action" value="update_assignment"><input type="hidden" name="assignment_id" id="tmAssignmentId"><input type="hidden" name="return_tab" value="<?=esc($tab)?>">
     <div class="modal-head"><div><div class="modal-title">Update Task</div><div class="modal-sub">Progress is saved to the assignment history.</div></div><button type="button" class="modal-close" onclick="closeModal('tmUpdate')"><i data-lucide="x"></i></button></div>
     <div class="modal-body">
@@ -352,6 +381,12 @@ include __DIR__ . '/includes/header.php';
 </div>
 <script>
 function tmOpenUpdate(id,status){document.getElementById('tmAssignmentId').value=id;document.getElementById('tmStatus').value=status||'in_progress';openModal('tmUpdate');window.TRACSDropdowns?.syncAll();}
+</script>
+<?php endif; ?>
+
+<?php if($can_create && (string)($_GET['add'] ?? '') === '1'): ?>
+<script>
+document.addEventListener('DOMContentLoaded', () => openModal('tmTask'));
 </script>
 <?php endif; ?>
 

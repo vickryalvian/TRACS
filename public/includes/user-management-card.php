@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../../core/security/direct_access.php';
+tracs_deny_direct_script_access(__FILE__);
 $initials = tracs_user_initials($user['display_name'] ?? '', $user['email'] ?? 'U');
 $avatarUrl = tracs_user_avatar_url($user);
 $roleClass = tracs_user_role_badge_class($user['role_slug'] ?? 'agent');

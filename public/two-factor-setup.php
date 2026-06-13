@@ -86,6 +86,8 @@ $manualKey = tracs_two_factor_format_secret($secret);
 $otpauth = tracs_two_factor_otpauth_uri($user, $secret);
 $qrSvg = tracs_two_factor_qr_svg($otpauth);
 $tracs_build_info = tracs_build_public_payload();
+$_tracs_visual_theme_preference = tracs_normalize_visual_theme(tracs_get_user_preference($conn, $pendingUserId, 'visual_theme', 'default'));
+$_css_v = @filemtime(__DIR__ . '/assets/tracs.css') ?: time();
 $login_help = TRACS_AUTH_HELP_MESSAGE;
 $login_contact = trim((string)tracs_auth_env('TRACS_LOGIN_HELP_CONTACT', ''));
 if ($login_contact !== '') {
@@ -101,10 +103,8 @@ if ($login_contact !== '') {
 <meta name="tracs-build-version" content="<?=htmlspecialchars(TRACS_BUILD_VERSION, ENT_QUOTES, 'UTF-8')?>">
 <title>TRACS - Set Up 2FA</title>
 <?php include __DIR__ . '/includes/theme_bootstrap.php'; ?>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="manifest" href="manifest.json">
-<link rel="stylesheet" href="/assets/tracs.css">
+<link rel="stylesheet" href="/assets/tracs.css?v=<?=$_css_v?>">
 <script>window.TRACS_BUILD_INFO = <?=json_encode($tracs_build_info, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)?>;</script>
 </head><body>
 <div class="login-shell two-factor-shell">
@@ -135,20 +135,12 @@ if ($login_contact !== '') {
           <label class="form-label" for="verification_code">Verification Code</label>
           <input id="verification_code" class="form-input two-factor-code" type="text" name="verification_code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" placeholder="000000" required autofocus>
         </div>
-        <button type="submit" class="btn-login"><span class="btn-login-label">Verify and continue</span></button>
+        <button type="submit" class="btn-login" data-loading-text="Verifying..."><span class="btn-login-label">Verify and continue</span></button>
       </form>
     </div>
     <div class="login-foot"><div class="status-online"><span class="status-dot"></span>TRACS Secure Login</div></div>
   </div>
 </div>
-<script src="assets/tracs.js"></script>
-<script>
-document.querySelector('[data-two-factor-form]')?.addEventListener('submit', event => {
-  const button = event.currentTarget.querySelector('button[type="submit"]');
-  if (button) {
-    button.disabled = true;
-    button.querySelector('.btn-login-label').textContent = 'Verifying...';
-  }
-});
-</script>
+<?php $_js_v = @filemtime(__DIR__ . '/assets/tracs.js') ?: time(); ?>
+<script src="assets/tracs.js?v=<?=$_js_v?>"></script>
 </body></html>

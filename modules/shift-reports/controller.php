@@ -64,6 +64,7 @@ class ShiftReportController {
     public function getTodayStats() {
         $reports = $this->model->getTodayReports();
         $active = 0;
+        $onHold = 0;
         $resolved = 0;
         $critical = 0;
         
@@ -73,6 +74,8 @@ class ShiftReportController {
                 if ($r['priority'] === 'critical') {
                     $critical++;
                 }
+            } elseif ($r['status'] === 'on_hold') {
+                $onHold++;
             } else {
                 $resolved++;
             }
@@ -81,6 +84,7 @@ class ShiftReportController {
         return [
             'total' => count($reports),
             'active' => $active,
+            'on_hold' => $onHold,
             'resolved' => $resolved,
             'critical' => $critical
         ];
@@ -93,7 +97,7 @@ class ShiftReportController {
     // Local summary engine; keep this return shape stable for optional external AI later.
     public function buildOperationalIntelligence($today_reports, $yesterday_reports, $month_reports, $recent_reports) {
         $today_total = count($today_reports);
-        $yesterday_active = count(array_filter($yesterday_reports, fn($r) => ($r['status'] ?? '') === 'active'));
+        $yesterday_active = count(array_filter($yesterday_reports, fn($r) => in_array(($r['status'] ?? ''), ['active', 'on_hold'], true)));
         $month_total = count($month_reports);
         $critical_active = count(array_filter($recent_reports, fn($r) => ($r['status'] ?? '') === 'active' && ($r['priority'] ?? '') === 'critical'));
 
@@ -160,8 +164,8 @@ class ShiftReportController {
         return $this->model->update($id, $data);
     }
 
-    public function resolve($id) {
-        return $this->model->resolve($id);
+    public function resolve($id, ?string $note = null, ?string $resolvedAt = null) {
+        return $this->model->resolve($id, $note, $resolvedAt);
     }
 
     public function delete($id) {

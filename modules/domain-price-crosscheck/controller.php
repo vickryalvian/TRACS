@@ -89,6 +89,182 @@ class DomainPriceCrosscheckController {
     }
 
     /**
+     * Update a domain extension's matrix category and display order.
+     */
+    public function updateTldExtension(int $id, string $category, ?int $sortOrder, string $ipAddress): bool {
+        if ($id <= 0) {
+            throw new Exception("Invalid extension.");
+        }
+        if (!in_array($category, ['gtld', 'cctld'], true)) {
+            throw new Exception("Invalid extension category.");
+        }
+
+        $allTlds = array_merge($this->model->getActiveTlds('gtld'), $this->model->getActiveTlds('cctld'));
+        $current = null;
+        foreach ($allTlds as $tld) {
+            if ((int)$tld['id'] === $id) {
+                $current = $tld;
+                break;
+            }
+        }
+        if (!$current) {
+            throw new Exception("Extension not found.");
+        }
+
+        $finalSort = $sortOrder && $sortOrder > 0 ? $sortOrder : (int)($current['sort_order'] ?? ($category === 'cctld' ? 5000 : 100));
+        if ($finalSort < 1 || $finalSort > 999999) {
+            throw new Exception("Invalid sort order.");
+        }
+
+        if (!$this->model->updateTldExtension($id, $category, $finalSort)) {
+            throw new Exception("Failed to update domain extension.");
+        }
+
+        $this->activityLogger->logActivity('updated', 'Domain Price Extension', "Updated extension {$current['tld_name']}", $id);
+        return true;
+    }
+
+    /**
+     * Soft-delete a domain extension from active pricing matrices.
+     */
+    public function deleteTldExtension(int $id, string $ipAddress): bool {
+        if ($id <= 0) {
+            throw new Exception("Invalid extension.");
+        }
+
+        $allTlds = array_merge($this->model->getActiveTlds('gtld'), $this->model->getActiveTlds('cctld'));
+        $current = null;
+        foreach ($allTlds as $tld) {
+            if ((int)$tld['id'] === $id) {
+                $current = $tld;
+                break;
+            }
+        }
+        if (!$current) {
+            throw new Exception("Extension not found.");
+        }
+
+        if (!$this->model->deactivateTldExtension($id)) {
+            throw new Exception("Failed to delete domain extension.");
+        }
+
+        $this->activityLogger->logActivity('deleted', 'Domain Price Extension', "Deleted extension {$current['tld_name']}", $id);
+        return true;
+    }
+
+    /**
+     * Add or reactivate a registrar source for the pricing matrix.
+     */
+    public function addPricingSource(string $sourceName, string $sourceType, ?int $sortOrder, string $ipAddress): int {
+        $normalized = trim(preg_replace('/\s+/', ' ', $sourceName));
+        if ($normalized === '') {
+            throw new Exception("Registrar source name is required.");
+        }
+        if (strlen($normalized) > 100) {
+            throw new Exception("Registrar source name must be 100 characters or fewer.");
+        }
+        if (!preg_match('/^[A-Za-z0-9][A-Za-z0-9 .&+_()\/-]*$/', $normalized)) {
+            throw new Exception("Registrar source name may only contain letters, numbers, spaces, and basic symbols.");
+        }
+        if (!in_array($sourceType, ['registrar', 'internal', 'registry'], true)) {
+            throw new Exception("Invalid source type.");
+        }
+        if ($sortOrder !== null && ($sortOrder < 1 || $sortOrder > 999999)) {
+            throw new Exception("Invalid source sort order.");
+        }
+
+        $existing = $this->model->getSourceByName($normalized);
+        if ($existing && (int)($existing['is_active'] ?? 0) === 1) {
+            throw new Exception("Registrar source already exists.");
+        }
+
+        $finalSort = $sortOrder && $sortOrder > 0 ? $sortOrder : 10;
+        if (!$sortOrder) {
+            foreach ($this->model->getActiveSources() as $source) {
+                if (($source['source_type'] ?? '') === $sourceType) {
+                    $finalSort = max($finalSort, (int)($source['sort_order'] ?? 0) + 10);
+                }
+            }
+        }
+
+        $sourceId = $this->model->savePricingSource($normalized, $sourceType, $finalSort);
+        if (!$sourceId) {
+            throw new Exception("Failed to save registrar source.");
+        }
+
+        $this->activityLogger->logActivity('created', 'Domain Price Source', "Saved {$sourceType} source {$normalized}", $sourceId);
+        return $sourceId;
+    }
+
+    /**
+     * Update a registrar source's display type and order.
+     */
+    public function updatePricingSource(int $id, string $sourceType, ?int $sortOrder, string $ipAddress): bool {
+        if ($id <= 0) {
+            throw new Exception("Invalid registrar source.");
+        }
+        if (!in_array($sourceType, ['registrar', 'internal', 'registry'], true)) {
+            throw new Exception("Invalid source type.");
+        }
+
+        $current = null;
+        foreach ($this->model->getActiveSources() as $source) {
+            if ((int)$source['id'] === $id) {
+                $current = $source;
+                break;
+            }
+        }
+        if (!$current) {
+            throw new Exception("Registrar source not found.");
+        }
+
+        $finalSort = $sortOrder && $sortOrder > 0 ? $sortOrder : (int)($current['sort_order'] ?? 10);
+        if ($finalSort < 1 || $finalSort > 999999) {
+            throw new Exception("Invalid source sort order.");
+        }
+
+        if (!$this->model->updatePricingSource($id, $sourceType, $finalSort)) {
+            throw new Exception("Failed to update registrar source.");
+        }
+
+        $this->activityLogger->logActivity('updated', 'Domain Price Source', "Updated source {$current['source_name']}", $id);
+        return true;
+    }
+
+    /**
+     * Soft-delete a registrar source from active pricing matrices.
+     */
+    public function deletePricingSource(int $id, string $ipAddress): bool {
+        if ($id <= 0) {
+            throw new Exception("Invalid registrar source.");
+        }
+
+        $current = null;
+        foreach ($this->model->getActiveSources() as $source) {
+            if ((int)$source['id'] === $id) {
+                $current = $source;
+                break;
+            }
+        }
+        if (!$current) {
+            throw new Exception("Registrar source not found.");
+        }
+        if (($current['source_type'] ?? '') !== 'registrar') {
+            throw new Exception("Only registrar sources can be disabled here.");
+        }
+        if (in_array((string)$current['source_name'], ['Liquid Registrar', 'Webnic Registrar'], true)) {
+            throw new Exception("Liquid Registrar and Webnic Registrar are required default sources and cannot be disabled.");
+        }
+
+        if (!$this->model->deactivatePricingSource($id)) {
+            throw new Exception("Failed to disable registrar source.");
+        }
+
+        $this->activityLogger->logActivity('deleted', 'Domain Price Source', "Disabled source {$current['source_name']}", $id);
+        return true;
+    }
+
+    /**
      * Get month details by ID.
      */
     public function getMonthDetails(int $id): ?array {
@@ -516,6 +692,108 @@ class DomainPriceCrosscheckController {
         // Get monthly exchange rate
         $exchangeRate = (float)$month['exchange_rate_usd_idr'];
 
+        // Derive the editable IDCH Internal Pricing draft from the lowest active
+        // registrar USD value. Matrix order is the deterministic tie-breaker.
+        $activeSources = $this->model->getActiveSources();
+        $activeRegistrarMeta = [];
+        $internalSourceId = null;
+        foreach ($activeSources as $source) {
+            $sourceId = (int)$source['id'];
+            if (($source['source_type'] ?? '') === 'registrar') {
+                $activeRegistrarMeta[$sourceId] = [
+                    'name' => (string)$source['source_name'],
+                    'sort_order' => (int)$source['sort_order'],
+                ];
+            }
+            if (($source['source_name'] ?? '') === 'IDCH Internal Pricing' || ($source['source_type'] ?? '') === 'internal') {
+                $internalSourceId = $sourceId;
+            }
+        }
+
+        if ($internalSourceId !== null && $exchangeRate > 0 && $activeRegistrarMeta) {
+            $parseDraftValue = static function ($rawValue): ?float {
+                $raw = trim((string)$rawValue);
+                if ($raw === '') {
+                    return null;
+                }
+                $clean = preg_replace('/[^\d.]/', '', str_replace(',', '', $raw));
+                if ($clean === '' || !is_numeric($clean)) {
+                    throw new Exception("Invalid numeric pricing value.");
+                }
+                $numeric = (float)$clean;
+                if ($numeric < 0) {
+                    throw new Exception("Pricing values must be non-negative.");
+                }
+                return $numeric;
+            };
+
+            $registrarCandidates = [];
+            $internalEntryIndexes = [];
+            foreach ($entries as $index => $item) {
+                $tldId = (int)($item['tld_id'] ?? 0);
+                $sourceId = isset($item['source_id']) && $item['source_id'] !== '' && $item['source_id'] !== null
+                    ? (int)$item['source_id']
+                    : null;
+                $priceType = trim((string)($item['price_type'] ?? ''));
+                $currency = strtoupper(trim((string)($item['currency'] ?? '')));
+
+                if ($sourceId === $internalSourceId && in_array($priceType, ['cost_register', 'cost_renewal'], true)) {
+                    $internalEntryIndexes["{$tldId}_{$priceType}"] = $index;
+                }
+                if (
+                    $tldId <= 0
+                    || !isset($activeRegistrarMeta[$sourceId])
+                    || !in_array($priceType, ['cost_register', 'cost_renewal'], true)
+                    || $currency !== 'USD'
+                ) {
+                    continue;
+                }
+
+                $usdValue = $parseDraftValue($item['value'] ?? '');
+                if ($usdValue === null) {
+                    continue;
+                }
+                $registrarCandidates["{$tldId}_{$priceType}"][] = [
+                    'tld_id' => $tldId,
+                    'price_type' => $priceType,
+                    'source_id' => $sourceId,
+                    'source_name' => $activeRegistrarMeta[$sourceId]['name'],
+                    'sort_order' => $activeRegistrarMeta[$sourceId]['sort_order'],
+                    'usd_value' => $usdValue,
+                ];
+            }
+
+            foreach ($registrarCandidates as $key => $candidates) {
+                usort($candidates, static function (array $left, array $right): int {
+                    $valueComparison = $left['usd_value'] <=> $right['usd_value'];
+                    if ($valueComparison !== 0) {
+                        return $valueComparison;
+                    }
+                    $orderComparison = $left['sort_order'] <=> $right['sort_order'];
+                    return $orderComparison !== 0 ? $orderComparison : ($left['source_id'] <=> $right['source_id']);
+                });
+
+                $selected = $candidates[0];
+                $derivedValue = $selected['usd_value'] * $exchangeRate * 1.30;
+                $derivedEntry = [
+                    'tld_id' => $selected['tld_id'],
+                    'source_id' => $internalSourceId,
+                    'price_type' => $selected['price_type'],
+                    'currency' => 'IDR',
+                    // domain_price_entries.original_value is DECIMAL(15,4).
+                    'value' => number_format($derivedValue, 4, '.', ''),
+                    'derived_from_kurs' => true,
+                    'calculation_note' => "Calculated from {$selected['source_name']} USD x KURS x 1.30.",
+                ];
+
+                if (isset($internalEntryIndexes[$key])) {
+                    $entries[$internalEntryIndexes[$key]] = $derivedEntry;
+                } else {
+                    $entries[] = $derivedEntry;
+                }
+            }
+        }
+
         $savedCount = 0;
         $deletedCount = 0;
         $userName = function_exists('tracs_current_user_display') ? tracs_current_user_display($this->db) : 'System';
@@ -591,7 +869,7 @@ class DomainPriceCrosscheckController {
                 } elseif ($currency === 'IDR') {
                     $idrValue = $cleanValue;
                     $usdValue = 0.0; // Selling prices in IDR do not calculate backward USD
-                    $calculatedFromKurs = 0;
+                    $calculatedFromKurs = !empty($item['derived_from_kurs']) ? 1 : 0;
                 } else {
                     throw new Exception("Invalid currency specified: '{$currency}'");
                 }
@@ -625,15 +903,20 @@ class DomainPriceCrosscheckController {
                     $savedCount++;
 
                     // Log audit trail
-                    $newValStr = ($currency === 'USD' ? '$' : 'Rp') . number_format($cleanValue, 2);
-                    $oldValFormatted = $oldEntry ? ($oldEntry['currency'] === 'USD' ? '$' : 'Rp') . number_format((float)$oldEntry['original_value'], 2) : null;
+                    $newPrecision = !empty($item['derived_from_kurs']) ? 4 : 2;
+                    $oldPrecision = $oldEntry && (float)($oldEntry['calculated_from_kurs'] ?? 0) > 0 && $oldEntry['currency'] === 'IDR' ? 4 : 2;
+                    $newValStr = ($currency === 'USD' ? '$' : 'Rp') . number_format($cleanValue, $newPrecision);
+                    $oldValFormatted = $oldEntry
+                        ? ($oldEntry['currency'] === 'USD' ? '$' : 'Rp') . number_format((float)$oldEntry['original_value'], $oldPrecision)
+                        : null;
                     
+                    $calculationNote = trim((string)($item['calculation_note'] ?? ''));
                     $this->model->logAction(
                         $monthId,
                         $this->userId,
                         $userName,
                         $oldEntry ? 'price_updated' : 'price_created',
-                        "Set {$priceType} to {$newValStr} (Currency: {$currency}) for TLD ID {$tldId}" . ($sourceId ? " and Source ID {$sourceId}" : ""),
+                        "Set {$priceType} to {$newValStr} (Currency: {$currency}) for TLD ID {$tldId}" . ($sourceId ? " and Source ID {$sourceId}" : "") . ($calculationNote !== '' ? " {$calculationNote}" : ""),
                         $ipAddress,
                         $tldId,
                         $sourceId,

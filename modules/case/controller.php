@@ -49,8 +49,10 @@ class CaseController {
         };
         $statusClass = match($case['status'] ?? 'pending') {
             'active'    => 'active',
+            'in_progress' => 'in_progress',
             'pending'   => 'pending',
             'stuck'     => 'stuck',
+            'on_hold'   => 'pending',
             'completed' => 'active',
             default     => 'pending'
         };
@@ -71,6 +73,7 @@ class CaseController {
                 'created_by'     => $case['created_by'] ?? null,
                 'created_by_name' => $case['created_by_name'] ?? null,
                 'creator_name'   => $case['creator_name'] ?? null,
+                'attachment_count' => (int)($case['attachment_count'] ?? 0),
             ];
         }
         $nextCheck = new DateTime($case['next_check_at']);
@@ -98,6 +101,7 @@ class CaseController {
             'created_by' => $case['created_by'] ?? null,
             'created_by_name' => $case['created_by_name'] ?? null,
             'creator_name' => $case['creator_name'] ?? null,
+            'attachment_count' => (int)($case['attachment_count'] ?? 0),
         ];
     }
     

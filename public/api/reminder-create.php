@@ -1,4 +1,5 @@
 <?php require '_bootstrap.php';
+require_once __DIR__ . '/../../core/notifications.php';
 tracs_ensure_creator_columns($conn, 'tracs_reminders', 'user_id');
 $title = trim($body['title'] ?? '');
 $due   = trim($body['due_date'] ?? '');
@@ -16,4 +17,5 @@ if (!$stmt->execute()) {
 $id=$stmt->insert_id; $stmt->close();
 logAct($conn,$uid,'created','Reminders',"Created reminder: {$title}",$id);
 tickerEvent($conn, $uid, "New reminder scheduled: {$title}", 'info', 'reminders', $id);
+tracs_notify_reminder_created($conn, (int)$id, $uid, $title, $due_fmt, $uid);
 ok(['id'=>$id],'Reminder created');

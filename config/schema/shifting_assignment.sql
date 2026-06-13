@@ -1,0 +1,3 @@
+-- Canonical Shifting Assignment schema reference.
+-- Apply config/migrations/2026_06_08_shifting_assignment.sql for tables,
+-- seed data, permissions, and default configuration.

@@ -49,6 +49,36 @@ function tracs_ensure_creator_columns(mysqli $conn, string $table, ?string $sour
     }
 }
 
+function tracs_ensure_case_status_values(mysqli $conn): void {
+    if (!tracs_column_exists($conn, 'tracs_cases', 'status')) {
+        return;
+    }
+
+    $stmt = $conn->prepare("
+        SELECT COLUMN_TYPE
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'tracs_cases'
+          AND COLUMN_NAME = 'status'
+        LIMIT 1
+    ");
+    if (!$stmt) {
+        return;
+    }
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if (str_contains((string)($row['COLUMN_TYPE'] ?? ''), "'in_progress'")) {
+        return;
+    }
+
+    $conn->query("
+        ALTER TABLE `tracs_cases`
+        MODIFY COLUMN `status` ENUM('active','pending','in_progress','stuck','on_hold','completed') NOT NULL DEFAULT 'active'
+    ");
+}
+
 function tracs_current_user_display(mysqli $conn): string {
     static $cached = null;
     if ($cached !== null) {

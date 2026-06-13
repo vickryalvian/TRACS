@@ -231,7 +231,6 @@
       <div class="infra-report-main ${statusClass(snapshot.summary.globalStatus)}">
         <div class="infra-report-head">
           <div>
-            <div class="infra-report-kicker"><i data-lucide="clipboard-check" class="icon-sm"></i>Infrastructure Summary</div>
             <h2>${esc(snapshot.summary.globalStatusLabel)}</h2>
           </div>
           ${statusChip(snapshot.summary.globalStatus)}
@@ -245,7 +244,6 @@
         </div>
       </div>
       <aside class="infra-report-side ${statusClass(node?.status || 'healthy')}">
-        <div class="infra-report-kicker"><i data-lucide="server" class="icon-sm"></i>Selected Server</div>
         ${node ? `
           <div class="infra-report-node-head">
             <strong>${esc(node.name)}</strong>
@@ -446,9 +444,10 @@
     if (!target) return;
     const { summary } = snapshot;
     const affectedItems = dashboardAffectedItems(snapshot);
+    const affectedKey = affectedItems.map((item) => `${item.name}:${item.status}`).join('|');
     const isSliding = affectedItems.length > 1 ? ' is-sliding' : '';
     target.className = `panel infra-dashboard-widget ${statusClass(summary.globalStatus)}`;
-    target.innerHTML = `
+    const markup = `
       <div class="infra-dashboard-widget__head">
         <div>
           <span>Infrastructure Pulse</span>
@@ -470,6 +469,15 @@
         </div>
       </div>
     `;
+    if (target.dataset.affectedKey === affectedKey && target.dataset.globalStatus === summary.globalStatus) {
+      target.querySelectorAll('.infra-dashboard-widget__metrics b')[0].textContent = String(summary.activeIncidents);
+      target.querySelectorAll('.infra-dashboard-widget__metrics b')[1].textContent = ms(summary.averageLatency);
+      target.querySelectorAll('.infra-dashboard-widget__metrics b')[2].textContent = pct(summary.uptime30d);
+      return;
+    }
+    target.dataset.affectedKey = affectedKey;
+    target.dataset.globalStatus = summary.globalStatus;
+    target.innerHTML = markup;
   }
 
   function renderInfrastructurePulseTVWidget(target, snapshot) {
@@ -733,7 +741,7 @@
     const form = modal.querySelector('[data-infra-server-form]');
 
     function openModal() {
-      modal.hidden = false;
+      tracsOpenModalElement(modal);
       activateModalTab(modal, 'add');
       updateMethodUi(modal);
       renderServerRegistry(modal, store);
@@ -741,7 +749,7 @@
     }
 
     function closeModal() {
-      modal.hidden = true;
+      tracsCloseModalElement(modal);
     }
 
     document.querySelectorAll('[data-infra-manage-open]').forEach((button) => {
@@ -785,6 +793,7 @@
         if (state.selectedCode === code) state.selectedCode = nodes[0]?.code || '';
         store.ingest({ ...snapshot, nodes });
         renderServerRegistry(modal, store);
+        showToast('Server removed from monitoring.','success',{context:'modal',position:'modal-top-right',modal,duration:1800});
         return;
       }
       if (!remove) return;
@@ -816,27 +825,44 @@
           validation.classList.add('is-error');
           validation.textContent = `Complete required fields${missing ? `: ${missing}` : ''}${invalid ? `; check ${invalid}` : ''}.`;
         }
+        handleModalError({
+          modal,
+          message:`Complete the required server fields${missing ? `: ${missing}` : ''}${invalid ? `; check ${invalid}` : ''}.`,
+          focus:form.querySelector(':invalid, [data-required-base]')
+        });
         return;
       }
       const node = nodeFromForm(form);
-      if (!node) return;
+      if (!node) {
+        handleModalError({modal,message:'The server details could not be prepared. Please review the form and try again.'});
+        return;
+      }
       const snapshot = store.getSnapshot();
       const nodes = [node, ...snapshot.nodes.filter((item) => item.code !== node.code)];
-      state.selectedCode = node.code;
-      store.ingest({ ...snapshot, nodes });
-      form.reset();
-      form.elements.method.value = 'icmp';
-      form.elements.status.value = 'healthy';
-      form.elements.latency.value = '24';
-      form.elements.packetLoss.value = '0.02';
-      form.elements.uptime.value = '99.990';
-      form.elements.expected_status.value = '200';
-      form.elements.packet_count.value = '4';
-      form.elements.timeout_seconds.value = '5';
-      form.elements.interval_seconds.value = '60';
-      updateMethodUi(modal);
-      renderServerRegistry(modal, store);
-      activateModalTab(modal, 'servers');
+      const button=event.submitter || form.querySelector('button[type="submit"]');
+      if(button && !setButtonLoading(button,'Saving...'))return;
+      showModalSuccessAndClose({
+        modal,
+        button,
+        message:'Server added to monitoring.',
+        close:()=>closeModal(),
+        onAfterClose:()=>{
+          state.selectedCode = node.code;
+          store.ingest({ ...snapshot, nodes });
+          form.reset();
+          form.elements.method.value = 'icmp';
+          form.elements.status.value = 'healthy';
+          form.elements.latency.value = '24';
+          form.elements.packetLoss.value = '0.02';
+          form.elements.uptime.value = '99.990';
+          form.elements.expected_status.value = '200';
+          form.elements.packet_count.value = '4';
+          form.elements.timeout_seconds.value = '5';
+          form.elements.interval_seconds.value = '60';
+          updateMethodUi(modal);
+          renderServerRegistry(modal, store);
+        }
+      });
     });
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape' && !modal.hidden) closeModal();
@@ -850,18 +876,30 @@
     if (!page && dashboardWidgets.length === 0 && tvWidgets.length === 0) return;
 
     initDashboardWidgetSliders();
-    const store = Infra.createSharedStore({ intervalMs: 4000 });
-    state.store = store;
-    bindPage(page, store);
-    bindServerModal(store);
-    store.subscribe((snapshot) => {
-      if (page) renderPage(page, snapshot);
-      dashboardWidgets.forEach((target) => renderInfrastructurePulseDashboardWidget(target, snapshot));
-      tvWidgets.forEach((target) => renderInfrastructurePulseTVWidget(target, snapshot));
-      if (window.lucide) window.lucide.createIcons();
-    });
-    store.start();
-    window.addEventListener('pagehide', () => store.stop(), { once: true });
+    const startStore = () => {
+      if (state.store) return state.store;
+      const store = Infra.createSharedStore({ intervalMs: 4000 });
+      state.store = store;
+      bindPage(page, store);
+      bindServerModal(store);
+      store.subscribe((snapshot) => {
+        if (page) renderPage(page, snapshot);
+        dashboardWidgets.forEach((target) => renderInfrastructurePulseDashboardWidget(target, snapshot));
+        tvWidgets.forEach((target) => renderInfrastructurePulseTVWidget(target, snapshot));
+        if (window.lucide) window.lucide.createIcons();
+      });
+      store.start();
+      window.addEventListener('pagehide', () => store.stop(), { once: true });
+      return store;
+    };
+
+    if (page || tvWidgets.length > 0) {
+      startStore();
+    } else if (dashboardWidgets.length > 0 && typeof window.initWhenVisible === 'function') {
+      window.initWhenVisible(dashboardWidgets[0], startStore, { rootMargin: '240px 0px' });
+    } else {
+      startStore();
+    }
   }
 
   window.renderInfrastructurePulseDashboardWidget = renderInfrastructurePulseDashboardWidget;

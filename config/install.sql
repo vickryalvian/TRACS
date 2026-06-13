@@ -128,7 +128,7 @@ CREATE TABLE IF NOT EXISTS `tracs_cases` (
   `created_by_name` VARCHAR(150)            DEFAULT NULL,
   `title`         VARCHAR(500)     NOT NULL,
   `notes`         TEXT                      DEFAULT NULL,
-  `status`        ENUM('active','pending','stuck','completed')
+  `status`        ENUM('active','pending','in_progress','stuck','on_hold','completed')
                                    NOT NULL DEFAULT 'active',
   `priority`      ENUM('low','medium','high','critical')
                                    NOT NULL DEFAULT 'medium',
@@ -156,6 +156,26 @@ CREATE TABLE IF NOT EXISTS `tracs_cases` (
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_unicode_ci
   COMMENT='Operational cases (legal, CS, ops)';
+
+CREATE TABLE IF NOT EXISTS `case_attachments` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `case_id` INT NOT NULL,
+  `original_filename` VARCHAR(255) NOT NULL,
+  `stored_filename` VARCHAR(255) NOT NULL,
+  `thumbnail_filename` VARCHAR(255) NOT NULL,
+  `file_path` VARCHAR(255) NOT NULL,
+  `thumbnail_path` VARCHAR(255) NOT NULL,
+  `mime_type` VARCHAR(100) NOT NULL,
+  `file_size` INT UNSIGNED NOT NULL,
+  `uploaded_by` INT NOT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `idx_case_attachments_case` (`case_id`),
+  INDEX `idx_case_attachments_uploaded_by` (`uploaded_by`)
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci
+  COMMENT='Image and screenshot attachments for operational cases';
 
 
 -- ══════════════════════════════════════════════════════════════════════════════
@@ -405,12 +425,14 @@ CREATE TABLE IF NOT EXISTS `tracs_shift_reports` (
   `details`     TEXT                     DEFAULT NULL,
   `priority`    ENUM('low','medium','high','critical')
                                 NOT NULL DEFAULT 'medium',
-  `status`      ENUM('active','resolved')
+  `status`      ENUM('active','on_hold','resolved')
                                 NOT NULL DEFAULT 'active',
+  `resolution_note` TEXT                  DEFAULT NULL,
   `active_date` DATE            NOT NULL,
   `created_by`  INT UNSIGNED    NOT NULL,
   `created_by_name` VARCHAR(150)          DEFAULT NULL,
   `resolved_at` DATETIME                 DEFAULT NULL,
+  `visible_to_next_shift` TINYINT(1)      NOT NULL DEFAULT 1,
   `created_at`  DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`  DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP
                                          ON UPDATE CURRENT_TIMESTAMP,
@@ -431,6 +453,24 @@ CREATE TABLE IF NOT EXISTS `tracs_shift_reports` (
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_unicode_ci
   COMMENT='Shift handover reports — daily operational log';
+
+CREATE TABLE IF NOT EXISTS `shift_report_attachments` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `shift_report_id` INT UNSIGNED NOT NULL,
+  `original_filename` VARCHAR(255) NOT NULL,
+  `stored_filename` VARCHAR(255) NOT NULL,
+  `thumbnail_filename` VARCHAR(255) NOT NULL,
+  `mime_type` VARCHAR(100) NOT NULL,
+  `file_size` INT UNSIGNED NOT NULL,
+  `uploaded_by` INT UNSIGNED NOT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_shift_report_attachments_report` (`shift_report_id`),
+  KEY `idx_shift_report_attachments_uploaded_by` (`uploaded_by`)
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci
+  COMMENT='Protected screenshots and photos attached to shift reports';
 
 
 -- ══════════════════════════════════════════════════════════════════════════════
@@ -503,6 +543,74 @@ CREATE TABLE IF NOT EXISTS `tracs_ticker_events` (
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_unicode_ci
   COMMENT='Auto-generated operational ticker events (1h TTL)';
+
+CREATE TABLE IF NOT EXISTS `tracs_notifications` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `notification_type` VARCHAR(80) NOT NULL,
+  `target_user_id` INT UNSIGNED NOT NULL,
+  `related_module` VARCHAR(80) NOT NULL DEFAULT '',
+  `related_entity_id` INT UNSIGNED NOT NULL DEFAULT 0,
+  `trigger_type` VARCHAR(60) NOT NULL DEFAULT 'created',
+  `dedupe_key` VARCHAR(190) NOT NULL,
+  `title` VARCHAR(180) NOT NULL,
+  `message` VARCHAR(500) NOT NULL,
+  `related_url` VARCHAR(255) DEFAULT NULL,
+  `actor_user_id` INT UNSIGNED DEFAULT NULL,
+  `is_read` TINYINT(1) NOT NULL DEFAULT 0,
+  `read_at` DATETIME DEFAULT NULL,
+  `push_status` ENUM('pending','sent','failed','unavailable','skipped') NOT NULL DEFAULT 'pending',
+  `push_attempted_at` DATETIME DEFAULT NULL,
+  `push_sent_at` DATETIME DEFAULT NULL,
+  `push_error` VARCHAR(255) DEFAULT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `scheduled_at` DATETIME DEFAULT NULL,
+  `sent_at` DATETIME DEFAULT NULL,
+
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_tracs_notification_dedupe` (`dedupe_key`),
+  INDEX `idx_tracs_notifications_user_unread` (`target_user_id`, `is_read`, `sent_at`),
+  INDEX `idx_tracs_notifications_push` (`target_user_id`, `push_status`, `sent_at`),
+  INDEX `idx_tracs_notifications_related` (`related_module`, `related_entity_id`, `trigger_type`)
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci
+  COMMENT='In-app and browser notification records';
+
+CREATE TABLE IF NOT EXISTS `tracs_notification_triggers` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `dedupe_key` VARCHAR(190) NOT NULL,
+  `target_user_id` INT UNSIGNED NOT NULL,
+  `related_module` VARCHAR(80) NOT NULL DEFAULT '',
+  `related_entity_id` INT UNSIGNED NOT NULL DEFAULT 0,
+  `trigger_type` VARCHAR(60) NOT NULL,
+  `notification_id` BIGINT UNSIGNED DEFAULT NULL,
+  `triggered_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_tracs_notification_trigger` (`dedupe_key`),
+  INDEX `idx_tracs_notification_trigger_lookup` (`target_user_id`, `related_module`, `related_entity_id`, `trigger_type`)
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci
+  COMMENT='Duplicate prevention for notification triggers';
+
+CREATE TABLE IF NOT EXISTS `tracs_notification_logs` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `notification_id` BIGINT UNSIGNED DEFAULT NULL,
+  `target_user_id` INT UNSIGNED DEFAULT NULL,
+  `status` VARCHAR(40) NOT NULL,
+  `message` VARCHAR(500) NOT NULL,
+  `context_json` TEXT DEFAULT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  PRIMARY KEY (`id`),
+  INDEX `idx_tracs_notification_logs_notification` (`notification_id`, `created_at`),
+  INDEX `idx_tracs_notification_logs_status` (`status`, `created_at`)
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci
+  COMMENT='Notification send, skip, failure, and permission logs';
 
 
 -- ══════════════════════════════════════════════════════════════════════════════

@@ -35,7 +35,7 @@ function respond($ok, $data = [], $msg = '') {
 
 if(!$MC->isInstalled()) {
   http_response_code(503);
-  respond(false, [], 'MOM database tables are not installed. Run config/mom_database_schema.sql first.');
+  respond(false, [], 'MOM storage is not available.');
 }
 
 // ═══════════════════════════════════════════════════════════════

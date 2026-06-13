@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../../core/security/direct_access.php';
+tracs_deny_direct_script_access(__FILE__);
 require_once __DIR__ . '/../../core/creator_tracking.php';
 
 /* Shared formatting helpers for all pages */
@@ -15,8 +17,10 @@ function prio_badge(string $p): string {
 function status_badge(string $s): array {
     return match($s){
         'active'    =>['b-active',  'Active'],
+        'in_progress'=>['b-in_progress', 'In Progress'],
         'stuck'     =>['b-stuck',   'Stuck'],
-        'completed' =>['b-done',    'Done'],
+        'on_hold'   =>['b-hold',    'On Hold'],
+        'completed' =>['b-resolved','Resolved'],
         default     =>['b-pending', 'Pending']
     };
 }
@@ -29,6 +33,72 @@ function safe_dt_local(mixed $v): string {
     return date('Y-m-d\TH:i', strtotime((string)$v));
 }
 function esc(mixed $v): string { return htmlspecialchars((string)($v??''), ENT_QUOTES,'UTF-8'); }
+
+function tracs_stat_delta_meta(int $current, int $previous, string $period_label, string $polarity = 'positive'): array {
+    $diff = $current - $previous;
+    $pct = $previous > 0 ? (int)round(($diff / $previous) * 100) : ($current > 0 ? 100 : 0);
+    $state = $diff > 0 ? 'up' : ($diff < 0 ? 'down' : 'flat');
+    $tone = 'neutral';
+    $direction = $state;
+
+    if ($state !== 'flat') {
+        if ($polarity === 'negative') {
+            $tone = $diff < 0 ? 'good' : 'bad';
+            $direction = $diff > 0 ? 'warn' : $state;
+        } elseif ($polarity === 'warning') {
+            $tone = $diff < 0 ? 'good' : 'warning';
+        } elseif ($polarity === 'neutral') {
+            $tone = 'neutral';
+        } else {
+            $tone = $diff > 0 ? 'good' : 'bad';
+        }
+    }
+
+    $prefix = $pct > 0 ? '+' : '';
+    return [
+        'state' => $state,
+        'tone' => $tone,
+        'direction' => $direction,
+        'value' => $prefix . $pct . '%',
+        'detail' => $current . ' vs ' . $previous . ' ' . $period_label,
+    ];
+}
+
+function tracs_stat_snapshot_meta(string $value, string $detail, string $tone = 'neutral'): array {
+    return [
+        'state' => 'flat',
+        'tone' => preg_replace('/[^a-z0-9_-]/i', '', $tone) ?: 'neutral',
+        'direction' => 'flat',
+        'value' => $value,
+        'detail' => $detail,
+    ];
+}
+
+function tracs_render_stat_card(array $card): string {
+    $trend = is_array($card['trend'] ?? null) ? $card['trend'] : tracs_stat_snapshot_meta('Live', 'Current snapshot');
+    $color = preg_replace('/[^a-z0-9_-]/i', '', (string)($card['color'] ?? 'blue')) ?: 'blue';
+    $key = preg_replace('/[^a-z0-9_-]/i', '', (string)($card['key'] ?? ''));
+    ob_start();
+    ?>
+    <div class="stat-card <?=esc($color)?>" <?=$key !== '' ? 'data-stat-key="'.esc($key).'"' : ''?>>
+      <div class="stat-glow"></div>
+      <div class="stat-head">
+        <?php if(!empty($card['icon'])): ?><span class="stat-icon"><i data-lucide="<?=esc($card['icon'])?>" class="icon-sm"></i></span><?php endif; ?>
+        <span class="stat-label"><?=esc($card['label'] ?? '')?></span>
+      </div>
+      <div class="stat-main">
+        <div class="stat-num"><?=esc((string)($card['value'] ?? '0'))?></div>
+        <div class="stat-trend <?=esc($trend['direction'] ?? 'flat')?> <?=esc($trend['tone'] ?? 'neutral')?>" title="<?=esc($trend['detail'] ?? '')?>">
+          <span class="stat-trend-arrow"></span>
+          <span><?=esc($trend['value'] ?? 'Live')?></span>
+        </div>
+      </div>
+      <div class="stat-compare"><?=esc($trend['detail'] ?? '')?></div>
+    </div>
+    <?php
+    return trim((string)ob_get_clean());
+}
+
 function tracs_highlight_summary(mixed $summary, mixed $highlight): string {
     $summary = (string)($summary ?? '');
     $highlights = is_array($highlight) ? $highlight : [$highlight];

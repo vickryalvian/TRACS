@@ -1,0 +1,476 @@
+{
+    "generated_at": "2026-06-13T06:49:48+07:00",
+    "month": {
+        "id": 110,
+        "month": "2026-06",
+        "status": "draft",
+        "created_by": 1,
+        "updated_by": null
+    },
+    "actor": {
+        "id": 1,
+        "name": "Administrator"
+    },
+    "plan": {
+        "expected": 45,
+        "insert": 45,
+        "update": 0,
+        "unchanged": 0
+    },
+    "existing_affected_rows": [],
+    "missing_keys_before_seed": [
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 14,
+            "source_name": "PANDI Registry Pricing",
+            "tld_id": 14,
+            "tld_name": ".AC.ID",
+            "price_type": "cost_register",
+            "price": 35000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 14,
+            "source_name": "PANDI Registry Pricing",
+            "tld_id": 16,
+            "tld_name": ".BIZ.ID",
+            "price_type": "cost_register",
+            "price": 50000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 14,
+            "source_name": "PANDI Registry Pricing",
+            "tld_id": 9,
+            "tld_name": ".CO.ID",
+            "price_type": "cost_register",
+            "price": 210000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 14,
+            "source_name": "PANDI Registry Pricing",
+            "tld_id": 2,
+            "tld_name": ".ID",
+            "price_type": "cost_register",
+            "price": 182700
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 14,
+            "source_name": "PANDI Registry Pricing",
+            "tld_id": 10,
+            "tld_name": ".MY.ID",
+            "price_type": "cost_register",
+            "price": 20000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 14,
+            "source_name": "PANDI Registry Pricing",
+            "tld_id": 13,
+            "tld_name": ".OR.ID",
+            "price_type": "cost_register",
+            "price": 35000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 14,
+            "source_name": "PANDI Registry Pricing",
+            "tld_id": 17,
+            "tld_name": ".PONPES.ID",
+            "price_type": "cost_register",
+            "price": 35000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 14,
+            "source_name": "PANDI Registry Pricing",
+            "tld_id": 12,
+            "tld_name": ".SCH.ID",
+            "price_type": "cost_register",
+            "price": 35000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 14,
+            "source_name": "PANDI Registry Pricing",
+            "tld_id": 11,
+            "tld_name": ".WEB.ID",
+            "price_type": "cost_register",
+            "price": 35000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 14,
+            "source_name": "PANDI Registry Pricing",
+            "tld_id": 14,
+            "tld_name": ".AC.ID",
+            "price_type": "cost_renewal",
+            "price": 35000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 14,
+            "source_name": "PANDI Registry Pricing",
+            "tld_id": 16,
+            "tld_name": ".BIZ.ID",
+            "price_type": "cost_renewal",
+            "price": 50000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 14,
+            "source_name": "PANDI Registry Pricing",
+            "tld_id": 9,
+            "tld_name": ".CO.ID",
+            "price_type": "cost_renewal",
+            "price": 210000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 14,
+            "source_name": "PANDI Registry Pricing",
+            "tld_id": 2,
+            "tld_name": ".ID",
+            "price_type": "cost_renewal",
+            "price": 182700
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 14,
+            "source_name": "PANDI Registry Pricing",
+            "tld_id": 10,
+            "tld_name": ".MY.ID",
+            "price_type": "cost_renewal",
+            "price": 20000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 14,
+            "source_name": "PANDI Registry Pricing",
+            "tld_id": 13,
+            "tld_name": ".OR.ID",
+            "price_type": "cost_renewal",
+            "price": 35000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 14,
+            "source_name": "PANDI Registry Pricing",
+            "tld_id": 17,
+            "tld_name": ".PONPES.ID",
+            "price_type": "cost_renewal",
+            "price": 35000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 14,
+            "source_name": "PANDI Registry Pricing",
+            "tld_id": 12,
+            "tld_name": ".SCH.ID",
+            "price_type": "cost_renewal",
+            "price": 35000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 14,
+            "source_name": "PANDI Registry Pricing",
+            "tld_id": 11,
+            "tld_name": ".WEB.ID",
+            "price_type": "cost_renewal",
+            "price": 35000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 14,
+            "source_name": "PANDI Registry Pricing",
+            "tld_id": 14,
+            "tld_name": ".AC.ID",
+            "price_type": "cost_transfer",
+            "price": 105000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 14,
+            "source_name": "PANDI Registry Pricing",
+            "tld_id": 16,
+            "tld_name": ".BIZ.ID",
+            "price_type": "cost_transfer",
+            "price": 150000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 14,
+            "source_name": "PANDI Registry Pricing",
+            "tld_id": 9,
+            "tld_name": ".CO.ID",
+            "price_type": "cost_transfer",
+            "price": 630000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 14,
+            "source_name": "PANDI Registry Pricing",
+            "tld_id": 2,
+            "tld_name": ".ID",
+            "price_type": "cost_transfer",
+            "price": 548100
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 14,
+            "source_name": "PANDI Registry Pricing",
+            "tld_id": 10,
+            "tld_name": ".MY.ID",
+            "price_type": "cost_transfer",
+            "price": 60000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 14,
+            "source_name": "PANDI Registry Pricing",
+            "tld_id": 13,
+            "tld_name": ".OR.ID",
+            "price_type": "cost_transfer",
+            "price": 105000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 14,
+            "source_name": "PANDI Registry Pricing",
+            "tld_id": 17,
+            "tld_name": ".PONPES.ID",
+            "price_type": "cost_transfer",
+            "price": 105000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 14,
+            "source_name": "PANDI Registry Pricing",
+            "tld_id": 12,
+            "tld_name": ".SCH.ID",
+            "price_type": "cost_transfer",
+            "price": 105000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 14,
+            "source_name": "PANDI Registry Pricing",
+            "tld_id": 11,
+            "tld_name": ".WEB.ID",
+            "price_type": "cost_transfer",
+            "price": 105000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 15,
+            "source_name": "IDCH ccTLD Pricing",
+            "tld_id": 14,
+            "tld_name": ".AC.ID",
+            "price_type": "cost_register",
+            "price": 55000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 15,
+            "source_name": "IDCH ccTLD Pricing",
+            "tld_id": 16,
+            "tld_name": ".BIZ.ID",
+            "price_type": "cost_register",
+            "price": 55000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 15,
+            "source_name": "IDCH ccTLD Pricing",
+            "tld_id": 9,
+            "tld_name": ".CO.ID",
+            "price_type": "cost_register",
+            "price": 300000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 15,
+            "source_name": "IDCH ccTLD Pricing",
+            "tld_id": 2,
+            "tld_name": ".ID",
+            "price_type": "cost_register",
+            "price": 210000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 15,
+            "source_name": "IDCH ccTLD Pricing",
+            "tld_id": 10,
+            "tld_name": ".MY.ID",
+            "price_type": "cost_register",
+            "price": 25000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 15,
+            "source_name": "IDCH ccTLD Pricing",
+            "tld_id": 13,
+            "tld_name": ".OR.ID",
+            "price_type": "cost_register",
+            "price": 55000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 15,
+            "source_name": "IDCH ccTLD Pricing",
+            "tld_id": 17,
+            "tld_name": ".PONPES.ID",
+            "price_type": "cost_register",
+            "price": 55000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 15,
+            "source_name": "IDCH ccTLD Pricing",
+            "tld_id": 12,
+            "tld_name": ".SCH.ID",
+            "price_type": "cost_register",
+            "price": 55000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 15,
+            "source_name": "IDCH ccTLD Pricing",
+            "tld_id": 11,
+            "tld_name": ".WEB.ID",
+            "price_type": "cost_register",
+            "price": 55000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 15,
+            "source_name": "IDCH ccTLD Pricing",
+            "tld_id": 14,
+            "tld_name": ".AC.ID",
+            "price_type": "cost_renewal",
+            "price": 100000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 15,
+            "source_name": "IDCH ccTLD Pricing",
+            "tld_id": 16,
+            "tld_name": ".BIZ.ID",
+            "price_type": "cost_renewal",
+            "price": 60000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 15,
+            "source_name": "IDCH ccTLD Pricing",
+            "tld_id": 9,
+            "tld_name": ".CO.ID",
+            "price_type": "cost_renewal",
+            "price": 300000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 15,
+            "source_name": "IDCH ccTLD Pricing",
+            "tld_id": 2,
+            "tld_name": ".ID",
+            "price_type": "cost_renewal",
+            "price": 210000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 15,
+            "source_name": "IDCH ccTLD Pricing",
+            "tld_id": 10,
+            "tld_name": ".MY.ID",
+            "price_type": "cost_renewal",
+            "price": 25000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 15,
+            "source_name": "IDCH ccTLD Pricing",
+            "tld_id": 13,
+            "tld_name": ".OR.ID",
+            "price_type": "cost_renewal",
+            "price": 55000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 15,
+            "source_name": "IDCH ccTLD Pricing",
+            "tld_id": 17,
+            "tld_name": ".PONPES.ID",
+            "price_type": "cost_renewal",
+            "price": 55000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 15,
+            "source_name": "IDCH ccTLD Pricing",
+            "tld_id": 12,
+            "tld_name": ".SCH.ID",
+            "price_type": "cost_renewal",
+            "price": 55000
+        },
+        {
+            "month_id": 110,
+            "month": "2026-06",
+            "source_id": 15,
+            "source_name": "IDCH ccTLD Pricing",
+            "tld_id": 11,
+            "tld_name": ".WEB.ID",
+            "price_type": "cost_renewal",
+            "price": 55000
+        }
+    ],
+    "protected_idch_redemption_rows": [],
+    "protected_net_id_rows": [],
+    "unrelated_rows_hash_before": "a0bc1499f5d0349a3f243078cbf2054cc6b076dc02f01adb55e93eb756daec13"
+}

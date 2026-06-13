@@ -1,8 +1,13 @@
 <?php
 /* TRACS — Footer Include. Requires $ticker_items */
+require_once __DIR__ . '/../../core/security/direct_access.php';
+tracs_deny_direct_script_access(__FILE__);
 require_once __DIR__ . '/../../core/build_signature.php';
 $_tracs_footer_build = tracs_build_public_payload();
 $_tracs_can_view_build_info = isset($conn) && $conn instanceof mysqli && function_exists('tracs_user_can') && tracs_user_can($conn, 'settings.manage');
+$_tracs_case_can_manage = isset($conn) && $conn instanceof mysqli && function_exists('tracs_user_can') && tracs_user_can($conn, 'cases.manage');
+$_tracs_case_role = (string)($_SESSION['user_role_slug'] ?? '');
+$_tracs_case_can_delete = in_array($_tracs_case_role, ['super_admin', 'admin'], true) || (isset($conn) && $conn instanceof mysqli && function_exists('tracs_user_can') && tracs_user_can($conn, 'cases.delete'));
 ?>
 <!-- CASE MODAL -->
 <div class="modal-overlay hidden" id="caseModal">
@@ -16,7 +21,7 @@ $_tracs_can_view_build_info = isset($conn) && $conn instanceof mysqli && functio
     <div class="form-group"><label class="form-label">Case Title *</label><input type="text" class="form-input" id="caseTitle" placeholder="Case title, e.g. Hosting issue follow-up" autocomplete="off"></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Status</label>
-        <select class="form-select" id="caseStatus"><option value="active">Active</option><option value="pending">Pending</option><option value="stuck">Stuck</option><option value="completed">Completed</option></select>
+        <select class="form-select" id="caseStatus"><option value="active">Active</option><option value="in_progress">In Progress</option><option value="pending">Pending</option><option value="stuck">Stuck</option><option value="on_hold">On Hold</option><option value="completed">Completed</option></select>
       </div>
       <div class="form-group"><label class="form-label">Priority</label>
         <select class="form-select" id="casePriority"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option></select>
@@ -90,12 +95,107 @@ $_tracs_can_view_build_info = isset($conn) && $conn instanceof mysqli && functio
 </div>
 
     <div class="form-group"><label class="form-label">Internal Notes</label><textarea class="form-textarea" id="caseNotes" placeholder="Add internal notes, investigation result, or next action"></textarea></div>
+    <div class="form-group case-upload-group">
+      <label class="form-label">Screenshots / Photos</label>
+      <input class="case-upload-input" type="file" id="caseAttachments" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" multiple>
+      <label class="case-upload-drop" id="caseUploadDrop" for="caseAttachments">
+        <i data-lucide="image-plus" class="icon-sm"></i>
+        <span>Click or drop images here</span>
+        <small>JPG, JPEG, PNG, WEBP. Max 5MB each.</small>
+      </label>
+      <div class="case-upload-status" id="caseUploadStatus" aria-live="polite"></div>
+      <div class="case-attachment-grid" id="caseExistingAttachments"></div>
+      <div class="case-attachment-grid" id="caseAttachmentPreview"></div>
+    </div>
   </div>
   <div class="modal-foot">
     <button class="btn btn-ghost" onclick="closeModal('case')">Cancel</button>
-    <button class="btn btn-primary" onclick="saveCase()"><i data-lucide="check" class="icon-sm"></i>Save Case</button>
+    <button class="btn btn-primary" id="caseSaveBtn" data-loading-text="Saving..." onclick="saveCase()"><i data-lucide="check" class="icon-sm"></i>Save Case</button>
   </div>
 </div></div>
+
+<div class="modal-overlay hidden" id="caseTicketModal">
+<div class="modal modal-ticket" role="dialog" aria-modal="true" aria-labelledby="caseTicketTitle">
+  <div class="modal-head case-ticket-head">
+    <div class="case-ticket-titleblock">
+      <div class="case-ticket-meta-row">
+        <span class="case-ticket-ref" id="caseTicketRef">Ticket details</span>
+        <div class="case-ticket-statusline" id="caseTicketBadges"></div>
+      </div>
+      <h2 id="caseTicketTitle">Case Preview</h2>
+    </div>
+    <div class="case-ticket-head-actions">
+      <?php if($_tracs_case_can_manage || $_tracs_case_can_delete): ?>
+      <div class="case-ticket-more-menu" id="caseTicketMoreMenu">
+        <button class="modal-icon-action case-ticket-more" type="button" id="caseTicketMoreBtn" onclick="toggleCaseTicketMore(event)" title="More actions" aria-label="More case actions" aria-haspopup="menu" aria-expanded="false"><i data-lucide="more-vertical" class="icon-sm"></i></button>
+        <div class="case-ticket-menu-popover" id="caseTicketMorePopover" role="menu">
+          <?php if($_tracs_case_can_manage): ?>
+          <button class="btn btn-ghost btn-sm" type="button" id="caseTicketEditBtn" onclick="closeCaseTicketMore();editCaseFromTicket()" role="menuitem"><i data-lucide="pencil" class="icon-sm"></i>Edit</button>
+          <button class="btn btn-ghost btn-sm" type="button" id="caseTicketNoteBtn" onclick="closeCaseTicketMore();editCaseFromTicket()" role="menuitem"><i data-lucide="notebook-pen" class="icon-sm"></i>Add note</button>
+          <button class="btn btn-ghost btn-sm" type="button" id="caseTicketReminderBtn" onclick="closeCaseTicketMore();editCaseFromTicket()" role="menuitem"><i data-lucide="alarm-clock" class="icon-sm"></i>Set next check</button>
+          <?php endif; ?>
+          <?php if($_tracs_case_can_delete): ?>
+          <button class="btn btn-danger btn-sm" type="button" id="caseTicketDeleteBtn" onclick="closeCaseTicketMore();deleteCaseFromTicket()" role="menuitem"><i data-lucide="trash-2" class="icon-sm"></i>Delete</button>
+          <?php endif; ?>
+        </div>
+      </div>
+      <?php endif; ?>
+      <button class="modal-close" type="button" onclick="closeModal('caseTicket')" aria-label="Close case preview"><i data-lucide="x"></i></button>
+    </div>
+  </div>
+  <div class="modal-body case-ticket-body">
+    <div class="case-ticket-summary">
+      <div><span>Created By / PIC</span><strong id="caseTicketPic">—</strong></div>
+      <div><span>Created</span><strong id="caseTicketCreated">—</strong></div>
+      <div><span>Last Updated</span><strong id="caseTicketUpdated">—</strong></div>
+      <div><span>Next Check</span><strong id="caseTicketNext">—</strong></div>
+    </div>
+    <div class="case-ticket-timeline" id="caseTicketTimeline" aria-label="Case progress timeline"></div>
+    <div class="case-ticket-content">
+      <section class="case-ticket-section case-ticket-section-main">
+        <h3>Description / Issue Detail</h3>
+        <p id="caseTicketNotes">—</p>
+      </section>
+      <section class="case-ticket-section">
+        <h3>Activity / Follow-Up History</h3>
+        <div id="caseTicketHistory" class="case-ticket-history">—</div>
+      </section>
+      <section class="case-ticket-section">
+        <h3>Attachments / Screenshots</h3>
+        <div class="case-attachment-grid case-ticket-attachments" id="caseTicketAttachments"></div>
+        <p class="case-ticket-empty" id="caseTicketAttachmentEmpty">No attachments available.</p>
+      </section>
+      <section class="case-ticket-section">
+        <h3>Related References</h3>
+        <div id="caseTicketReferences" class="case-ticket-reference">No related domain, finance, or task reference found.</div>
+      </section>
+    </div>
+  </div>
+  <div class="modal-foot case-ticket-actions">
+    <div class="case-ticket-action-note" id="caseTicketActionNote">View-only ticket preview</div>
+    <div class="case-ticket-action-buttons">
+    <?php if($_tracs_case_can_manage): ?>
+    <button class="btn btn-ghost case-ticket-status-btn" type="button" id="caseTicketInProgressBtn" onclick="requestCaseTicketStatus('in_progress')"><i data-lucide="loader-circle" class="icon-sm"></i>In Progress</button>
+    <button class="btn btn-ghost case-ticket-status-btn" type="button" id="caseTicketStuckBtn" onclick="requestCaseTicketStatus('stuck')"><i data-lucide="pause-circle" class="icon-sm"></i>Stuck</button>
+    <button class="btn btn-ghost case-ticket-status-btn" type="button" id="caseTicketHoldBtn" onclick="requestCaseTicketStatus('on_hold')"><i data-lucide="archive" class="icon-sm"></i>On Hold</button>
+    <button class="btn btn-primary" type="button" id="caseTicketResolveBtn" data-loading-text="Resolving..." onclick="resolveCaseFromTicket()"><i data-lucide="check-circle" class="icon-sm"></i>Resolve</button>
+    <?php endif; ?>
+    </div>
+  </div>
+</div></div>
+
+<div class="modal-overlay hidden case-image-modal" id="caseImageModal">
+  <div class="case-image-frame" role="dialog" aria-modal="true" aria-label="Case attachment preview">
+    <div class="case-image-bar">
+      <div class="case-image-title" id="caseImageTitle">Attachment</div>
+      <div class="case-image-actions">
+        <a class="btn btn-ghost btn-icon" id="caseImageOpen" href="#" target="_blank" rel="noopener noreferrer" title="Open image" aria-label="Open image"><i data-lucide="external-link" class="icon-sm"></i></a>
+        <button class="modal-close" type="button" onclick="closeCaseImagePreview()" aria-label="Close preview"><i data-lucide="x"></i></button>
+      </div>
+    </div>
+    <img id="caseImagePreviewFull" src="" alt="Case attachment preview">
+  </div>
+</div>
 
 <!-- REMINDER MODAL -->
 <div class="modal-overlay hidden" id="remModal">
@@ -139,7 +239,7 @@ $_tracs_can_view_build_info = isset($conn) && $conn instanceof mysqli && functio
   </div>
   <div class="modal-foot">
     <button class="btn btn-ghost" onclick="closeModal('rem')">Cancel</button>
-    <button class="btn btn-primary" onclick="saveReminder()"><i data-lucide="check" class="icon-sm"></i>Save Reminder</button>
+    <button class="btn btn-primary" id="remSaveBtn" data-loading-text="Saving..." onclick="saveReminder()"><i data-lucide="check" class="icon-sm"></i>Save Reminder</button>
   </div>
 </div></div>
 
@@ -157,7 +257,7 @@ $_tracs_can_view_build_info = isset($conn) && $conn instanceof mysqli && functio
   </div>
   <div class="modal-foot">
     <button class="btn btn-ghost" onclick="closeModal('task')">Cancel</button>
-    <button class="btn btn-primary" onclick="saveTask()"><i data-lucide="check" class="icon-sm"></i>Save Task</button>
+    <button class="btn btn-primary" id="taskSaveBtn" data-loading-text="Saving..." onclick="saveTask()"><i data-lucide="check" class="icon-sm"></i>Save Task</button>
   </div>
 </div></div>
 
@@ -192,13 +292,36 @@ $_tracs_can_view_build_info = isset($conn) && $conn instanceof mysqli && functio
           <option value="critical">Critical</option>
         </select>
       </div>
-      <div class="form-group" style="visibility:hidden"></div>
+      <div class="form-group"><label class="form-label">Status</label>
+        <select class="form-select" id="shiftStatus" onchange="toggleShiftResolutionFields()">
+          <option value="active" selected>Active / Need Handover</option>
+          <option value="on_hold">On Hold</option>
+          <option value="resolved">Resolved</option>
+        </select>
+      </div>
     </div>
     <div class="form-group"><label class="form-label">Handover Details</label><textarea class="form-textarea" id="shiftDetails" placeholder="Describe handover context, steps taken, customer impact, and next actions" style="min-height:100px"></textarea></div>
+    <div class="shift-resolution-fields hidden" id="shiftResolutionFields">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Resolved Time</label><input type="datetime-local" class="form-input" id="shiftResolvedAt"></div>
+        <div class="form-group"><label class="form-label">Resolution Summary</label><input type="text" class="form-input" id="shiftResolutionNote" maxlength="255" placeholder="Short note for next shift visibility"></div>
+      </div>
+    </div>
+    <div class="form-group case-upload-group">
+      <label class="form-label">Screenshots / Photos</label>
+      <input class="case-upload-input" type="file" id="shiftAttachments" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" multiple>
+      <label class="case-upload-drop" id="shiftUploadDrop" for="shiftAttachments">
+        <i data-lucide="image-plus" class="icon-sm"></i>
+        <span>Click or drop images here</span>
+        <small>JPG, JPEG, PNG, WEBP. Max 5MB each.</small>
+      </label>
+      <div class="case-upload-status" id="shiftUploadStatus" aria-live="polite"></div>
+      <div class="case-attachment-grid" id="shiftAttachmentPreview"></div>
+    </div>
   </div>
   <div class="modal-foot">
     <button class="btn btn-ghost" onclick="closeModal('shift')">Cancel</button>
-    <button class="btn btn-primary" onclick="saveShiftReport()"><i data-lucide="check" class="icon-sm"></i>Save Report</button>
+    <button class="btn btn-primary" id="shiftSaveBtn" data-loading-text="Saving..." onclick="saveShiftReport()"><i data-lucide="check" class="icon-sm"></i>Save Report</button>
   </div>
 </div></div>
 
@@ -215,7 +338,7 @@ $_tracs_can_view_build_info = isset($conn) && $conn instanceof mysqli && functio
       <div class="form-group" style="width:105px"><label class="form-label">Type</label>
         <select class="form-select" id="newTickerCls"><option value="normal">Normal</option><option value="info">Info</option><option value="urgent">Urgent</option><option value="critical">Critical</option></select>
       </div>
-      <button class="btn btn-primary" onclick="addTickerMsg()" style="height:34px;flex-shrink:0"><i data-lucide="plus" class="icon-sm"></i>Add</button>
+      <button class="btn btn-primary" id="tickerAddBtn" data-loading-text="Adding..." onclick="addTickerMsg()" style="height:34px;flex-shrink:0"><i data-lucide="plus" class="icon-sm"></i>Add</button>
     </div>
     <div style="border:1px solid var(--bd1);border-radius:var(--r2);overflow:hidden;max-height:300px;overflow-y:auto">
       <?php
@@ -353,7 +476,7 @@ First Deployment Build
     </div>
     <?php endif; ?>
   </div>
-  <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('momForm')">Cancel</button><button class="btn btn-primary" onclick="saveMOM()"><i data-lucide="check" class="icon-sm"></i>Schedule Meeting</button></div>
+  <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('momForm')">Cancel</button><button class="btn btn-primary" id="momSaveBtn" data-loading-text="Saving..." onclick="saveMOM()"><i data-lucide="check" class="icon-sm"></i>Schedule Meeting</button></div>
 </div></div>
 
 <div class="modal-overlay hidden" id="momActionFormModal"><div class="modal">
@@ -371,7 +494,7 @@ First Deployment Build
     </div>
     <div class="form-group"><label class="form-label">Due Date</label><input type="date" class="form-input" id="momActionFormDueDate"></div>
   </div>
-  <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('momActionForm')">Cancel</button><button class="btn btn-primary" onclick="saveActionItem()"><i data-lucide="check" class="icon-sm"></i>Save Action</button></div>
+  <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('momActionForm')">Cancel</button><button class="btn btn-primary" id="momActionSaveBtn" data-loading-text="Saving..." onclick="saveActionItem()"><i data-lucide="check" class="icon-sm"></i>Save Action</button></div>
 </div></div>
 
 <div class="modal-overlay hidden" id="momNoteFormModal"><div class="modal">
@@ -384,7 +507,7 @@ First Deployment Build
     <div class="form-group"><label class="form-label">Note Type</label><select class="form-select" id="momNoteFormType"><option value="discussion">Discussion</option><option value="decision">Decision</option><option value="action">Action</option><option value="insight">Insight</option></select></div>
     <div class="form-group"><label class="form-label">Note Content *</label><textarea class="form-textarea" id="momNoteFormContent" placeholder="Capture discussion details, customer impact, decisions, or follow-up actions" style="min-height:100px"></textarea></div>
   </div>
-  <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('momNoteForm')">Cancel</button><button class="btn btn-primary" onclick="saveDiscussionNote()"><i data-lucide="check" class="icon-sm"></i>Save Note</button></div>
+  <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('momNoteForm')">Cancel</button><button class="btn btn-primary" id="momNoteSaveBtn" data-loading-text="Saving..." onclick="saveDiscussionNote()"><i data-lucide="check" class="icon-sm"></i>Save Note</button></div>
 </div></div>
 
 <div class="modal-overlay hidden" id="momDecisionFormModal"><div class="modal">
@@ -398,7 +521,7 @@ First Deployment Build
     <div class="form-group"><label class="form-label">Rationale</label><textarea class="form-textarea" id="momDecisionFormRationale" placeholder="Add operational context, customer impact, or reason for the decision" style="min-height:60px"></textarea></div>
     <div class="form-group"><label class="form-label">Owner</label><input type="text" class="form-input" id="momDecisionFormOwner" placeholder="Decision owner, e.g. CS Supervisor" autocomplete="off"></div>
   </div>
-  <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('momDecisionForm')">Cancel</button><button class="btn btn-primary" onclick="saveDecision()"><i data-lucide="check" class="icon-sm"></i>Save Decision</button></div>
+  <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('momDecisionForm')">Cancel</button><button class="btn btn-primary" id="momDecisionSaveBtn" data-loading-text="Saving..." onclick="saveDecision()"><i data-lucide="check" class="icon-sm"></i>Save Decision</button></div>
 </div></div>
 <?php endif; ?>
 
@@ -406,7 +529,16 @@ First Deployment Build
 </div><!-- /shell -->
 <!-- TRACS System by Vickry -->
 <?php $_tracs_js_v = @filemtime(__DIR__.'/../assets/tracs.js') ?: time(); ?>
+<script>
+window.TRACS_CASE_CAPS = <?=json_encode(['canManage' => $_tracs_case_can_manage, 'canDelete' => $_tracs_case_can_delete], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)?>;
+</script>
 <script src="assets/tracs.js?v=<?=$_tracs_js_v?>"></script>
+<?php $_tracs_unsaved_js_v = @filemtime(__DIR__.'/../assets/unsaved-changes-guard.js') ?: time(); ?>
+<script src="assets/unsaved-changes-guard.js?v=<?=$_tracs_unsaved_js_v?>"></script>
+<?php if(($active_page??'') === 'shifting-assignment'): ?>
+<?php $_shift_assignment_js_v = @filemtime(__DIR__.'/../assets/shifting-assignment.js') ?: time(); ?>
+<script src="assets/shifting-assignment.js?v=<?=$_shift_assignment_js_v?>"></script>
+<?php endif; ?>
 <?php if(in_array(($active_page??''), ['mom','dashboard'], true)): ?>
 <?php $_mom_js_v = @filemtime(__DIR__.'/../assets/mom-functions.js') ?: time(); ?>
 <script src="assets/mom-functions.js?v=<?=$_mom_js_v?>"></script>

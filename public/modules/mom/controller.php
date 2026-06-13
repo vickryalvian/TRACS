@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../../../core/security/direct_access.php';
+tracs_deny_direct_script_access(__FILE__);
 /**
  * MOM (Minutes of Meeting) Controller
  * Handles meeting creation, discussion tracking, decisions, actions, and integrations
@@ -14,6 +16,8 @@
  * - Weekly meeting suggestions from unresolved cases
  * - Operational insights (SLA, escalation monitoring)
  */
+
+require_once __DIR__ . '/../../../core/notifications.php';
 
 class MOMController {
   private $conn;
@@ -266,7 +270,10 @@ class MOMController {
     if(!$stmt) return null;
     $remTitle = "MOM: " . $title;
     $stmt->bind_param('issssis', $this->uid, $remTitle, $desc, $due, $priority, $this->uid, $creator_name);
-    return $stmt->execute() ? (int)$stmt->insert_id : null;
+    if(!$stmt->execute()) return null;
+    $remId = (int)$stmt->insert_id;
+    tracs_notify_reminder_created($this->conn, $remId, $this->uid, $remTitle, $due, $this->uid);
+    return $remId;
   }
 
   // ═══════════════════════════════════════════════════════
@@ -906,6 +913,7 @@ class MOMController {
 
     $this->logMOMActivity('mom_case_created', "Created case from MOM action #$action_id", $case_id);
     $this->tickerEvent("Case #$case_id created from MOM action", 'info', $case_id);
+    tracs_notify_case_created($this->conn, (int)$case_id, $this->uid, (string)$action['title'], $this->uid);
     return $case_id;
   }
 
@@ -942,13 +950,14 @@ class MOMController {
     
     $this->logMOMActivity('action_reminder_created', "Created reminder for action #$action_id", $rem_id);
     $this->tickerEvent("Follow-up reminder created from MOM action: " . $action['title'], 'info', $rem_id);
+    tracs_notify_reminder_created($this->conn, (int)$rem_id, $this->uid, $action['title'], $due, $this->uid);
     return $rem_id;
   }
 
   public function resolveLinkedCaseFromMOM($mom_id, $case_id, $status='completed', $note='') {
     $mom_id = (int)$mom_id;
     $case_id = (int)$case_id;
-    $status = in_array($status, ['active','pending','stuck','completed'], true) ? $status : 'completed';
+    $status = in_array($status, ['active','pending','in_progress','stuck','on_hold','completed'], true) ? $status : 'completed';
     $mom = $this->getMOM($mom_id);
     $case = $this->getCaseForUser($case_id);
     if(!$mom || !$case) return false;
@@ -1032,7 +1041,7 @@ class MOMController {
     if(!$this->getMOM($mom_id)) return false;
     $now = date('Y-m-d H:i:s');
     $uploadDir = __DIR__ . '/../../uploads/mom';
-    if(!is_dir($uploadDir)) @mkdir($uploadDir, 0755, true);
+    if(!is_dir($uploadDir)) @mkdir($uploadDir, 0750, true);
     
     $declared_mime = '';
     if(preg_match('/^data:([^;,]+);base64,/', (string)$image_data, $matches)) {
@@ -1056,7 +1065,7 @@ class MOMController {
     $filepath = $uploadDir . '/' . $filename;
 
     if(file_put_contents($filepath, $bytes)) {
-      @chmod($filepath, 0644);
+      @chmod($filepath, 0640);
       $stmt = $this->conn->prepare("
         INSERT INTO tracs_mom_screenshots (mom_id, filename, attached_to_type, attached_to_id, uploaded_at)
         VALUES (?, ?, ?, ?, ?)

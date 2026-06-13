@@ -17,6 +17,11 @@ function momNavigateAfterToast(url,delay=420){
   else setTimeout(()=>{location.href=url;},delay);
 }
 
+function momModalIsOpen(id) {
+  const modal = document.getElementById(`${id}Modal`);
+  return !!modal && !modal.classList.contains('hidden') && getComputedStyle(modal).display !== 'none';
+}
+
 function formatLocalDateTime(date) {
   const p = v => String(v).padStart(2, '0');
   return {
@@ -208,7 +213,7 @@ function toggleMOMSidebarEdit(section) {
   }
 }
 
-function saveMOM() {
+async function saveMOM() {
   const mom_id = document.getElementById('momFormId').value;
   const title = document.getElementById('momFormTitle').value.trim();
   const type = document.getElementById('momFormType').value;
@@ -233,22 +238,36 @@ function saveMOM() {
   fd.append('participants', participants);
   fd.append('meeting_at', meeting_at);
 
-  fetch('api/api_mom.php', { method: 'POST', body: fd })
-  .then(r => r.json())
-  .then(async r => {
+  const button = document.getElementById('momSaveBtn');
+  try {
+    const r = await withLoadingState(button, 'Saving...', async () => {
+      const response = await fetch('api/api_mom.php', { method: 'POST', body: fd });
+      const payload = await response.json();
+      if(!response.ok) {
+        const error = new Error(payload.msg || payload.message || 'Unable to save meeting.');
+        error.status = response.status;
+        throw error;
+      }
+      return payload;
+    });
+    if(!r) return;
     if(r.ok) {
       const targetMomId = r.mom_id || Number(mom_id || 0);
       await linkSelectedCasesToMOM(targetMomId);
-      toast(mom_id ? 'Meeting updated' : 'Meeting scheduled', 'success');
-      if(targetMomId) {
-        momNavigateAfterToast(mom_id ? 'mom.php?mom_id=' + targetMomId : 'mom.php',300);
-      } else {
-        momReloadAfterToast(300);
-      }
+      showModalSuccessAndClose({
+        modal:'momForm',
+        message:mom_id ? 'Meeting updated.' : 'Meeting scheduled.',
+        onAfterClose:()=>{
+          if(targetMomId) location.assign(mom_id ? `mom.php?mom_id=${targetMomId}` : 'mom.php');
+          else location.reload();
+        }
+      });
     } else {
-      toast(r.msg || 'Failed to save meeting', 'error');
+      handleModalError({modal:'momForm',error:{message:r.msg || r.message},fallbackMessage:'The meeting could not be saved. Please check the data and try again.'});
     }
-  }).catch(e => toast('Error: ' + e.message, 'error'));
+  } catch(error) {
+    handleModalError({modal:'momForm',button,error,fallbackMessage:'The meeting could not be saved. Please check the data and try again.'});
+  }
 }
 
 function closeMOM(mom_id) {
@@ -452,8 +471,30 @@ function saveInlineDiscussionNote(mom_id, options = {}) {
   });
 }
 
-function saveDiscussionNote() {
-  saveInlineDiscussionNote(window._currentMOMId);
+async function saveDiscussionNote() {
+  if(!momModalIsOpen('momNoteForm')) {
+    saveInlineDiscussionNote(window._currentMOMId);
+    return;
+  }
+  const contentEl=document.getElementById('momNoteFormContent');
+  const content=contentEl?.value?.trim() || '';
+  if(!content) {
+    handleModalError({modal:'momNoteForm',message:'Note content is required.',focus:contentEl});
+    return;
+  }
+  const button=document.getElementById('momNoteSaveBtn');
+  const r=await withLoadingState(button,'Saving...',()=>api('api/api_mom.php',{
+    action:'add_discussion_note',
+    mom_id:window._currentMOMId,
+    content,
+    note_type:document.getElementById('momNoteFormType')?.value || 'discussion'
+  }));
+  if(!r)return;
+  if(r.ok) {
+    showModalSuccessAndClose({modal:'momNoteForm',message:'Discussion note saved.',onAfterClose:()=>location.reload()});
+  } else {
+    handleModalError({modal:'momNoteForm',error:{message:r.msg || r.message},fallbackMessage:'The discussion note could not be saved. Please try again.'});
+  }
 }
 
 function deleteNote(note_id) {
@@ -552,8 +593,31 @@ function saveInlineDecision(mom_id, options = {}) {
   });
 }
 
-function saveDecision() {
-  saveInlineDecision(window._currentMOMId);
+async function saveDecision() {
+  if(!momModalIsOpen('momDecisionForm')) {
+    saveInlineDecision(window._currentMOMId);
+    return;
+  }
+  const decisionEl=document.getElementById('momDecisionFormText');
+  const decision=decisionEl?.value?.trim() || '';
+  if(!decision) {
+    handleModalError({modal:'momDecisionForm',message:'Decision text is required.',focus:decisionEl});
+    return;
+  }
+  const button=document.getElementById('momDecisionSaveBtn');
+  const r=await withLoadingState(button,'Saving...',()=>api('api/api_mom.php',{
+    action:'add_decision',
+    mom_id:window._currentMOMId,
+    decision,
+    rationale:document.getElementById('momDecisionFormRationale')?.value?.trim() || '',
+    owner:document.getElementById('momDecisionFormOwner')?.value?.trim() || ''
+  }));
+  if(!r)return;
+  if(r.ok) {
+    showModalSuccessAndClose({modal:'momDecisionForm',message:'Decision recorded.',onAfterClose:()=>location.reload()});
+  } else {
+    handleModalError({modal:'momDecisionForm',error:{message:r.msg || r.message},fallbackMessage:'The decision could not be saved. Please try again.'});
+  }
 }
 
 function deleteDecision(decision_id) {
@@ -634,8 +698,33 @@ function saveInlineActionItem(mom_id, options = {}) {
   });
 }
 
-function saveActionItem() {
-  saveInlineActionItem(window._currentMOMId);
+async function saveActionItem() {
+  if(!momModalIsOpen('momActionForm')) {
+    saveInlineActionItem(window._currentMOMId);
+    return;
+  }
+  const titleEl=document.getElementById('momActionFormTitle');
+  const title=titleEl?.value?.trim() || '';
+  if(!title) {
+    handleModalError({modal:'momActionForm',message:'Action title is required.',focus:titleEl});
+    return;
+  }
+  const button=document.getElementById('momActionSaveBtn');
+  const r=await withLoadingState(button,'Saving...',()=>api('api/api_mom.php',{
+    action:'add_action_item',
+    mom_id:window._currentMOMId,
+    title,
+    description:document.getElementById('momActionFormDesc')?.value?.trim() || '',
+    assigned_to:document.getElementById('momActionFormAssignee')?.value?.trim() || '',
+    priority:document.getElementById('momActionFormPriority')?.value || 'medium',
+    due_date:document.getElementById('momActionFormDueDate')?.value || ''
+  }));
+  if(!r)return;
+  if(r.ok) {
+    showModalSuccessAndClose({modal:'momActionForm',message:'Action item saved.',onAfterClose:()=>location.reload()});
+  } else {
+    handleModalError({modal:'momActionForm',error:{message:r.msg || r.message},fallbackMessage:'The action item could not be saved. Please try again.'});
+  }
 }
 
 function momInlineHasContent(form) {

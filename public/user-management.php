@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../core/security/csrf.php';
 require_once __DIR__ . '/../core/security/auth_hardening.php';
+require_once __DIR__ . '/../core/security/error_response.php';
 require_once __DIR__ . '/../core/build_signature.php';
 tracs_start_session();
 require_once __DIR__ . '/../config/database.php';
@@ -28,10 +29,27 @@ function um_redirect(string $tab = 'users'): never {
     header('Location: /user-management.php?tab=' . urlencode($tab));
     exit;
 }
+function um_is_ajax_request(): bool {
+    return strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest'
+        || str_contains(strtolower((string)($_SERVER['HTTP_ACCEPT'] ?? '')), 'application/json');
+}
+function um_json_response(bool $success, string $message, string $tab = 'users', int $status = 200): never {
+    http_response_code($status);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode([
+        'success' => $success,
+        'message' => $message,
+        'redirect' => '/user-management.php?tab=' . urlencode($tab),
+    ], JSON_UNESCAPED_SLASHES);
+    exit;
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
     if (!$schema_ready) {
+        if (um_is_ajax_request()) {
+            um_json_response(false, 'Run the User Management migration before saving changes.', 'users', 422);
+        }
         um_flash('error', 'Run the User Management migration before saving changes.');
         um_redirect('users');
     }
@@ -57,12 +75,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'for' => $result['temporary_password_for'] ?? 'User',
             ];
         }
-        um_flash('success', $result['message'] ?? 'Saved successfully.');
         $tab = ($action === 'update_permissions') ? 'roles' : 'users';
+        if (um_is_ajax_request()) {
+            um_json_response(true, $result['message'] ?? 'Saved successfully.', $tab);
+        }
+        um_flash('success', $result['message'] ?? 'Saved successfully.');
         um_redirect($tab);
     } catch (Throwable $e) {
-        um_flash('error', $e->getMessage());
+        error_log('TRACS user management action failed: ' . $e->getMessage());
+        $publicMessage = tracs_public_exception_message($e, 'The user management action could not be completed.');
         $tab = ($action === 'update_permissions') ? 'roles' : 'users';
+        if (um_is_ajax_request()) {
+            um_json_response(false, $publicMessage, $tab, 422);
+        }
+        um_flash('error', $publicMessage);
         um_redirect($tab);
     }
 }
@@ -642,7 +668,7 @@ include __DIR__ . '/includes/header.php';
 
 <?php if($schema_ready): ?>
 <div class="modal-overlay hidden" id="userFormModal">
-  <form method="post" class="modal modal-lg um-modal" onsubmit="return umUserFormSubmit(this)">
+  <form method="post" class="modal modal-lg um-modal" data-tracs-modal-ajax data-close-delay="1000" onsubmit="return umUserFormSubmit(this)">
     <?=csrf_input()?>
     <input type="hidden" name="action" id="umUserAction" value="create_user">
     <input type="hidden" name="user_id" id="umUserId" value="">
@@ -706,7 +732,7 @@ include __DIR__ . '/includes/header.php';
 
 <?php if($can_reset_2fa): ?>
 <div class="modal-overlay hidden" id="twoFactorResetModal">
-  <form method="post" class="modal" onsubmit="return umConfirmTwoFactorResetSubmit(this)">
+  <form method="post" class="modal" data-tracs-modal-ajax data-close-delay="1000" onsubmit="return umConfirmTwoFactorResetSubmit(this)">
     <?=csrf_input()?>
     <input type="hidden" name="action" value="reset_two_factor">
     <input type="hidden" name="user_id" id="umTwoFactorResetUserId" value="">
@@ -731,7 +757,7 @@ include __DIR__ . '/includes/header.php';
 <?php endif; ?>
 
 <div class="modal-overlay hidden" id="divisionFormModal">
-  <form method="post" class="modal">
+  <form method="post" class="modal" data-tracs-modal-ajax data-close-delay="1000">
     <?=csrf_input()?>
     <input type="hidden" name="action" id="umDivisionAction" value="create_division">
     <input type="hidden" name="division_id" id="umDivisionFormId" value="">

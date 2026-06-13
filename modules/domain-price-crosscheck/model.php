@@ -79,6 +79,30 @@ class DomainPriceCrosscheckModel {
     }
 
     /**
+     * Update an active TLD extension's display category and ordering.
+     */
+    public function updateTldExtension(int $id, string $category, int $sortOrder): bool {
+        $sql = "UPDATE domain_price_tlds
+                SET tld_category = ?, sort_order = ?
+                WHERE id = ? AND is_active = 1";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return false;
+        $stmt->bind_param("sii", $category, $sortOrder, $id);
+        return $stmt->execute();
+    }
+
+    /**
+     * Soft-delete a TLD extension so existing monthly records remain intact.
+     */
+    public function deactivateTldExtension(int $id): bool {
+        $sql = "UPDATE domain_price_tlds SET is_active = 0 WHERE id = ? AND is_active = 1";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return false;
+        $stmt->bind_param("i", $id);
+        return $stmt->execute();
+    }
+
+    /**
      * Get all active pricing/registrar sources.
      */
     public function getActiveSources(): array {
@@ -86,6 +110,70 @@ class DomainPriceCrosscheckModel {
         $result = $this->db->query($sql);
         if (!$result) return [];
         return $result->fetch_all(MYSQLI_ASSOC);
+    }
+
+    /**
+     * Get a pricing source by name.
+     */
+    public function getSourceByName(string $sourceName): ?array {
+        $stmt = $this->db->prepare("SELECT id, source_name, source_type, is_active, sort_order FROM domain_price_sources WHERE source_name = ? LIMIT 1");
+        if (!$stmt) return null;
+        $stmt->bind_param("s", $sourceName);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        return $row ?: null;
+    }
+
+    /**
+     * Create or reactivate a pricing source used by the pricing matrix.
+     */
+    public function savePricingSource(string $sourceName, string $sourceType, int $sortOrder): ?int {
+        $sql = "INSERT INTO domain_price_sources (source_name, source_type, is_active, sort_order, created_at)
+                VALUES (?, ?, 1, ?, NOW())
+                ON DUPLICATE KEY UPDATE
+                    source_type = VALUES(source_type),
+                    is_active = 1,
+                    sort_order = VALUES(sort_order)";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return null;
+        $stmt->bind_param("ssi", $sourceName, $sourceType, $sortOrder);
+        if (!$stmt->execute()) return null;
+
+        if ($stmt->insert_id) {
+            return (int)$stmt->insert_id;
+        }
+
+        $lookup = $this->db->prepare("SELECT id FROM domain_price_sources WHERE source_name = ? LIMIT 1");
+        if (!$lookup) return null;
+        $lookup->bind_param("s", $sourceName);
+        $lookup->execute();
+        $row = $lookup->get_result()->fetch_assoc();
+        return $row ? (int)$row['id'] : null;
+    }
+
+    /**
+     * Update an active pricing source's type and display order.
+     */
+    public function updatePricingSource(int $id, string $sourceType, int $sortOrder): bool {
+        $sql = "UPDATE domain_price_sources
+                SET source_type = ?, sort_order = ?
+                WHERE id = ? AND is_active = 1";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return false;
+        $stmt->bind_param("sii", $sourceType, $sortOrder, $id);
+        return $stmt->execute();
+    }
+
+    /**
+     * Soft-delete a pricing source so historical monthly records remain intact.
+     */
+    public function deactivatePricingSource(int $id): bool {
+        $sql = "UPDATE domain_price_sources SET is_active = 0 WHERE id = ? AND is_active = 1";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return false;
+        $stmt->bind_param("i", $id);
+        return $stmt->execute();
     }
 
     /*      * Get all monthly crosscheck metadata records.

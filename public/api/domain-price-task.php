@@ -47,7 +47,8 @@ if ($action === 'assign_task') {
         
         ok($result, 'Task assigned successfully!');
     } catch (Exception $e) {
-        fail($e->getMessage());
+        error_log('TRACS domain price task failed: ' . $e->getMessage());
+        fail(tracs_public_exception_message($e, 'The pricing task could not be assigned.'));
     }
 }
 

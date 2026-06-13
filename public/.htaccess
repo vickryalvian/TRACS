@@ -2,6 +2,9 @@ Options -Indexes
 ErrorDocument 404 /404.php
 RewriteEngine On
 RewriteRule ^modules/ - [F,L]
+RewriteRule ^includes/ - [F,L]
+RewriteRule ^api/(?:_|.*-lib\.php$) - [F,L,NC]
+RewriteRule ^uploads/(?!avatars/[A-Za-z0-9._-]+\.(?:png|jpe?g|webp)$) - [F,L,NC]
 RewriteRule ^uploads/.*\.(php|phtml|phar|cgi|pl|py|asp|aspx|jsp|sh)$ - [F,L,NC]
 RewriteRule (^|/)[^/]*(backup|bak|old|orig|save|copy)[^/]*\.(css|js|php|html?|json|txt|sql|zip|tar|gz)$ - [F,L,NC]
 RewriteCond %{REQUEST_FILENAME} !-f
@@ -22,6 +25,8 @@ RewriteRule ^$ index.php [L]
   Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains" "expr=%{HTTPS} == 'on'"
 </IfModule>
 
-# PHP error handling - hide from users
-php_flag display_errors Off
-php_value error_reporting 0
+# PHP error handling - hide from users when mod_php is active.
+<IfModule mod_php.c>
+  php_flag display_errors Off
+  php_value error_reporting 0
+</IfModule>

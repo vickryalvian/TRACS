@@ -10,9 +10,13 @@ $report = $SC->getById($id);
 
 if (!$report) fail('Report not found', 404);
 
-$success = $SC->resolve($id);
+$note = trim((string)($body['resolution_note'] ?? ''));
+$resolvedAt = trim((string)($body['resolved_at'] ?? ''));
+$success = $SC->resolve($id, $note, $resolvedAt);
 if (!$success) fail('Error resolving report');
 
 logAct($conn, $uid, 'completed', 'Shift Reports', "Resolved shift report: " . $report['title'], $id);
-tickerEvent($conn, $uid, "Shift report resolved: " . $report['title'], 'success', 'shift-reports', $id);
+if (($report['status'] ?? '') !== 'resolved') {
+    logAct($conn, $uid, 'status_changed', 'Shift Reports', "Shift report status changed from " . ($report['status'] ?? 'unknown') . " to resolved: " . $report['title'], $id);
+}
 ok(null, 'Shift report resolved');

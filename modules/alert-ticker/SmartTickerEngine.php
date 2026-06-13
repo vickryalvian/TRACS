@@ -28,6 +28,7 @@ class SmartTickerEngine {
         $items = array_merge($items, $this->financeItems());
         $items = array_merge($items, $this->meetingItems());
         $items = array_merge($items, $this->shiftReportItems());
+        $items = array_merge($items, $this->shiftingAssignmentItems());
         $items = array_merge($items, $this->tickerEventItems());
         $items = array_merge($items, $this->customMessageItems());
 
@@ -48,7 +49,7 @@ class SmartTickerEngine {
         $feed = $this->buildFeed();
         if (!$feed) {
             return [[
-                'text' => 'All systems operational — No active alerts',
+                'text' => '[INFO] HIDUP JOKIW',
                 'class' => 'normal',
                 'type' => 'system',
                 'priority' => 'info',
@@ -373,6 +374,31 @@ class SmartTickerEngine {
         return $items;
     }
 
+    private function shiftingAssignmentItems(): array {
+        if (!$this->tableExists('shift_assignments')) return [];
+        try {
+            require_once __DIR__ . '/../shifting-assignment/ShiftingAssignmentService.php';
+            $service = new ShiftingAssignmentService($this->conn, $this->uid);
+            $items = [];
+            foreach ($service->getOpsTrackSignals() as $signal) {
+                $items[] = $this->item(
+                    (string)($signal['type'] ?? 'workload'),
+                    (string)($signal['priority'] ?? 'medium'),
+                    (string)($signal['status'] ?? 'active'),
+                    (string)($signal['label'] ?? 'Workforce schedule'),
+                    (string)($signal['message'] ?? ''),
+                    (string)($signal['created_at'] ?? date('Y-m-d H:i:s')),
+                    null,
+                    'shifting-' . hash('sha256', (string)($signal['message'] ?? ''))
+                );
+            }
+            return $items;
+        } catch (Throwable $e) {
+            error_log('TRACS SmartTicker shifting assignment feed failed: ' . $e->getMessage());
+            return [];
+        }
+    }
+
     private function tickerEventItems(): array {
         if (!$this->tableExists('tracs_ticker_events')) return [];
 
@@ -490,6 +516,7 @@ class SmartTickerEngine {
             'finance' => 'finance',
             'mom', 'meeting', 'meetings' => 'meeting',
             'shift_report', 'shift_reports' => 'shift_report',
+            'shifting_assignment', 'workload', 'coverage', 'jumpshift', 'overtime', 'holiday' => $m,
             default => 'info'
         };
     }

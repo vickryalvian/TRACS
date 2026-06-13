@@ -38,5 +38,6 @@ try {
     ok($result, $result['message'] ?? 'Recalculation complete.');
 
 } catch (Exception $e) {
-    fail($e->getMessage());
+    error_log('TRACS domain price recalculation failed: ' . $e->getMessage());
+    fail(tracs_public_exception_message($e, 'The pricing summary could not be recalculated.'));
 }

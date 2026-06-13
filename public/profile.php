@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../core/security/csrf.php';
+require_once __DIR__ . '/../core/security/error_response.php';
 tracs_start_session();
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/auth/auth_check.php';
@@ -40,7 +41,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         profile_flash('success', $result['message'] ?? 'Saved successfully.');
         profile_redirect($action === 'change_password' ? 'security' : ($action === 'update_preferences' ? 'preferences' : 'profile'));
     } catch (Throwable $e) {
-        profile_flash('error', $e->getMessage());
+        error_log('TRACS profile action failed: ' . $e->getMessage());
+        profile_flash('error', tracs_public_exception_message($e, 'The profile action could not be completed.'));
         profile_redirect($action === 'change_password' ? 'security' : ($action === 'update_preferences' ? 'preferences' : 'profile'));
     }
 }
@@ -53,6 +55,8 @@ $section = in_array(($_GET['section'] ?? 'profile'), $sections, true) ? (string)
 
 $me = $schema_ready ? $UM->getUser($uid) : tracs_get_user_by_id($conn, $uid);
 $prefs = $schema_ready ? $UM->preferences($uid) : [];
+$visualTheme = tracs_normalize_visual_theme($prefs['visual_theme'] ?? 'default');
+$visualThemeAttr = tracs_visual_theme_data_value($visualTheme);
 $activity = $schema_ready && $section === 'activity' ? $UM->ownActivity(50) : [];
 
 $TC = new AlertTickerController($conn, $uid);
@@ -173,9 +177,22 @@ include __DIR__ . '/includes/header.php';
         <div class="profile-form-body">
           <div class="form-row">
             <div class="form-group"><label class="form-label">Theme Preference</label><select class="form-select" name="theme_preference" id="profileThemePreference"><option value="auto" <?=($prefs['theme_preference'] ?? 'auto')==='auto'?'selected':''?>>System / Auto</option><option value="light" <?=($prefs['theme_preference'] ?? '')==='light'?'selected':''?>>Light</option><option value="dark" <?=($prefs['theme_preference'] ?? '')==='dark'?'selected':''?>>Dark</option></select></div>
-            <div class="form-group"><label class="form-label">Notification Preference</label><select class="form-select" name="notification_preference"><option value="in_app" <?=($prefs['notification_preference'] ?? 'in_app')==='in_app'?'selected':''?>>In App</option><option value="email" <?=($prefs['notification_preference'] ?? '')==='email'?'selected':''?>>Email</option><option value="both" <?=($prefs['notification_preference'] ?? '')==='both'?'selected':''?>>Both</option><option value="muted" <?=($prefs['notification_preference'] ?? '')==='muted'?'selected':''?>>Muted</option></select></div>
+            <div class="form-group" id="visualThemeField"><label class="form-label">Visual Theme</label><select class="form-select" name="visual_theme" id="profileVisualTheme"><option value="default" selected>Default TRACS</option></select></div>
           </div>
-          <div class="form-group"><label class="form-label">Default Landing Page</label><select class="form-select" name="default_landing_page"><option value="index.php" <?=($prefs['default_landing_page'] ?? 'index.php')==='index.php'?'selected':''?>>Dashboard</option><option value="cases.php" <?=($prefs['default_landing_page'] ?? '')==='cases.php'?'selected':''?>>Cases</option><option value="reminders.php" <?=($prefs['default_landing_page'] ?? '')==='reminders.php'?'selected':''?>>Reminders</option><option value="checklist.php" <?=($prefs['default_landing_page'] ?? '')==='checklist.php'?'selected':''?>>Checklist</option><option value="shift-reports.php" <?=($prefs['default_landing_page'] ?? '')==='shift-reports.php'?'selected':''?>>Shift Reports</option><option value="mom.php" <?=($prefs['default_landing_page'] ?? '')==='mom.php'?'selected':''?>>Meetings / MoM</option><option value="activity.php" <?=($prefs['default_landing_page'] ?? '')==='activity.php'?'selected':''?>>Activity Log</option></select></div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Notification Preference</label><select class="form-select" name="notification_preference"><option value="in_app" <?=($prefs['notification_preference'] ?? 'in_app')==='in_app'?'selected':''?>>In App</option><option value="email" <?=($prefs['notification_preference'] ?? '')==='email'?'selected':''?>>Email</option><option value="both" <?=($prefs['notification_preference'] ?? '')==='both'?'selected':''?>>Both</option><option value="muted" <?=($prefs['notification_preference'] ?? '')==='muted'?'selected':''?>>Muted</option></select></div>
+            <div class="form-group"><label class="form-label">Default Landing Page</label><select class="form-select" name="default_landing_page"><option value="index.php" <?=($prefs['default_landing_page'] ?? 'index.php')==='index.php'?'selected':''?>>Dashboard</option><option value="cases.php" <?=($prefs['default_landing_page'] ?? '')==='cases.php'?'selected':''?>>Cases</option><option value="reminders.php" <?=($prefs['default_landing_page'] ?? '')==='reminders.php'?'selected':''?>>Reminders</option><option value="checklist.php" <?=($prefs['default_landing_page'] ?? '')==='checklist.php'?'selected':''?>>Checklist</option><option value="shift-reports.php" <?=($prefs['default_landing_page'] ?? '')==='shift-reports.php'?'selected':''?>>Shift Reports</option><option value="mom.php" <?=($prefs['default_landing_page'] ?? '')==='mom.php'?'selected':''?>>Meetings / MoM</option><option value="activity.php" <?=($prefs['default_landing_page'] ?? '')==='activity.php'?'selected':''?>>Activity Log</option></select></div>
+          </div>
+          <div class="notif-permission-callout profile-notification-callout hidden" data-tracs-notification-permission>
+            <div>
+              <strong>Browser notifications</strong>
+              <span>Enable short alerts for assigned tasks, reminders, meetings, and handover timing.</span>
+            </div>
+            <div class="notif-permission-actions">
+              <button type="button" class="btn btn-primary btn-sm" data-tracs-notification-enable>Enable</button>
+              <button type="button" class="btn btn-ghost btn-sm" data-tracs-notification-dismiss>Later</button>
+            </div>
+          </div>
         </div>
         <div class="modal-foot"><button type="submit" class="btn btn-primary"><i data-lucide="save" class="icon-sm"></i>Save Preferences</button></div>
       </form>
@@ -258,6 +275,12 @@ try {
   localStorage.setItem('tracs-theme', <?=json_encode($prefs['theme_preference'])?>);
 } catch(e) {}
 <?php endif; ?>
+try {
+  localStorage.setItem('tracs_visual_theme_preference', <?=json_encode($visualTheme)?>);
+  localStorage.setItem('tracs-visual-theme', <?=json_encode($visualTheme)?>);
+  document.documentElement.setAttribute('data-visual-theme', <?=json_encode($visualThemeAttr)?>);
+  document.documentElement.setAttribute('data-visual-theme-preference', <?=json_encode($visualTheme)?>);
+} catch(e) {}
 </script>
 
 <?php if($flash): ?>

@@ -8,6 +8,7 @@ class ShiftReportModel {
 
     public function __construct($connection) {
         $this->conn = $connection;
+        $this->ensureResolvedSchema();
     }
 
     public function getTodayReports() {
@@ -16,7 +17,7 @@ class ShiftReportModel {
             FROM tracs_shift_reports r
             LEFT JOIN tracs_users u ON r.created_by = u.id
             WHERE r.active_date = CURDATE()
-            ORDER BY r.status ASC, 
+            ORDER BY FIELD(r.status, 'active', 'on_hold', 'resolved') ASC,
                      FIELD(r.priority, 'critical', 'high', 'medium', 'low') ASC,
                      r.created_at DESC
         ";
@@ -44,7 +45,7 @@ class ShiftReportModel {
             WHERE {$where}
             ORDER BY r.active_date ASC,
                      FIELD(r.shift_name, 'Shift 1', 'Shift 2', 'Shift 3') ASC,
-                     r.status ASC,
+                     FIELD(r.status, 'active', 'on_hold', 'resolved') ASC,
                      FIELD(r.priority, 'critical', 'high', 'medium', 'low') ASC,
                      r.created_at DESC
         ";
@@ -115,10 +116,14 @@ class ShiftReportModel {
     }
 
     public function create($data, $uid) {
+        $status = $this->normalizeStatus($data['status'] ?? 'active');
+        $visible = $this->visibleToNextShift($status);
+        $resolvedAt = $status === 'resolved' ? $this->normalizeDateTime($data['resolved_at'] ?? null) : null;
+        $resolutionNote = $status === 'resolved' ? trim((string)($data['resolution_note'] ?? '')) : null;
         $stmt = $this->conn->prepare("
             INSERT INTO tracs_shift_reports 
-            (shift_name, title, details, priority, active_date, status, created_by, created_by_name, created_at, updated_at) 
-            VALUES (?, ?, ?, ?, ?, 'active', ?, ?, NOW(), NOW())
+            (shift_name, title, details, priority, active_date, status, resolution_note, resolved_at, visible_to_next_shift, created_by, created_by_name, created_at, updated_at) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
         ");
         if (!$stmt) return false;
 
@@ -126,12 +131,16 @@ class ShiftReportModel {
 
         $creatorName = $data['created_by_name'] ?? '';
 
-        $stmt->bind_param('sssssis', 
+        $stmt->bind_param('ssssssssiis', 
             $data['shift_name'], 
             $data['title'], 
             $data['details'], 
             $data['priority'],
             $date,
+            $status,
+            $resolutionNote,
+            $resolvedAt,
+            $visible,
             $uid,
             $creatorName
         );
@@ -142,19 +151,27 @@ class ShiftReportModel {
     }
 
     public function update($id, $data) {
+        $status = $this->normalizeStatus($data['status'] ?? 'active');
+        $visible = $this->visibleToNextShift($status);
+        $resolvedAt = $status === 'resolved' ? $this->normalizeDateTime($data['resolved_at'] ?? null) : null;
+        $resolutionNote = $status === 'resolved' ? trim((string)($data['resolution_note'] ?? '')) : null;
         $stmt = $this->conn->prepare("
             UPDATE tracs_shift_reports 
-            SET shift_name=?, title=?, details=?, priority=?, active_date=?, updated_at=NOW() 
+            SET shift_name=?, title=?, details=?, priority=?, active_date=?, status=?, resolution_note=?, resolved_at=?, visible_to_next_shift=?, updated_at=NOW() 
             WHERE id=?
         ");
         if (!$stmt) return false;
 
-        $stmt->bind_param('sssssi', 
+        $stmt->bind_param('ssssssssii', 
             $data['shift_name'], 
             $data['title'], 
             $data['details'], 
             $data['priority'], 
             $data['active_date'],
+            $status,
+            $resolutionNote,
+            $resolvedAt,
+            $visible,
             $id
         );
         $success = $stmt->execute();
@@ -162,15 +179,17 @@ class ShiftReportModel {
         return $success;
     }
 
-    public function resolve($id) {
+    public function resolve($id, ?string $note = null, ?string $resolvedAt = null) {
+        $resolvedAt = $this->normalizeDateTime($resolvedAt);
         $stmt = $this->conn->prepare("
             UPDATE tracs_shift_reports 
-            SET status='resolved', resolved_at=NOW(), updated_at=NOW() 
+            SET status='resolved', resolution_note=COALESCE(NULLIF(?, ''), resolution_note), resolved_at=COALESCE(?, NOW()), visible_to_next_shift=1, updated_at=NOW() 
             WHERE id=?
         ");
         if (!$stmt) return false;
 
-        $stmt->bind_param('i', $id);
+        $note = trim((string)$note);
+        $stmt->bind_param('ssi', $note, $resolvedAt, $id);
         $success = $stmt->execute();
         $stmt->close();
         return $success;
@@ -194,5 +213,38 @@ class ShiftReportModel {
         $row = $result->fetch_assoc();
         $stmt->close();
         return $row ?: null;
+    }
+
+    private function normalizeStatus(string $status): string {
+        return in_array($status, ['active', 'on_hold', 'resolved'], true) ? $status : 'active';
+    }
+
+    private function visibleToNextShift(string $status): int {
+        return in_array($status, ['active', 'on_hold', 'resolved'], true) ? 1 : 0;
+    }
+
+    private function normalizeDateTime(?string $value): ?string {
+        $value = trim((string)$value);
+        if ($value === '') return null;
+        $ts = strtotime($value);
+        return $ts ? date('Y-m-d H:i:s', $ts) : null;
+    }
+
+    private function ensureResolvedSchema(): void {
+        static $checked = false;
+        if ($checked) return;
+        $checked = true;
+        if (!function_exists('tracs_column_exists')) return;
+        $statusColumn = $this->conn->query("SHOW COLUMNS FROM tracs_shift_reports LIKE 'status'");
+        $statusType = $statusColumn ? strtolower((string)($statusColumn->fetch_assoc()['Type'] ?? '')) : '';
+        if (!str_contains($statusType, 'on_hold')) {
+            $this->conn->query("ALTER TABLE tracs_shift_reports MODIFY COLUMN `status` ENUM('active','on_hold','resolved') NOT NULL DEFAULT 'active'");
+        }
+        if (!tracs_column_exists($this->conn, 'tracs_shift_reports', 'resolution_note')) {
+            $this->conn->query("ALTER TABLE tracs_shift_reports ADD COLUMN `resolution_note` TEXT NULL AFTER `status`");
+        }
+        if (!tracs_column_exists($this->conn, 'tracs_shift_reports', 'visible_to_next_shift')) {
+            $this->conn->query("ALTER TABLE tracs_shift_reports ADD COLUMN `visible_to_next_shift` TINYINT(1) NOT NULL DEFAULT 1 AFTER `resolved_at`");
+        }
     }
 }

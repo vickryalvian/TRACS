@@ -62,7 +62,7 @@ Calculate these values strictly as defined below:
 ## 5. File Ownership Registry
 
 ### Dedicated Module Files (Safe to edit)
-- [domain_price_crosscheck.php](file:///Users/ulfahanifah/Documents/tracs/public/domain_price_crosscheck.php)
+- [domain-price-crosscheck.php](file:///Users/ulfahanifah/Documents/tracs/public/domain-price-crosscheck.php)
 - [domain-price-crosscheck.php (API)](file:///Users/ulfahanifah/Documents/tracs/public/api/domain-price-crosscheck.php)
 - [controller.php](file:///Users/ulfahanifah/Documents/tracs/modules/domain-price-crosscheck/controller.php)
 - [model.php](file:///Users/ulfahanifah/Documents/tracs/modules/domain-price-crosscheck/model.php)

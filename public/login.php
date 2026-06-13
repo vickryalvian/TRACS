@@ -26,6 +26,7 @@ $show_help = !empty($_SESSION['login_show_help'])
     || in_array($error, [TRACS_AUTH_GENERIC_LOCKED, TRACS_2FA_SESSION_EXPIRED], true);
 unset($_SESSION['login_error'], $_SESSION['login_show_help']);
 $tracs_build_info = tracs_build_public_payload();
+$_css_v = @filemtime(__DIR__ . '/assets/tracs.css') ?: time();
 $login_help = TRACS_AUTH_HELP_MESSAGE;
 $login_contact = trim((string)tracs_auth_env('TRACS_LOGIN_HELP_CONTACT', ''));
 if ($login_contact !== '') {
@@ -42,10 +43,8 @@ if ($login_contact !== '') {
 <meta name="tracs-build-version" content="<?=htmlspecialchars(TRACS_BUILD_VERSION, ENT_QUOTES, 'UTF-8')?>">
 <title>TRACS — Sign In</title>
 <?php include __DIR__ . '/includes/theme_bootstrap.php'; ?>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="manifest" href="manifest.json">
-<link rel="stylesheet" href="/assets/tracs.css">
+<link rel="stylesheet" href="/assets/tracs.css?v=<?=$_css_v?>">
 <?php if($show_captcha && tracs_auth_turnstile_enabled()): ?><script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script><?php endif; ?>
 <script>
 window.TRACS_BUILD_INFO = <?=json_encode($tracs_build_info, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)?>;
@@ -85,7 +84,7 @@ window.TRACS_BUILD_INFO = <?=json_encode($tracs_build_info, JSON_UNESCAPED_SLASH
             <?php endif; ?>
           </div>
         <?php endif; ?>
-        <button type="submit" class="btn-login">
+        <button type="submit" class="btn-login" data-loading-text="Signing in...">
           <span class="btn-login-label">Sign In →</span>
           <span class="radar-dot dot-1" aria-hidden="true"></span>
           <span class="radar-dot dot-2" aria-hidden="true"></span>
@@ -99,5 +98,6 @@ window.TRACS_BUILD_INFO = <?=json_encode($tracs_build_info, JSON_UNESCAPED_SLASH
     <div class="login-foot"><div class="status-online"><span class="status-dot"></span>TRACS System Online</div></div>
   </div>
 </div>
-<script src="assets/tracs.js"></script>
+<?php $_js_v = @filemtime(__DIR__ . '/assets/tracs.js') ?: time(); ?>
+<script src="assets/tracs.js?v=<?=$_js_v?>"></script>
 </body></html>

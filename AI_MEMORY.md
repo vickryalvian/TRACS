@@ -1,104 +1,119 @@
-# TRACS — AI Memory & Project Rules
+# TRACS - AI Memory & Project Rules
 
-> **READ THIS FIRST.** This file preserves critical project intelligence for future AI sessions, developers, and handoffs. Do not delete it, and do not treat it as generic boilerplate.
+> **READ THIS FIRST.** This file is durable project memory for future AI agents and developers. Verify implementation before changing documentation or behavior.
 
 ## Project Identity
 
 - **Name:** TRACS Operational Dashboard
-- **Purpose:** Operational control panel for CS/support/legal workflows, especially Indonesian operations teams.
-- **Stack:** Vanilla PHP 8 + MySQL/MariaDB + Apache + vanilla JS/CSS.
-- **Document root:** [public](/tracs/public), not repository root.
-- **Timezone:** Asia/Jakarta / WIB.
-- **Design:** Dense operational dashboard with TRACS branding, sidebar navigation, ticker bar, stat strips, compact panels, modals, and dark/light theme support.
-- **No framework/build step:** No Composer, no npm, no SPA routing unless the owner intentionally changes architecture.
+- **Purpose:** Compact operational control panel for support, CS, legal, and infrastructure-monitoring workflows.
+- **Stack:** Vanilla PHP 8, MySQL/MariaDB, Apache or Nginx/PHP-FPM, vanilla JavaScript, and CSS.
+- **Web root:** `public/`, never the repository root.
+- **Timezone:** `Asia/Jakarta` / WIB.
+- **Runtime style:** Server-rendered pages plus authenticated JSON/CSV APIs. There is no Composer, npm, SPA router, or frontend build step.
 
-## Current System Shape
+## Current Direction
 
-- Public pages live under [public](/tracs/public).
-- Auth files live under [public/auth](/tracs/public/auth).
-- JSON/CSV endpoints live under [public/api](/tracs/public/api).
-- Business logic lives under [modules](/tracs/modules), with MoM currently bridged through [modules/mom/controller.php](/tracs/modules/mom/controller.php) to [public/modules/mom/controller.php](/tracs/public/modules/mom/controller.php).
-- Shared helpers live in [core](/tracs/core) and [public/includes](/tracs/public/includes).
-- Fresh schema is [config/install.sql](/tracs/config/install.sql); existing installs use [config/migrations](/tracs/config/migrations).
+- Keep the interface clean, compact, operational-first, and low-noise.
+- The dashboard uses the restored five-item stat strip. Do not restore the rejected grouped dashboard stat-card experiment.
+- Keep widget gaps, internal padding, row heights, and column balance consistent.
+- Use blue only for active, selected, or highlighted states.
+- Keep completed items readable; do not fade them until operational context is lost.
+- Use context-relevant icons, especially for holidays and special-day notices.
+- Preserve light and dark mode behavior.
+- Use this font stack:
 
-## Do Not Break
+```css
+font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+```
 
-1. **Document root:** keep Apache/Nginx pointed at `/public`.
-2. **Session/auth flow:** public pages call `tracs_start_session()` then include `public/auth/auth_check.php`.
-3. **API bootstrap:** endpoints under `public/api` require `_bootstrap.php`; it handles session guard, CSRF verification for mutating methods, DB include, auth user refresh, JSON helpers, creator tracking, and activity/ticker helpers.
-4. **CSRF:** keep `csrf_meta_tag()` in the header and `verify_csrf()` on POST/PUT/PATCH/DELETE flows.
-5. **Require paths:** prefer `__DIR__` based includes.
-6. **Ticker duplication:** `header.php` doubles ticker HTML for seamless scrolling; keep that behavior.
-7. **Shared layout:** `public/includes/header.php` owns shell, ticker, sidebar, theme menu, and nav permissions; `footer.php` owns shared modals and script loading.
-8. **Design tokens:** use CSS custom properties and existing component classes in `tracs.css`; avoid one-off inline color systems.
-9. **Dirty worktree safety:** this repo may contain in-progress user edits and prior backup folders. Do not revert unrelated PHP/CSS/JS changes.
+## Dashboard Decisions
 
-## Coding Conventions
+- Main dashboard areas are Cases, Task Monitoring, Shift Handover, Currency Converter, and the Infrastructure Pulse summary.
+- Dashboard case rows and `cases.php` rows open the same shared ticket-detail modal.
+- Task Monitoring has exactly these dashboard tabs:
+  - `Checklist and Reminder`
+  - `Assignments`
+  - `Activity`
+- Checklist and Reminder are merged. Do not recreate a separate dashboard Reminder tab unless explicitly requested.
+- Reminder List belongs inside the combined tab. The standalone `reminders.php` page remains an implemented full-list page.
+- Assigned tasks create linked checklist items and, when due dates exist, reminders. New assignments can therefore appear in the combined tab and Assignments tab.
 
-### PHP
+## Case Ticket Rules
 
-- Use prepared statements for SQL.
-- Escape HTML with `esc()` from [public/includes/page_helpers.php](/tracs/public/includes/page_helpers.php).
-- Keep activity/ticker failures non-fatal.
-- Use `tracs_ensure_creator_columns()` where existing modules already do.
-- Preserve user attribution fields such as `created_by` and `created_by_name`.
-- Keep module permissions checked with `tracs_user_can()` / `tracs_require_permission()` where present.
+- Keep `Resolve` as the primary footer action on the right.
+- Keep the only Close control in the ticket header.
+- Edit and Delete currently live under the icon-only More trigger in the header.
+- The progress timeline is implemented with Created, Assigned, In Progress, Waiting, and Resolved steps.
+- Keep the line thin and blue-to-cyan, limit animation to the filled/current portion, use smaller passed dots, and emphasize the current dot.
+- Resolved timelines stop animating.
 
-### APIs
+## Shift Handover Rules
 
-- Use `_bootstrap.php` for authenticated endpoints.
-- Return the existing response shape for the endpoint family being edited. Most endpoints use `ok()`/`fail()`, while some legacy MoM endpoints return legacy `success`/`error` or `ok`/`msg` shapes.
-- Mutating requests require CSRF.
-- CSV export endpoints may produce downloads instead of JSON.
+- Statuses are `active`, `on_hold`, and `resolved`.
+- Active items need handover; on-hold items remain monitoring context; resolved items remain visible as informational context.
+- Do not imply that every case or activity must become a handover item.
+- The dashboard reminder starts 30 minutes before shift change and escalates visually near handover.
+- Scheduled browser/in-app shift notification creation currently occurs within the final 15 minutes and requires the notification worker or an active dashboard request.
 
-### Frontend
+## Infrastructure Pulse
 
-- Shared app JS is [public/assets/tracs.js](/tracs/public/assets/tracs.js).
-- MoM JS is [public/assets/mom-functions.js](/tracs/public/assets/mom-functions.js).
-- TV mode JS is [public/assets/tv-mode.js](/tracs/public/assets/tv-mode.js).
-- Use existing helpers: `api()`, `toast()`, `confirm()`, modal helpers, row data attributes, and optimistic DOM updates where established.
-- Use lucide icons already loaded by the header.
+- **Partially Implemented:** full page, dashboard mini widget, and TV Mode widget share `public/assets/infrastructure-pulse-data.js`.
+- Current telemetry and server-registry changes are mock/session-only. No backend ping worker, monitoring tables, Redis, SSE, or WebSocket feed is implemented.
+- `tv-mode.php` includes an Infrastructure Pulse widget; there is no separate Infrastructure-only TV route.
+- Do not document mock incidents as live infrastructure alerts.
 
-## Design Rules
+## Domain Price Crosscheck
 
-- Keep TRACS compact, operational, and scannable.
-- Keep the sidebar icon-only with hover tips and role-aware navigation.
-- Keep the top ticker as a live operational signal, not a decorative banner.
-- Use stat cards, tables, filter bars, panels, badges, and compact modal forms consistently.
-- Preserve theme support through `theme_bootstrap.php`, `tracs_user_preferences`, and CSS variables.
-- Do not make dashboard panels oversized marketing cards.
-- Do not split `tracs.css` unless a future design-system migration is explicitly requested.
+- Canonical route: `domain-price-crosscheck.php`.
+- Legacy `domain_price_crosscheck.php` only performs a 308 redirect.
+- Navigation is under `Tasks & Monitoring` as `Domain Pricing Crosscheck`.
+- Current UI includes Overview, Price Matrix, Intelligence Summary, ccTLD Check, Website Price Adjustment, Action Buckets, Notes & Follow-ups, Audit Trail, registrar source management, and domain-extension management.
+- Keep layouts compact, preserve sticky matrix context, and do not describe planned registrar APIs/imports as implemented.
 
-## Active Modules And Priorities
+## Navigation And Settings
 
-| Module | Current priority |
-| --- | --- |
-| Dashboard | Preserve layout and critical counts; improve measurement widgets carefully. |
-| Cases / Reminders / Checklist | Core daily workflow; avoid regressions. |
-| Task Monitoring | High priority for assignment, accountability, and measurement. |
-| MoM | Keep scheduled meeting/reminder/ops-window flow accurate. |
-| Shift Reports | Important for handover and ISO-style traceability. |
-| User Management | Permission-sensitive; test role access after edits. |
-| Cancellation Feedback | Important for retention intelligence and reporting. |
-| TV Mode | Role-gated wall display; avoid coupling it to dashboard DOM. |
-| ISO 9001 / Measurement | Future direction: measurement page/subdomain, KPIs, achievement tracking, evidence exports. |
-| Domain Price Crosscheck | Operational comparison panel for TLD base cost vs selling prices. Accessed from Domains → Crosscheck Pricing; Task Management integration remains for assignment/workflow. See [DOMAIN_PRICE_CROSSCHECK.md](file:///Users/ulfahanifah/Documents/tracs/docs/DOMAIN_PRICE_CROSSCHECK.md), [DOMAIN_PRICE_CROSSCHECK_ARCHITECTURE.md](file:///Users/ulfahanifah/Documents/tracs/docs/DOMAIN_PRICE_CROSSCHECK_ARCHITECTURE.md), and [DOMAIN_PRICE_CROSSCHECK_AI_MEMORY.md](file:///Users/ulfahanifah/Documents/tracs/docs/DOMAIN_PRICE_CROSSCHECK_AI_MEMORY.md). |
+- Top-level navigation includes Dashboard, Case Management, Reminders, Shift Reports, Infrastructure Pulse, Meetings/MoM, Feedback, Ticker/Alerts, Activity Log, role-gated TV Mode, and role-gated User Management.
+- `Tasks & Monitoring` contains Case / Task Monitoring, Finance, Domain Transfer Log, Domain Pricing Crosscheck, and Checklist according to permissions.
+- Settings, profile, and password changes are accessed through the avatar/profile menu.
+
+## Notifications
+
+- Implemented notification types include new case, reminder creation/due timing, task assignment, meeting timing, and shift-handover reminder.
+- The Attention Center polls every 60 seconds. Browser notifications use the Notification API plus `public/tracs-sw.js` after user permission.
+- The scheduler is `bin/tracs-notification-worker.php`; production should run it from cron.
+- Critical shared request errors can remain visible until manually dismissed.
+- Infrastructure alerts are **Planned** until a real monitoring backend creates them.
+
+## Security And Runtime Invariants
+
+1. Public pages start the hardened session, include `public/auth/auth_check.php`, and apply page permission checks before loading sensitive data.
+2. APIs use `public/api/_bootstrap.php`; mutating requests require CSRF.
+3. Full authentication requires password verification plus TOTP 2FA.
+4. Session IDs regenerate after password verification and successful 2FA.
+5. Use prepared statements, `esc()`, and existing access-control helpers.
+6. Uploads must be content-validated, re-encoded where implemented, and served through permission-checked endpoints.
+7. Keep `public/includes/header.php` as the shared shell and `footer.php` as the shared modal/script owner.
+8. Preserve creator/build signature files and text unchanged.
+9. Production permissions are source `755/644`, secrets `640`, runtime folders/files `750/640` owned by `www-data`, deployment metadata `750/640` owned by the deploy user and readable by `www-data`, backups `700/600`, and `deploy.sh` `750`. Never use `777`.
+10. `server-health.php` and `api/server-health.php` are exact-role `super_admin` only. Do not replace this with a broadly assignable permission.
+11. Server monitoring accepts no path or command input. Keep metrics fixed, scans bounded, logs sanitized, and unavailable states preferable to weaker permissions.
+12. Protected case, shift, and MoM evidence is served through authenticated APIs. Only avatar images are intentionally direct-public under `public/uploads`.
+
+## Documentation Rules
+
+1. Update existing documentation before creating new files.
+2. Create a new Markdown file only when it removes real complexity and does not duplicate existing content.
+3. Use actual routes, modules, schema names, and current behavior.
+4. Label incomplete work as `Planned`, `In Progress`, `Partially Implemented`, or `Legacy`.
+5. Preserve every existing signature block and signature string exactly.
+6. Keep historical package documents under `MOM README/` as legacy reference; use `README_MOM.md` for current MoM behavior.
+7. Do not edit backup-tree documentation as if it were current.
 
 ## Known Constraints
 
-- No real-time websocket layer; most pages refresh or update via local AJAX.
-- Some modules still auto-create legacy tables for migration tolerance.
-- Some legacy table names are intentionally unprefixed: `balance_transfers`, `domain_transfers`, `activity_feed`, `ops_status`.
-- MoM has two API styles: current `api_mom.php` and legacy `mom-action.php`.
-- Root `.env` exists, but `database.php` currently reads PHP `$_ENV`; Docker now configures PHP to expose environment variables to `$_ENV`.
-- External CDN dependencies exist for fonts, lucide, and flatpickr.
-
-## Future AI Agent Instructions
-
-1. Read this file, [ARCHITECTURE.md](/tracs/ARCHITECTURE.md), [HANDOFF.md](/tracs/HANDOFF.md), and [TASKS.md](/tracs/TASKS.md) before major edits.
-2. Inspect live code before updating docs or schema.
-3. Back up targeted docs/config before edits when asked.
-4. Do not delete obsolete files immediately; mark legacy/deprecated and explain migration path.
-5. Do not touch unrelated PHP/CSS/JS while doing documentation/config work.
-6. Preserve TRACS branding and useful project notes.
-7. For risky DB or permission changes, add migration notes and test with at least an admin and a non-admin role.
+- External CDNs are used for fonts, Lucide, and Flatpickr.
+- Docker is for local development; its current image installs `mysqli` but not GD, so case/shift image processing requires a Dockerfile follow-up.
+- `config/database.php` reads `$_ENV`; PHP-FPM/Apache must expose deployment environment values.
+- Some intentionally retained legacy tables are unprefixed: `balance_transfers`, `domain_transfers`, `activity_feed`, and `ops_status`.
+- MoM still has current and legacy API shapes.
+- The worktree may contain intentional user edits and backup folders. Never revert unrelated changes.

@@ -40,7 +40,8 @@ if ($action === 'save_matrix') {
         
         ok($result, $result['message'] ?? 'Matrix saved successfully!');
     } catch (Exception $e) {
-        fail($e->getMessage());
+        error_log('TRACS domain price matrix failed: ' . $e->getMessage());
+        fail(tracs_public_exception_message($e, 'The pricing matrix could not be saved.'));
     }
 }
 

@@ -49,7 +49,7 @@ $infra_js_v = @filemtime(__DIR__ . '/assets/infrastructure-pulse.js') ?: time();
     <div class="infra-topbar__actions">
       <span class="infra-live-chip" title="Simulated telemetry only"><span aria-hidden="true"></span>Mock realtime / <b data-infra-generated-at>--:--:--</b></span>
       <button type="button" class="btn btn-ghost btn-sm" data-infra-manage-open><i data-lucide="server-cog" class="icon-sm"></i>Manage Servers</button>
-      <a href="tv-mode.php" class="btn btn-ghost btn-sm"><i data-lucide="monitor-up" class="icon-sm"></i>TV Mode</a>
+      <a href="tv-mode.php" target="_blank" rel="noopener noreferrer" class="btn btn-ghost btn-sm"><i data-lucide="monitor-up" class="icon-sm"></i>TV Mode</a>
     </div>
   </div>
 
@@ -59,7 +59,7 @@ $infra_js_v = @filemtime(__DIR__ . '/assets/infrastructure-pulse.js') ?: time();
     <section class="panel infra-report-panel">
       <div class="panel-head">
         <div>
-          <span class="panel-title">Infrastructure Summary Report</span>
+          <span class="panel-title">Infrastructure Summary</span>
           <div class="panel-meta">NOC handover view / mock telemetry</div>
         </div>
         <div class="panel-right">

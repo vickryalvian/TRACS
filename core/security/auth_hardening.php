@@ -3,7 +3,7 @@
  * TRACS authentication hardening helpers.
  */
 
-const TRACS_AUTH_GENERIC_INVALID = 'Invalid login credentials.';
+const TRACS_AUTH_GENERIC_INVALID = 'We could not sign you in. Please check your email and password, then try again.';
 const TRACS_AUTH_GENERIC_LOCKED = 'Too many attempts. Please try again later.';
 const TRACS_AUTH_HELP_MESSAGE = 'If you are having trouble logging in, please contact your administrator for further assistance.';
 const TRACS_AUTH_DUMMY_HASH = '$2y$10$uG/.8q0jbJc8f9V6mI8GBeKyUQvubVw7aJ3d3AjzbHMDEZdyx1XmS';

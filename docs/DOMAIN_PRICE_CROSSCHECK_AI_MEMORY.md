@@ -1,8 +1,8 @@
 # AI Memory — Domain Price Crosscheck Module
-Last Updated: 2026-05-20 (ccTLD pricing and template duplication update)
+Last Updated: 2026-06-06 (canonical route, Tasks & Monitoring navigation, compact module tabs)
 
 ## Module Status
-**PRODUCTION READY — Phase 10 Complete**
+**IMPLEMENTED MANUAL OPERATIONAL WORKFLOW**
 
 ## Overview
 A manual-input-first operational ledger for comparing registrar costs vs IDCH selling prices on a monthly basis.
@@ -69,8 +69,10 @@ draft → pending_review → approved
 - `domain_price.approve` — approve, unlock
 
 ### Navigation Placement
-- Primary sidebar location is **Domains → Crosscheck Pricing**.
-- This feature belongs under the Domains sidebar menu, not as a separate top-level item and not inside the Task Management menu.
+- Primary sidebar location is **Tasks & Monitoring → Domain Pricing Crosscheck**.
+- Canonical route is `domain-price-crosscheck.php`.
+- `domain_price_crosscheck.php` is redirect-only and must not be documented as current.
+- Domain Transfer Log is a sibling under the same Tasks & Monitoring menu.
 - Task Management integration remains for assignment/workflow via `domain_price_task_links`.
 
 ### Create-Month UI
@@ -86,6 +88,10 @@ draft → pending_review → approved
 
 ### Pricing Intelligence Summary
 - Summary components: Executive Summary Cards, Priority Findings List, Recommended Website Price Adjustment table, Registrar Source Summary, Exchange Rate Impact Summary, Previous Month Change Summary, and Action Buckets.
+- USD registrar cells update their visible IDR preview immediately in the browser using the selected monthly KURS. This does not persist data or update summaries/history until Save Matrix and Recalculate Summary run.
+- In editable drafts, IDCH Internal Pricing is derived from the lowest active registrar USD value for the same TLD and price type: `USD × KURS × 1.30`. Matrix order breaks equal-price ties. Existing records are not changed until Save Matrix is explicitly used.
+- USD values are formatted at presentation time with no more than two decimal digits for registrar inputs and ccTLD `Harga USD`; this must not normalize stored database values unless a save action already does so.
+- Registrar cheapest-price highlights are computed per TLD and per price type (Register/Renewal). Empty or invalid values are ignored; ties highlight every matching cheapest registrar. The logic is source-count agnostic so additional registrar sources can participate when active.
 - Severity mapping: Below Cost = Critical, Below Target Margin = Warning, Missing Data = Missing, significant cost increase/source change = Review/Warning, Safe = Safe.
 - Suggested actions: Increase Website Price Immediately, Adjust Website Price to Target Margin, Complete Missing Data, Review Registrar Cost Change, Review Source Change, Escalate to Admin/Finance, Keep Current Website Price.
 - Summary filters are client-side and must not alter saved calculation data.
@@ -96,12 +102,16 @@ draft → pending_review → approved
 - ccTLD source groups: PANDI Registry Pricing and IDCH ccTLD Pricing.
 - ccTLD rows use existing price types: `cost_register`, `cost_renewal`, `cost_transfer` as Register, Renewal, Redemption.
 - ccTLD formula: PANDI Registry Pricing as cost, IDCH ccTLD Pricing as current price, 30% target margin.
+- ccTLD check table includes `Harga USD`, calculated as `ceil_to_2_decimals((PANDI base IDR / monthly USD-IDR KURS) * 1.30)`. The division is intentional because this page stores ccTLD base values in IDR while KURS is USD -> IDR.
 - ccTLD statuses: Below Cost, Below Target Margin, Safe, Missing Data, Review.
 - ccTLD import/export remains TODO.
+- Manage Domain Extensions exposes category and sort order per extension. Category edits persist through `update_tld_extension`; superadmin deletion soft-deactivates the extension through `delete_tld_extension` without removing historical monthly price entries.
 
 ### UI / Theme
 - Domain Price Crosscheck has scoped button styling for dark/light mode.
 - Duplicate Month, Recalculate Summary, Save Matrix, New Monthly Record, modal footer buttons, disabled buttons, and warning/danger buttons should stay readable in both themes.
+- Keep the compact tabs: Overview, Price Matrix, Intelligence Summary, ccTLD Check, Website Price Adjustment, Action Buckets, Notes & Follow-ups, Audit Trail.
+- Keep Operational Audit Trail visible and preserve the Latest Audit Activity preview.
 
 ## Known Limitations (V1)
 - No CSV/Excel bulk import

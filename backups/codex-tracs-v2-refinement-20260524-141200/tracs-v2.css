@@ -1,0 +1,674 @@
+/*! TRACS optional visual theme: TRACS V2 polish.
+   Scoped to html[data-visual-theme="tracs-v2"] so the default TRACS
+   design system remains the baseline and rollback is a one-link change. */
+
+html[data-visual-theme="tracs-v2"] {
+  color-scheme: light;
+
+  --tracs-app-bg: #f4f3ee;
+  --tracs-app-bg-alt: #ebe9e2;
+  --tracs-sidebar-bg: #fbfaf6;
+  --tracs-header-bg: color-mix(in srgb, #fffdf8 88%, transparent);
+  --tracs-ticker-bg: #fbfaf6;
+  --tracs-card-bg: #fffefa;
+  --tracs-surface-bg: #fffefa;
+  --tracs-surface-raised-bg: #ffffff;
+  --tracs-modal-bg: #fffefa;
+  --tracs-dropdown-bg: #fffefa;
+  --tracs-input-bg: #f8f7f2;
+  --tracs-row-bg: #fffefa;
+  --tracs-border: #ddd9cf;
+  --tracs-border-strong: #cac5b8;
+  --tracs-divider: #e7e3d9;
+  --tracs-text: #20211f;
+  --tracs-text-secondary: #60625e;
+  --tracs-text-muted: #8a8b84;
+  --tracs-text-disabled: #b6b5ad;
+  --tracs-icon: #6b6d67;
+
+  --tracs-status-critical: #d84c4c;
+  --tracs-status-warning: #c9822f;
+  --tracs-status-success: #2f9f68;
+  --tracs-status-info: #377dbe;
+  --tracs-status-priority: #7b61c6;
+
+  --tracs-critical-bg: rgba(216,76,76,.10);
+  --tracs-warning-bg: rgba(201,130,47,.12);
+  --tracs-success-bg: rgba(47,159,104,.11);
+  --tracs-info-bg: rgba(55,125,190,.10);
+  --tracs-priority-bg: rgba(123,97,198,.11);
+
+  --tracs-button-bg: #20211f;
+  --tracs-button-text: #fffefa;
+  --tracs-button-soft-bg: #f6f4ee;
+  --tracs-hover-bg: #f0eee7;
+  --tracs-active-bg: rgba(55,125,190,.12);
+  --tracs-focus-ring: rgba(55,125,190,.26);
+  --tracs-shadow-soft: 0 7px 20px rgba(42, 39, 32, .055), 0 1px 1px rgba(42, 39, 32, .05);
+  --tracs-shadow-raised: 0 18px 46px rgba(42, 39, 32, .12), 0 4px 12px rgba(42, 39, 32, .07);
+  --tracs-radius-card: 8px;
+  --tracs-radius-control: 8px;
+  --tracs-scrollbar-thumb: #bbb6aa;
+
+  --bg: var(--tracs-app-bg);
+  --bg2: var(--tracs-app-bg-alt);
+  --s1: var(--tracs-surface-bg);
+  --s2: var(--tracs-input-bg);
+  --s3: #f0eee7;
+  --s4: #e7e3d9;
+  --s5: #d8d2c5;
+  --bd1: var(--tracs-border);
+  --bd2: #d1ccc0;
+  --bd3: var(--tracs-border-strong);
+  --bd4: #aaa397;
+  --border-color: var(--tracs-border);
+  --tx1: var(--tracs-text);
+  --tx2: var(--tracs-text-secondary);
+  --tx3: var(--tracs-text-muted);
+  --tx4: var(--tracs-text-disabled);
+  --blue: var(--tracs-status-info);
+  --blue-dk: #276cad;
+  --blue-lt: var(--tracs-info-bg);
+  --blue-bd: rgba(55,125,190,.22);
+  --blue-glow: rgba(55,125,190,.14);
+  --red: var(--tracs-status-critical);
+  --red-lt: var(--tracs-critical-bg);
+  --red-bd: rgba(216,76,76,.24);
+  --amber: var(--tracs-status-warning);
+  --amber-lt: var(--tracs-warning-bg);
+  --amber-bd: rgba(201,130,47,.26);
+  --green: var(--tracs-status-success);
+  --green-lt: var(--tracs-success-bg);
+  --green-bd: rgba(47,159,104,.24);
+  --purple: var(--tracs-status-priority);
+  --purple-lt: var(--tracs-priority-bg);
+  --purple-bd: rgba(123,97,198,.24);
+  --cyan: #2e93a8;
+  --cyan-lt: rgba(46,147,168,.10);
+  --cyan-bd: rgba(46,147,168,.24);
+  --shadow: var(--tracs-shadow-soft);
+  --shadow-lg: var(--tracs-shadow-raised);
+  --radius: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --r: var(--tracs-radius-control);
+  --r2: var(--tracs-radius-card);
+  --r3: var(--radius-lg);
+  --r4: var(--radius-xl);
+  --card-padding: 13px 15px 12px;
+  --panel-padding: 14px;
+  --gap: 12px;
+}
+
+html[data-visual-theme="tracs-v2"][data-theme="dark"] {
+  color-scheme: dark;
+
+  --tracs-app-bg: #11171d;
+  --tracs-app-bg-alt: #0e1318;
+  --tracs-sidebar-bg: #0b1014;
+  --tracs-header-bg: color-mix(in srgb, #192027 88%, transparent);
+  --tracs-ticker-bg: #151c23;
+  --tracs-card-bg: #1a2027;
+  --tracs-surface-bg: #1a2027;
+  --tracs-surface-raised-bg: #202730;
+  --tracs-modal-bg: #1d242c;
+  --tracs-dropdown-bg: #202730;
+  --tracs-input-bg: #151b22;
+  --tracs-row-bg: #1c232b;
+  --tracs-border: #303842;
+  --tracs-border-strong: #404a56;
+  --tracs-divider: #29313a;
+  --tracs-text: #f2f3ef;
+  --tracs-text-secondary: #c4c8c2;
+  --tracs-text-muted: #969d9b;
+  --tracs-text-disabled: #686f72;
+  --tracs-icon: #aab0ae;
+
+  --tracs-status-critical: #ff7b78;
+  --tracs-status-warning: #e5ad61;
+  --tracs-status-success: #63c58d;
+  --tracs-status-info: #7ab4f4;
+  --tracs-status-priority: #b79af7;
+
+  --tracs-critical-bg: rgba(255,123,120,.12);
+  --tracs-warning-bg: rgba(229,173,97,.13);
+  --tracs-success-bg: rgba(99,197,141,.12);
+  --tracs-info-bg: rgba(122,180,244,.12);
+  --tracs-priority-bg: rgba(183,154,247,.13);
+
+  --tracs-button-bg: #f2f3ef;
+  --tracs-button-text: #151b22;
+  --tracs-button-soft-bg: #242c35;
+  --tracs-hover-bg: #232b34;
+  --tracs-active-bg: rgba(122,180,244,.15);
+  --tracs-focus-ring: rgba(122,180,244,.28);
+  --tracs-shadow-soft: 0 15px 34px rgba(0,0,0,.28), 0 1px 0 rgba(255,255,255,.025) inset;
+  --tracs-shadow-raised: 0 28px 70px rgba(0,0,0,.52), 0 1px 0 rgba(255,255,255,.045) inset;
+  --tracs-scrollbar-thumb: #4f5965;
+}
+
+html[data-visual-theme="tracs-v2"] body {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg) 92%, var(--s1) 8%), var(--bg));
+  color: var(--tx1);
+}
+
+html[data-visual-theme="tracs-v2"] .main,
+html[data-visual-theme="tracs-v2"] .mom-workspace,
+html[data-visual-theme="tracs-v2"] .mom-sidebar,
+html[data-visual-theme="tracs-v2"] .login-shell {
+  background: var(--bg);
+}
+
+html[data-visual-theme="tracs-v2"] .main-inner {
+  gap: var(--gap);
+}
+
+html[data-visual-theme="tracs-v2"] .sidebar {
+  background: var(--tracs-sidebar-bg);
+  border-right-color: var(--tracs-divider);
+  box-shadow: 1px 0 0 color-mix(in srgb, var(--tracs-divider) 80%, transparent);
+}
+
+html[data-visual-theme="tracs-v2"] .sidebar-bottom {
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--tracs-sidebar-bg) 90%, var(--bg) 10%));
+}
+
+html[data-visual-theme="tracs-v2"] .nav-item,
+html[data-visual-theme="tracs-v2"] .theme-toggle {
+  color: var(--tracs-icon);
+  border-radius: var(--r);
+}
+
+html[data-visual-theme="tracs-v2"] .nav-item:hover,
+html[data-visual-theme="tracs-v2"] .theme-toggle:hover {
+  background: var(--tracs-hover-bg);
+  border-color: var(--bd1);
+  color: var(--tx1);
+}
+
+html[data-visual-theme="tracs-v2"] .nav-item.active,
+html[data-visual-theme="tracs-v2"] .nav-submenu a.active,
+html[data-visual-theme="tracs-v2"] .filter-tab.active {
+  background: var(--tracs-active-bg);
+  border-color: var(--blue-bd);
+  color: var(--blue);
+}
+
+html[data-visual-theme="tracs-v2"] .nav-submenu,
+html[data-visual-theme="tracs-v2"] .theme-menu,
+html[data-visual-theme="tracs-v2"] .user-menu,
+html[data-visual-theme="tracs-v2"] .tracs-select-menu,
+html[data-visual-theme="tracs-v2"] .report-export-popover,
+html[data-visual-theme="tracs-v2"] .notif-dropdown,
+html[data-visual-theme="tracs-v2"] .row-action-popover {
+  background: var(--tracs-dropdown-bg);
+  border-color: var(--bd1);
+  box-shadow: var(--shadow-lg);
+}
+
+html[data-visual-theme="tracs-v2"] .nav-tip {
+  background: var(--tx1);
+  color: var(--s1);
+  border-color: color-mix(in srgb, var(--tx1) 78%, transparent);
+  box-shadow: 0 12px 28px rgba(20, 24, 30, .18);
+}
+
+html[data-visual-theme="tracs-v2"][data-theme="dark"] .nav-tip {
+  background: #262f38;
+  color: var(--tx1);
+  border-color: var(--bd3);
+  box-shadow: 0 18px 40px rgba(0,0,0,.42);
+}
+
+html[data-visual-theme="tracs-v2"] .ticker-bar {
+  background: var(--tracs-ticker-bg);
+  border-bottom-color: var(--tracs-divider);
+}
+
+html[data-visual-theme="tracs-v2"] .ticker-live {
+  background: color-mix(in srgb, var(--red) 88%, #222 12%);
+  color: #fff;
+}
+
+html[data-visual-theme="tracs-v2"] .ticker-btn {
+  border-left-color: var(--tracs-divider);
+}
+
+html[data-visual-theme="tracs-v2"] .topbar {
+  background: transparent;
+  border-bottom-color: var(--tracs-divider);
+}
+
+html[data-visual-theme="tracs-v2"] .page-title,
+html[data-visual-theme="tracs-v2"] .panel-title,
+html[data-visual-theme="tracs-v2"] .modal-title,
+html[data-visual-theme="tracs-v2"] .profile-name {
+  color: var(--tx1);
+}
+
+html[data-visual-theme="tracs-v2"] .page-sub,
+html[data-visual-theme="tracs-v2"] .panel-meta,
+html[data-visual-theme="tracs-v2"] .modal-sub,
+html[data-visual-theme="tracs-v2"] .profile-email,
+html[data-visual-theme="tracs-v2"] .act-desc,
+html[data-visual-theme="tracs-v2"] .act-time {
+  color: var(--tx3);
+}
+
+html[data-visual-theme="tracs-v2"] .panel,
+html[data-visual-theme="tracs-v2"] .stat-card,
+html[data-visual-theme="tracs-v2"] .profile-card,
+html[data-visual-theme="tracs-v2"] .profile-section-panel,
+html[data-visual-theme="tracs-v2"] .mom-header,
+html[data-visual-theme="tracs-v2"] .mom-card,
+html[data-visual-theme="tracs-v2"] .mom-section,
+html[data-visual-theme="tracs-v2"] .infra-summary-card,
+html[data-visual-theme="tracs-v2"] .infra-map-card,
+html[data-visual-theme="tracs-v2"] .dpc-card,
+html[data-visual-theme="tracs-v2"] .dpc-toolbar,
+html[data-visual-theme="tracs-v2"] .login-card {
+  background: var(--tracs-card-bg);
+  border-color: var(--tracs-border);
+  border-radius: var(--tracs-radius-card);
+  box-shadow: var(--tracs-shadow-soft);
+}
+
+html[data-visual-theme="tracs-v2"] .panel-head,
+html[data-visual-theme="tracs-v2"] .modal-head,
+html[data-visual-theme="tracs-v2"] .login-top,
+html[data-visual-theme="tracs-v2"] .login-foot {
+  background: color-mix(in srgb, var(--s2) 78%, var(--s1));
+  border-color: var(--tracs-divider);
+}
+
+html[data-visual-theme="tracs-v2"] .stat-card:hover,
+html[data-visual-theme="tracs-v2"] .panel:hover {
+  border-color: var(--bd2);
+  box-shadow: var(--tracs-shadow-soft);
+}
+
+html[data-visual-theme="tracs-v2"] .stat-label,
+html[data-visual-theme="tracs-v2"] .form-label,
+html[data-visual-theme="tracs-v2"] .filter-tab,
+html[data-visual-theme="tracs-v2"] th {
+  color: var(--tx3);
+}
+
+html[data-visual-theme="tracs-v2"] .stat-num,
+html[data-visual-theme="tracs-v2"] .stat-main,
+html[data-visual-theme="tracs-v2"] td,
+html[data-visual-theme="tracs-v2"] .item-title,
+html[data-visual-theme="tracs-v2"] .task-title,
+html[data-visual-theme="tracs-v2"] .rem-title,
+html[data-visual-theme="tracs-v2"] .case-title,
+html[data-visual-theme="tracs-v2"] .mom-title {
+  color: var(--tx1);
+}
+
+html[data-visual-theme="tracs-v2"] .btn,
+html[data-visual-theme="tracs-v2"] .filter-tab,
+html[data-visual-theme="tracs-v2"] .theme-option,
+html[data-visual-theme="tracs-v2"] .tracs-select-trigger,
+html[data-visual-theme="tracs-v2"] .quick-time-btn,
+html[data-visual-theme="tracs-v2"] .report-export-trigger {
+  border-radius: var(--tracs-radius-control);
+}
+
+html[data-visual-theme="tracs-v2"] .btn-primary,
+html[data-visual-theme="tracs-v2"] .btn-login {
+  background: var(--tracs-button-bg);
+  border-color: color-mix(in srgb, var(--tracs-button-bg) 80%, var(--bd1));
+  color: var(--tracs-button-text);
+  box-shadow: 0 1px 0 color-mix(in srgb, #fff 22%, transparent) inset, 0 10px 18px rgba(24, 27, 31, .08);
+}
+
+html[data-visual-theme="tracs-v2"] .btn-primary:hover,
+html[data-visual-theme="tracs-v2"] .btn-login:hover {
+  background: color-mix(in srgb, var(--tracs-button-bg) 92%, var(--blue) 8%);
+  border-color: color-mix(in srgb, var(--tracs-button-bg) 70%, var(--blue) 30%);
+  box-shadow: 0 12px 24px rgba(24, 27, 31, .12);
+  transform: translateY(-1px);
+}
+
+html[data-visual-theme="tracs-v2"] .btn-ghost,
+html[data-visual-theme="tracs-v2"] .btn-secondary,
+html[data-visual-theme="tracs-v2"] .btn-outline {
+  background: var(--tracs-button-soft-bg);
+  border-color: var(--bd1);
+  color: var(--tx2);
+}
+
+html[data-visual-theme="tracs-v2"] .btn-ghost:hover,
+html[data-visual-theme="tracs-v2"] .btn-secondary:hover,
+html[data-visual-theme="tracs-v2"] .btn-outline:hover,
+html[data-visual-theme="tracs-v2"] .filter-tab:hover,
+html[data-visual-theme="tracs-v2"] .theme-option:hover,
+html[data-visual-theme="tracs-v2"] .tracs-select-option:hover {
+  background: var(--tracs-hover-bg);
+  border-color: var(--bd2);
+  color: var(--tx1);
+}
+
+html[data-visual-theme="tracs-v2"] .btn:focus-visible,
+html[data-visual-theme="tracs-v2"] .nav-item:focus-visible,
+html[data-visual-theme="tracs-v2"] .ticker-btn:focus-visible,
+html[data-visual-theme="tracs-v2"] .form-input:focus,
+html[data-visual-theme="tracs-v2"] .form-select:focus,
+html[data-visual-theme="tracs-v2"] .form-textarea:focus,
+html[data-visual-theme="tracs-v2"] .tracs-select-trigger:focus-visible {
+  outline-color: var(--blue);
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px var(--tracs-focus-ring);
+}
+
+html[data-visual-theme="tracs-v2"] .form-input,
+html[data-visual-theme="tracs-v2"] .form-select,
+html[data-visual-theme="tracs-v2"] .form-textarea,
+html[data-visual-theme="tracs-v2"] .search-input,
+html[data-visual-theme="tracs-v2"] .compact-select,
+html[data-visual-theme="tracs-v2"] .tracs-select-trigger {
+  background: var(--tracs-input-bg);
+  border-color: var(--bd1);
+  color: var(--tx1);
+}
+
+html[data-visual-theme="tracs-v2"] .form-input:hover,
+html[data-visual-theme="tracs-v2"] .form-select:hover,
+html[data-visual-theme="tracs-v2"] .form-textarea:hover,
+html[data-visual-theme="tracs-v2"] .search-input:hover,
+html[data-visual-theme="tracs-v2"] .compact-select:hover,
+html[data-visual-theme="tracs-v2"] .tracs-select-trigger:hover {
+  background: color-mix(in srgb, var(--tracs-input-bg) 74%, var(--s1));
+  border-color: var(--bd2);
+}
+
+html[data-visual-theme="tracs-v2"] .badge,
+html[data-visual-theme="tracs-v2"] .ops-badge,
+html[data-visual-theme="tracs-v2"] .panel-counter,
+html[data-visual-theme="tracs-v2"] .mom-badge,
+html[data-visual-theme="tracs-v2"] .infra-status-pill,
+html[data-visual-theme="tracs-v2"] .dpc-badge {
+  border-radius: 999px;
+  box-shadow: none;
+}
+
+html[data-visual-theme="tracs-v2"] .b-critical,
+html[data-visual-theme="tracs-v2"] .ops-critical,
+html[data-visual-theme="tracs-v2"] .btn-danger,
+html[data-visual-theme="tracs-v2"] .tracs-alert.alert-danger {
+  background: var(--red-lt);
+  border-color: var(--red-bd);
+  color: var(--red);
+}
+
+html[data-visual-theme="tracs-v2"] .b-high,
+html[data-visual-theme="tracs-v2"] .b-warning,
+html[data-visual-theme="tracs-v2"] .ops-warning,
+html[data-visual-theme="tracs-v2"] .btn-warning {
+  background: var(--amber-lt);
+  border-color: var(--amber-bd);
+  color: var(--amber);
+}
+
+html[data-visual-theme="tracs-v2"] .b-active,
+html[data-visual-theme="tracs-v2"] .b-completed,
+html[data-visual-theme="tracs-v2"] .ops-solved,
+html[data-visual-theme="tracs-v2"] .btn-success,
+html[data-visual-theme="tracs-v2"] .success-box {
+  background: var(--green-lt);
+  border-color: var(--green-bd);
+  color: var(--green);
+}
+
+html[data-visual-theme="tracs-v2"] .b-info,
+html[data-visual-theme="tracs-v2"] .b-medium,
+html[data-visual-theme="tracs-v2"] .ops-info,
+html[data-visual-theme="tracs-v2"] .panel-counter.is-low {
+  background: var(--blue-lt);
+  border-color: var(--blue-bd);
+  color: var(--blue);
+}
+
+html[data-visual-theme="tracs-v2"] .b-stuck,
+html[data-visual-theme="tracs-v2"] .b-priority,
+html[data-visual-theme="tracs-v2"] .shift-priority.stuck {
+  background: var(--purple-lt);
+  border-color: var(--purple-bd);
+  color: var(--purple);
+}
+
+html[data-visual-theme="tracs-v2"] .b-done,
+html[data-visual-theme="tracs-v2"] .b-low {
+  background: color-mix(in srgb, var(--s3) 76%, transparent);
+  border-color: var(--bd1);
+  color: var(--tx3);
+}
+
+html[data-visual-theme="tracs-v2"] table,
+html[data-visual-theme="tracs-v2"] .data-table,
+html[data-visual-theme="tracs-v2"] .table-wrap {
+  border-color: var(--tracs-border);
+}
+
+html[data-visual-theme="tracs-v2"] thead,
+html[data-visual-theme="tracs-v2"] .table-head {
+  background: color-mix(in srgb, var(--s2) 82%, var(--s1));
+}
+
+html[data-visual-theme="tracs-v2"] tr,
+html[data-visual-theme="tracs-v2"] .task-row,
+html[data-visual-theme="tracs-v2"] .rem-row,
+html[data-visual-theme="tracs-v2"] .case-row,
+html[data-visual-theme="tracs-v2"] .act-row,
+html[data-visual-theme="tracs-v2"] .domain-row,
+html[data-visual-theme="tracs-v2"] .um-user-card,
+html[data-visual-theme="tracs-v2"] .um-log-row,
+html[data-visual-theme="tracs-v2"] .notif-drop-item {
+  border-color: var(--tracs-divider);
+}
+
+html[data-visual-theme="tracs-v2"] tbody tr:hover,
+html[data-visual-theme="tracs-v2"] .task-row:hover,
+html[data-visual-theme="tracs-v2"] .rem-row:hover,
+html[data-visual-theme="tracs-v2"] .case-row:hover,
+html[data-visual-theme="tracs-v2"] .act-row:hover,
+html[data-visual-theme="tracs-v2"] .domain-row:hover,
+html[data-visual-theme="tracs-v2"] .um-log-row:hover,
+html[data-visual-theme="tracs-v2"] .notif-drop-item:hover {
+  background: color-mix(in srgb, var(--tracs-hover-bg) 78%, transparent);
+}
+
+html[data-visual-theme="tracs-v2"] .modal-overlay {
+  background: rgba(18, 19, 18, .44);
+  backdrop-filter: blur(6px);
+}
+
+html[data-visual-theme="tracs-v2"][data-theme="dark"] .modal-overlay {
+  background: rgba(0, 0, 0, .58);
+}
+
+html[data-visual-theme="tracs-v2"] .modal,
+html[data-visual-theme="tracs-v2"] .avatar-crop-modal,
+html[data-visual-theme="tracs-v2"] .infra-modal {
+  background: var(--tracs-modal-bg);
+  border-color: var(--bd1);
+  border-radius: var(--tracs-radius-card);
+  box-shadow: var(--tracs-shadow-raised);
+}
+
+html[data-visual-theme="tracs-v2"] .empty,
+html[data-visual-theme="tracs-v2"] .um-empty-state,
+html[data-visual-theme="tracs-v2"] .dpc-empty-state,
+html[data-visual-theme="tracs-v2"] .infra-empty-state {
+  color: var(--tx3);
+  background: color-mix(in srgb, var(--s2) 58%, transparent);
+  border-color: var(--bd1);
+}
+
+html[data-visual-theme="tracs-v2"] .prog-track,
+html[data-visual-theme="tracs-v2"] .profile-strength-track,
+html[data-visual-theme="tracs-v2"] .um-capacity-track,
+html[data-visual-theme="tracs-v2"] .progress-track {
+  background: var(--s3);
+  border-color: var(--bd1);
+}
+
+html[data-visual-theme="tracs-v2"] .prog-fill,
+html[data-visual-theme="tracs-v2"] .profile-strength-track span,
+html[data-visual-theme="tracs-v2"] .progress-fill {
+  background: linear-gradient(90deg, var(--green), color-mix(in srgb, var(--blue) 78%, var(--green)));
+}
+
+html[data-visual-theme="tracs-v2"] .login-shell {
+  background:
+    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--blue-lt) 62%, transparent), transparent 36%),
+    var(--bg);
+}
+
+html[data-visual-theme="tracs-v2"] .login-grid {
+  opacity: .24;
+  background-image:
+    linear-gradient(var(--bd1) 1px, transparent 1px),
+    linear-gradient(90deg, var(--bd1) 1px, transparent 1px);
+}
+
+html[data-visual-theme="tracs-v2"] .login-card {
+  overflow: hidden;
+}
+
+html[data-visual-theme="tracs-v2"] .login-p,
+html[data-visual-theme="tracs-v2"] .login-help {
+  color: var(--tx3);
+}
+
+html[data-visual-theme="tracs-v2"] .err-box,
+html[data-visual-theme="tracs-v2"] .two-factor-alert {
+  background: var(--red-lt);
+  border-color: var(--red-bd);
+  color: var(--red);
+}
+
+html[data-visual-theme="tracs-v2"] .user-menu-head,
+html[data-visual-theme="tracs-v2"] .profile-facts div,
+html[data-visual-theme="tracs-v2"] .profile-readonly-grid div {
+  background: color-mix(in srgb, var(--s2) 72%, transparent);
+  border-color: var(--bd1);
+}
+
+html[data-visual-theme="tracs-v2"] .user-menu a,
+html[data-visual-theme="tracs-v2"] .user-menu-logout button,
+html[data-visual-theme="tracs-v2"] .theme-option,
+html[data-visual-theme="tracs-v2"] .tracs-select-option {
+  color: var(--tx2);
+}
+
+html[data-visual-theme="tracs-v2"] .user-menu a:hover,
+html[data-visual-theme="tracs-v2"] .user-menu-logout button:hover {
+  background: var(--tracs-hover-bg);
+  color: var(--tx1);
+}
+
+html[data-visual-theme="tracs-v2"] .toast {
+  background: var(--tracs-surface-raised-bg);
+  border-color: var(--bd1);
+  color: var(--tx1);
+  box-shadow: var(--tracs-shadow-raised);
+}
+
+html[data-visual-theme="tracs-v2"] .tracs-domain-price-crosscheck {
+  --dpc-glow: radial-gradient(circle at top right, color-mix(in srgb, var(--blue) 9%, transparent), transparent 62%);
+  --dpc-shadow-card: var(--tracs-shadow-soft);
+  --dpc-radius-card: var(--tracs-radius-card);
+  --dpc-radius-control: var(--tracs-radius-control);
+  --dpc-radius-modal: var(--tracs-radius-card);
+}
+
+html[data-visual-theme="tracs-v2"] .tracs-domain-price-crosscheck .dpc-toolbar,
+html[data-visual-theme="tracs-v2"] .tracs-domain-price-crosscheck .dpc-page-section,
+html[data-visual-theme="tracs-v2"] .tracs-domain-price-crosscheck .dpc-summary-card,
+html[data-visual-theme="tracs-v2"] .tracs-domain-price-crosscheck .dpc-extension-card {
+  background: var(--tracs-card-bg);
+  border-color: var(--tracs-border);
+  box-shadow: var(--tracs-shadow-soft);
+}
+
+html[data-visual-theme="tracs-v2"] .infra-page {
+  --infra-degraded: #d48646;
+}
+
+html[data-visual-theme="tracs-v2"] .infra-summary-card,
+html[data-visual-theme="tracs-v2"] .infra-service-card,
+html[data-visual-theme="tracs-v2"] .infra-settings-grid article {
+  background: var(--tracs-card-bg);
+  border-color: var(--tracs-border);
+}
+
+html[data-visual-theme="tracs-v2"] .mom-sidebar {
+  border-left-color: var(--tracs-divider);
+}
+
+html[data-visual-theme="tracs-v2"] .mom-card,
+html[data-visual-theme="tracs-v2"] .mom-note,
+html[data-visual-theme="tracs-v2"] .mom-decision,
+html[data-visual-theme="tracs-v2"] .action-item,
+html[data-visual-theme="tracs-v2"] .quick-action-item {
+  background: var(--tracs-card-bg);
+  border-color: var(--tracs-border);
+}
+
+html[data-visual-theme="tracs-v2"] .tv-mode-body {
+  background:
+    radial-gradient(circle at 18% 12%, color-mix(in srgb, var(--blue-lt) 82%, transparent), transparent 28%),
+    linear-gradient(135deg, var(--bg), var(--bg2));
+}
+
+html[data-visual-theme="tracs-v2"] .tv-mode {
+  --tv-panel: color-mix(in srgb, var(--tracs-card-bg) 92%, transparent);
+}
+
+html[data-visual-theme="tracs-v2"] .tv-mode__bar,
+html[data-visual-theme="tracs-v2"] .tv-panel,
+html[data-visual-theme="tracs-v2"] .tv-metric,
+html[data-visual-theme="tracs-v2"] .tv-ticker {
+  background: var(--tv-panel);
+  border-color: var(--tracs-border);
+  box-shadow: var(--tracs-shadow-soft);
+}
+
+html[data-visual-theme="tracs-v2"] .not-found-shell {
+  color: var(--tx1);
+}
+
+html[data-visual-theme="tracs-v2"] ::selection {
+  background: var(--tracs-focus-ring);
+  color: var(--tx1);
+}
+
+html[data-visual-theme="tracs-v2"] ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+html[data-visual-theme="tracs-v2"] ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+html[data-visual-theme="tracs-v2"] ::-webkit-scrollbar-thumb {
+  background: var(--tracs-scrollbar-thumb);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+
+html[data-visual-theme="tracs-v2"] * {
+  scrollbar-color: var(--tracs-scrollbar-thumb) transparent;
+  scrollbar-width: thin;
+}
+
+@media (max-width: 900px) {
+  html[data-visual-theme="tracs-v2"] {
+    --panel-padding: 12px;
+    --gap: 10px;
+  }
+}

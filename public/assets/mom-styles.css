@@ -12,7 +12,7 @@
 
 .mom-workspace {
   display: flex;
-  gap: 12px;
+  gap: var(--page-section-gap, var(--gap));
   flex: 1 1 auto;
   height: auto;
   min-height: 0;
@@ -32,7 +32,7 @@
   scroll-padding-bottom: 12px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--page-section-gap, var(--gap));
 }
 
 .mom-sidebar {
@@ -44,7 +44,7 @@
   overflow-x: hidden;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--page-section-gap, var(--gap));
   padding: 12px;
   scroll-padding-bottom: 12px;
   border-left: 1px solid var(--bd1);
@@ -1039,7 +1039,7 @@
 .mom-list-layout {
   display: grid;
   grid-template-columns: minmax(0, 6.5fr) minmax(360px, 3.5fr);
-  gap: 12px;
+  gap: var(--page-section-gap, var(--gap));
   align-items: start;
 }
 
@@ -1175,7 +1175,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--page-section-gap, var(--gap));
 }
 
 .mom-history-head {

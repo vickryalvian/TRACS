@@ -99,7 +99,7 @@ include 'includes/header.php';
         $tdate_fmt=$tdate?date('d M Y',strtotime($tdate)):'';
       ?>
       <tr class="checkable-row <?=$tdone?'is-completed':''?>" data-tid="<?=$tid?>" data-completed="<?=$tdone?'1':'0'?>" data-title="<?=esc($t['title']??'')?>" data-desc="<?=esc($t['description']??'')?>">
-        <td style="text-align:center"><input type="checkbox" class="rem-check task-chk" <?=$tdone?'checked':''?> onchange="toggleTask(<?=$tid?>,this.checked)"></td>
+        <td style="text-align:center"><input type="checkbox" class="rem-check task-chk" <?=$tdone?'checked':''?> onchange="toggleTask(<?=$tid?>,this)"></td>
         <td style="max-width:300px">
           <div style="font-weight:500;color:var(--tx1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" class="task-title <?=$tdone?'done':''?>"><?=$ttit?></div>
           <?php if($tdesc):?><div class="task-sub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="<?=$tdesc?>"><?=$tdesc?></div><?php endif;?>
@@ -111,7 +111,7 @@ include 'includes/header.php';
             <summary class="btn btn-ghost btn-icon" title="Actions" aria-label="Row actions"><i data-lucide="more-vertical" class="icon-sm"></i></summary>
             <div class="row-action-popover">
               <button class="btn btn-ghost btn-sm" type="button" onclick="openEditTask(<?=$tid?>)">Edit</button>
-              <button class="btn btn-danger btn-sm" type="button" onclick="deleteTask(<?=$tid?>)">Delete</button>
+              <button class="btn btn-danger btn-sm" type="button" onclick="deleteTask(<?=$tid?>,this)">Delete</button>
             </div>
           </details>
         </td>

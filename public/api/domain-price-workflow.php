@@ -50,7 +50,8 @@ if ($action === 'save_tld_note') {
         
         ok($result, 'Note saved successfully!');
     } catch (Exception $e) {
-        fail($e->getMessage());
+        error_log('TRACS domain price workflow failed: ' . $e->getMessage());
+        fail(tracs_public_exception_message($e, 'The pricing workflow could not be updated.'));
     }
 }
 

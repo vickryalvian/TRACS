@@ -18,7 +18,7 @@ function mom_legacy_fail(string $error='Error', int $code=400): void {
 }
 
 if(!$MC->isInstalled()) {
-  mom_legacy_fail('MOM database tables are not installed. Run config/mom_database_schema.sql first.', 503);
+  mom_legacy_fail('MOM storage is not available.', 503);
 }
 
 try {

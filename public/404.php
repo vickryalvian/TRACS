@@ -5,6 +5,7 @@ if (!headers_sent()) {
 require_once __DIR__ . '/../core/security/csrf.php';
 tracs_start_session();
 $dashboardHref = '/index.php';
+$_css_v = @filemtime(__DIR__ . '/assets/tracs.css') ?: time();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -13,9 +14,7 @@ $dashboardHref = '/index.php';
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>TRACS — 404 Page Not Found</title>
 <?php include __DIR__ . '/includes/theme_bootstrap.php'; ?>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/tracs.css">
+<link rel="stylesheet" href="/assets/tracs.css?v=<?=$_css_v?>">
 <style>
   html, body { min-height: 100%; overflow: auto; }
   body {

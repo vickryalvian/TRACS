@@ -6,6 +6,16 @@
 .tracs-domain-price-crosscheck {
   --dpc-glow: radial-gradient(circle at top right, rgba(59, 130, 246, 0.05), transparent 60%);
   --dpc-shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.03);
+  --dpc-radius-card: var(--r2);
+  --dpc-radius-control: var(--r);
+  --dpc-radius-modal: var(--r2);
+  --dpc-cheapest-bg: color-mix(in srgb, var(--green-lt) 64%, var(--s1));
+  --dpc-cheapest-bd: color-mix(in srgb, var(--green) 58%, var(--green-bd));
+  --dpc-section-gap: 12px;
+  --dpc-card-padding: 10px;
+  --dpc-table-divider: color-mix(in srgb, var(--bd1) 82%, var(--tx3));
+  --dpc-table-divider-strong: color-mix(in srgb, var(--bd2) 86%, var(--tx3));
+  --dpc-highlight-divider: color-mix(in srgb, var(--blue-bd) 76%, var(--bd1));
 }
 
 [data-theme="dark"] .tracs-domain-price-crosscheck {
@@ -32,7 +42,7 @@
 }
 
 .tracs-domain-price-crosscheck .btn {
-  border-radius: var(--r);
+  border-radius: var(--dpc-radius-control, var(--r));
   border: 1px solid var(--bd2);
   box-shadow: none;
   gap: 6px;
@@ -488,10 +498,10 @@
 
 /* --- Pricing Intelligence Summary --- */
 .tracs-domain-price-crosscheck .dpc-intelligence-panel {
-  --dpc-summary-gutter: 16px;
+  --dpc-summary-gutter: 12px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 9px;
   padding: 0 var(--dpc-summary-gutter) var(--dpc-summary-gutter);
 }
 
@@ -504,7 +514,7 @@
 .tracs-domain-price-crosscheck .dpc-exec-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  gap: 7px;
 }
 
 .tracs-domain-price-crosscheck .dpc-exec-grid-compact {
@@ -514,11 +524,11 @@
 .tracs-domain-price-crosscheck .dpc-intel-card {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  min-height: 78px;
-  padding: 10px 12px;
+  gap: 2px;
+  min-height: 62px;
+  padding: 8px 10px;
   border: 1px solid var(--bd1);
-  border-radius: var(--r);
+  border-radius: var(--dpc-radius-card);
   background: var(--s2);
 }
 
@@ -532,14 +542,14 @@
 
 .tracs-domain-price-crosscheck .dpc-intel-card strong {
   color: var(--tx1);
-  font-size: 20px;
+  font-size: 18px;
   line-height: 1.1;
   font-family: var(--mono);
 }
 
 .tracs-domain-price-crosscheck .dpc-intel-card small {
   color: var(--tx3);
-  font-size: 11px;
+  font-size: 10.5px;
   line-height: 1.35;
 }
 
@@ -552,7 +562,7 @@
 .tracs-domain-price-crosscheck .dpc-summary-filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
 
 .tracs-domain-price-crosscheck .dpc-summary-filters .active {
@@ -564,7 +574,7 @@
 .tracs-domain-price-crosscheck .dpc-intel-layout {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 9px;
 }
 
 .tracs-domain-price-crosscheck .dpc-intel-section {
@@ -572,7 +582,7 @@
   border-top: 1px solid var(--bd1);
   border-radius: 0;
   background: transparent;
-  padding: 14px 0 0;
+  padding: 10px 0 0;
 }
 
 .tracs-domain-price-crosscheck .dpc-section-head {
@@ -580,7 +590,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 10px;
+  margin-bottom: 7px;
 }
 
 .tracs-domain-price-crosscheck .dpc-section-head h3 {
@@ -595,23 +605,56 @@
 }
 
 .tracs-domain-price-crosscheck .dpc-subhead {
-  margin-top: 14px;
+  margin-top: 10px;
 }
 
 .tracs-domain-price-crosscheck .dpc-findings-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 420px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  max-height: 390px;
   overflow: auto;
   padding: 2px 4px 2px 0;
 }
 
+.tracs-domain-price-crosscheck .dpc-finding-column {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.tracs-domain-price-crosscheck .dpc-finding-column-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 30px;
+  padding: 6px 9px;
+  border: 1px solid var(--bd1);
+  border-radius: var(--dpc-radius-control, var(--r));
+  background: var(--s1);
+  color: var(--tx1);
+}
+
+.tracs-domain-price-crosscheck .dpc-finding-column-head strong {
+  font-size: 12px;
+}
+
+.tracs-domain-price-crosscheck .dpc-finding-column-head span {
+  color: var(--tx3);
+  font-size: 10px;
+  font-family: var(--mono);
+}
+
 .tracs-domain-price-crosscheck .dpc-finding-row {
   border: 1px solid var(--bd1);
-  border-radius: var(--r);
+  border-radius: var(--dpc-radius-card);
   background: var(--s2);
-  padding: 12px 14px;
+  padding: 9px 10px;
 }
 
 .tracs-domain-price-crosscheck .dpc-finding-main {
@@ -619,7 +662,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .tracs-domain-price-crosscheck .dpc-finding-main strong {
@@ -661,8 +704,8 @@
 
 .tracs-domain-price-crosscheck .dpc-finding-metrics {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
-  gap: 7px 10px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 5px 8px;
 }
 
 .tracs-domain-price-crosscheck .dpc-finding-metrics span {
@@ -680,9 +723,9 @@
 }
 
 .tracs-domain-price-crosscheck .dpc-finding-action {
-  margin-top: 8px;
+  margin-top: 6px;
   color: var(--tx2);
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
 }
 
@@ -691,20 +734,20 @@
 .tracs-domain-price-crosscheck .dpc-bucket-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .tracs-domain-price-crosscheck .dpc-bucket-list {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  align-items: stretch;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
 }
 
 .tracs-domain-price-crosscheck .dpc-source-row {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 2px 10px;
-  padding: 12px 14px;
+  padding: 8px 10px;
   border: 1px solid var(--bd1);
   border-radius: var(--r);
   background: var(--s2);
@@ -725,8 +768,8 @@
 .tracs-domain-price-crosscheck .dpc-change-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  margin-bottom: 10px;
+  gap: 6px;
+  margin-bottom: 7px;
 }
 
 .tracs-domain-price-crosscheck .dpc-change-grid {
@@ -738,10 +781,10 @@
   border: 1px solid var(--bd1);
   border-radius: var(--r);
   background: var(--s2);
-  padding: 12px 14px;
+  padding: 8px 10px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
 }
 
 .tracs-domain-price-crosscheck .dpc-rate-impact span,
@@ -758,17 +801,17 @@
 }
 
 .tracs-domain-price-crosscheck .dpc-mini-list span {
-  padding: 7px 9px;
+  padding: 5px 7px;
   border: 1px solid var(--bd1);
   border-radius: var(--r);
   background: var(--s2);
   color: var(--tx2);
-  font-size: 11px;
+  font-size: 10.5px;
 }
 
 .tracs-domain-price-crosscheck .dpc-adjustment-table {
   width: 100%;
-  min-width: 1180px;
+  min-width: 1020px;
   border-collapse: collapse;
 }
 
@@ -787,17 +830,19 @@
   text-transform: uppercase;
 }
 
-.tracs-domain-price-crosscheck .dpc-bucket-list details {
-  grid-column: span 2;
+.tracs-domain-price-crosscheck .dpc-bucket-column {
+  display: flex;
   min-width: 0;
-  border: 1px solid var(--bd1);
-  border-radius: var(--r);
-  background: var(--s2);
-  overflow: hidden;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.tracs-domain-price-crosscheck .dpc-bucket-list details:nth-child(n + 4) {
-  grid-column: span 3;
+.tracs-domain-price-crosscheck .dpc-bucket-list details {
+  min-width: 0;
+  border: 1px solid var(--bd1);
+  border-radius: var(--dpc-radius-card);
+  background: var(--s2);
+  overflow: hidden;
 }
 
 .tracs-domain-price-crosscheck .dpc-bucket-list summary {
@@ -807,9 +852,10 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 10px 12px;
+  min-height: 30px;
+  padding: 7px 9px;
   color: var(--tx1);
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 650;
 }
 
@@ -835,7 +881,7 @@
 
 .tracs-domain-price-crosscheck .dpc-cctld-table {
   width: 100%;
-  min-width: 1680px;
+  min-width: max(980px, 100%);
   border-collapse: separate;
   border-spacing: 0;
 }
@@ -843,6 +889,7 @@
 .tracs-domain-price-crosscheck .dpc-cctld-scroll {
   max-height: min(60vh, 560px);
   overflow: auto;
+  overscroll-behavior-y: auto;
 }
 
 .tracs-domain-price-crosscheck .dpc-cctld-table th,
@@ -859,25 +906,16 @@
   text-transform: uppercase;
 }
 
-.tracs-domain-price-crosscheck .dpc-cctld-table .month-col {
-  left: 0;
-  min-width: 150px;
-  background: var(--s1);
-  z-index: 4;
-  color: var(--tx1);
-  font-weight: 650;
-}
-
 .tracs-domain-price-crosscheck .dpc-cctld-table .group-header-col {
-  left: 150px;
-  min-width: 180px;
+  left: 0;
+  min-width: 156px;
   background: var(--s1);
   z-index: 4;
 }
 
 .tracs-domain-price-crosscheck .dpc-cctld-table .type-col {
-  left: 330px;
-  min-width: 140px;
+  left: 156px;
+  min-width: 118px;
   background: var(--s1);
   z-index: 4;
   border-right: 2px solid var(--bd2);
@@ -885,7 +923,7 @@
 
 .tracs-domain-price-crosscheck .dpc-cctld-table .dpc-notes-col,
 .tracs-domain-price-crosscheck .dpc-cctld-table .dpc-row-note {
-  min-width: 190px;
+  min-width: 150px;
   color: var(--tx3);
   background: var(--s2);
   font-size: 11px;
@@ -969,19 +1007,53 @@
   background: var(--s1);
 }
 
+.dpc-option-card,
 .tracs-domain-price-crosscheck .dpc-option-card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   padding: 12px;
   border: 1px solid var(--bd1);
-  border-radius: var(--r2);
+  border-radius: var(--dpc-radius-card, var(--r2));
   background: var(--s2);
-  margin-bottom: 16px;
+  margin-bottom: 0;
 }
 
+.dpc-option-card.is-disabled,
 .tracs-domain-price-crosscheck .dpc-option-card.is-disabled {
   opacity: .65;
+}
+
+.dpc-option-card .dpc-check-row,
+.tracs-domain-price-crosscheck .dpc-option-card .dpc-check-row {
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.dpc-option-card .dpc-check-row input,
+.tracs-domain-price-crosscheck .dpc-option-card .dpc-check-row input {
+  width: 14px;
+  height: 14px;
+  margin-top: 1px;
+}
+
+.dpc-option-card .dpc-check-row span,
+.tracs-domain-price-crosscheck .dpc-option-card .dpc-check-row span {
+  min-width: 0;
+}
+
+.dpc-option-card .dpc-check-row strong,
+.tracs-domain-price-crosscheck .dpc-option-card .dpc-check-row strong {
+  font-size: 12.5px;
+  line-height: 1.25;
+}
+
+.dpc-option-card .dpc-check-row small,
+.dpc-option-card .dpc-template-hint,
+.tracs-domain-price-crosscheck .dpc-option-card .dpc-check-row small,
+.tracs-domain-price-crosscheck .dpc-option-card .dpc-template-hint {
+  margin-top: 2px;
+  line-height: 1.45;
 }
 
 .dpc-extension-form,
@@ -1033,8 +1105,8 @@
 .dpc-modal-content.dpc-extension-modal-content,
 .dpc-extension-modal-content,
 .tracs-domain-price-crosscheck .dpc-extension-modal-content {
-  width: min(760px, calc(100vw - 32px));
-  max-width: 760px;
+  width: min(1040px, calc(100vw - 32px));
+  max-width: 1040px;
   max-height: calc(100vh - 48px);
   display: flex;
   flex-direction: column;
@@ -1046,6 +1118,91 @@
   flex-direction: column;
   gap: 14px;
   overflow: auto;
+}
+
+.dpc-matrix-config-card,
+.tracs-domain-price-crosscheck .dpc-matrix-config-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid var(--bd1);
+  border-radius: var(--r2);
+  background: var(--s2);
+}
+
+.dpc-source-config-card,
+.tracs-domain-price-crosscheck .dpc-source-config-card {
+  border-color: var(--bd1);
+  background: var(--s2);
+}
+
+.dpc-config-card-head,
+.tracs-domain-price-crosscheck .dpc-config-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dpc-config-card-head strong,
+.tracs-domain-price-crosscheck .dpc-config-card-head strong {
+  display: block;
+  color: var(--tx1);
+  font-size: 13px;
+}
+
+.dpc-config-card-head span,
+.dpc-config-card-help,
+.tracs-domain-price-crosscheck .dpc-config-card-head span,
+.tracs-domain-price-crosscheck .dpc-config-card-help {
+  color: var(--tx3);
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+
+.dpc-source-form,
+.tracs-domain-price-crosscheck .dpc-source-form {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(120px, .35fr) max-content;
+  gap: 10px;
+  align-items: end;
+  margin: 0;
+  padding: 0;
+}
+
+.dpc-source-form .form-group,
+.tracs-domain-price-crosscheck .dpc-source-form .form-group {
+  gap: 5px;
+  margin-bottom: 0;
+  min-width: 0;
+}
+
+.dpc-source-form label,
+.tracs-domain-price-crosscheck .dpc-source-form label {
+  color: var(--tx3);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.dpc-source-form .form-input,
+.dpc-source-form .btn,
+.tracs-domain-price-crosscheck .dpc-source-form .form-input,
+.tracs-domain-price-crosscheck .dpc-source-form .btn {
+  box-sizing: border-box;
+  height: 38px;
+  min-height: 38px;
+}
+
+.dpc-source-form .btn,
+.tracs-domain-price-crosscheck .dpc-source-form .btn {
+  justify-content: center;
+  white-space: nowrap;
 }
 
 .dpc-extension-lists,
@@ -1091,14 +1248,134 @@
 }
 
 .dpc-extension-chips,
-.tracs-domain-price-crosscheck .dpc-extension-chips {
+.dpc-extension-rows,
+.tracs-domain-price-crosscheck .dpc-extension-chips,
+.tracs-domain-price-crosscheck .dpc-extension-rows {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 6px;
   max-height: 180px;
   overflow: auto;
   padding-right: 2px;
   scrollbar-gutter: stable;
+}
+
+.dpc-extension-edit-row,
+.tracs-domain-price-crosscheck .dpc-extension-edit-row {
+  display: grid;
+  grid-template-columns: minmax(76px, 1fr) minmax(92px, .8fr) 76px auto;
+  gap: 6px;
+  align-items: center;
+  margin: 0;
+}
+
+.dpc-source-row-head,
+.tracs-domain-price-crosscheck .dpc-source-row-head {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 110px 120px auto;
+  gap: 8px;
+  padding: 0 2px;
+  color: var(--tx3);
+  font-family: var(--mono);
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.dpc-source-rows,
+.tracs-domain-price-crosscheck .dpc-source-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 150px;
+  overflow: auto;
+  padding-right: 2px;
+  scrollbar-gutter: stable;
+}
+
+.dpc-source-edit-row,
+.tracs-domain-price-crosscheck .dpc-source-edit-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 110px 120px auto;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  margin: 0;
+}
+
+.dpc-extension-edit-row .form-input,
+.dpc-extension-edit-row .form-select,
+.dpc-source-edit-row .form-input,
+.tracs-domain-price-crosscheck .dpc-extension-edit-row .form-input,
+.tracs-domain-price-crosscheck .dpc-extension-edit-row .form-select {
+  min-height: 30px;
+  height: 30px;
+  padding: 4px 7px;
+  border-radius: var(--dpc-radius-control, var(--r));
+  font-size: 11px;
+}
+
+.dpc-extension-edit-row .btn,
+.dpc-source-edit-row .btn,
+.tracs-domain-price-crosscheck .dpc-extension-edit-row .btn {
+  width: 30px;
+  min-height: 30px;
+  padding: 0;
+  justify-content: center;
+}
+
+.dpc-extension-row-actions,
+.dpc-source-row-actions,
+.tracs-domain-price-crosscheck .dpc-extension-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dpc-default-source-badge,
+.tracs-domain-price-crosscheck .dpc-default-source-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 3px 7px;
+  border: 1px solid var(--blue-bd);
+  border-radius: 999px;
+  color: var(--blue);
+  background: var(--blue-lt);
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.dpc-extension-name,
+.dpc-source-name,
+.tracs-domain-price-crosscheck .dpc-extension-name {
+  min-width: 0;
+  color: var(--tx1);
+  font-size: 11px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dpc-extension-category-badge,
+.dpc-source-type-badge,
+.tracs-domain-price-crosscheck .dpc-extension-category-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 4px 9px;
+  border: 1px solid var(--bd1);
+  border-radius: var(--dpc-radius-control, var(--r));
+  background: var(--s1);
+  color: var(--tx2);
+  font-size: 11px;
+  font-weight: 650;
 }
 
 .dpc-extension-chips span,
@@ -1119,6 +1396,7 @@
   white-space: nowrap;
 }
 
+.dpc-check-row,
 .tracs-domain-price-crosscheck .dpc-check-row {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -1128,16 +1406,20 @@
   cursor: pointer;
 }
 
+.dpc-check-row input,
 .tracs-domain-price-crosscheck .dpc-check-row input {
   margin-top: 3px;
 }
 
+.dpc-check-row strong,
 .tracs-domain-price-crosscheck .dpc-check-row strong {
   display: block;
   color: var(--tx1);
   font-size: 12px;
 }
 
+.dpc-check-row small,
+.dpc-template-hint,
 .tracs-domain-price-crosscheck .dpc-check-row small,
 .tracs-domain-price-crosscheck .dpc-template-hint {
   display: block;
@@ -1146,6 +1428,7 @@
   line-height: 1.45;
 }
 
+.dpc-copy-notes-row,
 .tracs-domain-price-crosscheck .dpc-copy-notes-row {
   padding-top: 8px;
   border-top: 1px solid var(--bd1);
@@ -1155,8 +1438,8 @@
 .tracs-domain-price-crosscheck .dpc-summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 16px;
-  margin-top: 4px;
+  gap: var(--page-section-gap, var(--gap));
+  margin-top: 0;
 }
 
 .tracs-domain-price-crosscheck .stat-card {
@@ -1310,24 +1593,25 @@
 .tracs-domain-price-crosscheck .dpc-lower-layout {
   display: grid;
   grid-template-columns: 1.6fr 1fr;
-  gap: 14px;
-  margin-top: 4px;
+  gap: var(--page-section-gap, var(--gap));
+  margin-top: 0;
 }
 
 .tracs-domain-price-crosscheck .dpc-notes-panel {
-  margin-bottom: 14px;
+  margin-bottom: 10px;
+  overflow: visible;
 }
 
 .tracs-domain-price-crosscheck .dpc-notes-body {
-  padding: 12px;
+  padding: 10px;
 }
 
 .tracs-domain-price-crosscheck .dpc-notes-form {
   display: grid;
-  grid-template-columns: minmax(120px, 150px) minmax(260px, 1fr) minmax(160px, 190px) auto;
-  gap: 10px;
+  grid-template-columns: minmax(116px, 142px) minmax(220px, 1fr) minmax(146px, 172px) auto;
+  gap: 8px;
   align-items: end;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 
 .tracs-domain-price-crosscheck .dpc-notes-form .form-group {
@@ -1335,7 +1619,7 @@
 }
 
 .tracs-domain-price-crosscheck .dpc-note-tld-select {
-  min-width: 120px;
+  min-width: 112px;
 }
 
 .tracs-domain-price-crosscheck .dpc-note-text-field {
@@ -1343,7 +1627,7 @@
 }
 
 .tracs-domain-price-crosscheck .dpc-panel-alert {
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 
 /* Layout audit: notes table/form now share the same compact row rhythm as the pricing matrix. */
@@ -1354,7 +1638,7 @@
 
 .tracs-domain-price-crosscheck .dpc-notes-table th,
 .tracs-domain-price-crosscheck .dpc-notes-table td {
-  padding: 7px 8px;
+  padding: 5px 8px;
   border-bottom: 1px solid var(--bd1);
   text-align: left;
   vertical-align: top;
@@ -1369,17 +1653,17 @@
 
 .tracs-domain-price-crosscheck .dpc-note-updated {
   color: var(--tx3);
-  font-size: 11px;
+  font-size: 10.5px;
 }
 
 .tracs-domain-price-crosscheck .dpc-task-head {
-  margin-top: 16px;
+  margin-top: 10px;
   border-top: 1px solid var(--bd1);
-  padding-top: 12px;
+  padding-top: 9px;
 }
 
 .tracs-domain-price-crosscheck .dpc-task-empty {
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .tracs-domain-price-crosscheck .dpc-full-width-btn {
@@ -1398,10 +1682,10 @@
 
 /* --- Operational Audit Trail (Timeline) --- */
 .tracs-domain-price-crosscheck .dpc-audit-panel {
-  --dpc-lower-panel-gutter: 12px;
+  --dpc-lower-panel-gutter: 10px;
   display: flex;
   flex-direction: column;
-  max-height: 400px;
+  max-height: 360px;
   overflow-y: auto;
   padding: 0 var(--dpc-lower-panel-gutter) var(--dpc-lower-panel-gutter);
 }
@@ -1414,7 +1698,7 @@
 }
 
 .tracs-domain-price-crosscheck .empty-small {
-  padding: 14px;
+  padding: 10px;
   text-align: center;
   color: var(--tx3);
   font-style: italic;
@@ -1424,7 +1708,7 @@
   display: flex;
   flex-direction: column;
   position: relative;
-  padding: 12px 0 0 20px;
+  padding: 8px 0 0 16px;
 }
 
 .tracs-domain-price-crosscheck .audit-timeline::before {
@@ -1432,14 +1716,14 @@
   position: absolute;
   top: 6px;
   bottom: 6px;
-  left: 5px;
+  left: 4px;
   width: 1px;
   background: var(--bd2);
 }
 
 .tracs-domain-price-crosscheck .timeline-row {
   position: relative;
-  padding-bottom: 16px;
+  padding-bottom: 8px;
 }
 
 .tracs-domain-price-crosscheck .timeline-row:last-child {
@@ -1448,22 +1732,22 @@
 
 .tracs-domain-price-crosscheck .timeline-dot {
   position: absolute;
-  left: -20px;
-  top: 5px;
-  width: 11px;
-  height: 11px;
+  left: -16px;
+  top: 6px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   background: var(--s1);
   border: 2px solid var(--blue);
-  box-shadow: 0 0 0 3px var(--s2);
+  box-shadow: 0 0 0 2px var(--s2);
 }
 
 .tracs-domain-price-crosscheck .timeline-content {
   background: var(--s2);
   border: 1px solid var(--bd1);
   border-radius: var(--r);
-  padding: 10px 12px;
-  box-shadow: var(--shadow);
+  padding: 7px 9px;
+  box-shadow: none;
   transition: border-color var(--dur);
 }
 
@@ -1475,10 +1759,10 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  font-size: 11.5px;
+  gap: 4px;
+  font-size: 11px;
   color: var(--tx2);
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .tracs-domain-price-crosscheck .timeline-meta strong {
@@ -1493,21 +1777,21 @@
 }
 
 .tracs-domain-price-crosscheck .timeline-details {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--tx2);
-  line-height: 1.4;
+  line-height: 1.35;
   margin-bottom: 2px;
 }
 
 .tracs-domain-price-crosscheck .timeline-ip {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 8.5px;
   color: var(--tx3);
 }
 
 /* --- Metadata Details Table --- */
 .tracs-domain-price-crosscheck .dpc-meta-panel {
-  --dpc-lower-panel-gutter: 12px;
+  --dpc-lower-panel-gutter: 10px;
   padding: 0 var(--dpc-lower-panel-gutter) var(--dpc-lower-panel-gutter);
 }
 
@@ -1553,6 +1837,9 @@
   display: none;
   align-items: center;
   justify-content: center;
+  box-sizing: border-box;
+  padding: 24px;
+  overflow: hidden;
   animation: fadeInModal 0.2s var(--ease);
 }
 
@@ -1563,12 +1850,21 @@
 .dpc-modal-content {
   background: var(--s1);
   border: 1px solid var(--bd2);
-  border-radius: var(--r3);
+  border-radius: var(--dpc-radius-modal, var(--r2));
   width: 100%;
   max-width: 520px;
+  max-height: calc(100dvh - 48px);
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
   box-shadow: var(--shadow-lg);
   overflow: hidden;
   animation: slideUpModal 0.25s var(--ease);
+}
+
+.dpc-new-month-modal-content,
+.dpc-duplicate-month-modal-content {
+  max-width: 560px;
 }
 
 .dpc-modal-header {
@@ -1578,6 +1874,7 @@
   padding: 14px 18px;
   border-bottom: 1px solid var(--bd1);
   background: var(--s2);
+  flex: 0 0 auto;
 }
 
 .dpc-modal-header h3 {
@@ -1601,6 +1898,11 @@
 
 .dpc-modal-form {
   padding: 18px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
 
 .dpc-modal-grid {
@@ -1614,6 +1916,18 @@
   flex-direction: column;
   gap: 6px;
   margin-bottom: 16px;
+}
+
+.dpc-new-month-modal-content .dpc-modal-form,
+.dpc-duplicate-month-modal-content .dpc-modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.dpc-new-month-modal-content .dpc-modal-form .form-group,
+.dpc-duplicate-month-modal-content .dpc-modal-form .form-group {
+  margin-bottom: 0;
 }
 
 .dpc-modal-form .form-group label {
@@ -1634,7 +1948,7 @@
   gap: 10px;
   padding: 12px;
   border: 1px solid var(--bd1);
-  border-radius: var(--r2);
+  border-radius: var(--dpc-radius-card, var(--r2));
   background: var(--s2);
 }
 
@@ -1675,18 +1989,74 @@
   margin-top: 24px;
   border-top: 1px solid var(--bd1);
   padding-top: 14px;
+  position: sticky;
+  bottom: -1px;
+  z-index: 3;
+  background: var(--s1);
+}
+
+.dpc-new-month-modal-content .dpc-modal-footer,
+.dpc-duplicate-month-modal-content .dpc-modal-footer {
+  margin-top: 10px;
 }
 
 .dpc-extension-modal-content .dpc-extension-modal-body {
   gap: 12px;
   padding: 16px 18px 18px;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+}
+
+.dpc-extension-modal-content .dpc-source-form {
+  grid-template-columns: minmax(260px, 1fr) minmax(108px, 132px) max-content;
+  align-items: end;
+  gap: 10px;
+}
+
+.dpc-extension-modal-content .dpc-source-form .form-group {
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.dpc-extension-modal-content .dpc-source-form .btn {
+  align-self: end;
+  min-width: 142px;
 }
 
 .dpc-extension-modal-content .dpc-extension-form {
-  grid-template-columns: minmax(220px, 1.35fr) minmax(180px, 1fr) minmax(108px, .45fr) max-content;
+  grid-template-columns: minmax(190px, 1fr) minmax(150px, .7fr) minmax(110px, .45fr) max-content;
   gap: 10px;
   align-items: end;
-  padding: 12px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.dpc-extension-modal-content .dpc-extension-create-card {
+  border-color: transparent;
+  background: transparent;
+}
+
+.dpc-extension-create-head {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 2px;
+}
+
+.dpc-extension-create-head strong {
+  color: var(--tx1);
+  font-size: 12.5px;
+}
+
+.dpc-extension-create-head span {
+  color: var(--tx3);
+  font-size: 10.5px;
 }
 
 .dpc-extension-modal-content .dpc-extension-form .form-group {
@@ -1742,6 +2112,30 @@
   gap: 8px;
 }
 
+.dpc-extension-list-help {
+  color: var(--tx3);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.dpc-extension-row-head {
+  display: grid;
+  grid-template-columns: minmax(76px, 1fr) minmax(92px, .8fr) 96px auto;
+  gap: 6px;
+  padding: 0 2px;
+  color: var(--tx3);
+  font-family: var(--mono);
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.dpc-extension-modal-content .dpc-extension-edit-row {
+  grid-template-columns: minmax(76px, 1fr) minmax(92px, .8fr) 96px auto;
+}
+
 .dpc-extension-modal-content .dpc-extension-lists strong {
   font-size: 11.5px;
 }
@@ -1750,7 +2144,8 @@
   font-size: 9.5px;
 }
 
-.dpc-extension-modal-content .dpc-extension-chips {
+.dpc-extension-modal-content .dpc-extension-chips,
+.dpc-extension-modal-content .dpc-extension-rows {
   gap: 5px;
   max-height: 132px;
 }
@@ -1767,24 +2162,43 @@
   padding-top: 12px;
 }
 
+.dpc-extension-modal-content > .dpc-extension-modal-footer {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 12px 18px;
+  border-top: 1px solid var(--bd1);
+  background: var(--s1);
+}
+
 @media (max-width: 1100px) {
   .tracs-domain-price-crosscheck .dpc-bucket-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-
-  .tracs-domain-price-crosscheck .dpc-bucket-list details,
-  .tracs-domain-price-crosscheck .dpc-bucket-list details:nth-child(n + 4) {
-    grid-column: auto;
-  }
 }
 
 @media (max-width: 900px) {
+  .dpc-extension-modal-content .dpc-source-form {
+    grid-template-columns: minmax(0, 1fr) minmax(108px, 132px);
+  }
+
+  .dpc-extension-modal-content .dpc-source-form .btn {
+    grid-column: 1 / -1;
+    width: auto;
+    justify-self: end;
+  }
+
   .dpc-extension-modal-content .dpc-extension-form {
-    grid-template-columns: minmax(0, 1fr) minmax(180px, .75fr);
+    grid-template-columns: 1fr;
   }
 
   .dpc-extension-modal-content .dpc-extension-form .btn {
     width: 100%;
+  }
+
+  .dpc-extension-create-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
   }
 }
 
@@ -1810,20 +2224,49 @@
 
   .dpc-extension-form,
   .dpc-extension-lists,
+  .dpc-source-form,
   .dpc-export-range,
   .tracs-domain-price-crosscheck .dpc-extension-form,
   .tracs-domain-price-crosscheck .dpc-extension-lists,
+  .tracs-domain-price-crosscheck .dpc-source-form,
   .tracs-domain-price-crosscheck .dpc-export-range {
     grid-template-columns: 1fr;
   }
 
+  .dpc-source-row-head,
+  .tracs-domain-price-crosscheck .dpc-source-row-head {
+    display: none;
+  }
+
+  .dpc-source-edit-row,
+  .tracs-domain-price-crosscheck .dpc-source-edit-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+    padding: 8px;
+    border: 1px solid var(--bd1);
+    border-radius: var(--r);
+    background: var(--s1);
+  }
+
+  .dpc-source-row-actions,
+  .tracs-domain-price-crosscheck .dpc-source-row-actions {
+    justify-content: flex-end;
+  }
+
+  .dpc-source-form .btn,
   .dpc-extension-form .btn,
+  .tracs-domain-price-crosscheck .dpc-source-form .btn,
   .tracs-domain-price-crosscheck .dpc-extension-form .btn {
     width: 100%;
   }
 
   .tracs-domain-price-crosscheck .dpc-bucket-list {
     grid-template-columns: 1fr;
+  }
+
+  .tracs-domain-price-crosscheck .dpc-bucket-list details,
+  .tracs-domain-price-crosscheck .dpc-bucket-column {
+    grid-column: auto;
   }
 
   .tracs-domain-price-crosscheck .month-selector-card {
@@ -1843,12 +2286,13 @@
 
   .dpc-modal {
     padding: 12px;
-    align-items: flex-start;
-    overflow-y: auto;
+    align-items: center;
+    overflow: hidden;
   }
 
   .dpc-modal-content {
-    margin: 24px 0;
+    max-height: calc(100dvh - 24px);
+    margin: 0;
   }
 
   .dpc-modal-grid,
@@ -1863,6 +2307,7 @@
   .tracs-domain-price-crosscheck .dpc-exec-grid,
   .tracs-domain-price-crosscheck .dpc-exec-grid-compact,
   .tracs-domain-price-crosscheck .dpc-intel-layout,
+  .tracs-domain-price-crosscheck .dpc-findings-list,
   .tracs-domain-price-crosscheck .dpc-finding-metrics,
   .tracs-domain-price-crosscheck .dpc-rate-impact,
   .tracs-domain-price-crosscheck .dpc-change-grid {
@@ -1885,36 +2330,6 @@
   to { transform: translateY(0) scale(1); }
 }
 
-/* --- Collapsible Audit Panel styling --- */
-.tracs-domain-price-crosscheck .dpc-audit-panel .panel-head {
-  cursor: pointer;
-  user-select: none;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.tracs-domain-price-crosscheck .dpc-audit-panel .panel-head::after {
-  content: '';
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-right: 2px solid var(--tx3);
-  border-bottom: 2px solid var(--tx3);
-  transform: rotate(45deg);
-  transition: transform var(--dur) var(--ease);
-  margin-left: 12px;
-}
-
-.tracs-domain-price-crosscheck .dpc-audit-panel.collapsed .panel-head::after {
-  transform: rotate(-135deg);
-}
-
-.tracs-domain-price-crosscheck .dpc-audit-panel.collapsed .audit-timeline,
-.tracs-domain-price-crosscheck .dpc-audit-panel.collapsed .empty-small {
-  display: none;
-}
-
 /* Layout audit: matrix tables keep horizontal overflow inside their own wrappers and use compact, sticky scan anchors. */
 .tracs-domain-price-crosscheck .dpc-matrix-panel {
   margin-top: 0;
@@ -1931,10 +2346,24 @@
 }
 
 .tracs-domain-price-crosscheck .dpc-matrix-panel .panel-title,
+.tracs-domain-price-crosscheck .panel-title,
+.tracs-domain-price-crosscheck .dpc-section-head h3,
 .tracs-domain-price-crosscheck .dpc-matrix-panel .panel-right,
 .tracs-domain-price-crosscheck .dpc-matrix-panel .panel-meta {
   display: inline-flex;
   align-items: center;
+}
+
+.tracs-domain-price-crosscheck .panel-title,
+.tracs-domain-price-crosscheck .dpc-section-head h3 {
+  gap: 8px;
+}
+
+.tracs-domain-price-crosscheck .panel-title svg,
+.tracs-domain-price-crosscheck .panel-title .lucide {
+  flex: 0 0 auto;
+  opacity: .86;
+  vertical-align: middle;
 }
 
 .tracs-domain-price-crosscheck .dpc-matrix-actions {
@@ -1946,24 +2375,71 @@
 .tracs-domain-price-crosscheck .table-container {
   overflow-x: auto;
   max-width: 100%;
-  border-radius: 0 0 var(--r2) var(--r2);
+  border-radius: 0 0 var(--dpc-radius-card) var(--dpc-radius-card);
   scrollbar-width: thin;
+  scrollbar-gutter: stable;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  overscroll-behavior-x: contain;
+  overscroll-behavior-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.tracs-domain-price-crosscheck .table-container::-webkit-scrollbar,
+.tracs-domain-price-crosscheck .dpc-section-tabs::-webkit-scrollbar,
+.dpc-modal-form::-webkit-scrollbar,
+.dpc-extension-modal-body::-webkit-scrollbar,
+.dpc-source-rows::-webkit-scrollbar,
+.dpc-extension-rows::-webkit-scrollbar {
+  width: var(--scrollbar-size, 7px);
+  height: var(--scrollbar-size-horizontal, 9px);
+}
+
+.tracs-domain-price-crosscheck .table-container::-webkit-scrollbar-track,
+.tracs-domain-price-crosscheck .dpc-section-tabs::-webkit-scrollbar-track,
+.dpc-modal-form::-webkit-scrollbar-track,
+.dpc-extension-modal-body::-webkit-scrollbar-track,
+.dpc-source-rows::-webkit-scrollbar-track,
+.dpc-extension-rows::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+.tracs-domain-price-crosscheck .table-container::-webkit-scrollbar-thumb,
+.tracs-domain-price-crosscheck .dpc-section-tabs::-webkit-scrollbar-thumb,
+.dpc-modal-form::-webkit-scrollbar-thumb,
+.dpc-extension-modal-body::-webkit-scrollbar-thumb,
+.dpc-source-rows::-webkit-scrollbar-thumb,
+.dpc-extension-rows::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--scrollbar-thumb);
+  background-clip: padding-box;
+}
+
+.tracs-domain-price-crosscheck .table-container::-webkit-scrollbar-thumb:hover,
+.tracs-domain-price-crosscheck .dpc-section-tabs::-webkit-scrollbar-thumb:hover,
+.dpc-modal-form::-webkit-scrollbar-thumb:hover,
+.dpc-extension-modal-body::-webkit-scrollbar-thumb:hover,
+.dpc-source-rows::-webkit-scrollbar-thumb:hover,
+.dpc-extension-rows::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+  background-clip: padding-box;
 }
 
 .tracs-domain-price-crosscheck .dpc-matrix-scroll {
   max-height: min(68vh, 680px);
   overflow: auto;
+  overscroll-behavior-y: auto;
 }
 
 .tracs-domain-price-crosscheck .dpc-matrix-table {
   width: 100%;
-  min-width: max(980px, 100%);
+  min-width: max(920px, 100%);
   border-collapse: separate;
   border-spacing: 0;
 }
 
 .tracs-domain-price-crosscheck .dpc-gtld-table .tld-col {
-  min-width: 124px;
+  min-width: 108px;
 }
 
 .tracs-domain-price-crosscheck .dpc-matrix-table th {
@@ -1999,18 +2475,17 @@
 
 .tracs-domain-price-crosscheck .dpc-gtld-table .group-header-col {
   left: 0;
-  min-width: 150px;
+  min-width: 138px;
 }
 
 .tracs-domain-price-crosscheck .dpc-gtld-table .type-col {
-  left: 150px;
-  min-width: 128px;
+  left: 138px;
+  min-width: 116px;
   border-right: 2px solid var(--bd2);
 }
 
 .tracs-domain-price-crosscheck .dpc-group-label {
-  vertical-align: top;
-  padding-top: 9px;
+  vertical-align: middle;
 }
 
 .tracs-domain-price-crosscheck .auto-calc-col,
@@ -2048,13 +2523,41 @@
   min-width: 96px;
   background: var(--s1);
   border: 1px solid var(--bd2);
-  border-radius: var(--r);
+  border-radius: var(--dpc-radius-control);
   overflow: hidden;
   transition: border-color var(--dur) var(--ease);
+}
+
+.tracs-domain-price-crosscheck .dpc-registrar-price.is-cheapest {
+  border-color: var(--dpc-cheapest-bd);
+  background: var(--dpc-cheapest-bg);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--green) 24%, transparent);
+}
+
+.tracs-domain-price-crosscheck .dpc-registrar-price.is-cheapest .currency-prefix {
+  color: var(--green);
+  background: color-mix(in srgb, var(--green-lt) 70%, var(--s2));
+  border-right-color: var(--green-bd);
 }
 .tracs-domain-price-crosscheck .dpc-input-wrap:focus-within {
   border-color: var(--blue);
   box-shadow: 0 0 0 2px var(--blue-lt);
+}
+
+.tracs-domain-price-crosscheck .dpc-internal-pricing-wrap.is-derived {
+  border-color: var(--blue-bd);
+  background: color-mix(in srgb, var(--blue-lt) 58%, var(--s1));
+}
+
+.tracs-domain-price-crosscheck .dpc-internal-pricing-wrap.is-derived .currency-prefix {
+  color: var(--blue);
+  border-right-color: var(--blue-bd);
+  background: var(--blue-lt);
+}
+
+.tracs-domain-price-crosscheck .dpc-internal-pricing-input[readonly] {
+  color: var(--blue);
+  cursor: default;
 }
 .tracs-domain-price-crosscheck .currency-prefix {
   display: inline-flex;
@@ -2083,7 +2586,1449 @@
   color: var(--tx1);
   outline: none;
 }
+
+@media (max-width: 1180px) {
+  .tracs-domain-price-crosscheck .dpc-matrix-scroll {
+    max-height: min(64vh, 620px);
+  }
+
+  .tracs-domain-price-crosscheck .dpc-matrix-table {
+    min-width: max(820px, 100%);
+  }
+
+  .tracs-domain-price-crosscheck .dpc-gtld-table .tld-col {
+    min-width: 100px;
+  }
+
+  .tracs-domain-price-crosscheck .dpc-gtld-table .group-header-col {
+    min-width: 126px;
+  }
+
+  .tracs-domain-price-crosscheck .dpc-gtld-table .type-col {
+    left: 126px;
+    min-width: 108px;
+  }
+}
 .tracs-domain-price-crosscheck .matrix-input:disabled {
   color: var(--tx3);
   cursor: not-allowed;
+}
+
+/* --- Dashboard module redesign --- */
+.tracs-domain-price-crosscheck {
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+  overflow-x: hidden;
+}
+
+.tracs-domain-price-crosscheck .dpc-module-shell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dpc-section-gap);
+  min-width: 0;
+}
+
+.tracs-domain-price-crosscheck .dpc-module-panel[hidden] {
+  display: none !important;
+}
+
+.tracs-domain-price-crosscheck .dpc-module-panel {
+  min-width: 0;
+  scroll-margin-top: 18px;
+}
+
+.tracs-domain-price-crosscheck .dpc-module-panel > .panel,
+.tracs-domain-price-crosscheck .dpc-module-panel > section,
+.tracs-domain-price-crosscheck .dpc-cctld-check-layout {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.tracs-domain-price-crosscheck .dpc-module-panel.dpc-intelligence-panel {
+  display: block;
+  gap: 0;
+  padding: 0;
+}
+
+.tracs-domain-price-crosscheck .dpc-section-tabs {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  margin: 0;
+  padding: 4px 1px 6px;
+  scrollbar-width: thin;
+}
+
+.tracs-domain-price-crosscheck .dpc-section-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 6px 11px;
+  border: 1px solid var(--bd2);
+  border-radius: var(--r);
+  color: var(--tx2);
+  background: var(--s2);
+  font-size: 12px;
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--dur), border-color var(--dur), background var(--dur), box-shadow var(--dur);
+}
+
+.tracs-domain-price-crosscheck .dpc-section-tabs button:hover,
+.tracs-domain-price-crosscheck .dpc-section-tabs button.active {
+  color: var(--blue);
+  border-color: var(--blue-bd);
+  background: var(--blue-lt);
+}
+
+.tracs-domain-price-crosscheck .dpc-section-tabs button.active {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 12%, transparent);
+}
+
+.tracs-domain-price-crosscheck .dpc-section-tabs button:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.tracs-domain-price-crosscheck .dpc-overview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dpc-section-gap);
+}
+
+.tracs-domain-price-crosscheck .dpc-overview-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(300px, .75fr);
+  gap: var(--dpc-section-gap);
+  align-items: stretch;
+}
+
+.tracs-domain-price-crosscheck .dpc-record-overview,
+.tracs-domain-price-crosscheck .dpc-quick-links,
+.tracs-domain-price-crosscheck .dpc-preview-panel,
+.tracs-domain-price-crosscheck .dpc-analysis-panel,
+.tracs-domain-price-crosscheck .dpc-registrar-panel,
+.tracs-domain-price-crosscheck .dpc-adjustment-panel,
+.tracs-domain-price-crosscheck .dpc-action-buckets-panel {
+  min-width: 0;
+}
+
+.tracs-domain-price-crosscheck .dpc-record-overview {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+}
+
+.tracs-domain-price-crosscheck .dpc-record-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--dpc-section-gap);
+  flex: 1 1 auto;
+  align-items: stretch;
+  min-height: clamp(92px, 11vw, 124px);
+  padding: 10px;
+}
+
+.tracs-domain-price-crosscheck .dpc-record-summary div,
+.tracs-domain-price-crosscheck .dpc-overview-stat,
+.tracs-domain-price-crosscheck .dpc-bucket-preview,
+.tracs-domain-price-crosscheck .dpc-action-bucket {
+  border: 1px solid var(--bd1);
+  border-radius: var(--r2);
+  background: var(--s2);
+}
+
+.tracs-domain-price-crosscheck .dpc-record-summary div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 7px;
+  min-height: 68px;
+  padding: 10px 11px;
+}
+
+.tracs-domain-price-crosscheck .dpc-record-summary span,
+.tracs-domain-price-crosscheck .dpc-overview-stat span,
+.tracs-domain-price-crosscheck .dpc-bucket-preview span {
+  color: var(--tx3);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.tracs-domain-price-crosscheck .dpc-record-summary strong {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 28px;
+  color: var(--tx1);
+  font-size: clamp(15px, 1.35vw, 18px);
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.tracs-domain-price-crosscheck .dpc-record-summary strong .badge {
+  font-size: 10.5px;
+  letter-spacing: .04em;
+}
+
+.tracs-domain-price-crosscheck .dpc-quick-link-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--dpc-section-gap);
+  padding: 10px;
+}
+
+.tracs-domain-price-crosscheck .dpc-quick-card {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 2px 8px;
+  align-items: center;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--bd1);
+  border-radius: var(--r);
+  background: var(--s2);
+  color: var(--tx2);
+  text-align: left;
+  cursor: pointer;
+}
+
+.tracs-domain-price-crosscheck .dpc-quick-card:hover {
+  border-color: var(--blue-bd);
+  background: var(--blue-lt);
+  color: var(--blue);
+}
+
+.tracs-domain-price-crosscheck .dpc-quick-card i,
+.tracs-domain-price-crosscheck .dpc-quick-card svg {
+  grid-row: 1 / span 2;
+}
+
+.tracs-domain-price-crosscheck .dpc-quick-card span {
+  color: var(--tx1);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.tracs-domain-price-crosscheck .dpc-quick-card small {
+  color: var(--tx3);
+  font-size: 10.5px;
+  line-height: 1.3;
+}
+
+.tracs-domain-price-crosscheck .dpc-overview-stats {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--dpc-section-gap);
+}
+
+.tracs-domain-price-crosscheck .dpc-overview-stat {
+  display: flex;
+  min-height: 82px;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 5px;
+  padding: 10px;
+}
+
+.tracs-domain-price-crosscheck .dpc-overview-stat strong,
+.tracs-domain-price-crosscheck .dpc-bucket-preview strong {
+  color: var(--tx1);
+  font-family: var(--mono);
+  font-size: 24px;
+  line-height: 1;
+}
+
+.tracs-domain-price-crosscheck .dpc-overview-stat small {
+  color: var(--tx3);
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+
+.tracs-domain-price-crosscheck .dpc-overview-stat.green,
+.tracs-domain-price-crosscheck .dpc-intel-card.green,
+.tracs-domain-price-crosscheck .dpc-bucket-preview.green,
+.tracs-domain-price-crosscheck .dpc-action-bucket.green {
+  border-color: var(--green-bd);
+  background: var(--green-lt);
+}
+
+.tracs-domain-price-crosscheck .dpc-overview-stat.yellow,
+.tracs-domain-price-crosscheck .dpc-intel-card.yellow,
+.tracs-domain-price-crosscheck .dpc-bucket-preview.yellow,
+.tracs-domain-price-crosscheck .dpc-action-bucket.yellow {
+  border-color: var(--amber-bd);
+  background: var(--amber-lt);
+}
+
+.tracs-domain-price-crosscheck .dpc-overview-stat.red,
+.tracs-domain-price-crosscheck .dpc-intel-card.red,
+.tracs-domain-price-crosscheck .dpc-bucket-preview.red,
+.tracs-domain-price-crosscheck .dpc-action-bucket.red {
+  border-color: var(--red-bd);
+  background: var(--red-lt);
+}
+
+.tracs-domain-price-crosscheck .dpc-overview-stat.muted,
+.tracs-domain-price-crosscheck .dpc-intel-card.muted,
+.tracs-domain-price-crosscheck .dpc-bucket-preview.muted,
+.tracs-domain-price-crosscheck .dpc-action-bucket.muted {
+  border-color: var(--bd2);
+  background: color-mix(in srgb, var(--s3) 54%, var(--s1));
+}
+
+.tracs-domain-price-crosscheck .dpc-overview-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(280px, .6fr);
+  gap: var(--dpc-section-gap);
+  align-items: start;
+}
+
+.tracs-domain-price-crosscheck .dpc-preview-list,
+.tracs-domain-price-crosscheck .dpc-audit-preview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+}
+
+.tracs-domain-price-crosscheck .dpc-preview-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 9px;
+  border: 1px solid var(--bd1);
+  border-radius: var(--r);
+  background: var(--s2);
+}
+
+.tracs-domain-price-crosscheck .dpc-preview-row strong,
+.tracs-domain-price-crosscheck .dpc-audit-preview-list strong {
+  display: block;
+  color: var(--tx1);
+  font-size: 12px;
+}
+
+.tracs-domain-price-crosscheck .dpc-preview-row span:not(.dpc-severity),
+.tracs-domain-price-crosscheck .dpc-audit-preview-list span {
+  color: var(--tx3);
+  font-size: 10.5px;
+}
+
+.tracs-domain-price-crosscheck .dpc-bucket-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--dpc-section-gap);
+  padding: 10px;
+}
+
+.tracs-domain-price-crosscheck .dpc-bucket-preview {
+  display: flex;
+  min-height: 64px;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 9px;
+}
+
+.tracs-domain-price-crosscheck .dpc-audit-preview-list div {
+  padding: 7px 9px;
+  border: 1px solid var(--bd1);
+  border-radius: var(--r);
+  background: var(--s2);
+}
+
+.tracs-domain-price-crosscheck .dpc-analysis-panel {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 10px;
+}
+
+.tracs-domain-price-crosscheck .dpc-analysis-panel > .panel-head { order: 0; }
+.tracs-domain-price-crosscheck .dpc-analysis-panel > .dpc-exec-grid { order: 1; }
+.tracs-domain-price-crosscheck .dpc-analysis-panel > .dpc-intelligence-buckets { order: 2; }
+.tracs-domain-price-crosscheck .dpc-analysis-panel > .dpc-analysis-grid { order: 3; }
+
+.tracs-domain-price-crosscheck .dpc-intelligence-dashboard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(330px, .42fr);
+  gap: var(--dpc-section-gap);
+  align-items: start;
+}
+
+.tracs-domain-price-crosscheck .dpc-intelligence-dashboard > * {
+  min-width: 0;
+}
+
+.tracs-domain-price-crosscheck .dpc-analysis-panel > .dpc-exec-grid,
+.tracs-domain-price-crosscheck .dpc-analysis-panel > .dpc-cctld-summary,
+.tracs-domain-price-crosscheck .dpc-analysis-panel > .dpc-analysis-grid {
+  margin: 10px;
+}
+
+.tracs-domain-price-crosscheck .dpc-analysis-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.tracs-domain-price-crosscheck .dpc-analysis-grid .dpc-intel-section:last-child {
+  grid-column: auto;
+}
+
+.tracs-domain-price-crosscheck .dpc-analysis-grid .dpc-intel-section {
+  border: 1px solid var(--bd1);
+  border-radius: var(--r2);
+  background: var(--s2);
+  padding: 10px;
+}
+
+.tracs-domain-price-crosscheck .dpc-analysis-grid .dpc-rate-impact,
+.tracs-domain-price-crosscheck .dpc-analysis-grid .dpc-change-grid {
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+}
+
+.tracs-domain-price-crosscheck .dpc-rate-impact div.green {
+  border-color: var(--green-bd);
+  background: var(--green-lt);
+}
+
+.tracs-domain-price-crosscheck .dpc-rate-impact div.red {
+  border-color: var(--red-bd);
+  background: var(--red-lt);
+}
+
+.tracs-domain-price-crosscheck .dpc-rate-impact div.muted {
+  border-color: var(--bd2);
+  background: var(--s3);
+}
+
+.tracs-domain-price-crosscheck .dpc-severity-review {
+  color: var(--amber);
+  background: var(--amber-lt);
+  border-color: var(--amber-bd);
+}
+
+.tracs-domain-price-crosscheck .dpc-severity-missing {
+  color: var(--tx3);
+  background: var(--s3);
+  border-color: var(--bd2);
+}
+
+.tracs-domain-price-crosscheck .dpc-cctld-check-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.tracs-domain-price-crosscheck .dpc-validation-stack {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--dpc-section-gap);
+}
+
+.tracs-domain-price-crosscheck .dpc-validation-website {
+  order: 1;
+}
+
+.tracs-domain-price-crosscheck .dpc-validation-cctld {
+  order: 2;
+}
+
+.tracs-domain-price-crosscheck .dpc-cctld-check-table-panel,
+.tracs-domain-price-crosscheck .dpc-cctld-priority-panel {
+  min-width: 0;
+}
+
+.tracs-domain-price-crosscheck .dpc-cctld-priority-panel .dpc-finding-column {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  max-height: none;
+  overflow: visible;
+  padding: 10px;
+}
+
+.tracs-domain-price-crosscheck .dpc-summary-filters {
+  min-height: 48px;
+  align-items: center;
+  padding: 9px var(--dpc-card-padding);
+  border-bottom: 1px solid var(--dpc-table-divider-strong);
+  background: var(--s1);
+}
+
+.tracs-domain-price-crosscheck .dpc-summary-filters .btn {
+  min-height: 28px;
+  padding: 4px 9px;
+  font-size: 11px;
+}
+
+.tracs-domain-price-crosscheck .dpc-adjustment-scroll {
+  max-height: min(66vh, 620px);
+  overflow: auto;
+  overscroll-behavior-y: auto;
+}
+
+.tracs-domain-price-crosscheck .dpc-adjustment-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.tracs-domain-price-crosscheck .dpc-adjustment-table td {
+  vertical-align: middle;
+  height: 36px;
+}
+
+.tracs-domain-price-crosscheck .dpc-matrix-table td,
+.tracs-domain-price-crosscheck .dpc-cctld-table td,
+.tracs-domain-price-crosscheck .dpc-notes-table td {
+  height: 36px;
+}
+
+.tracs-domain-price-crosscheck .dpc-adjustment-table th,
+.tracs-domain-price-crosscheck .dpc-adjustment-table td,
+.tracs-domain-price-crosscheck .dpc-matrix-table th,
+.tracs-domain-price-crosscheck .dpc-matrix-table td,
+.tracs-domain-price-crosscheck .dpc-cctld-table th,
+.tracs-domain-price-crosscheck .dpc-cctld-table td,
+.tracs-domain-price-crosscheck .dpc-notes-table th,
+.tracs-domain-price-crosscheck .dpc-notes-table td,
+.tracs-domain-price-crosscheck .dpc-source-table th,
+.tracs-domain-price-crosscheck .dpc-source-table td {
+  border-bottom-color: var(--dpc-table-divider);
+}
+
+.tracs-domain-price-crosscheck .dpc-adjustment-table th,
+.tracs-domain-price-crosscheck .dpc-matrix-table th,
+.tracs-domain-price-crosscheck .dpc-cctld-table th,
+.tracs-domain-price-crosscheck .dpc-notes-table th,
+.tracs-domain-price-crosscheck .dpc-source-table th {
+  border-bottom-width: 1px;
+  border-bottom-style: solid;
+  border-bottom-color: var(--dpc-table-divider-strong);
+}
+
+.tracs-domain-price-crosscheck .dpc-gtld-table .type-col,
+.tracs-domain-price-crosscheck .dpc-cctld-table .type-col {
+  border-right: 1px solid var(--dpc-table-divider-strong);
+}
+
+.tracs-domain-price-crosscheck .matrix-divider td {
+  height: 6px;
+  border-top: 1px solid var(--dpc-table-divider-strong);
+  border-bottom: 1px solid var(--dpc-table-divider-strong);
+  background: var(--s2);
+}
+
+.tracs-domain-price-crosscheck .dpc-suggested-price-head,
+.tracs-domain-price-crosscheck .dpc-suggested-price-cell {
+  border-right: 1px solid var(--dpc-highlight-divider);
+  border-left: 1px solid var(--dpc-highlight-divider);
+}
+
+.tracs-domain-price-crosscheck .dpc-sortable-header {
+  padding-right: 26px !important;
+  cursor: pointer;
+  user-select: none;
+}
+
+.tracs-domain-price-crosscheck .dpc-notes-table .dpc-sortable-header {
+  position: relative;
+}
+
+.tracs-domain-price-crosscheck .dpc-sortable-header::after {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  content: "↕";
+  color: var(--tx3);
+  font-size: 11px;
+  line-height: 1;
+  opacity: .58;
+  transform: translateY(-50%);
+}
+
+.tracs-domain-price-crosscheck .dpc-sortable-header[aria-sort="ascending"]::after {
+  content: "↑";
+  color: var(--blue);
+  opacity: 1;
+}
+
+.tracs-domain-price-crosscheck .dpc-sortable-header[aria-sort="descending"]::after {
+  content: "↓";
+  color: var(--blue);
+  opacity: 1;
+}
+
+.tracs-domain-price-crosscheck .dpc-sortable-header:hover,
+.tracs-domain-price-crosscheck .dpc-sortable-header:focus-visible {
+  color: var(--blue);
+  background: color-mix(in srgb, var(--blue-lt) 48%, var(--s2));
+}
+
+.tracs-domain-price-crosscheck .dpc-sortable-header:focus-visible {
+  z-index: 6;
+  outline: 2px solid var(--blue);
+  outline-offset: -2px;
+}
+
+.tracs-domain-price-crosscheck .dpc-margin-status-head {
+  min-width: 220px;
+}
+
+.tracs-domain-price-crosscheck .dpc-secondary-sort {
+  display: inline-flex;
+  min-height: 20px;
+  margin-left: 7px;
+  margin-right: 5px;
+  padding: 2px 6px;
+  align-items: center;
+  border: 1px solid var(--bd2);
+  border-radius: var(--r);
+  background: var(--s1);
+  color: var(--tx3);
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.tracs-domain-price-crosscheck .dpc-secondary-sort:hover,
+.tracs-domain-price-crosscheck .dpc-secondary-sort:focus-visible,
+.tracs-domain-price-crosscheck .dpc-secondary-sort.active {
+  border-color: var(--blue-bd);
+  background: var(--blue-lt);
+  color: var(--blue);
+  outline: none;
+}
+
+.tracs-domain-price-crosscheck .dpc-margin-status {
+  display: flex;
+  min-width: 180px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.tracs-domain-price-crosscheck .dpc-margin-status small {
+  color: var(--tx3);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.tracs-domain-price-crosscheck .dpc-price-explainer,
+.tracs-domain-price-crosscheck .dpc-decision {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.tracs-domain-price-crosscheck .dpc-price-explainer strong,
+.tracs-domain-price-crosscheck .dpc-decision strong {
+  color: var(--tx1);
+  font-size: 11.5px;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.tracs-domain-price-crosscheck .dpc-price-explainer small,
+.tracs-domain-price-crosscheck .dpc-decision small {
+  color: var(--tx3);
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.tracs-domain-price-crosscheck .dpc-suggested-price-head,
+.tracs-domain-price-crosscheck .dpc-suggested-price-cell {
+  background: color-mix(in srgb, var(--blue-lt) 56%, var(--s1));
+  color: var(--blue);
+  font-weight: 800;
+}
+
+.tracs-domain-price-crosscheck .dpc-suggested-price-cell .dpc-price-explainer strong {
+  color: var(--blue);
+  font-size: 13px;
+}
+
+.tracs-domain-price-crosscheck .dpc-suggested-price-cell .dpc-price-explainer small {
+  color: color-mix(in srgb, var(--blue) 70%, var(--tx3));
+}
+
+.tracs-domain-price-crosscheck .dpc-decision-head,
+.tracs-domain-price-crosscheck .dpc-decision-cell {
+  min-width: 190px;
+}
+
+.tracs-domain-price-crosscheck .dpc-decision strong {
+  font-weight: 750;
+}
+
+.tracs-domain-price-crosscheck .dpc-source-table {
+  width: 100%;
+  min-width: 680px;
+  border-collapse: collapse;
+}
+
+.tracs-domain-price-crosscheck .dpc-source-table th,
+.tracs-domain-price-crosscheck .dpc-source-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--bd1);
+  text-align: left;
+}
+
+.tracs-domain-price-crosscheck .dpc-source-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  color: var(--tx3);
+  background: var(--s2);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.tracs-domain-price-crosscheck .dpc-action-bucket-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 10px;
+}
+
+.tracs-domain-price-crosscheck .dpc-intelligence-buckets {
+  margin: 0 10px 10px;
+  padding: 10px;
+  border: 1px solid var(--bd1);
+  border-radius: var(--r2);
+  background: var(--s2);
+}
+
+.tracs-domain-price-crosscheck .dpc-intelligence-buckets .dpc-action-bucket-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-height: none;
+  padding: 0;
+  overflow: visible;
+}
+
+.tracs-domain-price-crosscheck .dpc-intelligence-buckets .dpc-action-bucket {
+  gap: 7px;
+}
+
+.tracs-domain-price-crosscheck .dpc-intelligence-buckets .dpc-action-bucket-head span {
+  max-width: 42ch;
+}
+
+.tracs-domain-price-crosscheck .dpc-intelligence-buckets .dpc-section-head {
+  margin-bottom: 9px;
+}
+
+.tracs-domain-price-crosscheck .dpc-intelligence-buckets .dpc-section-head h3 {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.tracs-domain-price-crosscheck .dpc-registrar-snapshot-panel {
+  position: sticky;
+  top: 52px;
+  max-height: calc(100vh - 70px);
+  overflow: hidden;
+}
+
+.tracs-domain-price-crosscheck .dpc-registrar-snapshot-list {
+  display: flex;
+  max-height: calc(100vh - 116px);
+  padding: 10px;
+  overflow-y: auto;
+  flex-direction: column;
+  gap: 9px;
+  scrollbar-width: thin;
+}
+
+.tracs-domain-price-crosscheck .dpc-registrar-snapshot-card {
+  display: flex;
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid var(--bd1);
+  border-radius: var(--r2);
+  background: var(--s2);
+  flex-direction: column;
+  gap: 9px;
+}
+
+.tracs-domain-price-crosscheck .dpc-registrar-snapshot-card.is-incomplete {
+  border-color: var(--amber-bd);
+  background: color-mix(in srgb, var(--amber-lt) 40%, var(--s2));
+}
+
+.tracs-domain-price-crosscheck .dpc-registrar-snapshot-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tracs-domain-price-crosscheck .dpc-registrar-snapshot-head strong,
+.tracs-domain-price-crosscheck .dpc-registrar-snapshot-head span {
+  display: block;
+}
+
+.tracs-domain-price-crosscheck .dpc-registrar-snapshot-head strong {
+  color: var(--tx1);
+  font-size: 13px;
+}
+
+.tracs-domain-price-crosscheck .dpc-registrar-snapshot-head span {
+  margin-top: 2px;
+  color: var(--tx3);
+  font-size: 10.5px;
+}
+
+.tracs-domain-price-crosscheck .dpc-registrar-snapshot-head em {
+  min-width: 52px;
+  padding: 4px 7px;
+  border: 1px solid var(--green-bd);
+  border-radius: var(--r);
+  background: var(--green-lt);
+  color: var(--green);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
+  text-align: center;
+}
+
+.tracs-domain-price-crosscheck .dpc-registrar-snapshot-head em.warning {
+  border-color: var(--amber-bd);
+  background: var(--amber-lt);
+  color: var(--amber);
+}
+
+.tracs-domain-price-crosscheck .dpc-registrar-snapshot-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.tracs-domain-price-crosscheck .dpc-registrar-snapshot-metrics span {
+  min-width: 0;
+  padding: 7px;
+  border: 1px solid var(--bd1);
+  border-radius: var(--r);
+  background: var(--s1);
+}
+
+.tracs-domain-price-crosscheck .dpc-registrar-snapshot-metrics small,
+.tracs-domain-price-crosscheck .dpc-registrar-snapshot-metrics strong {
+  display: block;
+}
+
+.tracs-domain-price-crosscheck .dpc-registrar-snapshot-metrics small,
+.tracs-domain-price-crosscheck .dpc-registrar-example small {
+  color: var(--tx3);
+  font-size: 9px;
+}
+
+.tracs-domain-price-crosscheck .dpc-registrar-snapshot-metrics strong {
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--tx1);
+  font-family: var(--mono);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tracs-domain-price-crosscheck .dpc-registrar-strength {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--tx3);
+  font-size: 10px;
+}
+
+.tracs-domain-price-crosscheck .dpc-registrar-strength strong {
+  color: var(--tx1);
+}
+
+.tracs-domain-price-crosscheck .dpc-registrar-example {
+  padding: 8px;
+  border-radius: var(--r);
+  background: var(--blue-lt);
+}
+
+.tracs-domain-price-crosscheck .dpc-registrar-example strong,
+.tracs-domain-price-crosscheck .dpc-registrar-example span {
+  display: block;
+}
+
+.tracs-domain-price-crosscheck .dpc-registrar-example strong {
+  margin-top: 2px;
+  color: var(--tx1);
+  font-size: 11px;
+}
+
+.tracs-domain-price-crosscheck .dpc-registrar-example span {
+  margin-top: 1px;
+  color: var(--blue);
+  font-size: 10px;
+}
+
+.tracs-domain-price-crosscheck .dpc-registrar-trend,
+.tracs-domain-price-crosscheck .dpc-registrar-warning {
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.tracs-domain-price-crosscheck .dpc-registrar-trend.positive { color: var(--green); }
+.tracs-domain-price-crosscheck .dpc-registrar-trend.negative { color: var(--amber); }
+.tracs-domain-price-crosscheck .dpc-registrar-trend.muted { color: var(--tx3); }
+.tracs-domain-price-crosscheck .dpc-registrar-warning { color: var(--amber); }
+
+.tracs-domain-price-crosscheck .dpc-action-bucket {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: var(--dpc-card-padding);
+}
+
+.tracs-domain-price-crosscheck .dpc-action-bucket-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 0;
+}
+
+.tracs-domain-price-crosscheck .dpc-action-bucket-head strong {
+  display: block;
+  color: var(--tx1);
+  font-size: 13px;
+}
+
+.tracs-domain-price-crosscheck .dpc-action-bucket-head span {
+  display: block;
+  margin-top: 2px;
+  color: var(--tx3);
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+
+.tracs-domain-price-crosscheck .dpc-action-bucket-head em {
+  flex: 0 0 auto;
+  min-width: 34px;
+  padding: 5px 8px;
+  border: 1px solid var(--bd2);
+  border-radius: var(--r);
+  background: var(--s1);
+  color: var(--tx1);
+  font-family: var(--mono);
+  font-size: 16px;
+  font-style: normal;
+  font-weight: 800;
+  text-align: center;
+}
+
+.tracs-domain-price-crosscheck .dpc-action-bucket-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.tracs-domain-price-crosscheck .dpc-action-bucket-stats > span,
+.tracs-domain-price-crosscheck .dpc-action-bucket-example {
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid var(--dpc-table-divider);
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--s1) 82%, transparent);
+}
+
+.tracs-domain-price-crosscheck .dpc-action-bucket-stats > span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tracs-domain-price-crosscheck .dpc-action-bucket-stats small,
+.tracs-domain-price-crosscheck .dpc-action-bucket-example small {
+  color: var(--tx3);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.tracs-domain-price-crosscheck .dpc-action-bucket-stats strong {
+  overflow: hidden;
+  color: var(--tx1);
+  font-family: var(--mono);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tracs-domain-price-crosscheck .dpc-action-bucket-example {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 3px;
+}
+
+.tracs-domain-price-crosscheck .dpc-action-bucket-example strong {
+  color: var(--tx1);
+  font-size: 12px;
+}
+
+.tracs-domain-price-crosscheck .dpc-action-bucket-example span {
+  color: var(--tx2);
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+
+.tracs-domain-price-crosscheck .dpc-action-bucket-link {
+  align-self: flex-start;
+  margin-top: auto;
+}
+
+.tracs-domain-price-crosscheck .dpc-module-panel > .panel,
+.tracs-domain-price-crosscheck .dpc-module-panel .panel {
+  border-color: var(--dpc-table-divider);
+}
+
+.tracs-domain-price-crosscheck .dpc-module-panel .panel-head {
+  min-height: 44px;
+  padding: 9px var(--dpc-card-padding);
+  border-bottom: 1px solid var(--dpc-table-divider-strong);
+}
+
+.tracs-domain-price-crosscheck .dpc-cctld-panel {
+  margin-top: var(--dpc-section-gap);
+}
+
+.tracs-domain-price-crosscheck .dpc-extension-modal-body,
+.tracs-domain-price-crosscheck .dpc-matrix-config-card,
+.tracs-domain-price-crosscheck .dpc-source-form,
+.tracs-domain-price-crosscheck .dpc-extension-form {
+  gap: var(--dpc-section-gap);
+}
+
+.tracs-domain-price-crosscheck .dpc-matrix-config-card,
+.tracs-domain-price-crosscheck .dpc-source-form,
+.tracs-domain-price-crosscheck .dpc-extension-form {
+  border-color: var(--dpc-table-divider);
+}
+
+@media (max-width: 720px) {
+  .tracs-domain-price-crosscheck .dpc-action-bucket-stats {
+    grid-template-columns: 1fr;
+  }
+}
+
+.tracs-domain-price-crosscheck .dpc-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.tracs-domain-price-crosscheck .dpc-chip-list span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 23px;
+  padding: 3px 7px;
+  border: 1px solid var(--bd2);
+  border-radius: 999px;
+  background: var(--s1);
+  color: var(--tx2);
+  font-size: 10.5px;
+  font-weight: 650;
+}
+
+.tracs-domain-price-crosscheck .dpc-notes-list {
+  overflow-x: auto;
+}
+
+.tracs-domain-price-crosscheck .dpc-note-status-updated {
+  color: var(--green);
+  border-color: var(--green-bd);
+  background: var(--green-lt);
+}
+
+.tracs-domain-price-crosscheck .dpc-note-status-warning {
+  color: var(--amber);
+  border-color: var(--amber-bd);
+  background: var(--amber-lt);
+}
+
+.tracs-domain-price-crosscheck .dpc-note-status-muted {
+  color: var(--tx3);
+  border-color: var(--bd2);
+  background: var(--s3);
+}
+
+.tracs-domain-price-crosscheck .dpc-audit-panel {
+  max-height: none;
+  overflow: hidden;
+}
+
+.tracs-domain-price-crosscheck .dpc-audit-scroll {
+  max-height: min(62vh, 520px);
+  overflow-y: auto;
+  overscroll-behavior-y: auto;
+  padding-right: 2px;
+  scrollbar-width: thin;
+}
+
+.tracs-domain-price-crosscheck .dpc-meta-panel {
+  align-self: start;
+}
+
+/* Decision-first intelligence summary */
+.tracs-domain-price-crosscheck .dpc-priority-dashboard {
+  margin-bottom: var(--dpc-section-gap);
+}
+
+.tracs-domain-price-crosscheck .dpc-priority-summary-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) repeat(3, minmax(210px, 1fr));
+  gap: 10px;
+  padding: 10px;
+}
+
+.tracs-domain-price-crosscheck .dpc-priority-summary-card {
+  display: flex;
+  min-width: 0;
+  min-height: 176px;
+  flex-direction: column;
+  gap: 9px;
+  padding: 11px;
+  border: 1px solid var(--bd2);
+  border-radius: var(--r2);
+  background: var(--s2);
+}
+
+.tracs-domain-price-crosscheck .dpc-priority-summary-card.red {
+  border-color: var(--red-bd);
+  background: color-mix(in srgb, var(--red-lt) 64%, var(--s2));
+}
+
+.tracs-domain-price-crosscheck .dpc-priority-summary-card.yellow {
+  border-color: var(--amber-bd);
+  background: color-mix(in srgb, var(--amber-lt) 64%, var(--s2));
+}
+
+.tracs-domain-price-crosscheck .dpc-priority-summary-card.green {
+  border-color: var(--green-bd);
+  background: color-mix(in srgb, var(--green-lt) 64%, var(--s2));
+}
+
+.tracs-domain-price-crosscheck .dpc-priority-summary-card.blue {
+  border-color: var(--blue-bd);
+  background: color-mix(in srgb, var(--blue-lt) 64%, var(--s2));
+}
+
+.tracs-domain-price-crosscheck .dpc-priority-summary-card.muted {
+  background: color-mix(in srgb, var(--s3) 60%, var(--s2));
+}
+
+.tracs-domain-price-crosscheck .dpc-priority-summary-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tracs-domain-price-crosscheck .dpc-priority-summary-head span {
+  color: var(--tx2);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.tracs-domain-price-crosscheck .dpc-priority-summary-head strong {
+  color: var(--tx1);
+  font-family: var(--mono);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.tracs-domain-price-crosscheck .dpc-priority-summary-card p {
+  margin: 0;
+  color: var(--tx3);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+.tracs-domain-price-crosscheck .dpc-priority-example {
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, currentColor 12%, var(--bd1));
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--s1) 80%, transparent);
+}
+
+.tracs-domain-price-crosscheck .dpc-priority-example small,
+.tracs-domain-price-crosscheck .dpc-priority-example strong,
+.tracs-domain-price-crosscheck .dpc-priority-example span {
+  display: block;
+}
+
+.tracs-domain-price-crosscheck .dpc-priority-example small {
+  color: var(--tx3);
+  font-size: 9px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.tracs-domain-price-crosscheck .dpc-priority-example strong {
+  margin-top: 3px;
+  color: var(--tx1);
+  font-size: 11px;
+}
+
+.tracs-domain-price-crosscheck .dpc-priority-example span,
+.tracs-domain-price-crosscheck .dpc-priority-actions span {
+  color: var(--tx2);
+  font-size: 10px;
+}
+
+.tracs-domain-price-crosscheck .dpc-priority-actions {
+  display: flex;
+  margin-top: auto;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tracs-domain-price-crosscheck .dpc-priority-summary-card > .btn {
+  align-self: flex-start;
+  margin-top: auto;
+}
+
+/* Matrix selling-price risk states. Baseline and registrar rows remain neutral. */
+.tracs-domain-price-crosscheck .dpc-input-wrap.dpc-cell-neutral {
+  border-color: var(--bd2);
+  background: var(--s1);
+}
+
+.tracs-domain-price-crosscheck .dpc-input-wrap.dpc-cell-danger {
+  border-color: var(--red-bd);
+  background: color-mix(in srgb, var(--red-lt) 78%, var(--s1));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--red) 10%, transparent);
+}
+
+.tracs-domain-price-crosscheck .dpc-input-wrap.dpc-cell-warning {
+  border-color: var(--amber-bd);
+  background: color-mix(in srgb, var(--amber-lt) 78%, var(--s1));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--amber) 10%, transparent);
+}
+
+.tracs-domain-price-crosscheck .dpc-input-wrap.dpc-cell-safe {
+  border-color: var(--green-bd);
+  background: color-mix(in srgb, var(--green-lt) 78%, var(--s1));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--green) 10%, transparent);
+}
+
+.tracs-domain-price-crosscheck .dpc-input-wrap.dpc-cell-danger .currency-prefix {
+  color: var(--red);
+  background: color-mix(in srgb, var(--red-lt) 82%, var(--s2));
+}
+
+.tracs-domain-price-crosscheck .dpc-input-wrap.dpc-cell-warning .currency-prefix {
+  color: var(--amber);
+  background: color-mix(in srgb, var(--amber-lt) 82%, var(--s2));
+}
+
+.tracs-domain-price-crosscheck .dpc-input-wrap.dpc-cell-safe .currency-prefix {
+  color: var(--green);
+  background: color-mix(in srgb, var(--green-lt) 82%, var(--s2));
+}
+
+.tracs-domain-price-crosscheck .dpc-input-wrap.dpc-cell-danger .form-input,
+.tracs-domain-price-crosscheck .dpc-input-wrap.dpc-cell-warning .form-input,
+.tracs-domain-price-crosscheck .dpc-input-wrap.dpc-cell-safe .form-input {
+  color: var(--tx1);
+  background: transparent;
+}
+
+.tracs-domain-price-crosscheck .dpc-input-wrap:focus-within {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+
+/* Compact, even ccTLD findings grid */
+.tracs-domain-price-crosscheck .dpc-cctld-priority-panel .dpc-finding-column {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding: 10px;
+}
+
+.tracs-domain-price-crosscheck .dpc-cctld-priority-panel .dpc-finding-row {
+  display: flex;
+  min-width: 0;
+  height: 100%;
+  flex-direction: column;
+  gap: 9px;
+  padding: 11px;
+}
+
+.tracs-domain-price-crosscheck .dpc-cctld-priority-panel .dpc-finding-main {
+  align-items: flex-start;
+}
+
+.tracs-domain-price-crosscheck .dpc-cctld-priority-panel .dpc-finding-main strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tracs-domain-price-crosscheck .dpc-cctld-priority-panel .dpc-finding-metrics {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.tracs-domain-price-crosscheck .dpc-cctld-priority-panel .dpc-finding-action {
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+@media (max-width: 1280px) {
+  .tracs-domain-price-crosscheck .dpc-overview-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .tracs-domain-price-crosscheck .dpc-overview-grid,
+  .tracs-domain-price-crosscheck .dpc-analysis-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tracs-domain-price-crosscheck .dpc-intelligence-dashboard {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, .46fr);
+  }
+
+  .tracs-domain-price-crosscheck .dpc-priority-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tracs-domain-price-crosscheck .dpc-cctld-priority-panel .dpc-finding-column {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 980px) {
+  .tracs-domain-price-crosscheck .dpc-overview-top,
+  .tracs-domain-price-crosscheck .dpc-overview-grid,
+  .tracs-domain-price-crosscheck .dpc-analysis-grid,
+  .tracs-domain-price-crosscheck .dpc-cctld-check-layout,
+  .tracs-domain-price-crosscheck .dpc-action-bucket-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tracs-domain-price-crosscheck .dpc-intelligence-dashboard {
+    grid-template-columns: 1fr;
+  }
+
+  .tracs-domain-price-crosscheck .dpc-intelligence-buckets {
+    margin-inline: 10px;
+  }
+
+  .tracs-domain-price-crosscheck .dpc-intelligence-buckets .dpc-action-bucket-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-height: none;
+    overflow: visible;
+  }
+
+  .tracs-domain-price-crosscheck .dpc-registrar-snapshot-panel {
+    position: static;
+    max-height: none;
+  }
+
+  .tracs-domain-price-crosscheck .dpc-registrar-snapshot-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-height: none;
+    overflow: visible;
+  }
+
+  .tracs-domain-price-crosscheck .dpc-record-summary {
+    grid-template-columns: 1fr;
+    flex: 0 1 auto;
+    min-height: 0;
+  }
+
+  .tracs-domain-price-crosscheck .dpc-cctld-priority-panel .dpc-finding-column {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tracs-domain-price-crosscheck .dpc-notes-form {
+    grid-template-columns: minmax(150px, .6fr) minmax(220px, 1fr);
+  }
+
+  .tracs-domain-price-crosscheck .dpc-notes-form .btn {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}
+
+@media (max-width: 700px) {
+  .tracs-domain-price-crosscheck .dpc-section-tabs {
+    margin-inline: -2px;
+  }
+
+  .tracs-domain-price-crosscheck .dpc-section-tabs button {
+    min-height: 30px;
+    padding: 5px 9px;
+    font-size: 11px;
+  }
+
+  .tracs-domain-price-crosscheck .dpc-overview-stats,
+  .tracs-domain-price-crosscheck .dpc-quick-link-grid,
+  .tracs-domain-price-crosscheck .dpc-bucket-preview-grid,
+  .tracs-domain-price-crosscheck .dpc-notes-form {
+    grid-template-columns: 1fr;
+  }
+
+  .tracs-domain-price-crosscheck .dpc-intelligence-buckets .dpc-action-bucket-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tracs-domain-price-crosscheck .dpc-registrar-snapshot-list {
+    grid-template-columns: 1fr;
+  }
+
+  .tracs-domain-price-crosscheck .dpc-priority-summary-grid,
+  .tracs-domain-price-crosscheck .dpc-cctld-priority-panel .dpc-finding-column {
+    grid-template-columns: 1fr;
+  }
+
+  .tracs-domain-price-crosscheck .dpc-preview-row {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+}
+
+@media (max-width: 600px) {
+  .dpc-extension-modal-content .dpc-source-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dpc-extension-modal-content .dpc-source-form .btn {
+    grid-column: auto;
+    width: 100%;
+    justify-self: stretch;
+  }
 }

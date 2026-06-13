@@ -1,5 +1,8 @@
 <?php
+require_once __DIR__ . '/../../core/security/direct_access.php';
+tracs_deny_direct_script_access(__FILE__);
 require_once __DIR__.'/../../core/security/csrf.php';
+require_once __DIR__ . '/../../core/security/error_response.php';
 tracs_start_session();
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
@@ -55,7 +58,7 @@ function ok(mixed $data=null, string $msg='Success'): void {
 }
 function fail(string $msg='Error', int $code=400): void {
     http_response_code($code);
-    echo json_encode(['success'=>false,'message'=>$msg]);
+    echo json_encode(['success'=>false,'message'=>tracs_public_error_message($msg, $code >= 500 ? 'Server request failed.' : 'Error')]);
     exit;
 }
 function fail_not_found(): void {
@@ -96,6 +99,14 @@ function api_require_tv_mode_access(): void {
     tracs_auth_log_event($conn, 'permission_denied', 'blocked', (string)($_SESSION['user_email'] ?? ''), $uid ?: null, 'tv_mode_access');
     fail('Not found', 404);
 }
+function api_require_super_admin(): void {
+    global $authUser, $conn, $uid;
+    if ((string)($authUser['role_slug'] ?? '') === 'super_admin') {
+        return;
+    }
+    tracs_auth_log_event($conn, 'permission_denied', 'blocked', (string)($_SESSION['user_email'] ?? ''), $uid ?: null, 'super_admin_only');
+    fail('Forbidden', 403);
+}
 function logAct(mysqli $conn, int $uid, string $action, string $module, string $desc, mixed $ref=null): void {
     try {
         $AC = new ActivityLogController($conn, $uid);
@@ -110,14 +121,82 @@ function tickerEvent(mysqli $conn, int $uid, string $msg, string $type='info', ?
 }
 
 $script = basename((string)(parse_url($_SERVER['SCRIPT_NAME'] ?? '', PHP_URL_PATH) ?: ''));
+$apiMethodMap = [
+    'api_mom.php' => ['POST'],
+    'bt-create.php' => ['POST'],
+    'bt-delete.php' => ['POST'],
+    'bt-update.php' => ['POST'],
+    'case-attachment.php' => ['GET'],
+    'case-create.php' => ['POST'],
+    'case-delete.php' => ['POST'],
+    'case-get.php' => ['POST'],
+    'case-resolve.php' => ['POST'],
+    'case-status.php' => ['POST'],
+    'case-update.php' => ['POST'],
+    'currency-converter.php' => ['GET'],
+    'currency.php' => ['GET'],
+    'domain-create.php' => ['POST'],
+    'domain-delete.php' => ['POST'],
+    'domain-price-matrix.php' => ['POST'],
+    'domain-price-recalculate.php' => ['POST'],
+    'domain-price-task.php' => ['POST'],
+    'domain-price-workflow.php' => ['POST'],
+    'domain-update.php' => ['POST'],
+    'feedback-create.php' => ['POST'],
+    'feedback-delete.php' => ['POST'],
+    'feedback-list.php' => ['GET'],
+    'feedback-update.php' => ['POST'],
+    'finance-create.php' => ['POST'],
+    'finance-delete.php' => ['POST'],
+    'holiday-indonesia.php' => ['GET'],
+    'mom-action.php' => ['POST'],
+    'mom-screenshot.php' => ['GET'],
+    'notification-mark-read.php' => ['POST'],
+    'notification-push-claim.php' => ['POST'],
+    'notification-push-status.php' => ['POST'],
+    'notifications-list.php' => ['GET'],
+    'ops-status.php' => ['POST'],
+    'reminder-create.php' => ['POST'],
+    'reminder-delete.php' => ['POST'],
+    'reminder-get.php' => ['POST'],
+    'reminder-toggle.php' => ['POST'],
+    'reminder-update.php' => ['POST'],
+    'server-health.php' => ['GET'],
+    'shift-attachment.php' => ['GET'],
+    'shift-create.php' => ['POST'],
+    'shift-delete.php' => ['POST'],
+    'shift-history.php' => ['GET'],
+    'shift-list.php' => ['GET'],
+    'shift-resolve.php' => ['POST'],
+    'shift-update.php' => ['POST'],
+    'shifting-assignment.php' => ['GET', 'POST'],
+    'task-create.php' => ['POST'],
+    'task-delete.php' => ['POST'],
+    'task-toggle.php' => ['POST'],
+    'task-update.php' => ['POST'],
+    'ticker-create.php' => ['POST'],
+    'ticker-delete.php' => ['POST'],
+    'ticker-list.php' => ['GET'],
+    'tv-mode-summary.php' => ['GET'],
+    'user-avatar.php' => ['POST'],
+];
+$requestMethod = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+if (isset($apiMethodMap[$script]) && !in_array($requestMethod, $apiMethodMap[$script], true)) {
+    header('Allow: ' . implode(', ', $apiMethodMap[$script]));
+    fail('Method not allowed', 405);
+}
+
 $apiPermissionMap = [
     'api_mom.php' => ['moms.manage'],
     'bt-create.php' => ['finance.manage'],
     'bt-delete.php' => ['finance.manage'],
     'bt-update.php' => ['finance.manage'],
     'case-create.php' => ['cases.manage'],
-    'case-delete.php' => ['cases.manage'],
+    'case-delete.php' => ['cases.view'],
     'case-get.php' => ['cases.view'],
+    'case-resolve.php' => ['cases.manage'],
+    'case-status.php' => ['cases.manage'],
+    'case-attachment.php' => ['cases.view'],
     'case-update.php' => ['cases.manage'],
     'currency.php' => ['dashboard.view'],
     'currency-converter.php' => ['dashboard.view'],
@@ -133,6 +212,7 @@ $apiPermissionMap = [
     'finance-create.php' => ['finance.manage'],
     'finance-delete.php' => ['finance.manage'],
     'mom-action.php' => ['moms.manage'],
+    'mom-screenshot.php' => ['moms.view'],
     'reminder-create.php' => ['reminders.manage'],
     'reminder-delete.php' => ['reminders.manage'],
     'reminder-get.php' => ['reminders.view'],
@@ -141,9 +221,11 @@ $apiPermissionMap = [
     'shift-create.php' => ['reports.create'],
     'shift-delete.php' => ['reports.update'],
     'shift-history.php' => ['reports.view'],
+    'shift-attachment.php' => ['reports.view'],
     'shift-list.php' => ['reports.view'],
     'shift-resolve.php' => ['reports.update'],
     'shift-update.php' => ['reports.update'],
+    'shifting-assignment.php' => ['shifts.view'],
     'task-create.php' => ['checklist.manage'],
     'task-delete.php' => ['checklist.manage'],
     'task-toggle.php' => ['checklist.manage'],

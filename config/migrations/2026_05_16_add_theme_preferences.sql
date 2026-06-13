@@ -4,7 +4,7 @@
 
 CREATE TABLE IF NOT EXISTS `tracs_user_preferences` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `user_id` INT UNSIGNED NOT NULL,
+  `user_id` INT NOT NULL,
   `preference_key` VARCHAR(100) NOT NULL,
   `preference_value` TEXT DEFAULT NULL,
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

@@ -62,6 +62,25 @@ function tracs_require_page_permission(mysqli $conn, string $permission): void {
     tracs_require_any_page_permission($conn, [$permission]);
 }
 
+function tracs_require_super_admin_page(mysqli $conn): array {
+    $user = tracs_get_user_by_id($conn, (int)($_SESSION['user_id'] ?? 0));
+    if ($user && tracs_user_can_login($user) && (string)($user['role_slug'] ?? '') === 'super_admin') {
+        return $user;
+    }
+
+    if (function_exists('tracs_auth_log_event')) {
+        tracs_auth_log_event(
+            $conn,
+            'permission_denied',
+            'blocked',
+            (string)($_SESSION['user_email'] ?? ''),
+            (int)($_SESSION['user_id'] ?? 0) ?: null,
+            'super_admin_only'
+        );
+    }
+    tracs_abort_404();
+}
+
 function tracs_actor_can_oversee_user(mysqli $conn, array $actor, int $ownerId): bool {
     if ($ownerId <= 0) {
         return false;

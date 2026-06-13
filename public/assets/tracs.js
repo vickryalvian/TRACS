@@ -43,6 +43,8 @@ const API = {
     CREATE : API_BASE + 'case-create.php',
     UPDATE : API_BASE + 'case-update.php',
     DELETE : API_BASE + 'case-delete.php',
+    RESOLVE: API_BASE + 'case-resolve.php',
+    STATUS : API_BASE + 'case-status.php',
     GET    : API_BASE + 'case-get.php'
   },
 
@@ -84,6 +86,13 @@ const API = {
     RESOLVE: API_BASE + 'shift-resolve.php',
     DELETE : API_BASE + 'shift-delete.php',
     LIST   : API_BASE + 'shift-list.php'
+  },
+
+  NOTIFICATION: {
+    LIST     : API_BASE + 'notifications-list.php',
+    MARK_READ: API_BASE + 'notification-mark-read.php',
+    CLAIM_PUSH: API_BASE + 'notification-push-claim.php',
+    PUSH_STATUS: API_BASE + 'notification-push-status.php'
   }
 };
 
@@ -99,10 +108,14 @@ function _clock(){
 }
 setInterval(_clock,1000); _clock();
 
-/* ── TRACS notifications ─────────────────────────────── */
-const _dock=(()=>{const d=document.createElement('div');d.className='toast-dock';document.body.appendChild(d);return d;})();
+/* ── TRACS notifications + shared UI state ───────────── */
 const TOAST_FLASH_KEY='tracs:toast-flash';
 let _lastToast=null;
+const tracsToastDocks=new Map();
+const tracsModalToastDocks=new WeakMap();
+const tracsInlineToastDocks=new WeakMap();
+const tracsToastDefaults={success:3500,info:4000,warning:7000,error:9000};
+const tracsModalOverlaySelector='.modal-overlay, .dpc-modal, .infra-modal, .cf-modal, .tracs-dialog-overlay';
 function tracsNoticeType(type){
   return ['success','error','warning','info'].includes(type) ? type : 'info';
 }
@@ -115,17 +128,195 @@ function toastIconFor(type){
 function tracsRefreshIcons(root){
   if(window.lucide) lucide.createIcons(root ? { nodes: Array.from(root.querySelectorAll('[data-lucide]')) } : undefined);
 }
-function showToast(type='info',title='',message='',options={}){
-  const noticeType=tracsNoticeType(type);
-  const duration=Number.isFinite(Number(options.duration)) ? Number(options.duration) : 6400;
-  const toastTitle=String(title || '').trim();
-  const toastMessage=String(message || '').trim();
+function tracsVisibleModal(){
+  return Array.from(document.querySelectorAll('.modal-overlay:not(.hidden), .dpc-modal, .infra-modal:not([hidden]), .cf-modal, [role="dialog"]:not([hidden])'))
+    .find(node=>!node.hidden && !node.classList.contains('hidden') && getComputedStyle(node).display!=='none') || null;
+}
+function tracsSourceElement(sourceElement){
+  if(sourceElement instanceof Element)return sourceElement;
+  const active=document.activeElement;
+  return active instanceof Element && active!==document.body && active!==document.documentElement ? active : null;
+}
+function tracsSourceModal(sourceElement){
+  const source=tracsSourceElement(sourceElement);
+  return source?.closest(tracsModalOverlaySelector) || source?.closest('[role="dialog"]') || null;
+}
+function tracsResolveModal(modal){
+  if(typeof modal === 'string'){
+    return document.getElementById(modal)
+      || document.getElementById(`${modal}Modal`)
+      || document.querySelector(modal);
+  }
+  if(modal instanceof Element){
+    return modal.matches(tracsModalOverlaySelector)
+      ? modal
+      : (modal.closest(tracsModalOverlaySelector) || modal);
+  }
+  return tracsVisibleModal();
+}
+function tracsModalPanel(modal){
+  const target=tracsResolveModal(modal);
+  if(!target)return null;
+  if(target.matches('.modal, .dpc-modal-content, .infra-modal__panel, [role="dialog"]'))return target;
+  return target.querySelector('.modal, .dpc-modal-content, .infra-modal__panel, [role="dialog"]') || target;
+}
+function tracsPositionModalToastDock(dock,modal){
+  const target=tracsResolveModal(modal);
+  const panel=tracsModalPanel(target);
+  if(!target || !panel || !dock)return;
+  const targetRect=target.getBoundingClientRect();
+  const panelRect=panel.getBoundingClientRect();
+  const relativeTop=panelRect.top-targetRect.top;
+  const hasRoomAbove=relativeTop>=72;
+  const panelHeader=panel.querySelector('.modal-head, .dpc-modal-header, .infra-modal__head, [data-modal-header]');
+  const insideTop=panelHeader
+    ? panelHeader.getBoundingClientRect().bottom-targetRect.top+8
+    : relativeTop+12;
+  const requestedMaxWidth=Number.parseFloat(dock.dataset.toastMaxWidth || '420');
+  const panelInset=panelRect.width<=240 ? 20 : 32;
+  const availableWidth=Math.max(1,Math.min(
+    Number.isFinite(requestedMaxWidth) ? requestedMaxWidth : 420,
+    panelRect.width-panelInset,
+    window.innerWidth-32
+  ));
+  dock.style.setProperty('--toast-modal-left',`${panelRect.left-targetRect.left+(panelRect.width/2)}px`);
+  dock.style.setProperty('--toast-modal-right',`${Math.max(10,targetRect.right-panelRect.right+12)}px`);
+  dock.style.setProperty('--toast-modal-top',`${hasRoomAbove?relativeTop-10:insideTop}px`);
+  dock.style.setProperty('--toast-modal-max-width',`${availableWidth}px`);
+  dock.classList.toggle('is-inside-modal',!hasRoomAbove);
+}
+function tracsToastContext(options={}){
+  const requested=String(options.context || '').toLowerCase();
+  if(['page','modal','inline'].includes(requested))return requested;
+  if(options.modal || options.contextElement)return 'modal';
+  const source=tracsSourceElement(options.sourceElement);
+  if(source)return tracsSourceModal(source) ? 'modal' : 'page';
+  return tracsVisibleModal() ? 'modal' : 'page';
+}
+function tracsToastOptionsForSource(sourceElement,options={}){
+  const source=tracsSourceElement(sourceElement);
+  const sourceModal=tracsSourceModal(source);
+  const context=options.context || (sourceModal ? 'modal' : 'page');
+  return {
+    ...options,
+    context,
+    position:options.position || (context === 'modal' ? 'modal-top-right' : 'top-right'),
+    sourceElement:source,
+    modal:options.modal || (context === 'modal' ? sourceModal : null)
+  };
+}
+function tracsToastDock(context='page',position='',modal=null,sourceElement=null,maxWidth=null){
+  const normalizedContext=['modal','inline'].includes(context) ? context : 'page';
+  const normalizedPosition=position || (normalizedContext === 'modal' ? 'modal-top-right' : 'top-right');
+  if(normalizedContext === 'modal'){
+    const target=tracsResolveModal(modal || tracsSourceModal(sourceElement));
+    if(target){
+      let dock=tracsModalToastDocks.get(target);
+      if(!dock || !dock.isConnected){
+        dock=document.createElement('div');
+        dock.className=`toast-dock toast-dock--modal toast-container--modal toast-dock--${normalizedPosition}`;
+        dock.dataset.toastContext='modal';
+        target.appendChild(dock);
+        tracsModalToastDocks.set(target,dock);
+      }
+      const oldPosition=dock.dataset.toastPosition;
+      if(oldPosition && oldPosition!==normalizedPosition)dock.classList.remove(`toast-dock--${oldPosition}`);
+      dock.classList.add(`toast-dock--${normalizedPosition}`);
+      dock.dataset.toastPosition=normalizedPosition;
+      dock.dataset.toastMaxWidth=String(Number.parseFloat(maxWidth) || 420);
+      tracsPositionModalToastDock(dock,target);
+      return dock;
+    }
+  }
+  if(normalizedContext === 'inline'){
+    const source=tracsSourceElement(sourceElement);
+    const host=source?.closest('[data-toast-context="inline"], .panel, .card, form') || source?.parentElement;
+    if(host){
+      let dock=tracsInlineToastDocks.get(host);
+      if(!dock || !dock.isConnected){
+        dock=document.createElement('div');
+        dock.className=`toast-dock toast-dock--inline toast-dock--${normalizedPosition}`;
+        dock.dataset.toastContext='inline';
+        dock.dataset.toastPosition=normalizedPosition;
+        host.classList.add('toast-inline-host');
+        host.appendChild(dock);
+        tracsInlineToastDocks.set(host,dock);
+      }
+      return dock;
+    }
+  }
+  const key=`${normalizedContext}:${normalizedPosition}`;
+  if(tracsToastDocks.has(key))return tracsToastDocks.get(key);
+  const dock=document.createElement('div');
+  dock.className=`toast-dock toast-dock--${normalizedContext} toast-dock--${normalizedPosition}`;
+  dock.dataset.toastContext=normalizedContext;
+  dock.dataset.toastPosition=normalizedPosition;
+  document.body.appendChild(dock);
+  tracsToastDocks.set(key,dock);
+  return dock;
+}
+window.addEventListener('resize',()=>{
+  document.querySelectorAll('.toast-dock--modal-center, .toast-dock--modal-top-right').forEach(dock=>tracsPositionModalToastDock(dock,dock.parentElement));
+});
+function tracsToastArgs(args){
+  const types=['success','error','warning','info'];
+  if(types.includes(args[0]) && args.length >= 3){
+    return {type:args[0],title:args[1],message:args[2],options:args[3]||{}};
+  }
+  return {message:args[0],type:args[1]||'info',options:args[2]||{},title:(args[2]||{}).title||''};
+}
+function tracsDismissToast(toastNode){
+  if(!toastNode?.isConnected || toastNode.classList.contains('is-leaving'))return;
+  toastNode.classList.add('is-leaving');
+  setTimeout(()=>toastNode.remove(),420);
+}
+function showToast(...args){
+  const parsed=tracsToastArgs(args);
+  const noticeType=tracsNoticeType(parsed.type);
+  const options=parsed.options && typeof parsed.options === 'object' ? parsed.options : {};
+  const critical=options.priority === 'critical' || (noticeType === 'error' && /could not sign|could not be saved|could not be deleted|could not be resolved|server.+unavailable|session.+expired|do not have permission|too many attempts/i.test(`${parsed.title || ''} ${parsed.message || ''}`));
+  const persistent=options.persistent === true || critical;
+  const duration=persistent ? 0 : (Number.isFinite(Number(options.duration)) ? Number(options.duration) : tracsToastDefaults[noticeType]);
+  const sourceElement=tracsSourceElement(options.sourceElement);
+  const context=tracsToastContext({...options,sourceElement});
+  const position=options.position || (context === 'modal' ? 'modal-top-right' : '');
+  const modal=options.modal || options.contextElement || (context === 'modal' ? tracsSourceModal(sourceElement) : null);
+  const dock=tracsToastDock(context,position,modal,sourceElement,options.maxWidth);
+  const title=parsed.title;
+  const message=parsed.message;
+  let toastTitle=String(title || '').trim();
+  let toastMessage=String(message || '').trim();
+  if(noticeType === 'error'){
+    if(toastMessage)toastMessage=getFriendlyErrorMessage(toastMessage,'The request could not be completed. Please check the data and try again.');
+    else{
+      toastMessage=getFriendlyErrorMessage(toastTitle,'The request could not be completed. Please check the data and try again.');
+      toastTitle='';
+    }
+  }
   const fallback=toastTitle || toastMessage;
   if(!fallback)return null;
   _lastToast={type:noticeType,title:toastTitle,message:toastMessage || toastTitle};
+  const duplicateKey=`${noticeType}:${(toastMessage || toastTitle).toLowerCase().replace(/\s+/g,' ').trim()}`;
+  let existing=Array.from(dock.querySelectorAll('.toast:not(.is-leaving)'));
+  if(context === 'modal'){
+    existing.forEach(item=>item.remove());
+    existing=[];
+  }else{
+    const duplicate=existing.find(item=>item.dataset.toastKey===duplicateKey);
+    if(duplicate)tracsDismissToast(duplicate);
+    if(existing.length >= 3){
+      const replaceable=existing.find(item=>item.dataset.persistent!=='true') || existing[0];
+      tracsDismissToast(replaceable);
+    }
+  }
   const t=document.createElement('div');
   const ic=toastIconFor(noticeType);
-  t.className=`toast ${noticeType}`;
+  t.className=`toast toast--${context} ${noticeType}`;
+  const requestedMaxWidth=Number.parseFloat(options.maxWidth);
+  if(context !== 'modal' && Number.isFinite(requestedMaxWidth))t.style.maxWidth=`min(100%, ${requestedMaxWidth}px)`;
+  t.dataset.toastKey=duplicateKey;
+  t.dataset.persistent=persistent?'true':'false';
+  if(critical)t.classList.add('is-critical');
   t.setAttribute('role',noticeType === 'error' ? 'alert' : 'status');
   t.setAttribute('aria-live',noticeType === 'error' ? 'assertive' : 'polite');
   const radar=document.createElement('span');
@@ -156,27 +347,333 @@ function showToast(type='info',title='',message='',options={}){
   close.className='toast-close';
   close.setAttribute('aria-label','Dismiss notification');
   close.innerHTML='<i data-lucide="x" class="icon-xs"></i>';
+  const closable=options.closable !== false && (options.closable === true || persistent || noticeType === 'error' || noticeType === 'warning');
+  close.hidden=!closable;
   t.append(radar,body,close);
-  _dock.appendChild(t);
-  const dismiss=()=>{
-    if(!t.isConnected)return;
-    t.classList.add('is-leaving');
-    t.addEventListener('animationend',event=>{
-      if(event.target === t && event.animationName === 'toast-fade-right') t.remove();
-    },{once:true});
-    setTimeout(()=>t.remove(),520);
-  };
+  if(critical)dock.prepend(t);
+  else dock.appendChild(t);
+  const dismiss=()=>tracsDismissToast(t);
   close.addEventListener('click',dismiss);
   tracsRefreshIcons(t);
   if(duration > 0)setTimeout(dismiss,duration);
   return t;
 }
-function toast(msg,type='info',ms=6400){
-  return showToast(type,'',msg,{duration:ms});
+function toast(msg,type='info',ms){
+  const options=Number.isFinite(Number(ms)) ? {duration:Number(ms)} : {};
+  return showToast(msg,type,options);
 }
 window.toast=toast;
 window.showToast=showToast;
 window.tracsToast=showToast;
+window.tracsToastOptionsForSource=tracsToastOptionsForSource;
+
+function setButtonLoading(button,loadingText='Processing...'){
+  if(typeof button === 'string')button=document.querySelector(button);
+  if(!button || button.dataset.tracsLoading === '1')return false;
+  const label=button.querySelector('[data-loading-label], .btn-login-label');
+  const inputButton=button.matches?.('input[type="submit"], input[type="button"]');
+  button.dataset.tracsLoading='1';
+  button.dataset.tracsOriginalHtml=button.innerHTML;
+  button.dataset.tracsOriginalValue=inputButton ? button.value : '';
+  button.dataset.tracsOriginalDisabled=button.disabled?'1':'0';
+  button.dataset.tracsOriginalAriaDisabled=button.getAttribute('aria-disabled') ?? '';
+  button.dataset.tracsOriginalAriaBusy=button.getAttribute('aria-busy') ?? '';
+  button.dataset.tracsOriginalAriaLabel=button.getAttribute('aria-label') ?? '';
+  button.dataset.tracsOriginalTitle=button.getAttribute('title') ?? '';
+  button.dataset.tracsOriginalMinWidth=button.style.minWidth || '';
+  const width=Math.ceil(button.getBoundingClientRect().width);
+  if(width>0)button.style.minWidth=`${width}px`;
+  if(inputButton){
+    button.value=loadingText;
+  }else if(button.classList.contains('btn-icon')){
+    button.classList.add('is-loading-icon');
+    button.setAttribute('aria-label',loadingText);
+    button.title=loadingText;
+  }else if(label){
+    label.dataset.tracsOriginalLabel=label.textContent || '';
+    label.textContent=loadingText;
+  }else{
+    button.textContent=loadingText;
+  }
+  button.disabled=true;
+  button.setAttribute('aria-disabled','true');
+  button.setAttribute('aria-busy','true');
+  button.classList.add('is-loading');
+  return true;
+}
+function resetButtonLoading(button){
+  if(typeof button === 'string')button=document.querySelector(button);
+  if(!button || button.dataset.tracsLoading !== '1')return;
+  const inputButton=button.matches?.('input[type="submit"], input[type="button"]');
+  if(inputButton)button.value=button.dataset.tracsOriginalValue || button.value;
+  else button.innerHTML=button.dataset.tracsOriginalHtml || button.innerHTML;
+  button.disabled=button.dataset.tracsOriginalDisabled === '1';
+  const ariaDisabled=button.dataset.tracsOriginalAriaDisabled;
+  const ariaBusy=button.dataset.tracsOriginalAriaBusy;
+  const ariaLabel=button.dataset.tracsOriginalAriaLabel;
+  const title=button.dataset.tracsOriginalTitle;
+  if(ariaDisabled)button.setAttribute('aria-disabled',ariaDisabled); else button.removeAttribute('aria-disabled');
+  if(ariaBusy)button.setAttribute('aria-busy',ariaBusy); else button.removeAttribute('aria-busy');
+  if(ariaLabel)button.setAttribute('aria-label',ariaLabel); else button.removeAttribute('aria-label');
+  if(title)button.setAttribute('title',title); else button.removeAttribute('title');
+  button.style.minWidth=button.dataset.tracsOriginalMinWidth || '';
+  button.classList.remove('is-loading','is-loading-icon');
+  delete button.dataset.tracsLoading;
+  tracsRefreshIcons(button);
+}
+async function withLoadingState(button,loadingText,asyncCallback){
+  if(typeof loadingText === 'function'){
+    asyncCallback=loadingText;
+    loadingText='Processing...';
+  }
+  if(typeof button === 'string')button=document.querySelector(button);
+  if(!button)return await asyncCallback();
+  if(!setButtonLoading(button,loadingText))return undefined;
+  try{return await asyncCallback();}
+  finally{resetButtonLoading(button);}
+}
+function getFriendlyErrorMessage(error,fallbackMessage='Something went wrong. Please try again.'){
+  const raw=String(error?.userMessage || error?.message || error || '').trim();
+  const status=Number(error?.status || error?.response?.status || 0);
+  if(/invalid login credentials|invalid credentials/i.test(raw))return 'We could not sign you in. Please check your email and password, then try again.';
+  if(status===401 || /session.+expired|unauthenticated/i.test(raw))return 'Your session has expired. Please sign in again to continue.';
+  if(status===403 || /permission|forbidden|not authorized/i.test(raw))return 'You do not have permission to perform this action.';
+  if(status===429 || /too many|rate limit|busy|timeout|timed out/i.test(raw))return 'The server is taking longer than usual. Please wait a moment and try again.';
+  if(status>=500 || /server unavailable|service unavailable|bad gateway/i.test(raw))return 'The server is currently unavailable. Please try again in a moment.';
+  if(error?.name==='TypeError' || /failed to fetch|network error|networkerror|load failed/i.test(raw))return 'Connection issue detected. Please check your internet connection and try again.';
+  if(/sql|mysqli|pdo|stack trace|fatal error|warning:|\/var\/|\/home\/|\\.php on line/i.test(raw))return fallbackMessage;
+  return raw || fallbackMessage;
+}
+function handleRequestError(error,context='page',fallbackMessage='Your changes could not be saved. Please check the data and try again.'){
+  const message=getFriendlyErrorMessage(error,fallbackMessage);
+  const critical=Number(error?.status || 0)>=500 || /server is currently unavailable|session has expired|permission|could not be saved|could not be deleted|could not be resolved|could not sign/i.test(message);
+  showToast(message,'error',{
+    context,
+    duration:critical?0:9000,
+    persistent:critical,
+    closable:true,
+    priority:critical?'critical':'normal'
+  });
+  return message;
+}
+function tracsCloseModalElement(modal,options={}){
+  const target=tracsResolveModal(modal);
+  if(!target)return;
+  if(target.dataset.tracsSuccessPending === '1')return;
+  if(!options.bypassUnsaved && window.TRACSUnsavedChanges?.isDirty(target)){
+    window.TRACSUnsavedChanges.requestModalClose(target,()=>tracsCloseModalElement(target,{bypassUnsaved:true}));
+    return;
+  }
+  if(target.classList.contains('modal-overlay') || target.classList.contains('tracs-dialog-overlay'))target.classList.add('hidden');
+  else if(target.classList.contains('dpc-modal') || target.classList.contains('cf-modal'))target.style.display='none';
+  else if(target.classList.contains('infra-modal') || target.hasAttribute('hidden'))target.hidden=true;
+  else target.classList.add('hidden');
+  target.removeAttribute('aria-busy');
+  target.setAttribute('aria-hidden','true');
+  delete target.dataset.tracsSuccessPending;
+  const toastDock=tracsModalToastDocks.get(target);
+  if(toastDock){
+    toastDock.remove();
+    tracsModalToastDocks.delete(target);
+  }
+  const trigger=target._tracsModalTrigger;
+  if(trigger?.isConnected)requestAnimationFrame(()=>trigger.focus({preventScroll:true}));
+}
+function tracsOpenModalElement(modal,options={}){
+  const target=tracsResolveModal(modal);
+  if(!target)return null;
+  target._tracsModalTrigger=document.activeElement;
+  target.classList.remove('hidden');
+  target.hidden=false;
+  target.removeAttribute('aria-hidden');
+  if(options.display)target.style.display=options.display;
+  const panel=tracsModalPanel(target);
+  if(panel){
+    if(!panel.hasAttribute('role'))panel.setAttribute('role','dialog');
+    panel.setAttribute('aria-modal','true');
+  }
+  requestAnimationFrame(()=>window.TRACSUnsavedChanges?.markSaved(target));
+  return target;
+}
+function showModalSuccessAndClose(options={}){
+  const modal=tracsResolveModal(options.modal);
+  const delay=Math.min(1500,Math.max(800,Number(options.delay ?? options.closeDelay ?? 1000)));
+  const message=String(options.message || 'Saved successfully.');
+  resetButtonLoading(options.button);
+  if(modal){
+    modal.dataset.tracsSuccessPending='1';
+    modal.setAttribute('aria-busy','false');
+    modal.dispatchEvent(new CustomEvent('tracs:save-success',{bubbles:true,detail:{root:modal}}));
+  }
+  const toastNode=showToast(message,'success',{
+    context:'modal',
+    position:'modal-top-right',
+    modal,
+    duration:Math.max(Number(options.duration || 0),delay+700),
+    closable:false
+  });
+  return new Promise(resolve=>{
+    window.setTimeout(async()=>{
+      if(modal)delete modal.dataset.tracsSuccessPending;
+      if(typeof options.close === 'function')options.close(modal);
+      else tracsCloseModalElement(modal);
+      try{
+        if(typeof options.onAfterClose === 'function')await options.onAfterClose();
+      }finally{
+        resolve(toastNode);
+      }
+    },delay);
+  });
+}
+function handleModalError(options={}){
+  const modal=tracsResolveModal(options.modal);
+  const error=options.error || options.message || '';
+  resetButtonLoading(options.button);
+  if(modal){
+    modal.removeAttribute('aria-busy');
+    delete modal.dataset.tracsSuccessPending;
+  }
+  const message=getFriendlyErrorMessage(error,options.fallbackMessage || 'Your changes could not be saved. Please check the data and try again.');
+  const critical=options.persistent === true
+    || Number(error?.status || 0)>=500
+    || /session has expired|permission|server is currently unavailable|could not be saved|network/i.test(message);
+  const toastNode=showToast(message,'error',{
+    context:'modal',
+    position:'modal-top-right',
+    modal,
+    duration:critical?0:Number(options.duration || 10000),
+    persistent:critical,
+    closable:true,
+    priority:critical?'critical':'normal'
+  });
+  const focusTarget=options.focus || modal?.querySelector('[aria-invalid="true"], :invalid');
+  if(focusTarget?.focus)requestAnimationFrame(()=>focusTarget.focus({preventScroll:false}));
+  return toastNode;
+}
+function initWhenVisible(target,callback,options={}){
+  if(typeof target === 'string')target=document.querySelector(target);
+  if(!target || typeof callback !== 'function')return ()=>{};
+  let started=false;
+  const start=()=>{
+    if(started)return;
+    started=true;
+    target.classList.remove('is-lazy-pending');
+    target.classList.add('is-lazy-loading');
+    Promise.resolve(callback(target))
+      .catch(error=>handleRequestError(error,'page','This component could not be loaded. Please refresh and try again.'))
+      .finally(()=>target.classList.remove('is-lazy-loading'));
+  };
+  target.classList.add('is-lazy-pending');
+  if(!('IntersectionObserver' in window)){start();return ()=>{};}
+  const observer=new IntersectionObserver(entries=>{
+    if(entries.some(entry=>entry.isIntersecting)){
+      observer.disconnect();
+      start();
+    }
+  },{rootMargin:options.rootMargin || '180px 0px',threshold:options.threshold ?? 0.01});
+  observer.observe(target);
+  return ()=>observer.disconnect();
+}
+window.setButtonLoading=setButtonLoading;
+window.resetButtonLoading=resetButtonLoading;
+window.withLoadingState=withLoadingState;
+window.getFriendlyErrorMessage=getFriendlyErrorMessage;
+window.handleRequestError=handleRequestError;
+window.showModalSuccessAndClose=showModalSuccessAndClose;
+window.handleModalError=handleModalError;
+window.tracsResolveModal=tracsResolveModal;
+window.tracsCloseModalElement=tracsCloseModalElement;
+window.tracsOpenModalElement=tracsOpenModalElement;
+window.initWhenVisible=initWhenVisible;
+
+function getShiftReportReminderState({shiftEndTime,reportSubmitted=false,now=new Date()}={}){
+  if(reportSubmitted){
+    return {
+      status:'completed',
+      message:'Shift report submitted for the current shift.',
+      severity:'normal',
+      minutesRemaining:0,
+      minutesOverdue:0
+    };
+  }
+  const endMs=shiftEndTime instanceof Date ? shiftEndTime.getTime() : new Date(shiftEndTime).getTime();
+  const nowMs=now instanceof Date ? now.getTime() : new Date(now).getTime();
+  if(!Number.isFinite(endMs) || !Number.isFinite(nowMs)){
+    return {
+      status:'normal',
+      message:'Shift timing is unavailable. Open Shift Reports to review your handover.',
+      severity:'normal',
+      minutesRemaining:null,
+      minutesOverdue:null
+    };
+  }
+  const diffMs=endMs-nowMs;
+  const minutesRemaining=Math.max(0,Math.ceil(diffMs/60000));
+  const minutesOverdue=Math.max(0,Math.floor(Math.abs(diffMs)/60000));
+
+  // Reminder thresholds intentionally progress at 30, 20, 10, 0, and 10 minutes overdue.
+  if(diffMs<=-10*60000){
+    return {status:'overdue-10',message:`Shift report is overdue by ${minutesOverdue} minutes. Please complete it immediately.`,severity:'overdue',minutesRemaining:0,minutesOverdue};
+  }
+  if(diffMs<=0){
+    return {status:'expired',message:'Shift has ended. Please submit your shift report now.',severity:'critical',minutesRemaining:0,minutesOverdue};
+  }
+  if(diffMs<=10*60000){
+    return {status:'critical-10',message:`Critical: only ${minutesRemaining} minutes left to submit your shift report.`,severity:'critical',minutesRemaining,minutesOverdue:0};
+  }
+  if(diffMs<=20*60000){
+    return {status:'reminder-20',message:`Please complete your shift report. ${minutesRemaining} minutes remaining.`,severity:'warning',minutesRemaining,minutesOverdue:0};
+  }
+  if(diffMs<=30*60000){
+    return {status:'reminder-30',message:`Shift report reminder: ${minutesRemaining} minutes left to complete your report.`,severity:'warning',minutesRemaining,minutesOverdue:0};
+  }
+  return {status:'normal',message:'Shift report reminder will appear 30 minutes before handover.',severity:'normal',minutesRemaining,minutesOverdue:0};
+}
+function initShiftReportReminders(){
+  const widgets=Array.from(document.querySelectorAll('[data-shift-report-reminder]'));
+  if(!widgets.length)return;
+  const states=['completed','normal','reminder-30','reminder-20','critical-10','expired','overdue-10'];
+  const render=widget=>{
+    const submitted=widget.dataset.reportSubmitted==='1';
+    const serverNowMs=new Date(widget.dataset.serverNow || '').getTime();
+    const serverOffset=Number.isFinite(serverNowMs) ? serverNowMs-Number(widget.dataset.clientStartedAt || Date.now()) : 0;
+    if(!widget.dataset.clientStartedAt)widget.dataset.clientStartedAt=String(Date.now());
+    const state=getShiftReportReminderState({
+      shiftEndTime:widget.dataset.shiftEndTime,
+      reportSubmitted:submitted,
+      now:new Date(Date.now()+serverOffset)
+    });
+    const reminder=widget.querySelector('.shift-dashboard-widget__reminder');
+    if(!reminder)return state;
+    reminder.dataset.shiftReminderState=state.status;
+    states.forEach(name=>reminder.classList.remove(`is-${name}`));
+    reminder.classList.add(`is-${state.status}`);
+    reminder.setAttribute('aria-label',state.message);
+    const message=reminder.querySelector('[data-shift-reminder-message]');
+    const countdown=reminder.querySelector('[data-shift-reminder-countdown]');
+    const icon=reminder.querySelector('[data-shift-reminder-icon]');
+    if(message)message.textContent=state.message;
+    if(countdown){
+      countdown.textContent=state.status==='completed'
+        ? 'Submitted'
+        : (state.minutesOverdue>0 ? `Overdue ${state.minutesOverdue}m` : (state.minutesRemaining===null ? 'Timing unavailable' : `${state.minutesRemaining}m left`));
+    }
+    if(icon){
+      icon.setAttribute('data-lucide',state.status==='completed'?'check-circle':(state.severity==='critical'||state.severity==='overdue'?'circle-alert':(state.severity==='warning'?'bell-ring':'bell')));
+      tracsRefreshIcons(reminder);
+    }
+    return state;
+  };
+  const updateAll=()=>widgets.map(render);
+  const initial=updateAll();
+  if(initial.every(state=>state.status==='completed'))return;
+  const timer=setInterval(()=>{
+    const current=updateAll();
+    if(current.every(state=>state.status==='completed'))clearInterval(timer);
+  },30000);
+  window.addEventListener('pagehide',()=>clearInterval(timer),{once:true});
+}
+window.getShiftReportReminderState=getShiftReportReminderState;
 
 function queueToastAfterReload(){
   if(!_lastToast || (!_lastToast.message && !_lastToast.title) || _lastToast.type === 'error')return;
@@ -354,13 +851,20 @@ window.prompt=function(message,defaultValue=''){tracsPrompt({type:'info',title:'
 /* ── Modal system ─────────────────────────────────────── */
 function openModal(id){
   const el=document.getElementById(id+'Modal');
-  if(el)el.classList.remove('hidden');
+  if(el){
+    tracsOpenModalElement(el);
+    requestAnimationFrame(()=>el.querySelector('[autofocus], .modal-body input:not([type="hidden"]):not([disabled]), .modal-body textarea:not([disabled]), .modal-body select:not([disabled]), form input:not([type="hidden"]):not([disabled]), form textarea:not([disabled]), form select:not([disabled]), button:not(.modal-close):not([disabled])')?.focus({preventScroll:true}));
+  }
   window.TRACSDropdowns?.syncAll();
 }
-function closeModal(id){const el=document.getElementById(id+'Modal');if(el)el.classList.add('hidden');}
-function closeAllModals(){document.querySelectorAll('.modal-overlay:not(.hidden)').forEach(o=>o.classList.add('hidden'));}
+function closeModal(id){tracsCloseModalElement(document.getElementById(id+'Modal'));}
+function closeAllModals(){document.querySelectorAll('.modal-overlay:not(.hidden)').forEach(tracsCloseModalElement);}
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeAllModals();});
-document.addEventListener('click',e=>{if(e.target.classList.contains('modal-overlay'))closeAllModals();});
+document.addEventListener('click',e=>{
+  if(!e.target.classList.contains('modal-overlay'))return;
+  if(e.target.id==='caseImageModal'){closeCaseImagePreview();return;}
+  closeAllModals();
+});
 
 /* ── TRACS custom dropdowns ───────────────────────────── */
 const TRACSDropdowns = (() => {
@@ -909,17 +1413,21 @@ document.addEventListener('click', e => {
     form.append('target_user_id', state.userId);
     form.append('avatar', blob, `avatar.${extension}`);
     try {
-      if (confirm) confirm.disabled = true;
+      if (confirm && !setButtonLoading(confirm,'Saving...')) return;
       const res = await fetch('/api/user-avatar.php', { method: 'POST', body: form });
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.message || 'Unable to save profile picture.');
-      updateAvatarUi(json.data.user_id, json.data.avatar_url || '', json.data.initials || 'U', json.data.avatar_path || '');
-      closeCropModal();
-      toast(json.message || 'Profile picture updated.', 'success');
+      showModalSuccessAndClose({
+        modal:'avatarCrop',
+        button:confirm,
+        message:json.message || 'Profile picture updated.',
+        close:()=>closeCropModal(),
+        onAfterClose:()=>updateAvatarUi(json.data.user_id,json.data.avatar_url || '',json.data.initials || 'U',json.data.avatar_path || '')
+      });
     } catch (error) {
-      toast(error.message || 'Unable to save profile picture.', 'error');
+      handleModalError({modal:'avatarCrop',button:confirm,error,fallbackMessage:'Unable to save profile picture. Please try again.'});
     } finally {
-      if (confirm) confirm.disabled = false;
+      resetButtonLoading(confirm);
     }
   }
 
@@ -1098,8 +1606,126 @@ document.addEventListener('DOMContentLoaded', () => {
 async function api(url,data){
   try{
     const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
-    return await r.json();
-  }catch(e){return{success:false,message:'Network error'};}
+    const text=await r.text();
+    let payload={};
+    try{payload=text ? JSON.parse(text) : {};}
+    catch(parseError){
+      const error=new Error('The server returned an invalid response.');
+      error.status=r.status;
+      throw error;
+    }
+    if(!r.ok){
+      payload.success=false;
+      payload.ok=false;
+      payload.status=r.status;
+      payload.message=getFriendlyErrorMessage({message:payload.message,status:r.status},'The request could not be completed. Please try again.');
+    }else if(payload.success === false || payload.ok === false){
+      payload.message=getFriendlyErrorMessage(payload.message,'The request could not be completed. Please check the data and try again.');
+    }
+    return payload;
+  }catch(e){
+    console.error('TRACS request failed:',e);
+    return{success:false,ok:false,status:Number(e?.status||0),message:getFriendlyErrorMessage(e,'Connection issue detected. Please check your internet connection and try again.')};
+  }
+}
+
+function tracsLoadingTextForButton(button){
+  const explicit=button?.dataset?.loadingText;
+  if(explicit)return explicit;
+  const text=(button?.textContent || '').trim().toLowerCase();
+  if(/sign in|login/.test(text))return 'Signing in...';
+  if(/delete|remove/.test(text))return 'Deleting...';
+  if(/resolve|complete/.test(text))return 'Resolving...';
+  if(/save|update|create|schedule|add/.test(text))return 'Saving...';
+  return 'Processing...';
+}
+function bindNativeFormLoading(){
+  document.addEventListener('submit',event=>{
+    const form=event.target;
+    if(!(form instanceof HTMLFormElement) || form.dataset.tracsLoadingBound === 'off')return;
+    const method=String(form.method || 'get').toLowerCase();
+    if(method === 'get')return;
+    const button=event.submitter || form.querySelector('button[type="submit"], input[type="submit"]');
+    if(!button)return;
+    setTimeout(()=>{
+      if(event.defaultPrevented || form.dataset.tracsSubmitting === '1')return;
+      form.dataset.tracsSubmitting='1';
+      setButtonLoading(button,tracsLoadingTextForButton(button));
+    },0);
+  },true);
+}
+function bindModalAjaxForms(){
+  document.addEventListener('submit',async event=>{
+    const form=event.target;
+    if(!(form instanceof HTMLFormElement) || !form.matches('[data-tracs-modal-ajax]'))return;
+    if(event.defaultPrevented)return;
+    event.preventDefault();
+    if(form.dataset.tracsSubmitting === '1')return;
+    const modal=tracsResolveModal(form);
+    const button=event.submitter || form.querySelector('button[type="submit"], input[type="submit"]');
+    const formData=event.submitter && typeof FormData === 'function'
+      ? new FormData(form,event.submitter)
+      : new FormData(form);
+    if(event.submitter?.name && !formData.has(event.submitter.name)){
+      formData.append(event.submitter.name,event.submitter.value);
+    }
+    form.dataset.tracsSubmitting='1';
+    modal?.setAttribute('aria-busy','true');
+    if(button && !setButtonLoading(button,tracsLoadingTextForButton(button))){
+      delete form.dataset.tracsSubmitting;
+      modal?.removeAttribute('aria-busy');
+      return;
+    }
+    try{
+      const submitUrl=event.submitter?.getAttribute('formaction')
+        || form.getAttribute('action')
+        || window.location.href;
+      const response=await fetch(submitUrl,{
+        method:String(form.method || 'post').toUpperCase(),
+        body:formData,
+        headers:{
+          'Accept':'application/json',
+          'X-Requested-With':'XMLHttpRequest'
+        }
+      });
+      const contentType=response.headers.get('content-type') || '';
+      if(!contentType.includes('application/json')){
+        const error=new Error('The server returned an invalid response.');
+        error.status=response.status;
+        throw error;
+      }
+      const payload=await response.json();
+      if(!response.ok || payload.success === false || payload.ok === false){
+        const error=new Error(payload.message || 'Your changes could not be saved.');
+        error.status=response.status || payload.status;
+        throw error;
+      }
+      resetButtonLoading(button);
+      form.dispatchEvent(new CustomEvent('tracs:save-success',{bubbles:true,detail:{root:form}}));
+      await showModalSuccessAndClose({
+        modal,
+        button,
+        message:payload.message || form.dataset.successMessage || 'Saved successfully.',
+        delay:Number(form.dataset.closeDelay || 1000),
+        onAfterClose:()=>{
+          const redirect=payload.redirect || form.dataset.refreshUrl || window.location.href;
+          if(redirect === window.location.href)window.location.reload();
+          else window.location.assign(redirect);
+        }
+      });
+    }catch(error){
+      form.dispatchEvent(new CustomEvent('tracs:save-error',{bubbles:true,detail:{root:form}}));
+      handleModalError({
+        modal,
+        button,
+        error,
+        fallbackMessage:form.dataset.errorMessage || 'Your changes could not be saved. Please check the data and try again.'
+      });
+    }finally{
+      delete form.dataset.tracsSubmitting;
+      modal?.removeAttribute('aria-busy');
+    }
+  });
 }
 
 /* ── Cancellation Feedback Handlers ── */
@@ -1197,9 +1823,10 @@ function openEditFeedback(data) {
     openModal('feedback');
 }
 
-function saveFeedback() {
+async function saveFeedback() {
     const id = document.getElementById('feedbackId').value;
     const url = id ? 'api/feedback-update.php' : 'api/feedback-create.php';
+    const button = document.querySelector('#feedbackModal .modal-foot .btn-primary');
     const fd = new FormData();
     if (id) fd.append('id', id);
     fd.append('email', document.getElementById('feedbackEmail').value);
@@ -1209,16 +1836,35 @@ function saveFeedback() {
     fd.append('resolution', document.getElementById('feedbackResolution').value);
     fd.append('details', document.getElementById('feedbackDetails').value);
 
-    fetch(url, { method: 'POST', body: fd })
-    .then(r => r.json())
-    .then(res => {
+    if (!selectedValues('feedbackService').length || !selectedValues('feedbackReason').length) {
+        handleModalError({modal:'feedback',message:'Cancelled service and reason are required.'});
+        return;
+    }
+
+    try {
+        const res = await withLoadingState(button,'Saving...',async()=>{
+            const response=await fetch(url,{method:'POST',body:fd});
+            const payload=await response.json();
+            if(!response.ok) {
+                const error=new Error(payload.error || payload.message || 'Unable to save feedback.');
+                error.status=response.status;
+                throw error;
+            }
+            return payload;
+        });
+        if(!res)return;
         if (res.success) {
-            toast(id ? 'Feedback updated' : 'Feedback added', 'success');
-            reloadAfterToast();
+            showModalSuccessAndClose({
+                modal:'feedback',
+                message:id ? 'Feedback updated.' : 'Feedback added.',
+                onAfterClose:()=>location.reload()
+            });
         } else {
-            toast(res.error || 'Save failed', 'error');
+            handleModalError({modal:'feedback',error:{message:res.error || res.message},fallbackMessage:'The feedback could not be saved. Please try again.'});
         }
-    });
+    } catch(error) {
+        handleModalError({modal:'feedback',button,error,fallbackMessage:'The feedback could not be saved. Please try again.'});
+    }
 }
 
 async function deleteFeedback(id) {
@@ -1327,53 +1973,1083 @@ function removeRow(sel){
   if(el){el.style.cssText='opacity:0;transition:opacity .18s';setTimeout(()=>el.remove(),180);}
 }
 function _reload(){reloadAfterToast();}
+function escHtml(value=''){
+  return String(value).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
+}
+function jsAttr(value=''){
+  return JSON.stringify(String(value)).replace(/"/g,'&quot;');
+}
+function formatBytes(bytes=0){
+  const size=Number(bytes)||0;
+  if(size<1024)return `${size} B`;
+  if(size<1024*1024)return `${(size/1024).toFixed(1)} KB`;
+  return `${(size/(1024*1024)).toFixed(1)} MB`;
+}
 
 /* ── CASE CRUD ────────────────────────────────────────── */
-function openNewCase(){
+const CASE_ATTACHMENT_MAX = 5 * 1024 * 1024;
+const CASE_ATTACHMENT_TYPES = new Set(['image/jpeg','image/png','image/webp']);
+let caseSelectedAttachments = [];
+let caseRemovedAttachmentIds = new Set();
+let currentCaseTicketId = 0;
+let currentCaseTicketData = null;
+const caseStatusPendingIds = new Set();
+
+const CASE_STATUS_META = {
+  active: ['b-active','Active'],
+  in_progress: ['b-in_progress','In Progress'],
+  pending: ['b-pending','Pending'],
+  stuck: ['b-stuck','Stuck'],
+  on_hold: ['b-hold','On Hold'],
+  completed: ['b-resolved','Resolved']
+};
+const CASE_BOARD_COLUMN_META = {
+  attention: {label:'Need Attention',status:'active'},
+  in_progress: {label:'In Progress',status:'in_progress'},
+  waiting: {label:'Waiting / Stuck',status:'stuck'},
+  on_hold: {label:'On Hold',status:'on_hold'},
+  resolved: {label:'Resolved',status:'completed'}
+};
+const CASE_FILTER_LABELS = {
+  all:'All',
+  active:'Active',
+  in_progress:'In Progress',
+  critical:'Critical',
+  stuck:'Stuck',
+  on_hold:'On Hold',
+  overdue:'Overdue'
+};
+const CASE_SORT_MODES = new Set(['operational','priority','overdue','next_check','created','updated','case_number']);
+const caseBoardState = {
+  rawCases: [],
+  filteredCases: [],
+  filter: 'all',
+  query: '',
+  sort: 'operational',
+  draggedId: 0,
+  initialized: false
+};
+function caseStatusMeta(status='pending'){
+  return CASE_STATUS_META[String(status||'pending').toLowerCase()] || CASE_STATUS_META.pending;
+}
+function casePriorityClass(priority='low'){
+  const p=String(priority||'low').toLowerCase();
+  if(p==='critical')return 'b-critical';
+  if(p==='high')return 'b-high';
+  if(p==='medium')return 'b-medium';
+  return 'b-low';
+}
+function caseBadgeHtml(status='pending'){
+  const [klass,label]=caseStatusMeta(status);
+  return `<span class="badge ${klass}"><span class="badge-dot"></span>${escHtml(label)}</span>`;
+}
+function casePriorityBadgeHtml(priority='low'){
+  const p=String(priority||'low').toLowerCase();
+  return `<span class="badge ${casePriorityClass(p)}">${escHtml(p.charAt(0).toUpperCase()+p.slice(1))}</span>`;
+}
+function caseCardToplineHtml(status='pending',priority='low'){
+  const normalizedStatus=String(status||'pending').toLowerCase();
+  if(normalizedStatus==='completed'){
+    return '<span class="case-card-topline is-resolved"><span class="case-card-topline-dot"></span>Resolved</span>';
+  }
+  const normalizedPriority=String(priority||'low').toLowerCase();
+  const severity=['critical','high','medium'].includes(normalizedPriority)?normalizedPriority:'normal';
+  const label=severity==='normal'?(normalizedPriority==='low'?'Low':'Normal'):severity.charAt(0).toUpperCase()+severity.slice(1);
+  return `<span class="case-card-topline is-${severity}"><span class="case-card-topline-dot"></span>${escHtml(label)}</span>`;
+}
+function formatCaseDate(value){
+  if(!value)return '—';
+  const date=new Date(String(value).replace(' ','T'));
+  if(Number.isNaN(date.getTime()))return '—';
+  return date.toLocaleString(undefined,{year:'numeric',month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+}
+function caseReferenceItems(data){
+  const text=`${data.title||''}\n${data.notes||''}`;
+  const refs=[];
+  const domains=[...new Set((text.match(/\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b/gi)||[]).map(v=>v.toLowerCase()))];
+  domains.slice(0,4).forEach(domain=>refs.push({type:'Domain',text:domain}));
+  const ticket=text.match(/\b(?:ticket|task|finance|invoice|ref(?:erence)?)\s*#?:?\s*([A-Z0-9._-]{3,})/i);
+  if(ticket)refs.push({type:'Reference',text:ticket[0]});
+  return refs;
+}
+function renderCaseReferences(data){
+  const refs=caseReferenceItems(data);
+  if(!refs.length)return '<span class="case-ticket-empty">No related domain, finance, or task reference found.</span>';
+  return refs.map(ref=>`<span class="case-ticket-ref-chip">${escHtml(ref.type)}: ${escHtml(ref.text)}</span>`).join('');
+}
+function caseHistoryItems(notes=''){
+  const lines=String(notes||'').split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
+  const history=lines.filter(line=>/^\[[^\]]+\]|follow|update|resolved|checked|mom|task|ticket/i.test(line));
+  return history.length?history:lines.slice(1);
+}
+function renderCaseHistory(notes='',activity=[]){
+  const activityItems=Array.isArray(activity) ? activity : [];
+  if(activityItems.length){
+    return activityItems.map(item=>`
+      <div class="case-ticket-log-item">
+        <span class="case-ticket-log-dot"></span>
+        <span><strong>${escHtml(item.actor_name||'System')}</strong> · ${escHtml(formatCaseDate(item.created_at))}<br>${escHtml(item.description||item.action||'Case updated')}</span>
+      </div>
+    `).join('');
+  }
+  const items=caseHistoryItems(notes);
+  if(!items.length)return '<span class="case-ticket-empty">No follow-up history available.</span>';
+  return items.map(item=>`<div class="case-ticket-log-item"><span class="case-ticket-log-dot"></span><span>${escHtml(item)}</span></div>`).join('');
+}
+function caseTimelineIndex(status='pending'){
+  const s=String(status||'pending').toLowerCase();
+  if(['completed','complete','done','resolved','closed'].includes(s))return 4;
+  if(['on_hold','pending','stuck','waiting','waiting_external','waiting_approval','blocked'].includes(s))return 3;
+  if(['in_progress','processing','investigating','checking'].includes(s))return 2;
+  return 1;
+}
+function caseTimelineProgress(status='pending'){
+  return Math.max(0,Math.min(100,(caseTimelineIndex(status) / 4) * 100));
+}
+function caseTimelineResolved(status='pending'){
+  return caseTimelineIndex(status)>=4;
+}
+function renderCaseTimeline(status='pending'){
+  const labels=['Created','Assigned','In Progress','Waiting','Resolved'];
+  const current=caseTimelineIndex(status);
+  const steps=labels.map((label,index)=>{
+    const state=index<current?'is-complete':(index===current?'is-current':'is-upcoming');
+    const edge=index===0?' is-first':(index===labels.length-1?' is-last':'');
+    const progress=index/(labels.length-1);
+    const offset=(20*(1-(progress*2))).toFixed(2);
+    return `<div class="case-ticket-step ${state}${edge}" style="--step-left:calc(${(progress*100).toFixed(2)}% ${offset>=0?'+':'-'} ${Math.abs(offset)}px)"><span class="case-ticket-dot"></span><span>${escHtml(label)}</span></div>`;
+  }).join('');
+  return `<div class="case-ticket-track" aria-hidden="true"><span class="case-ticket-track-fill"><span class="case-ticket-track-sweep"></span></span></div>${steps}`;
+}
+
+function caseAttachmentEls(){
+  return {
+    input: document.getElementById('caseAttachments'),
+    drop: document.getElementById('caseUploadDrop'),
+    status: document.getElementById('caseUploadStatus'),
+    selected: document.getElementById('caseAttachmentPreview'),
+    existing: document.getElementById('caseExistingAttachments'),
+    save: document.getElementById('caseSaveBtn')
+  };
+}
+function caseSetUploadStatus(message='',type=''){
+  const el=caseAttachmentEls().status;
+  if(!el)return;
+  el.textContent=message;
+  el.className=`case-upload-status ${type||''}`.trim();
+}
+function caseValidateAttachment(file){
+  if(!file || !file.name)return 'Choose a valid image.';
+  if(file.size<=0)return `${file.name} is empty.`;
+  if(file.size>CASE_ATTACHMENT_MAX)return `${file.name} is larger than 5MB.`;
+  if(!CASE_ATTACHMENT_TYPES.has(file.type))return `${file.name} must be JPG, JPEG, PNG, or WEBP.`;
+  return '';
+}
+function caseAddAttachmentFiles(files){
+  const incoming=Array.from(files||[]);
+  const errors=[];
+  incoming.forEach(file=>{
+    const err=caseValidateAttachment(file);
+    if(err){errors.push(err);return;}
+    const duplicate=caseSelectedAttachments.some(item=>item.file.name===file.name && item.file.size===file.size && item.file.lastModified===file.lastModified);
+    if(!duplicate)caseSelectedAttachments.push({id:crypto.randomUUID?.()||String(Date.now()+Math.random()),file,url:URL.createObjectURL(file)});
+  });
+  renderCaseSelectedAttachments();
+  if(errors.length)caseSetUploadStatus(errors[0],'error');
+  else if(incoming.length)caseSetUploadStatus(`${caseSelectedAttachments.length} image${caseSelectedAttachments.length===1?'':'s'} ready to upload.`,'ok');
+}
+function clearCaseAttachmentState(){
+  caseSelectedAttachments.forEach(item=>{try{URL.revokeObjectURL(item.url);}catch(e){}});
+  caseSelectedAttachments=[];
+  caseRemovedAttachmentIds=new Set();
+  const els=caseAttachmentEls();
+  if(els.input)els.input.value='';
+  if(els.selected)els.selected.innerHTML='';
+  if(els.existing)els.existing.innerHTML='';
+  caseSetUploadStatus('');
+}
+function removeCaseSelectedAttachment(id){
+  const item=caseSelectedAttachments.find(entry=>entry.id===id);
+  if(item){try{URL.revokeObjectURL(item.url);}catch(e){}}
+  caseSelectedAttachments=caseSelectedAttachments.filter(entry=>entry.id!==id);
+  renderCaseSelectedAttachments();
+  caseSetUploadStatus(caseSelectedAttachments.length?`${caseSelectedAttachments.length} image${caseSelectedAttachments.length===1?'':'s'} ready to upload.`:'');
+}
+function renderCaseSelectedAttachments(){
+  const el=caseAttachmentEls().selected;
+  if(!el)return;
+  el.innerHTML=caseSelectedAttachments.map(item=>`
+    <div class="case-attachment-tile">
+      <button class="case-attachment-thumb" type="button" onclick="openCaseImagePreview(${jsAttr(item.url)},${jsAttr(item.file.name)})">
+        <img src="${item.url}" alt="${escHtml(item.file.name)}">
+      </button>
+      <div class="case-attachment-meta"><span title="${escHtml(item.file.name)}">${escHtml(item.file.name)}</span><small>${formatBytes(item.file.size)}</small></div>
+      <button class="case-attachment-remove" type="button" onclick="removeCaseSelectedAttachment(${jsAttr(item.id)})" aria-label="Remove selected image"><i data-lucide="x" class="icon-xs"></i></button>
+    </div>
+  `).join('');
+  tracsRefreshIcons(el);
+}
+function renderCaseExistingAttachments(attachments=[]){
+  const el=caseAttachmentEls().existing;
+  if(!el)return;
+  const visible=attachments.filter(item=>!caseRemovedAttachmentIds.has(Number(item.id)));
+  el.innerHTML=visible.map(item=>`
+    <div class="case-attachment-tile existing">
+      <button class="case-attachment-thumb" type="button" onclick="openCaseImagePreview(${jsAttr(item.image_url)},${jsAttr(item.original_filename||'Attachment')})">
+        <img src="${item.thumbnail_url}" alt="${escHtml(item.original_filename||'Case attachment')}" loading="lazy">
+      </button>
+      <div class="case-attachment-meta"><span title="${escHtml(item.original_filename||'Attachment')}">${escHtml(item.original_filename||'Attachment')}</span><small>${formatBytes(Number(item.file_size)||0)}</small></div>
+      <button class="case-attachment-remove" type="button" onclick="removeExistingCaseAttachment(${Number(item.id)})" aria-label="Remove attachment"><i data-lucide="trash-2" class="icon-xs"></i></button>
+    </div>
+  `).join('');
+  tracsRefreshIcons(el);
+}
+function removeExistingCaseAttachment(id){
+  caseRemovedAttachmentIds.add(Number(id));
+  const existing=window.__caseExistingAttachments||[];
+  renderCaseExistingAttachments(existing);
+  caseSetUploadStatus('Attachment will be removed when you save.','warn');
+}
+function openCaseImagePreview(src,title='Attachment'){
+  const modal=document.getElementById('caseImageModal');
+  const img=document.getElementById('caseImagePreviewFull');
+  const label=document.getElementById('caseImageTitle');
+  const open=document.getElementById('caseImageOpen');
+  if(!modal||!img)return;
+  img.src=src;
+  if(label)label.textContent=title;
+  if(open)open.href=src;
+  modal.classList.remove('hidden');
+}
+function closeCaseImagePreview(){
+  const modal=document.getElementById('caseImageModal');
+  const img=document.getElementById('caseImagePreviewFull');
+  if(modal)modal.classList.add('hidden');
+  if(img)img.src='';
+}
+function closeCaseTicketMore(){
+  const menu=document.getElementById('caseTicketMoreMenu');
+  const btn=document.getElementById('caseTicketMoreBtn');
+  if(menu)menu.classList.remove('is-open');
+  if(btn)btn.setAttribute('aria-expanded','false');
+}
+function toggleCaseTicketMore(event){
+  event?.preventDefault?.();
+  event?.stopPropagation?.();
+  const menu=document.getElementById('caseTicketMoreMenu');
+  const btn=document.getElementById('caseTicketMoreBtn');
+  if(!menu)return;
+  const open=!menu.classList.contains('is-open');
+  menu.classList.toggle('is-open',open);
+  if(btn)btn.setAttribute('aria-expanded',open?'true':'false');
+}
+document.addEventListener('click',event=>{
+  if(event.target instanceof Element && event.target.closest('#caseTicketMoreMenu'))return;
+  closeCaseTicketMore();
+});
+function casePayloadFormData(id=''){
+  const fd=new FormData();
+  if(id)fd.append('id',id);
+  fd.append('title',val('caseTitle').trim());
+  fd.append('status',val('caseStatus'));
+  fd.append('priority',val('casePriority'));
+  fd.append('next_check_at',val('caseNextCheck'));
+  fd.append('notes',val('caseNotes'));
+  caseSelectedAttachments.forEach(item=>fd.append('attachments[]',item.file,item.file.name));
+  Array.from(caseRemovedAttachmentIds).forEach(removeId=>fd.append('remove_attachment_ids[]',String(removeId)));
+  return fd;
+}
+async function caseApiWithUploads(url,formData){
+  try{
+    const r=await fetch(url,{method:'POST',body:formData});
+    return await r.json();
+  }catch(e){return{success:false,message:'Network error'};}
+}
+function initCaseAttachmentUpload(){
+  const els=caseAttachmentEls();
+  if(!els.input||els.input.dataset.ready)return;
+  els.input.dataset.ready='1';
+  els.input.addEventListener('change',()=>caseAddAttachmentFiles(els.input.files));
+  if(els.drop){
+    ['dragenter','dragover'].forEach(evt=>els.drop.addEventListener(evt,e=>{e.preventDefault();els.drop.classList.add('drag');}));
+    ['dragleave','drop'].forEach(evt=>els.drop.addEventListener(evt,e=>{e.preventDefault();els.drop.classList.remove('drag');}));
+    els.drop.addEventListener('drop',e=>caseAddAttachmentFiles(e.dataTransfer?.files));
+  }
+}
+function openNewCase(defaultStatus='active'){
+  initCaseAttachmentUpload();
   document.getElementById('caseModalTitle').textContent='New Case';
   ['caseId','caseTitle','caseNextCheck','caseNotes'].forEach(id=>setVal(id,''));
-  setVal('caseStatus','active'); setVal('casePriority','medium');
+  const status=Object.prototype.hasOwnProperty.call(CASE_STATUS_META,String(defaultStatus)) ? String(defaultStatus) : 'active';
+  setVal('caseStatus',status); setVal('casePriority','medium');
+  window.__caseExistingAttachments=[];
+  clearCaseAttachmentState();
   openModal('case');
 }
-function openEditCase(id){
+async function openEditCase(id){
+  initCaseAttachmentUpload();
   const row=document.querySelector(`[data-cid="${id}"]`);
-  if(!row)return;
+  const caseItem=caseBoardState.rawCases.find(item=>Number(item.id)===Number(id));
+  if(!row && !caseItem)return;
   document.getElementById('caseModalTitle').textContent='Edit Case';
   setVal('caseId',id);
-  setVal('caseTitle',row.dataset.title||'');
-  setVal('caseStatus',row.dataset.status||'active');
-  setVal('casePriority',row.dataset.priority||'medium');
-  setVal('caseNextCheck',row.dataset.next||'');
-  setVal('caseNotes',row.dataset.notes||'');
+  setVal('caseTitle',row?.dataset.title||caseItem?.title||'');
+  setVal('caseStatus',row?.dataset.status||caseItem?.status||'active');
+  setVal('casePriority',row?.dataset.priority||caseItem?.priority||'medium');
+  setVal('caseNextCheck',row?.dataset.next||caseItem?.next_check_local||'');
+  setVal('caseNotes',row?.dataset.notes||caseItem?.notes||'');
+  clearCaseAttachmentState();
+  caseSetUploadStatus('Loading attachments...');
   openModal('case');
+  const d=await api(API.CASE.GET,{id});
+  if(d.success){
+    const data=d.data||{};
+    setVal('caseTitle',data.title||row?.dataset.title||caseItem?.title||'');
+    setVal('caseStatus',data.status||row?.dataset.status||caseItem?.status||'active');
+    setVal('casePriority',data.priority||row?.dataset.priority||caseItem?.priority||'medium');
+    setVal('caseNextCheck',data.next_check_at?data.next_check_at.replace(' ','T').slice(0,16):(row?.dataset.next||caseItem?.next_check_local||''));
+    setVal('caseNotes',data.notes||'');
+    window.__caseExistingAttachments=data.attachments||[];
+    renderCaseExistingAttachments(window.__caseExistingAttachments);
+    caseSetUploadStatus('');
+  }else{
+    caseSetUploadStatus(d.message||'Could not load attachments.','error');
+  }
+}
+async function openCaseTicket(id){
+  currentCaseTicketId=Number(id)||0;
+  currentCaseTicketData=null;
+  if(!currentCaseTicketId)return;
+  const titleEl=document.getElementById('caseTicketTitle');
+  const refEl=document.getElementById('caseTicketRef');
+  const badgesEl=document.getElementById('caseTicketBadges');
+  const timelineEl=document.getElementById('caseTicketTimeline');
+  if(titleEl)titleEl.textContent='Loading case...';
+  if(refEl)refEl.textContent=`Case #${currentCaseTicketId}`;
+  if(badgesEl)badgesEl.innerHTML='';
+  if(timelineEl){
+    timelineEl.classList.remove('is-resolved');
+    timelineEl.innerHTML='';
+  }
+  openModal('caseTicket');
+
+  const d=await api(API.CASE.GET,{id:currentCaseTicketId});
+  if(!d.success){
+    toast(d.message||'Could not load case','error');
+    closeModal('caseTicket');
+    return;
+  }
+  const data=d.data||{};
+  currentCaseTicketData=data;
+  const status=String(data.status||'pending').toLowerCase();
+  const priority=String(data.priority||'low').toLowerCase();
+  if(titleEl)titleEl.textContent=data.title||`Case #${currentCaseTicketId}`;
+  if(refEl)refEl.textContent=`Case #${currentCaseTicketId}`;
+  if(badgesEl)badgesEl.innerHTML=`${caseBadgeHtml(status)}${casePriorityBadgeHtml(priority)}`;
+  const pic=data.creator_name||data.created_by_name||data.assigned_user||data.pic||'Unassigned';
+  const setText=(id,value)=>{const el=document.getElementById(id);if(el)el.textContent=value||'—';};
+  setText('caseTicketPic',pic);
+  setText('caseTicketCreated',formatCaseDate(data.created_at));
+  setText('caseTicketUpdated',formatCaseDate(data.updated_at));
+  setText('caseTicketNext',formatCaseDate(data.next_check_at));
+  setText('caseTicketNotes',data.notes?.trim()||'No description or issue detail recorded.');
+  if(timelineEl){
+    timelineEl.style.setProperty('--timeline-progress', `${caseTimelineProgress(status).toFixed(2)}%`);
+    timelineEl.classList.toggle('is-resolved',caseTimelineResolved(status));
+    timelineEl.innerHTML=renderCaseTimeline(status);
+  }
+  const historyEl=document.getElementById('caseTicketHistory');
+  if(historyEl)historyEl.innerHTML=renderCaseHistory(data.notes,data.activity);
+  const refsEl=document.getElementById('caseTicketReferences');
+  if(refsEl)refsEl.innerHTML=renderCaseReferences(data);
+  setText('caseTicketActionNote',status==='completed'?'Resolved case preview':'View-first ticket preview');
+
+  const attachments=document.getElementById('caseTicketAttachments');
+  const empty=document.getElementById('caseTicketAttachmentEmpty');
+  const list=Array.isArray(data.attachments)?data.attachments:[];
+  if(attachments){
+    attachments.innerHTML=list.map(item=>`
+      <div class="case-attachment-tile">
+        <button class="case-attachment-thumb" type="button" onclick="openCaseImagePreview(${jsAttr(item.image_url)},${jsAttr(item.original_filename||'Attachment')})">
+          <img src="${escHtml(item.thumbnail_url||item.image_url||'')}" alt="${escHtml(item.original_filename||'Case attachment')}" loading="lazy">
+        </button>
+        <div class="case-attachment-meta"><span title="${escHtml(item.original_filename||'Attachment')}">${escHtml(item.original_filename||'Attachment')}</span><small>${formatBytes(Number(item.file_size)||0)}</small></div>
+      </div>
+    `).join('');
+    tracsRefreshIcons(attachments);
+  }
+  if(empty)empty.hidden=list.length>0;
+
+  const caps=window.TRACS_CASE_CAPS||{};
+  const canManage=Boolean(data.can_manage ?? caps.canManage);
+  const canDelete=Boolean(data.can_delete ?? caps.canDelete);
+  const resolveBtn=document.getElementById('caseTicketResolveBtn');
+  const inProgressBtn=document.getElementById('caseTicketInProgressBtn');
+  const stuckBtn=document.getElementById('caseTicketStuckBtn');
+  const holdBtn=document.getElementById('caseTicketHoldBtn');
+  const editBtn=document.getElementById('caseTicketEditBtn');
+  const deleteBtn=document.getElementById('caseTicketDeleteBtn');
+  const moreMenu=document.getElementById('caseTicketMoreMenu');
+  if(resolveBtn)resolveBtn.hidden=!canManage || status==='completed';
+  if(inProgressBtn)inProgressBtn.hidden=!canManage || status==='in_progress' || status==='completed';
+  if(stuckBtn)stuckBtn.hidden=!canManage || status==='stuck' || status==='completed';
+  if(holdBtn)holdBtn.hidden=!canManage || status==='on_hold' || status==='completed';
+  if(editBtn)editBtn.hidden=!canManage;
+  if(deleteBtn)deleteBtn.hidden=!canDelete;
+  if(moreMenu){
+    closeCaseTicketMore();
+    moreMenu.hidden=!((editBtn && !editBtn.hidden) || (deleteBtn && !deleteBtn.hidden));
+  }
+  const actionButtons=document.querySelector('#caseTicketModal .case-ticket-action-buttons');
+  const actionBar=document.querySelector('#caseTicketModal .case-ticket-actions');
+  const hasVisibleAction=[resolveBtn,inProgressBtn,stuckBtn,holdBtn].some(button=>button && !button.hidden);
+  if(actionButtons)actionButtons.hidden=!hasVisibleAction;
+  if(actionBar)actionBar.classList.toggle('is-note-only',!hasVisibleAction);
+  tracsRefreshIcons(document.getElementById('caseTicketModal'));
+}
+function normalizeCaseText(value=''){
+  return String(value??'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase();
+}
+function caseTimestamp(value,fallback=0){
+  if(!value)return fallback;
+  const parsed=new Date(String(value).replace(' ','T')).getTime();
+  return Number.isFinite(parsed)?parsed:fallback;
+}
+function caseIsOverdue(caseItem){
+  if(!caseItem || String(caseItem.status||'').toLowerCase()==='completed')return false;
+  if(caseItem.overdue===true || caseItem.overdue===1 || caseItem.overdue==='1')return true;
+  if(/^overdue\b/i.test(String(caseItem.time_until||'')))return true;
+  const next=caseTimestamp(caseItem.next_check_at,0);
+  return next>0 && next<Date.now();
+}
+function getWorkflowColumn(caseItem){
+  const status=String(caseItem?.status||'pending').toLowerCase();
+  if(status==='completed')return 'resolved';
+  if(status==='on_hold')return 'on_hold';
+  if(status==='in_progress')return 'in_progress';
+  if(status==='stuck' || status==='pending')return 'waiting';
+  return 'attention';
+}
+function caseWorkflowKey(status='pending'){
+  return getWorkflowColumn({status});
+}
+function matchesSearch(caseItem,query){
+  const needle=normalizeCaseText(query);
+  if(!needle)return true;
+  const status=String(caseItem?.status||'pending').toLowerCase();
+  const fields=[
+    caseItem?.title,
+    caseItem?.id,
+    `#${caseItem?.id||''}`,
+    status,
+    status.replace(/_/g,' '),
+    caseStatusMeta(status)[1],
+    caseItem?.priority,
+    caseItem?.creator_name,
+    caseItem?.created_by_name,
+    caseItem?.assigned_agent,
+    caseItem?.notes,
+    caseItem?.description,
+    caseItem?.next_check_at,
+    caseItem?.next_check_display,
+    caseItem?.time_until,
+    caseItem?.client,
+    caseItem?.domain,
+    caseItem?.service
+  ];
+  return normalizeCaseText(fields.filter(Boolean).join(' ')).includes(needle);
+}
+function matchesFilter(caseItem,activeFilter='all'){
+  const filter=String(activeFilter||'all').toLowerCase();
+  const status=String(caseItem?.status||'pending').toLowerCase();
+  const priority=String(caseItem?.priority||'low').toLowerCase();
+  if(filter==='all')return true;
+  if(filter==='active')return status==='active';
+  if(filter==='in_progress')return status==='in_progress';
+  if(filter==='critical')return priority==='critical' || status==='critical';
+  if(filter==='stuck')return status==='stuck' || getWorkflowColumn(caseItem)==='waiting';
+  if(filter==='on_hold')return status==='on_hold';
+  if(filter==='overdue')return caseIsOverdue(caseItem);
+  return true;
+}
+function caseComparePriority(a,b){
+  const rank={critical:0,high:1,medium:2,low:3};
+  return (rank[String(a?.priority||'low').toLowerCase()]??4)-(rank[String(b?.priority||'low').toLowerCase()]??4);
+}
+function caseCompareNextCheck(a,b){
+  return caseTimestamp(a?.next_check_at,Number.MAX_SAFE_INTEGER)-caseTimestamp(b?.next_check_at,Number.MAX_SAFE_INTEGER);
+}
+function caseCompareUpdated(a,b){
+  return caseTimestamp(b?.updated_at,0)-caseTimestamp(a?.updated_at,0);
+}
+function caseCompareOperational(a,b){
+  const overdueDelta=Number(caseIsOverdue(b))-Number(caseIsOverdue(a));
+  return overdueDelta
+    || caseComparePriority(a,b)
+    || caseCompareNextCheck(a,b)
+    || caseCompareUpdated(a,b)
+    || Number(b?.id||0)-Number(a?.id||0);
+}
+function sortCases(caseList,sortMode='operational'){
+  const mode=CASE_SORT_MODES.has(sortMode)?sortMode:'operational';
+  return [...caseList].sort((a,b)=>{
+    if(mode==='priority')return caseComparePriority(a,b)||caseCompareOperational(a,b);
+    if(mode==='overdue'){
+      const overdueDelta=Number(caseIsOverdue(b))-Number(caseIsOverdue(a));
+      return overdueDelta||caseCompareNextCheck(a,b)||caseComparePriority(a,b)||caseCompareUpdated(a,b);
+    }
+    if(mode==='next_check')return caseCompareNextCheck(a,b)||caseComparePriority(a,b)||caseCompareUpdated(a,b);
+    if(mode==='created')return caseTimestamp(b?.created_at,0)-caseTimestamp(a?.created_at,0)||Number(b?.id||0)-Number(a?.id||0);
+    if(mode==='updated')return caseCompareUpdated(a,b)||Number(b?.id||0)-Number(a?.id||0);
+    if(mode==='case_number')return Number(b?.id||0)-Number(a?.id||0);
+    return caseCompareOperational(a,b);
+  });
+}
+function groupCasesByWorkflow(caseList){
+  const groups=Object.fromEntries(Object.keys(CASE_BOARD_COLUMN_META).map(key=>[key,[]]));
+  caseList.forEach(caseItem=>groups[getWorkflowColumn(caseItem)].push(caseItem));
+  return groups;
+}
+function caseFiltersActive(){
+  return caseBoardState.filter!=='all' || normalizeCaseText(caseBoardState.query)!=='';
+}
+function caseDateOnly(value,fallback='—'){
+  if(!value)return fallback;
+  const date=new Date(String(value).replace(' ','T'));
+  if(Number.isNaN(date.getTime()))return fallback;
+  return date.toLocaleDateString(undefined,{year:'numeric',month:'short',day:'2-digit'});
+}
+function caseDataAttributes(caseItem){
+  return [
+    `data-cid="${Number(caseItem.id)||0}"`,
+    `data-title="${escHtml(caseItem.title||'')}"`,
+    `data-status="${escHtml(caseItem.status||'pending')}"`,
+    `data-priority="${escHtml(caseItem.priority||'low')}"`,
+    `data-next="${escHtml(caseItem.next_check_local||'')}"`,
+    `data-notes="${escHtml(caseItem.notes||'')}"`,
+    `data-created="${escHtml(caseItem.created_at||'')}"`,
+    `data-updated="${escHtml(caseItem.updated_at||'')}"`,
+    `data-overdue="${caseIsOverdue(caseItem)?'1':'0'}"`
+  ].join(' ');
+}
+function caseCardHtml(caseItem){
+  const id=Number(caseItem.id)||0;
+  const status=String(caseItem.status||'pending').toLowerCase();
+  const priority=String(caseItem.priority||'low').toLowerCase();
+  const overdue=caseIsOverdue(caseItem);
+  const attachments=Number(caseItem.attachment_count)||0;
+  const notes=String(caseItem.notes||'').trim();
+  const creator=caseItem.creator_name||caseItem.created_by_name||caseItem.assigned_agent||'System';
+  const canManage=Boolean(window.TRACS_CASE_CAPS?.canManage);
+  const canDelete=Boolean(window.TRACS_CASE_CAPS?.canDelete);
+  const pending=caseStatusPendingIds.has(id);
+  return `
+    <article class="case-kanban-card ${overdue?'is-overdue':''} ${status==='completed'?'is-resolved':''} ${pending?'is-status-updating':''}"
+      ${caseDataAttributes(caseItem)}
+      draggable="${canManage && !pending?'true':'false'}"
+      aria-grabbed="false">
+      <div class="case-card-click" role="button" tabindex="0" onclick="openCaseTicket(${id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openCaseTicket(${id})}">
+        <div class="case-card-header">
+          <span class="case-card-number">#${id}</span>
+          ${caseCardToplineHtml(status,priority)}
+          ${canManage?'<i data-lucide="grip-horizontal" class="case-card-grip"></i>':''}
+        </div>
+        <h3>${escHtml(caseItem.title||'Untitled case')}</h3>
+        <div class="case-card-badges">
+          ${caseBadgeHtml(status).replace('<span class="badge ','<span data-card-status-badge class="badge ')}
+        </div>
+        <div class="case-card-meta">
+          <span><i data-lucide="user-round" class="icon-xs"></i>${escHtml(creator)}</span>
+          <span><i data-lucide="calendar-days" class="icon-xs"></i>${escHtml(caseItem.created_display||caseDateOnly(caseItem.created_at))}</span>
+        </div>
+        <div class="case-card-due">
+          <span>Next check</span><strong>${escHtml(caseItem.next_check_display||formatCaseDate(caseItem.next_check_at))}</strong>
+          <em class="${overdue?'is-overdue':''}">${escHtml(caseItem.time_until||'—')}</em>
+        </div>
+        ${attachments>0 || notes?`
+          <div class="case-card-signals">
+            ${notes?'<span title="Notes available"><i data-lucide="notebook-text" class="icon-xs"></i>Notes</span>':''}
+            ${attachments>0?`<span title="${attachments} attachment${attachments===1?'':'s'}"><i data-lucide="paperclip" class="icon-xs"></i>${attachments}</span>`:''}
+          </div>
+        `:''}
+      </div>
+      <details class="case-card-menu" onclick="event.stopPropagation()" onkeydown="event.stopPropagation()">
+        <summary title="Case actions" aria-label="Case actions"><i data-lucide="more-horizontal" class="icon-sm"></i></summary>
+        <div class="case-card-popover">
+          <button type="button" onclick="openCaseTicket(${id})"><i data-lucide="panel-right-open" class="icon-sm"></i>View detail</button>
+          ${canManage?`
+            <button type="button" onclick="openEditCase(${id})"><i data-lucide="pencil" class="icon-sm"></i>Edit / add note</button>
+            <button type="button" onclick="updateCaseStatusImmediately(${id},'in_progress','quick_action')"><i data-lucide="loader-circle" class="icon-sm"></i>Mark In Progress</button>
+            <button type="button" onclick="updateCaseStatusImmediately(${id},'stuck','quick_action')"><i data-lucide="pause-circle" class="icon-sm"></i>Move to Stuck</button>
+            <button type="button" onclick="updateCaseStatusImmediately(${id},'on_hold','quick_action')"><i data-lucide="archive" class="icon-sm"></i>Move to On Hold</button>
+            <button type="button" onclick="updateCaseStatusImmediately(${id},'completed','quick_action')"><i data-lucide="circle-check" class="icon-sm"></i>Resolve case</button>
+          `:''}
+          ${canDelete?`<button type="button" class="is-danger" onclick="deleteCase(${id},this)"><i data-lucide="trash-2" class="icon-sm"></i>Delete case</button>`:''}
+        </div>
+      </details>
+    </article>
+  `;
+}
+function caseTableRowHtml(caseItem){
+  const id=Number(caseItem.id)||0;
+  const status=String(caseItem.status||'pending').toLowerCase();
+  const priority=String(caseItem.priority||'low').toLowerCase();
+  const overdue=caseIsOverdue(caseItem);
+  const attachments=Number(caseItem.attachment_count)||0;
+  const creator=caseItem.creator_name||caseItem.created_by_name||caseItem.assigned_agent||'System';
+  const canManage=Boolean(window.TRACS_CASE_CAPS?.canManage);
+  const canDelete=Boolean(window.TRACS_CASE_CAPS?.canDelete);
+  return `
+    <tr class="case-click-row" ${caseDataAttributes(caseItem)} role="button" tabindex="0"
+      onclick="openCaseTicket(${id})"
+      onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openCaseTicket(${id})}">
+      <td class="tracs-rownum">${id}</td>
+      <td class="case-table-title">
+        <strong title="${escHtml(caseItem.title||'')}">${escHtml(caseItem.title||'Untitled')}</strong>
+        ${attachments>0?`<span class="case-attachment-count"><i data-lucide="image" class="icon-xs"></i>${attachments} attachment${attachments===1?'':'s'}</span>`:''}
+        <span class="tracs-creator-meta"><i data-lucide="user-round" class="icon-xs"></i><span>Created by ${escHtml(creator)}</span></span>
+      </td>
+      <td>${caseBadgeHtml(status).replace('<span class="badge ','<span data-card-status-badge class="badge ')}</td>
+      <td>${casePriorityBadgeHtml(priority)}</td>
+      <td class="case-table-date">${escHtml(caseItem.next_check_display||formatCaseDate(caseItem.next_check_at))}</td>
+      <td><span class="case-time ${overdue?'ov':''}">${escHtml(caseItem.time_until||'—')}</span></td>
+      <td onclick="event.stopPropagation()" onkeydown="event.stopPropagation()">
+        <details class="row-action-menu">
+          <summary class="btn btn-ghost btn-icon" title="Actions" aria-label="Row actions"><i data-lucide="more-vertical" class="icon-sm"></i></summary>
+          <div class="row-action-popover">
+            <button class="btn btn-ghost btn-sm" type="button" onclick="openCaseTicket(${id})">View detail</button>
+            ${canManage?`<button class="btn btn-ghost btn-sm" type="button" onclick="openEditCase(${id})">Edit</button>`:''}
+            ${canDelete?`<button class="btn btn-danger btn-sm" type="button" onclick="deleteCase(${id},this)">Delete</button>`:''}
+          </div>
+        </details>
+      </td>
+    </tr>
+  `;
+}
+function caseColumnSummary(columnKey,items){
+  const critical=items.filter(item=>String(item.priority||'').toLowerCase()==='critical').length;
+  const overdue=items.filter(caseIsOverdue).length;
+  const high=items.filter(item=>['critical','high'].includes(String(item.priority||'').toLowerCase())).length;
+  const stuck=items.filter(item=>String(item.status||'').toLowerCase()==='stuck').length;
+  if(columnKey==='attention')return `${critical} critical · ${overdue} overdue`;
+  if(columnKey==='in_progress')return `${high} high priority`;
+  if(columnKey==='waiting')return `${stuck} stuck · ${Math.max(0,items.length-stuck)} pending`;
+  if(columnKey==='on_hold')return `${items.length} paused`;
+  return `${items.length} completed`;
+}
+function caseCaptureScrollState(){
+  const board=document.querySelector('.case-kanban');
+  return {
+    boardLeft:board?.scrollLeft||0,
+    columns:Object.fromEntries(Array.from(document.querySelectorAll('[data-case-column]')).map(column=>[
+      column.dataset.caseColumn,
+      column.querySelector('[data-case-dropzone]')?.scrollTop||0
+    ]))
+  };
+}
+function caseRestoreScrollState(state){
+  if(!state)return;
+  const board=document.querySelector('.case-kanban');
+  if(board)board.scrollLeft=state.boardLeft||0;
+  Object.entries(state.columns||{}).forEach(([key,top])=>{
+    const list=document.querySelector(`[data-case-column="${key}"] [data-case-dropzone]`);
+    if(list)list.scrollTop=Number(top)||0;
+  });
+}
+function renderBoard(filteredCases=caseBoardState.filteredCases){
+  const visibleGroups=groupCasesByWorkflow(filteredCases);
+  const totalGroups=groupCasesByWorkflow(caseBoardState.rawCases);
+  const active=caseFiltersActive();
+  Object.keys(CASE_BOARD_COLUMN_META).forEach(key=>{
+    const column=document.querySelector(`[data-case-column="${key}"]`);
+    if(!column)return;
+    const items=visibleGroups[key];
+    const originalTotal=totalGroups[key].length;
+    const count=column.querySelector('[data-column-count]');
+    const summary=column.querySelector('[data-column-summary]');
+    const list=column.querySelector('[data-case-dropzone]');
+    if(count){
+      count.textContent=active?`${items.length} / ${originalTotal}`:String(items.length);
+      count.title=active?`${items.length} visible of ${originalTotal} total`:`${items.length} cases`;
+    }
+    if(summary)summary.textContent=caseColumnSummary(key,items);
+    if(list){
+      list.innerHTML=items.length
+        ? items.map(caseCardHtml).join('')
+        : `<div class="case-column-empty" data-column-empty><i data-lucide="inbox" class="icon-sm"></i><span data-column-empty-label>${active?'No matching cases':'No cases in this stage'}</span></div>`;
+    }
+  });
+}
+function renderTable(filteredCases=caseBoardState.filteredCases){
+  const body=document.getElementById('caseTableBody');
+  const empty=document.getElementById('caseTableEmpty');
+  const wrap=body?.closest('.table-wrap');
+  if(body)body.innerHTML=filteredCases.map(caseTableRowHtml).join('');
+  if(wrap)wrap.hidden=filteredCases.length===0;
+  if(empty){
+    empty.hidden=filteredCases.length>0;
+    const title=empty.querySelector('.empty-t');
+    const subtitle=empty.querySelector('.empty-s');
+    const clear=empty.querySelector('[data-case-clear-filters]');
+    if(title)title.textContent=caseFiltersActive()?'No cases match your search/filter':'No cases found';
+    if(subtitle)subtitle.textContent=caseFiltersActive()?'Clear filters to return to the complete case list.':'Create a case to begin tracking operational work.';
+    if(clear)clear.hidden=!caseFiltersActive();
+  }
+}
+function updateBoardCounters(){
+  const visible=caseBoardState.filteredCases;
+  const total=caseBoardState.rawCases.length;
+  const active=caseFiltersActive();
+  const critical=visible.filter(item=>String(item.priority||'').toLowerCase()==='critical').length;
+  const inProgress=visible.filter(item=>String(item.status||'').toLowerCase()==='in_progress').length;
+  const onHold=visible.filter(item=>String(item.status||'').toLowerCase()==='on_hold').length;
+  const waiting=visible.filter(item=>getWorkflowColumn(item)==='waiting').length;
+  const overdue=visible.filter(caseIsOverdue).length;
+  const boardCount=document.getElementById('caseBoardCount');
+  const tableCount=document.getElementById('caseTableCount');
+  const summary=document.getElementById('casePageSummary');
+  const health=document.getElementById('caseQueueHealth');
+  const healthDot=document.querySelector('.case-queue-health > span');
+  const activeState=document.getElementById('caseActiveState');
+  const activeStateText=document.getElementById('caseActiveStateText');
+  const countText=active?`${visible.length} of ${total} cases shown`:`${total} cases shown`;
+  if(boardCount)boardCount.textContent=countText;
+  if(tableCount)tableCount.textContent=active?`${visible.length} of ${total} shown`:`${total} shown`;
+  if(summary)summary.textContent=active
+    ? `${visible.length} of ${total} cases · ${critical} critical · ${inProgress} in progress · ${onHold} on hold`
+    : `${total} total · ${critical} critical · ${inProgress} in progress · ${onHold} on hold`;
+  if(health)health.textContent=`${overdue} overdue · ${waiting} waiting`;
+  healthDot?.classList.toggle('is-alert',overdue>0);
+  if(activeState){
+    activeState.hidden=!active;
+    if(activeStateText){
+      const parts=[`Showing ${visible.length} of ${total} cases`];
+      if(caseBoardState.filter!=='all')parts.push(`Filter: ${CASE_FILTER_LABELS[caseBoardState.filter]||caseBoardState.filter}`);
+      if(normalizeCaseText(caseBoardState.query))parts.push(`Search: ${caseBoardState.query.trim()}`);
+      activeStateText.textContent=parts.join(' · ');
+    }
+  }
+  document.querySelectorAll('[data-case-filter-option]').forEach(button=>{
+    const selected=button.dataset.caseFilterOption===caseBoardState.filter;
+    button.classList.toggle('active',selected);
+    button.setAttribute('aria-pressed',selected?'true':'false');
+  });
+  const workspace=document.getElementById('caseWorkspace');
+  if(workspace){
+    workspace.dataset.caseFilter=caseBoardState.filter;
+    workspace.dataset.caseQuery=caseBoardState.query;
+    workspace.dataset.caseSort=caseBoardState.sort;
+    workspace.dataset.total=String(total);
+  }
+  const exportFilter=document.getElementById('caseExportFilter');
+  const exportQuery=document.getElementById('caseExportQuery');
+  if(exportFilter)exportFilter.value=caseBoardState.filter;
+  if(exportQuery)exportQuery.value=caseBoardState.query.trim();
+}
+function caseSyncUrl(){
+  const url=new URL(window.location.href);
+  if(caseBoardState.filter==='all')url.searchParams.delete('f');
+  else url.searchParams.set('f',caseBoardState.filter);
+  const query=caseBoardState.query.trim();
+  if(query)url.searchParams.set('q',query);
+  else url.searchParams.delete('q');
+  if(caseBoardState.sort==='operational')url.searchParams.delete('sort');
+  else url.searchParams.set('sort',caseBoardState.sort);
+  history.replaceState(null,'',`${url.pathname}${url.search}${url.hash}`);
+}
+function bindCaseCardMenus(){
+  document.querySelectorAll('.case-card-menu:not([data-case-menu-bound])').forEach(menu=>{
+    menu.dataset.caseMenuBound='1';
+    menu.addEventListener('toggle',()=>{
+      if(!menu.open)return;
+      document.querySelectorAll('.case-card-menu[open]').forEach(other=>{if(other!==menu)other.removeAttribute('open');});
+      const trigger=menu.querySelector('summary');
+      const popover=menu.querySelector('.case-card-popover');
+      if(!trigger||!popover)return;
+      const rect=trigger.getBoundingClientRect();
+      const width=190;
+      const estimatedHeight=Math.min(popover.scrollHeight||300,360);
+      const left=Math.max(8,Math.min(window.innerWidth-width-8,rect.right-width));
+      const placeAbove=rect.bottom+estimatedHeight+8>window.innerHeight && rect.top>estimatedHeight;
+      const top=placeAbove?Math.max(8,rect.top-estimatedHeight-6):Math.min(window.innerHeight-estimatedHeight-8,rect.bottom+6);
+      popover.style.left=`${left}px`;
+      popover.style.top=`${Math.max(8,top)}px`;
+    });
+  });
+}
+function renderCaseWorkspace({preserveScroll=true,syncUrl=true}={}){
+  if(!caseBoardState.initialized)return;
+  const scrollState=preserveScroll?caseCaptureScrollState():null;
+  const searched=caseBoardState.rawCases.filter(item=>matchesSearch(item,caseBoardState.query));
+  const filtered=searched.filter(item=>matchesFilter(item,caseBoardState.filter));
+  caseBoardState.filteredCases=sortCases(filtered,caseBoardState.sort);
+  renderBoard(caseBoardState.filteredCases);
+  renderTable(caseBoardState.filteredCases);
+  updateBoardCounters();
+  bindCaseCardMenus();
+  tracsRefreshIcons(document.getElementById('caseWorkspace'));
+  if(scrollState)requestAnimationFrame(()=>caseRestoreScrollState(scrollState));
+  if(syncUrl)caseSyncUrl();
+}
+function clearCaseFilters(){
+  caseBoardState.filter='all';
+  caseBoardState.query='';
+  const input=document.getElementById('caseSearchInput');
+  if(input)input.value='';
+  renderCaseWorkspace({preserveScroll:false});
+}
+function caseRefreshOperationalSummary(){
+  if(caseBoardState.initialized)updateBoardCounters();
+}
+function caseRefreshColumnMeta(){
+  if(caseBoardState.initialized)renderCaseWorkspace();
+}
+function applyCaseStatusUpdate(data){
+  const id=Number(data?.id)||0;
+  const status=String(data?.status||'').toLowerCase();
+  const caseItem=caseBoardState.rawCases.find(item=>Number(item.id)===id);
+  if(!caseItem || !CASE_STATUS_META[status])return;
+  Object.assign(caseItem,data,{id,status});
+  caseItem.overdue=caseIsOverdue(caseItem);
+  renderCaseWorkspace();
+  if(currentCaseTicketId===id && !document.getElementById('caseTicketModal')?.classList.contains('hidden'))openCaseTicket(id);
+}
+function closeCaseCardMenus(){
+  document.querySelectorAll('.case-card-menu[open]').forEach(menu=>menu.removeAttribute('open'));
+}
+async function updateCaseStatusImmediately(id,status,source='quick_action'){
+  const caseId=Number(id);
+  const targetStatus=String(status||'').toLowerCase();
+  const caseItem=caseBoardState.rawCases.find(item=>Number(item.id)===caseId);
+  if(!caseId || !caseItem || !CASE_STATUS_META[targetStatus] || caseStatusPendingIds.has(caseId))return;
+  const previous={status:caseItem.status,overdue:caseItem.overdue,updated_at:caseItem.updated_at};
+  if(String(previous.status||'').toLowerCase()===targetStatus){
+    closeCaseCardMenus();
+    return;
+  }
+
+  caseStatusPendingIds.add(caseId);
+  closeCaseCardMenus();
+  caseItem.status=targetStatus;
+  if(targetStatus==='completed')caseItem.overdue=false;
+  renderCaseWorkspace();
+
+  try{
+    const d=await api(API.CASE.STATUS,{id:caseId,status:targetStatus,source:String(source||'manual'),note:''});
+    if(!d?.success)throw {message:d?.message,status:d?.status};
+    Object.assign(caseItem,d.data||{},{id:caseId,status:targetStatus});
+    caseItem.overdue=caseIsOverdue(caseItem);
+    showToast(d.message||'Case status updated.','success',{context:'page'});
+    if(currentCaseTicketId===caseId && !document.getElementById('caseTicketModal')?.classList.contains('hidden'))openCaseTicket(caseId);
+  }catch(error){
+    Object.assign(caseItem,previous);
+    const ticketModal=document.getElementById('caseTicketModal');
+    const ticketOpen=currentCaseTicketId===caseId && ticketModal && !ticketModal.classList.contains('hidden');
+    handleRequestError(error,ticketOpen?'modal':'page','The case status could not be updated. Please try again.');
+  }finally{
+    caseStatusPendingIds.delete(caseId);
+    renderCaseWorkspace();
+  }
+}
+function requestCaseTicketStatus(status){
+  if(!currentCaseTicketId)return;
+  updateCaseStatusImmediately(currentCaseTicketId,status,'drawer_action');
+}
+function setCaseWorkspaceView(view,remember=true){
+  const selected=view==='table'?'table':'board';
+  document.querySelectorAll('[data-case-view-panel]').forEach(panel=>{panel.hidden=panel.dataset.caseViewPanel!==selected;});
+  document.querySelectorAll('[data-case-view]').forEach(button=>{
+    const active=button.dataset.caseView===selected;
+    button.classList.toggle('is-active',active);
+    button.setAttribute('aria-pressed',active?'true':'false');
+  });
+  if(remember){
+    try{localStorage.setItem('tracs:cases:view',selected);}catch(e){}
+  }
+}
+function initCaseBoard(){
+  const workspace=document.getElementById('caseWorkspace');
+  const dataset=document.getElementById('caseDataset');
+  if(!workspace||!dataset)return;
+  try{
+    const parsed=JSON.parse(dataset.textContent||'[]');
+    caseBoardState.rawCases=Array.isArray(parsed)?parsed.map(item=>({
+      ...item,
+      id:Number(item.id)||0,
+      status:String(item.status||'pending').toLowerCase(),
+      priority:String(item.priority||'low').toLowerCase(),
+      attachment_count:Number(item.attachment_count)||0,
+      overdue:caseIsOverdue(item)
+    })).filter(item=>item.id>0):[];
+  }catch(error){
+    console.error('Unable to load case workspace data:',error);
+    caseBoardState.rawCases=[];
+  }
+  caseBoardState.filter=CASE_FILTER_LABELS[workspace.dataset.caseFilter]?workspace.dataset.caseFilter:'all';
+  caseBoardState.query=workspace.dataset.caseQuery||'';
+  caseBoardState.sort=CASE_SORT_MODES.has(workspace.dataset.caseSort)?workspace.dataset.caseSort:'operational';
+  caseBoardState.initialized=true;
+
+  const search=document.getElementById('caseSearchInput');
+  const searchForm=document.getElementById('caseSearchForm');
+  const sort=document.getElementById('caseSort');
+  let searchTimer=0;
+  searchForm?.addEventListener('submit',event=>{
+    event.preventDefault();
+    window.clearTimeout(searchTimer);
+    caseBoardState.query=search?.value.trim()||'';
+    renderCaseWorkspace({preserveScroll:false});
+  });
+  search?.addEventListener('input',()=>{
+    window.clearTimeout(searchTimer);
+    searchTimer=window.setTimeout(()=>{
+      caseBoardState.query=search.value.trim();
+      renderCaseWorkspace({preserveScroll:false});
+    },100);
+  });
+  document.querySelectorAll('[data-case-filter-option]').forEach(button=>button.addEventListener('click',()=>{
+    caseBoardState.filter=CASE_FILTER_LABELS[button.dataset.caseFilterOption]?button.dataset.caseFilterOption:'all';
+    renderCaseWorkspace({preserveScroll:false});
+  }));
+  sort?.addEventListener('change',()=>{
+    caseBoardState.sort=CASE_SORT_MODES.has(sort.value)?sort.value:'operational';
+    renderCaseWorkspace({preserveScroll:false});
+  });
+  document.getElementById('caseClearFilters')?.addEventListener('click',clearCaseFilters);
+  document.querySelectorAll('[data-case-clear-filters]').forEach(button=>button.addEventListener('click',clearCaseFilters));
+
+  let preferred='board';
+  try{preferred=localStorage.getItem('tracs:cases:view')||'board';}catch(e){}
+  setCaseWorkspaceView(preferred,false);
+  document.querySelectorAll('[data-case-view]').forEach(button=>button.addEventListener('click',()=>setCaseWorkspaceView(button.dataset.caseView)));
+  document.addEventListener('click',event=>{
+    if(event.target.closest?.('.case-card-menu'))return;
+    closeCaseCardMenus();
+  });
+  document.querySelectorAll('.case-kanban, .case-column-list').forEach(scroller=>scroller.addEventListener('scroll',closeCaseCardMenus,{passive:true}));
+  const boardScroller=workspace.querySelector('.case-kanban');
+  boardScroller?.addEventListener('wheel',event=>{
+    if(boardScroller.scrollWidth<=boardScroller.clientWidth)return;
+    const horizontalIntent=Math.abs(event.deltaX)>Math.abs(event.deltaY);
+    const shiftedVertical=event.shiftKey && Math.abs(event.deltaY)>0;
+    if(!horizontalIntent && !shiftedVertical)return;
+    const delta=horizontalIntent?event.deltaX:event.deltaY;
+    const previous=boardScroller.scrollLeft;
+    const maximum=boardScroller.scrollWidth-boardScroller.clientWidth;
+    const next=Math.max(0,Math.min(maximum,previous+delta));
+    if(next===previous)return;
+    event.preventDefault();
+    boardScroller.scrollLeft=next;
+  },{passive:false});
+  window.addEventListener('resize',closeCaseCardMenus,{passive:true});
+
+  if(window.TRACS_CASE_CAPS?.canManage){
+    workspace.addEventListener('dragstart',event=>{
+      const card=event.target.closest?.('.case-kanban-card[draggable="true"]');
+      if(!card)return;
+      caseBoardState.draggedId=Number(card.dataset.cid)||0;
+      card.classList.add('is-dragging');
+      card.setAttribute('aria-grabbed','true');
+      event.dataTransfer.effectAllowed='move';
+      event.dataTransfer.setData('text/plain',String(caseBoardState.draggedId));
+    });
+    workspace.addEventListener('dragend',event=>{
+      event.target.closest?.('.case-kanban-card')?.classList.remove('is-dragging');
+      event.target.closest?.('.case-kanban-card')?.setAttribute('aria-grabbed','false');
+      document.querySelectorAll('.case-kanban-column.is-drag-over').forEach(column=>column.classList.remove('is-drag-over'));
+      caseBoardState.draggedId=0;
+    });
+    workspace.addEventListener('dragover',event=>{
+      const zone=event.target.closest?.('[data-case-dropzone]');
+      if(!zone||!caseBoardState.draggedId)return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect='move';
+      zone.closest('.case-kanban-column')?.classList.add('is-drag-over');
+    });
+    workspace.addEventListener('dragleave',event=>{
+      const zone=event.target.closest?.('[data-case-dropzone]');
+      if(zone && !zone.contains(event.relatedTarget))zone.closest('.case-kanban-column')?.classList.remove('is-drag-over');
+    });
+    workspace.addEventListener('drop',event=>{
+      const zone=event.target.closest?.('[data-case-dropzone]');
+      const column=zone?.closest('.case-kanban-column');
+      if(!zone||!column||!caseBoardState.draggedId)return;
+      event.preventDefault();
+      column.classList.remove('is-drag-over');
+      updateCaseStatusImmediately(caseBoardState.draggedId,column.dataset.targetStatus,'drag_drop');
+    });
+  }
+
+  if(sort)sort.value=caseBoardState.sort;
+  renderCaseWorkspace({preserveScroll:false,syncUrl:false});
+}
+async function resolveCaseFromTicket(){
+  const id=currentCaseTicketId;
+  if(!id)return;
+  updateCaseStatusImmediately(id,'completed','drawer_action');
+}
+function editCaseFromTicket(){
+  const id=currentCaseTicketId;
+  if(!id)return;
+  closeModal('caseTicket');
+  openEditCase(id);
+}
+function deleteCaseFromTicket(){
+  const id=currentCaseTicketId;
+  if(!id)return;
+  closeModal('caseTicket');
+  deleteCase(id);
 }
 async function saveCase(){
   const title=val('caseTitle').trim();
   if(!title){toast('Case title is required','error');return;}
   const id=val('caseId');
-  const d=await api(id?API.CASE.UPDATE:API.CASE.CREATE,{
-    id,title,status:val('caseStatus'),priority:val('casePriority'),
-    next_check_at:val('caseNextCheck'),notes:val('caseNotes')
-  });
-  if(d.success){toast(id?'Case updated':'Case created','success');closeModal('case');_reload();}
-  else toast(d.message||'Error saving case','error');
+  const saveBtn=caseAttachmentEls().save;
+  caseSetUploadStatus(caseSelectedAttachments.length?'Uploading images...':'Saving case...');
+  const useForm=caseSelectedAttachments.length>0 || caseRemovedAttachmentIds.size>0;
+  const d=await withLoadingState(saveBtn,'Saving...',()=>useForm
+    ? caseApiWithUploads(id?API.CASE.UPDATE:API.CASE.CREATE,casePayloadFormData(id))
+    : api(id?API.CASE.UPDATE:API.CASE.CREATE,{id,title,status:val('caseStatus'),priority:val('casePriority'),next_check_at:val('caseNextCheck'),notes:val('caseNotes')}));
+  if(!d)return;
+  if(d.success){
+    showModalSuccessAndClose({
+      modal:'case',
+      message:id?'Case updated.':'Case created.',
+      onAfterClose:()=>{
+        clearCaseAttachmentState();
+        location.reload();
+      }
+    });
+  }
+  else {
+    const message=getFriendlyErrorMessage(d.message,'Your changes could not be saved. Please check the data and try again.');
+    caseSetUploadStatus(message,'error');
+    handleModalError({modal:'case',error:{message,status:d.status}});
+  }
 }
-async function deleteCase(id){
+async function deleteCase(id,button=null){
   tracsConfirm('Delete this case permanently? This cannot be undone.',async()=>{
-    const row=document.querySelector(`[data-cid="${id}"]`);
-    const d=await api(API.CASE.DELETE,{id});
+    const caseId=Number(id);
+    const caseItem=caseBoardState.rawCases.find(item=>Number(item.id)===caseId);
+    const d=await withLoadingState(button,'Deleting...',()=>api(API.CASE.DELETE,{id}));
+    if(!d)return;
     if(d.success){
       const badgeContainer = document.getElementById('notif-badge-container');
-      if (badgeContainer && badgeContainer.dataset.badgeMode !== 'alerts' && row?.dataset.status !== 'completed') {
+      if (badgeContainer && badgeContainer.dataset.badgeMode !== 'alerts' && caseItem?.status !== 'completed') {
         const current = parseInt(badgeContainer.dataset.staticExtra || '0', 10) || 0;
         badgeContainer.dataset.staticExtra = String(Math.max(0, current - 1));
         refreshNotificationBadge();
       }
-      toast('Case deleted','success');removeRow(`[data-cid="${id}"]`);
+      caseBoardState.rawCases=caseBoardState.rawCases.filter(item=>Number(item.id)!==caseId);
+      renderCaseWorkspace();
+      showToast('Case deleted.','success',{context:'page'});
     }
-    else toast(d.message||'Error','error');
+    else handleRequestError({message:d.message,status:d.status},'page','The case could not be deleted. Please try again.');
   });
 }
+
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initCaseBoard);
+else initCaseBoard();
 
 /* ── REMINDER CRUD ────────────────────────────────────── */
 function openNewReminder(){
@@ -1398,16 +3074,23 @@ async function saveReminder(){
   if(!title){toast('Title is required','error');return;}
   if(!due){toast('Due date is required','error');return;}
   const id=val('remId');
-  const d=await api(id?API.REMINDER.UPDATE:API.REMINDER.CREATE,{
+  const d=await withLoadingState(document.getElementById('remSaveBtn'),'Saving...',()=>api(id?API.REMINDER.UPDATE:API.REMINDER.CREATE,{
     id,title,priority:val('remPriority'),due_date:due,description:val('remDesc')
-  });
-  if(d.success){toast(id?'Reminder updated':'Reminder created','success');closeModal('rem');_reload();}
-  else toast(d.message||'Error','error');
+  }));
+  if(!d)return;
+  if(d.success){
+    showModalSuccessAndClose({
+      modal:'rem',
+      message:id?'Reminder updated.':'Reminder created.',
+      onAfterClose:()=>location.reload()
+    });
+  }else handleModalError({modal:'rem',error:{message:d.message,status:d.status}});
 }
-async function deleteReminder(id){
+async function deleteReminder(id,button=null){
   tracsConfirm('Delete this reminder permanently? Use Mark Done for handled reminders so the history remains available.',async()=>{
     const row=document.querySelector(`[data-rid="${id}"]`);
-    const d=await api(API.REMINDER.DELETE,{id});
+    const d=await withLoadingState(button,'Deleting...',()=>api(API.REMINDER.DELETE,{id}));
+    if(!d)return;
     if(d.success){
       const badgeContainer = document.getElementById('notif-badge-container');
       if (badgeContainer && row?.dataset.completed !== '1' && (badgeContainer.dataset.badgeMode !== 'alerts' || row?.dataset.notifAlert === '1')) {
@@ -1415,52 +3098,95 @@ async function deleteReminder(id){
         badgeContainer.dataset.staticExtra = String(Math.max(0, current - 1));
         refreshNotificationBadge();
       }
-      toast('Reminder deleted','success');removeRow(`[data-rid="${id}"]`);
+      document.querySelectorAll(`[data-monitor-reminder-id="${id}"]`).forEach(item=>item.remove());
+      showToast('Reminder deleted.','success',{context:'page'});removeRow(`[data-rid="${id}"]`);setTimeout(refreshTaskMonitoringCounters,220);
     }
-    else toast(d.message||'Error','error');
+    else handleRequestError({message:d.message,status:d.status},'page','The reminder could not be deleted. Please try again.');
   }, 'Delete Reminder');
 }
-async function toggleReminder(id,checked){
-  const row=document.querySelector(`[data-rid="${id}"]`);
-  setCheckablePending(row, true);
-  const d=await api(API.REMINDER.TOGGLE,{id,is_completed:checked?1:0});
-  if(d.success){
-    row?.querySelector('.rem-title')?.classList.toggle('done',checked);
-    row?.querySelectorAll('.rem-check').forEach(box => { box.checked = checked; });
-    const badgeContainer = document.getElementById('notif-badge-container');
-    if (badgeContainer) {
-      const current = parseInt(badgeContainer.dataset.staticExtra || '0', 10) || 0;
-      const alertMode = badgeContainer.dataset.badgeMode === 'alerts';
-      let shouldAdjust = true;
-      if (alertMode) {
-        const due = row?.dataset.due ? new Date(row.dataset.due).getTime() : NaN;
-        const dueSoon = Number.isFinite(due) && due <= Date.now() + 5 * 60 * 1000;
-        shouldAdjust = row?.dataset.notifAlert === '1' || (!checked && dueSoon);
-        if (row) row.dataset.notifAlert = (!checked && dueSoon) ? '1' : '0';
+const tracsReminderTogglePending=new Set();
+const tracsTaskTogglePending=new Set();
+
+function tracsCheckableSource(candidate,row){
+  if(candidate instanceof Element)return candidate;
+  const active=tracsSourceElement();
+  return active && row?.contains(active) ? active : row?.querySelector('.rem-check, .task-chk, .rem-primary-action');
+}
+function tracsCheckableState(row){
+  const completed=row?.dataset.completed === '1';
+  return {
+    completed,
+    notificationAlert:row?.dataset.notifAlert,
+    titleDone:Boolean(row?.querySelector('.rem-title, .task-title')?.classList.contains('done'))
+  };
+}
+function restoreCheckableState(row,state){
+  if(!row || !state)return;
+  row.dataset.completed=state.completed?'1':'0';
+  row.classList.toggle('is-completed',state.completed);
+  row.querySelector('.rem-title, .task-title')?.classList.toggle('done',state.titleDone);
+  row.querySelectorAll('.rem-check, .task-chk').forEach(box=>{box.checked=state.completed;});
+  if(state.notificationAlert === undefined)delete row.dataset.notifAlert;
+  else row.dataset.notifAlert=state.notificationAlert;
+}
+async function toggleReminder(id,checkedOrSource,sourceElement=null){
+  const rows=[...document.querySelectorAll(`[data-rid="${id}"]`)];
+  const row=rows[0] || (checkedOrSource instanceof Element ? checkedOrSource.closest('[data-rid]') : null);
+  const directSource=checkedOrSource instanceof Element ? checkedOrSource : null;
+  const source=tracsCheckableSource(sourceElement || directSource,row);
+  const checked=directSource?.matches('input[type="checkbox"]') ? directSource.checked : !!checkedOrSource;
+  const previousStates=new Map(rows.map(item=>[item,tracsCheckableState(item)]));
+  const previousChecked=previousStates.get(row)?.completed ?? !checked;
+  const requestKey=String(id);
+  if(tracsReminderTogglePending.has(requestKey)){
+    if(source?.matches('input[type="checkbox"]'))source.checked=previousChecked;
+    return;
+  }
+  tracsReminderTogglePending.add(requestKey);
+  rows.forEach(item=>setCheckablePending(item,true));
+  try{
+    const d=await api(API.REMINDER.TOGGLE,{id,is_completed:checked?1:0});
+    if(!d.success){
+      rows.forEach(item=>restoreCheckableState(item,previousStates.get(item)));
+      showToast('Reminder could not be updated. Please try again.','error',tracsToastOptionsForSource(source,{
+        duration:9000,
+        closable:true
+      }));
+      return;
+    }
+
+    showToast(checked?'Reminder marked as done.':'Reminder reopened.',checked?'success':'info',tracsToastOptionsForSource(source));
+    rows.forEach(item=>{
+      item.querySelector('.rem-title')?.classList.toggle('done',checked);
+      item.querySelectorAll('.rem-check').forEach(box=>{box.checked=checked;});
+      syncReminderPrimaryAction(item,id,checked);
+    });
+    const badgeContainer=document.getElementById('notif-badge-container');
+    if(badgeContainer && previousChecked!==checked){
+      const current=parseInt(badgeContainer.dataset.staticExtra || '0',10) || 0;
+      const alertMode=badgeContainer.dataset.badgeMode === 'alerts';
+      let shouldAdjust=true;
+      if(alertMode){
+        const due=row?.dataset.due ? new Date(row.dataset.due).getTime() : NaN;
+        const dueSoon=Number.isFinite(due) && due<=Date.now()+5*60*1000;
+        shouldAdjust=row?.dataset.notifAlert === '1' || (!checked && dueSoon);
+        if(row)row.dataset.notifAlert=(!checked && dueSoon)?'1':'0';
       }
-      if (shouldAdjust) {
-        badgeContainer.dataset.staticExtra = String(Math.max(0, current + (checked ? -1 : 1)));
-      }
+      if(shouldAdjust)badgeContainer.dataset.staticExtra=String(Math.max(0,current+(checked?-1:1)));
       refreshNotificationBadge();
     }
-    syncReminderPrimaryAction(row, id, checked);
-    moveCheckableRow(row, checked);
+    syncTaskMonitoringReminderMirrors(id,checked);
+    rows.forEach(item=>moveCheckableRow(item,checked));
+    refreshTaskMonitoringCounters();
     _updateProgress();
-    toast(checked?'Reminder completed':'Reminder reopened','success');
-  }else{
-    if(row){
-      const box=row.querySelector('.rem-check');
-      if(box) box.checked=!checked;
-    }
-    toast('Error updating reminder','error');
+  }finally{
+    rows.forEach(item=>setCheckablePending(item,false));
+    tracsReminderTogglePending.delete(requestKey);
   }
-  setCheckablePending(row, false);
 }
 
-function completeReminder(id){
-  const row=document.querySelector(`[data-rid="${id}"]`);
-  row?.querySelectorAll('.rem-check').forEach(box => { box.checked = true; });
-  toggleReminder(id, true);
+function completeReminder(id,sourceElement=null){
+  return toggleReminder(id,true,sourceElement);
 }
 
 function syncReminderPrimaryAction(row, id, checked){
@@ -1472,13 +3198,13 @@ function syncReminderPrimaryAction(row, id, checked){
     action.className = compact ? 'btn btn-ghost btn-icon rem-primary-action' : 'btn btn-ghost btn-sm rem-primary-action';
     action.title = 'Reopen reminder';
     action.setAttribute('aria-label', 'Reopen reminder');
-    action.onclick = () => toggleReminder(id, false);
+    action.onclick = () => toggleReminder(id,false,action);
     action.innerHTML = compact ? '<i data-lucide="rotate-ccw" class="icon-sm"></i>' : '<i data-lucide="rotate-ccw" class="icon-xs"></i>Reopen';
   }else{
     action.className = compact ? 'btn btn-ghost btn-icon rem-done-btn rem-primary-action' : 'btn btn-success btn-sm rem-done-btn rem-primary-action';
     action.title = compact ? 'Mark reminder done' : 'Mark reminder as done';
     action.setAttribute('aria-label', 'Mark reminder done');
-    action.onclick = () => completeReminder(id);
+    action.onclick = () => completeReminder(id,action);
     action.innerHTML = compact ? '<i data-lucide="check-square" class="icon-sm"></i>' : '<i data-lucide="check" class="icon-xs"></i>Mark Done';
   }
   if(compact) action.dataset.compactAction = '1';
@@ -1504,15 +3230,22 @@ async function saveTask(){
   const title=val('taskTitle').trim();
   if(!title){toast('Task title is required','error');return;}
   const id=val('taskId');
-  const d=await api(id?API.TASK.UPDATE:API.TASK.CREATE,{
+  const d=await withLoadingState(document.getElementById('taskSaveBtn'),'Saving...',()=>api(id?API.TASK.UPDATE:API.TASK.CREATE,{
     id,title,description:val('taskDesc')
-  });
-  if(d.success){toast(id?'Task updated':'Task created','success');closeModal('task');_reload();}
-  else toast(d.message||'Error','error');
+  }));
+  if(!d)return;
+  if(d.success){
+    showModalSuccessAndClose({
+      modal:'task',
+      message:id?'Task updated.':'Task created.',
+      onAfterClose:()=>location.reload()
+    });
+  }else handleModalError({modal:'task',error:{message:d.message,status:d.status}});
 }
-async function deleteTask(id){
+async function deleteTask(id,button=null){
   tracsConfirm('Delete this task?',async()=>{
-    const d=await api(API.TASK.DELETE,{id});
+    const d=await withLoadingState(button,'Deleting...',()=>api(API.TASK.DELETE,{id}));
+    if(!d)return;
     if(d.success){
       const row=document.querySelector(`[data-tid="${id}"]`);
       const badgeContainer = document.getElementById('notif-badge-container');
@@ -1520,40 +3253,72 @@ async function deleteTask(id){
         const current = parseInt(badgeContainer.dataset.uncheckedChecklist || '0', 10) || 0;
         badgeContainer.dataset.uncheckedChecklist = String(Math.max(0, current - 1));
       }
-      toast('Task deleted','success');removeRow(`[data-tid="${id}"]`);_updateProgress();
+      showToast('Task deleted.','success',{context:'page'});removeRow(`[data-tid="${id}"]`);_updateProgress();
     }
-    else toast(d.message||'Error','error');
+    else handleRequestError({message:d.message,status:d.status},'page','The task could not be deleted. Please try again.');
   });
 }
-async function toggleTask(id,checked){
-  const row=document.querySelector(`[data-tid="${id}"]`);
-  setCheckablePending(row, true);
-  const d=await api(API.TASK.TOGGLE,{id,is_completed:checked?1:0});
-  if(d.success){
-    row?.querySelector('.task-title')?.classList.toggle('done',checked);
-    const badgeContainer = document.getElementById('notif-badge-container');
-    if (badgeContainer) {
-      const current = parseInt(badgeContainer.dataset.uncheckedChecklist || '0', 10) || 0;
-      badgeContainer.dataset.uncheckedChecklist = String(Math.max(0, current + (checked ? -1 : 1)));
-    }
-    moveCheckableRow(row, checked);
-    _updateProgress();
-    toast(checked?'Task completed':'Task reopened','success');
-  }else{
-    if(row){
-      const box=row.querySelector('.task-chk');
-      if(box) box.checked=!checked;
-    }
-    toast('Error updating task','error');
+async function toggleTask(id,checkboxOrChecked,sourceElement=null){
+  const rows=[...document.querySelectorAll(`[data-tid="${id}"]`)];
+  const row=rows[0] || (checkboxOrChecked instanceof Element ? checkboxOrChecked.closest('[data-tid]') : null);
+  const directSource=checkboxOrChecked instanceof Element ? checkboxOrChecked : null;
+  const source=tracsCheckableSource(sourceElement || directSource,row);
+  const box=directSource?.matches('.task-chk') ? directSource : row?.querySelector('.task-chk');
+  const checked=box ? box.checked : !!checkboxOrChecked;
+  const previousStates=new Map(rows.map(item=>[item,tracsCheckableState(item)]));
+  const previousChecked=previousStates.get(row)?.completed ?? !checked;
+  const requestKey=String(id);
+  if(tracsTaskTogglePending.has(requestKey)){
+    if(box)box.checked=previousChecked;
+    return;
   }
-  setCheckablePending(row, false);
+  tracsTaskTogglePending.add(requestKey);
+  rows.forEach(item=>setCheckablePending(item,true));
+  try{
+    const d=await api(API.TASK.TOGGLE,{id,is_completed:checked?1:0});
+    if(!d.success){
+      rows.forEach(item=>restoreCheckableState(item,previousStates.get(item)));
+      showToast('Checklist item could not be updated. Please try again.','error',tracsToastOptionsForSource(source,{
+        duration:9000,
+        closable:true
+      }));
+      return;
+    }
+
+    showToast(checked?'Checklist item completed.':'Checklist item reopened.',checked?'success':'info',tracsToastOptionsForSource(source));
+    rows.forEach(item=>{
+      item.querySelector('.task-title')?.classList.toggle('done',checked);
+      item.querySelectorAll('.task-chk').forEach(taskBox=>{taskBox.checked=checked;});
+    });
+    const badgeContainer=document.getElementById('notif-badge-container');
+    if(badgeContainer && previousChecked!==checked){
+      const current=parseInt(badgeContainer.dataset.uncheckedChecklist || '0',10) || 0;
+      badgeContainer.dataset.uncheckedChecklist=String(Math.max(0,current+(checked?-1:1)));
+    }
+    rows.forEach(item=>moveCheckableRow(item,checked));
+    _updateProgress();
+  }finally{
+    rows.forEach(item=>setCheckablePending(item,false));
+    tracsTaskTogglePending.delete(requestKey);
+  }
 }
 
 function setCheckablePending(row, pending){
   if(!row)return;
   row.classList.toggle('is-updating', !!pending);
-  const box=row.querySelector('.rem-check');
-  if(box) box.disabled=!!pending;
+  row.setAttribute('aria-busy',pending?'true':'false');
+  row.querySelectorAll('.rem-check, .task-chk, .rem-primary-action').forEach(control=>{
+    if(pending){
+      if(control.dataset.tracsPendingDisabled === undefined)control.dataset.tracsPendingDisabled=control.disabled?'1':'0';
+      control.disabled=true;
+      control.setAttribute('aria-disabled','true');
+    }else{
+      control.disabled=control.dataset.tracsPendingDisabled === '1';
+      delete control.dataset.tracsPendingDisabled;
+      if(control.disabled)control.setAttribute('aria-disabled','true');
+      else control.removeAttribute('aria-disabled');
+    }
+  });
 }
 
 function moveCheckableRow(row, checked){
@@ -1585,19 +3350,89 @@ function _updateProgress(){
   const fill=document.getElementById('prog-fill');
   const lbl=document.getElementById('prog-lbl');
   const pctlbl=document.getElementById('prog-pct');
+  const monitorProgress=document.querySelector('[data-task-monitor-progress]');
+  const uncheckedCounter=document.querySelector('[data-task-monitor-unchecked]');
+  const unchecked=total-done;
   if(fill)fill.style.width=pct+'%';
   if(lbl)lbl.textContent=`${done} / ${total}`;
   if(pctlbl)pctlbl.textContent=pct+'%';
+  if(monitorProgress)monitorProgress.textContent=`${done}/${total}`;
+  if(uncheckedCounter){
+    uncheckedCounter.textContent=String(unchecked);
+    uncheckedCounter.title=`${unchecked} unchecked checklist item${unchecked===1?'':'s'}`;
+    uncheckedCounter.classList.remove('is-zero','is-low','is-warning','is-critical');
+    uncheckedCounter.classList.add(
+      unchecked===0 ? 'is-zero' :
+      unchecked<5 ? 'is-low' :
+      unchecked<10 ? 'is-warning' :
+      'is-critical'
+    );
+  }
 
-  refreshNotificationBadge(total - done);
+  refreshNotificationBadge(unchecked);
+}
+
+function refreshTaskMonitoringCounters(){
+  const activeReminderCounter=document.querySelector('[data-task-monitor-active-reminders]');
+  if(activeReminderCounter){
+    const reminderRows=document.querySelectorAll('.tm-reminder-row');
+    if(reminderRows.length){
+      activeReminderCounter.textContent=String(document.querySelectorAll('.tm-reminder-row[data-completed="0"]').length);
+    }
+  }
+}
+
+function syncTaskMonitoringReminderMirrors(id, completed){
+  document.querySelectorAll(`[data-monitor-reminder-id="${id}"]`).forEach(item=>{
+    item.hidden=!!completed;
+    item.dataset.monitorReminderCompleted=completed?'1':'0';
+    const status=item.querySelector('.tm-feed-status');
+    if(status)status.textContent=completed?'Completed':(item.dataset.monitorReminderStatus || 'Scheduled');
+  });
+}
+
+function initTaskMonitoringTabs(){
+  const root=document.querySelector('[data-task-monitoring]');
+  if(!root)return;
+  const tabs=[...root.querySelectorAll('[data-task-monitor-tab]')];
+  const panes=[...root.querySelectorAll('[data-task-monitor-pane]')];
+  const allLink=root.querySelector('[data-task-monitor-all]');
+  const activate=(name)=>{
+    const activeTab=tabs.find(tab=>tab.dataset.taskMonitorTab===name) || tabs[0];
+    if(!activeTab)return;
+    tabs.forEach(tab=>{
+      const selected=tab===activeTab;
+      tab.classList.toggle('active',selected);
+      tab.setAttribute('aria-selected',selected?'true':'false');
+    });
+    panes.forEach(pane=>{
+      const selected=pane.dataset.taskMonitorPane===activeTab.dataset.taskMonitorTab;
+      pane.hidden=!selected;
+      pane.classList.toggle('is-active',selected);
+    });
+    if(allLink)allLink.href=activeTab.dataset.allHref || '#';
+    tracsRefreshIcons(root);
+  };
+  tabs.forEach(tab=>{
+    tab.addEventListener('click',()=>activate(tab.dataset.taskMonitorTab));
+  });
+  root.querySelectorAll('[data-task-monitor-switch]').forEach(control=>{
+    control.addEventListener('click',()=>{
+      activate(control.dataset.taskMonitorSwitch || 'assignments');
+    });
+  });
+  activate(tabs.find(tab=>tab.classList.contains('active'))?.dataset.taskMonitorTab || tabs[0]?.dataset.taskMonitorTab);
+  refreshTaskMonitoringCounters();
 }
 
 function refreshNotificationBadge(pendingOverride){
   const badgeContainer = document.getElementById('notif-badge-container');
   if (!badgeContainer) return;
+  const unreadNotifications = parseInt(badgeContainer.dataset.unreadNotifications || '0', 10) || 0;
   if (badgeContainer.dataset.badgeMode === 'alerts') {
     const count = parseInt(badgeContainer.dataset.staticExtra || '0', 10) || 0;
-    badgeContainer.innerHTML = count > 0 ? `<span class="bell-badge">${Math.min(count, 99)}</span>` : '';
+    const total = count + unreadNotifications;
+    badgeContainer.innerHTML = total > 0 ? `<span class="bell-badge">${Math.min(total, 99)}</span>` : '';
     return;
   }
   const taskBoxes=document.querySelectorAll('.task-chk');
@@ -1606,7 +3441,7 @@ function refreshNotificationBadge(pendingOverride){
     : (taskBoxes.length ? [...taskBoxes].filter(b=>!b.checked).length : 0);
   const extra = parseInt(badgeContainer.dataset.staticExtra || '0', 10) || 0;
   const checklistCount = parseInt(badgeContainer.dataset.uncheckedChecklist || String(pending), 10) || 0;
-  const count = checklistCount + extra;
+  const count = checklistCount + extra + unreadNotifications;
   if (count > 0) {
     badgeContainer.innerHTML = `<span class="bell-badge">${Math.min(count, 99)}</span>`;
   } else {
@@ -1614,13 +3449,299 @@ function refreshNotificationBadge(pendingOverride){
   }
 }
 
+/* ── TRACS notification center + browser notifications ── */
+const TRACSNotifications = (() => {
+  const SEEN_KEY = 'tracs:notifications:last-seen-id';
+  const PROMPT_KEY = 'tracs:notifications:prompt-dismissed-at';
+  const POLL_MS = 60000;
+  let polling = false;
+  let pollTimer = null;
+  let initialPoll = true;
+
+  function supported() {
+    return typeof window.Notification !== 'undefined';
+  }
+
+  function permission() {
+    if (!supported()) return 'unsupported';
+    return Notification.permission || 'default';
+  }
+
+  function promptContextAllowed() {
+    const page = document.body?.dataset?.tracsPage || '';
+    if (page === 'dashboard') return true;
+    if (page === 'profile') {
+      return new URLSearchParams(location.search).get('section') === 'preferences';
+    }
+    return false;
+  }
+
+  function promptDismissedRecently() {
+    try {
+      const ts = parseInt(localStorage.getItem(PROMPT_KEY) || '0', 10) || 0;
+      return ts > 0 && Date.now() - ts < 24 * 60 * 60 * 1000;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function setPromptVisible(visible) {
+    document.querySelectorAll('[data-tracs-notification-permission]').forEach(node => {
+      node.classList.toggle('hidden', !visible);
+    });
+  }
+
+  function updatePermissionPrompt() {
+    const canPrompt = supported() && permission() === 'default' && promptContextAllowed() && !promptDismissedRecently();
+    setPromptVisible(canPrompt);
+  }
+
+  async function requestPermission() {
+    if (!supported()) {
+      toast('Browser notifications are not supported here. In-app notifications will still work.', 'info');
+      return 'unsupported';
+    }
+    try {
+      const result = await Notification.requestPermission();
+      updatePermissionPrompt();
+      if (result === 'granted') toast('Browser notifications enabled.', 'success');
+      if (result === 'denied') toast('No problem. TRACS will keep using in-app notifications.', 'info');
+      poll();
+      return result;
+    } catch (e) {
+      toast('Unable to request browser notification permission.', 'error');
+      return permission();
+    }
+  }
+
+  function dismissPrompt() {
+    try { localStorage.setItem(PROMPT_KEY, String(Date.now())); } catch (e) {}
+    setPromptVisible(false);
+  }
+
+  function absoluteUrl(url) {
+    try { return new URL(url || '/index.php', location.origin).href; }
+    catch (e) { return location.origin + '/index.php'; }
+  }
+
+  async function registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) return null;
+    try {
+      return await navigator.serviceWorker.register('/tracs-sw.js');
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async function browserNotify(item) {
+    const url = absoluteUrl(item.related_url || '/index.php');
+    const options = {
+      body: item.message || 'Open TRACS for details.',
+      tag: `tracs-${item.id}`,
+      renotify: false,
+      icon: '/assets/img/logo.svg',
+      badge: '/assets/img/logo.svg',
+      data: { url }
+    };
+    if ('serviceWorker' in navigator) {
+      const registration = await navigator.serviceWorker.ready.catch(() => null);
+      if (registration?.showNotification) {
+        await registration.showNotification(item.title || 'TRACS notification', options);
+        return;
+      }
+    }
+    const notice = new Notification(item.title || 'TRACS notification', options);
+    notice.onclick = () => {
+      window.focus();
+      location.href = url;
+      notice.close();
+    };
+  }
+
+  function notificationStatusClass(item) {
+    const module = String(item.related_module || 'pending').replace(/[^a-z0-9_-]/gi, '').toLowerCase();
+    if (module === 'mom') return 'meeting';
+    if (module === 'shift-reports') return 'shift';
+    return module || 'pending';
+  }
+
+  function renderList(items = []) {
+    const host = document.querySelector('[data-tracs-notification-list]');
+    if (!host) return;
+    const visible = items.slice(0, 8);
+    host.innerHTML = [
+      '<div class="notif-section-label">TRACS Notifications</div>',
+      visible.length ? visible.map(item => {
+        const href = item.related_url ? escHtml(item.related_url) : '#';
+        const type = escHtml(String(item.notification_type || 'notification').replace(/_/g, ' '));
+        const readClass = item.is_read === '1' || item.is_read === 1 ? 'is-read' : 'is-unread';
+        return `
+          <a class="notif-drop-item notif-system-item ${readClass}" href="${href}" data-notification-id="${Number(item.id) || 0}">
+            <div class="notif-drop-status status-${notificationStatusClass(item)}"></div>
+            <div class="notif-drop-info">
+              <div class="notif-drop-label">${type}</div>
+              <div class="notif-drop-text">${escHtml(item.title || 'TRACS notification')}</div>
+              <div class="notif-drop-meta">${escHtml(item.message || '')}</div>
+            </div>
+          </a>
+        `;
+      }).join('') : '<div class="notif-drop-empty is-compact">No TRACS notifications yet</div>'
+    ].join('');
+  }
+
+  function updateBadge(unread) {
+    const badge = document.getElementById('notif-badge-container');
+    if (!badge) return;
+    badge.dataset.unreadNotifications = String(Math.max(0, Number(unread) || 0));
+    refreshNotificationBadge();
+  }
+
+  async function postJson(url, data) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data || {})
+    });
+    return res.json();
+  }
+
+  async function markRead(ids = []) {
+    if (!ids.length) return;
+    try {
+      await postJson(API.NOTIFICATION.MARK_READ, { ids });
+      poll();
+    } catch (e) {}
+  }
+
+  function notifyInApp(items = []) {
+    let lastSeen = 0;
+    try { lastSeen = parseInt(localStorage.getItem(SEEN_KEY) || '0', 10) || 0; } catch (e) {}
+    const maxId = items.reduce((max, item) => Math.max(max, Number(item.id) || 0), lastSeen);
+    if (initialPoll) {
+      try { localStorage.setItem(SEEN_KEY, String(maxId)); } catch (e) {}
+      return;
+    }
+    items
+      .filter(item => Number(item.id) > lastSeen)
+      .sort((a, b) => Number(a.id) - Number(b.id))
+      .slice(0, 3)
+      .forEach(item => showToast('info', item.title || 'TRACS notification', item.message || 'Open TRACS for details.', { duration: 7000 }));
+    try { localStorage.setItem(SEEN_KEY, String(maxId)); } catch (e) {}
+  }
+
+  async function claimAndShowPush(items = []) {
+    const pending = items.filter(item => item.push_status === 'pending').slice(0, 5);
+    if (!pending.length) return;
+    const perm = permission();
+    if (perm === 'default') return;
+    let claimedIds = [];
+    try {
+      const claim = await postJson(API.NOTIFICATION.CLAIM_PUSH, {
+        ids: pending.map(item => Number(item.id)).filter(Boolean),
+        permission: perm
+      });
+      claimedIds = claim?.data?.claimed_ids || [];
+    } catch (e) {
+      return;
+    }
+    if (perm !== 'granted' || !claimedIds.length) return;
+    const claimed = new Set(claimedIds.map(Number));
+    for (const item of pending.filter(entry => claimed.has(Number(entry.id)))) {
+      try {
+        await browserNotify(item);
+      } catch (e) {
+        try {
+          await postJson(API.NOTIFICATION.PUSH_STATUS, {
+            ids: [Number(item.id)],
+            status: 'failed',
+            error: e?.message || 'Notification display failed'
+          });
+        } catch (ignored) {}
+      }
+    }
+  }
+
+  async function poll() {
+    if (polling) return;
+    polling = true;
+    try {
+      const res = await fetch(`${API.NOTIFICATION.LIST}?limit=20`, { headers: { 'Accept': 'application/json' } });
+      const json = await res.json();
+      if (!json.success) return;
+      const data = json.data || {};
+      const items = data.items || [];
+      renderList(items);
+      updateBadge(data.unread_count || 0);
+      notifyInApp(items);
+      await claimAndShowPush(items);
+    } catch (e) {
+      /* Notification polling should never interrupt active work. */
+    } finally {
+      initialPoll = false;
+      polling = false;
+    }
+  }
+
+  function bind() {
+    document.addEventListener('click', event => {
+      const enable = event.target.closest('[data-tracs-notification-enable]');
+      if (enable) {
+        event.preventDefault();
+        requestPermission();
+        return;
+      }
+      const dismiss = event.target.closest('[data-tracs-notification-dismiss]');
+      if (dismiss) {
+        event.preventDefault();
+        dismissPrompt();
+        return;
+      }
+      const item = event.target.closest('.notif-system-item[data-notification-id]');
+      if (item) {
+        const id = Number(item.dataset.notificationId) || 0;
+        if (id) markRead([id]);
+      }
+    });
+  }
+
+  function start() {
+    bind();
+    registerServiceWorker();
+    updatePermissionPrompt();
+    poll();
+    pollTimer = setInterval(poll, POLL_MS);
+  }
+
+  return { start, poll, requestPermission, markRead };
+})();
+
+window.TRACSNotifications = TRACSNotifications;
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => TRACSNotifications.start());
+} else {
+  TRACSNotifications.start();
+}
+
 /* ── TICKER CRUD ──────────────────────────────────────── */
 async function addTickerMsg(){
   const text=val('newTickerText').trim(),cls=val('newTickerCls');
-  if(!text){toast('Message text is required','error');return;}
-  const d=await api(API.TICKER.CREATE,{text,class:cls});
-  if(d.success){toast('Message added','success');setVal('newTickerText','');_reload();}
-  else toast(d.message||'Error','error');
+  const button=document.getElementById('tickerAddBtn');
+  if(!text){
+    handleModalError({modal:'ticker',message:'Announcement message is required.',focus:document.getElementById('newTickerText')});
+    return;
+  }
+  const d=await withLoadingState(button,'Adding...',()=>api(API.TICKER.CREATE,{text,class:cls}));
+  if(!d)return;
+  if(d.success){
+    showModalSuccessAndClose({
+      modal:'ticker',
+      message:'Announcement added.',
+      onAfterClose:()=>{
+        setVal('newTickerText','');
+        location.reload();
+      }
+    });
+  }else handleModalError({modal:'ticker',error:{message:d.message,status:d.status},fallbackMessage:'The announcement could not be added. Please try again.'});
 }
 async function archiveTickerMsg(id){
 
@@ -1653,14 +3774,120 @@ async function archiveTickerMsg(id){
 }
 
 /* ── SHIFT REPORT CRUD ────────────────────────────────── */
+let shiftSelectedAttachments = [];
+
+function shiftAttachmentEls(){
+  return {
+    input: document.getElementById('shiftAttachments'),
+    drop: document.getElementById('shiftUploadDrop'),
+    status: document.getElementById('shiftUploadStatus'),
+    selected: document.getElementById('shiftAttachmentPreview')
+  };
+}
+function shiftSetUploadStatus(message='',type=''){
+  const el=shiftAttachmentEls().status;
+  if(!el)return;
+  el.textContent=message;
+  el.className=`case-upload-status ${type||''}`.trim();
+}
+function shiftValidateAttachment(file){
+  if(!file || !file.name)return 'Choose a valid image.';
+  if(file.size<=0)return `${file.name} is empty.`;
+  if(file.size>CASE_ATTACHMENT_MAX)return `${file.name} is larger than 5MB.`;
+  if(!CASE_ATTACHMENT_TYPES.has(file.type))return `${file.name} must be JPG, JPEG, PNG, or WEBP.`;
+  return '';
+}
+function shiftAddAttachmentFiles(files){
+  const incoming=Array.from(files||[]);
+  const errors=[];
+  incoming.forEach(file=>{
+    const err=shiftValidateAttachment(file);
+    if(err){errors.push(err);return;}
+    const duplicate=shiftSelectedAttachments.some(item=>item.file.name===file.name && item.file.size===file.size && item.file.lastModified===file.lastModified);
+    if(!duplicate)shiftSelectedAttachments.push({id:crypto.randomUUID?.()||String(Date.now()+Math.random()),file,url:URL.createObjectURL(file)});
+  });
+  renderShiftSelectedAttachments();
+  if(errors.length)shiftSetUploadStatus(errors[0],'error');
+  else if(incoming.length)shiftSetUploadStatus(`${shiftSelectedAttachments.length} image${shiftSelectedAttachments.length===1?'':'s'} ready to upload.`,'ok');
+}
+function clearShiftAttachmentState(){
+  shiftSelectedAttachments.forEach(item=>{try{URL.revokeObjectURL(item.url);}catch(e){}});
+  shiftSelectedAttachments=[];
+  const els=shiftAttachmentEls();
+  if(els.input)els.input.value='';
+  if(els.selected)els.selected.innerHTML='';
+  shiftSetUploadStatus('');
+}
+function removeShiftSelectedAttachment(id){
+  const item=shiftSelectedAttachments.find(entry=>entry.id===id);
+  if(item){try{URL.revokeObjectURL(item.url);}catch(e){}}
+  shiftSelectedAttachments=shiftSelectedAttachments.filter(entry=>entry.id!==id);
+  renderShiftSelectedAttachments();
+  shiftSetUploadStatus(shiftSelectedAttachments.length?`${shiftSelectedAttachments.length} image${shiftSelectedAttachments.length===1?'':'s'} ready to upload.`:'');
+}
+function renderShiftSelectedAttachments(){
+  const el=shiftAttachmentEls().selected;
+  if(!el)return;
+  el.innerHTML=shiftSelectedAttachments.map(item=>`
+    <div class="case-attachment-tile">
+      <button class="case-attachment-thumb" type="button" onclick="openCaseImagePreview(${jsAttr(item.url)},${jsAttr(item.file.name)})">
+        <img src="${item.url}" alt="${escHtml(item.file.name)}">
+      </button>
+      <div class="case-attachment-meta"><span title="${escHtml(item.file.name)}">${escHtml(item.file.name)}</span><small>${formatBytes(item.file.size)}</small></div>
+      <button class="case-attachment-remove" type="button" onclick="removeShiftSelectedAttachment(${jsAttr(item.id)})" aria-label="Remove selected image"><i data-lucide="x" class="icon-xs"></i></button>
+    </div>
+  `).join('');
+  tracsRefreshIcons(el);
+}
+function shiftPayloadFormData(id=''){
+  const fd=new FormData();
+  if(id)fd.append('id',id);
+  fd.append('title',val('shiftTitle').trim());
+  fd.append('shift_name',val('shiftName'));
+  fd.append('priority',val('shiftPriority'));
+  fd.append('status',val('shiftStatus')||'active');
+  fd.append('details',val('shiftDetails'));
+  fd.append('active_date',val('shiftDate'));
+  fd.append('resolution_note',val('shiftResolutionNote'));
+  fd.append('resolved_at',val('shiftResolvedAt'));
+  shiftSelectedAttachments.forEach(item=>fd.append('attachments[]',item.file,item.file.name));
+  return fd;
+}
+function toggleShiftResolutionFields(){
+  const fields=document.getElementById('shiftResolutionFields');
+  if(!fields)return;
+  const isResolved=val('shiftStatus')==='resolved';
+  fields.classList.toggle('hidden',!isResolved);
+  if(isResolved && !val('shiftResolvedAt')){
+    const now=new Date();
+    now.setMinutes(now.getMinutes()-now.getTimezoneOffset());
+    setVal('shiftResolvedAt',now.toISOString().slice(0,16));
+  }
+}
+function initShiftAttachmentUpload(){
+  const els=shiftAttachmentEls();
+  if(!els.input||els.input.dataset.ready)return;
+  els.input.dataset.ready='1';
+  els.input.addEventListener('change',()=>shiftAddAttachmentFiles(els.input.files));
+  if(els.drop){
+    ['dragenter','dragover'].forEach(evt=>els.drop.addEventListener(evt,e=>{e.preventDefault();els.drop.classList.add('drag');}));
+    ['dragleave','drop'].forEach(evt=>els.drop.addEventListener(evt,e=>{e.preventDefault();els.drop.classList.remove('drag');}));
+    els.drop.addEventListener('drop',e=>shiftAddAttachmentFiles(e.dataTransfer?.files));
+  }
+}
 function openNewShiftReport(){
+  initShiftAttachmentUpload();
   document.getElementById('shiftModalTitle').textContent='New Shift Report';
-  ['shiftId','shiftTitle','shiftDetails'].forEach(id=>setVal(id,''));
+  ['shiftId','shiftTitle','shiftDetails','shiftResolutionNote','shiftResolvedAt'].forEach(id=>setVal(id,''));
   setVal('shiftPriority','medium');
+  setVal('shiftStatus','active');
   setVal('shiftDate', new Date().toISOString().split('T')[0]);
+  toggleShiftResolutionFields();
+  clearShiftAttachmentState();
   openModal('shift');
 }
 function openEditShiftReport(id){
+  initShiftAttachmentUpload();
   const row=document.querySelector(`[data-id="${id}"]`);
   if(!row)return;
   document.getElementById('shiftModalTitle').textContent='Edit Shift Report';
@@ -1668,37 +3895,49 @@ function openEditShiftReport(id){
   setVal('shiftTitle',row.dataset.title||'');
   setVal('shiftName',row.dataset.shift||'Shift 1');
   setVal('shiftPriority',row.dataset.prio||'medium');
+  setVal('shiftStatus',row.dataset.status||'active');
   setVal('shiftDate', row.dataset.date || new Date().toISOString().split('T')[0]);
   setVal('shiftDetails',row.dataset.details||'');
+  setVal('shiftResolutionNote',row.dataset.resolutionNote||'');
+  setVal('shiftResolvedAt',(row.dataset.resolvedAt||'').replace(' ','T').slice(0,16));
+  toggleShiftResolutionFields();
+  clearShiftAttachmentState();
   openModal('shift');
 }
 async function saveShiftReport(){
   const title=val('shiftTitle').trim();
   if(!title){toast('Title is required','error');return;}
   const id=val('shiftId');
-  const d=await api(id?API.SHIFT.UPDATE:API.SHIFT.CREATE,{
-    id,
-    title,
-    shift_name:val('shiftName'),
-    priority:val('shiftPriority'),
-    details:val('shiftDetails'),
-    active_date:val('shiftDate')
-  });
-  if(d.success){toast(id?'Report updated':'Report created','success');closeModal('shift');_reload();}
-  else toast(d.message||'Error','error');
+  shiftSetUploadStatus(shiftSelectedAttachments.length?'Uploading images...':'Saving report...');
+  const d=await withLoadingState(document.getElementById('shiftSaveBtn'),'Saving...',()=>shiftSelectedAttachments.length
+    ? caseApiWithUploads(id?API.SHIFT.UPDATE:API.SHIFT.CREATE,shiftPayloadFormData(id))
+    : api(id?API.SHIFT.UPDATE:API.SHIFT.CREATE,{id,title,shift_name:val('shiftName'),priority:val('shiftPriority'),status:val('shiftStatus')||'active',details:val('shiftDetails'),active_date:val('shiftDate'),resolution_note:val('shiftResolutionNote'),resolved_at:val('shiftResolvedAt')}));
+  if(!d)return;
+  if(d.success){
+    showModalSuccessAndClose({
+      modal:'shift',
+      message:id?'Report updated.':'Report created.',
+      onAfterClose:()=>{
+        clearShiftAttachmentState();
+        location.reload();
+      }
+    });
+  }else handleModalError({modal:'shift',error:{message:d.message,status:d.status}});
 }
-async function resolveShiftReport(id){
+async function resolveShiftReport(id,button=null){
   tracsConfirm('Mark this shift report as resolved?',async()=>{
-    const d=await api(API.SHIFT.RESOLVE,{id});
-    if(d.success){toast('Report resolved','success');_reload();}
-    else toast(d.message||'Error','error');
+    const d=await withLoadingState(button,'Resolving...',()=>api(API.SHIFT.RESOLVE,{id}));
+    if(!d)return;
+    if(d.success){showToast('Report resolved.','success',{context:'page'});_reload();}
+    else handleRequestError({message:d.message,status:d.status},'page','The shift report could not be resolved. Please try again.');
   });
 }
-async function deleteShiftReport(id){
+async function deleteShiftReport(id,button=null){
   tracsConfirm('Delete this shift report?',async()=>{
-    const d=await api(API.SHIFT.DELETE,{id});
-    if(d.success){toast('Report deleted','success');removeRow(`[data-id="${id}"]`);}
-    else toast(d.message||'Error','error');
+    const d=await withLoadingState(button,'Deleting...',()=>api(API.SHIFT.DELETE,{id}));
+    if(!d)return;
+    if(d.success){showToast('Report deleted.','success',{context:'page'});removeRow(`[data-id="${id}"]`);}
+    else handleRequestError({message:d.message,status:d.status},'page','The shift report could not be deleted. Please try again.');
   });
 }
 
@@ -1748,6 +3987,7 @@ async function convertCurrency() {
     }
 
     const result = parseFloat(data.result);
+    const rate = parseFloat(data.rate);
 
     if (isNaN(result)) {
       console.error("RESULT NaN DETECTED:", data);
@@ -1755,10 +3995,10 @@ async function convertCurrency() {
     }
 
     document.getElementById('currency-result').textContent =
-      result.toLocaleString();
+      formatCurrencyConverterNumber(result);
 
     document.getElementById('currency-rate').textContent =
-      `1 ${from} = ${data.rate} ${to}`;
+      `1 ${from} = ${formatCurrencyConverterNumber(rate, true)} ${to}`;
 
     document.getElementById('currency-time').textContent =
       data.time;
@@ -1766,6 +4006,19 @@ async function convertCurrency() {
   } catch (err) {
     console.error("FETCH ERROR:", err);
   }
+}
+
+function formatCurrencyConverterNumber(value, allowSmallMarker = false) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return '0';
+  if (allowSmallMarker && num > 0 && Math.abs(num) < 0.01) return '<0.01';
+  const rounded = Math.round((num + Number.EPSILON) * 100) / 100;
+  const hadFraction = Math.abs(num - Math.trunc(num)) > Number.EPSILON;
+  const hasRoundedFraction = Math.abs(rounded - Math.trunc(rounded)) > Number.EPSILON;
+  return rounded.toLocaleString(undefined, {
+    minimumFractionDigits: hadFraction || hasRoundedFraction ? 2 : 0,
+    maximumFractionDigits: 2,
+  });
 }
 
 function setOpsModalMode(isEdit) {
@@ -1815,34 +4068,38 @@ function closeOpsModal() {
 async function saveOpsStatus() {
 
   const message = document.getElementById('ops-message').value.trim();
+  const button = document.getElementById('ops-save-btn');
 
   if (!message) {
-    toast('Ops message is required', 'error');
+    handleModalError({modal:'ops',message:'Ops message is required.',focus:document.getElementById('ops-message')});
     return;
   }
 
   try {
 
-    const data = await api(API_BASE + 'ops-status.php', {
+    const data = await withLoadingState(button,'Saving...',()=>api(API_BASE + 'ops-status.php', {
       action: 'save',
       id: document.getElementById('ops-id').value,
       message,
       severity: document.getElementById('ops-severity').value
-    });
+    }));
+    if(!data)return;
 
     if (!data.success) {
-      toast(data.message || 'Failed saving ops status', 'error');
+      handleModalError({modal:'ops',error:{message:data.message,status:data.status},fallbackMessage:'The operational status could not be saved. Please try again.'});
       return;
     }
 
-    toast('Ops status saved', 'success');
-    reloadAfterToast();
+    showModalSuccessAndClose({
+      modal:'ops',
+      message:'Operational status saved.',
+      onAfterClose:()=>location.reload()
+    });
 
   } catch (err) {
 
     console.error(err);
-
-    toast('Failed saving ops status', 'error');
+    handleModalError({modal:'ops',button,error:err,fallbackMessage:'The operational status could not be saved. Please try again.'});
   }
 }
 
@@ -1850,32 +4107,36 @@ async function archiveOpsStatus() {
 
   const id =
     document.getElementById('ops-id').value;
+  const button = document.getElementById('ops-archive-btn');
 
   if (!id) {
-    toast('Invalid ops status', 'error');
+    handleModalError({modal:'ops',message:'Select a valid operational status first.'});
     return;
   }
 
   try {
 
-    const data = await api(API_BASE + 'ops-status.php', {
+    const data = await withLoadingState(button,'Archiving...',()=>api(API_BASE + 'ops-status.php', {
       action: 'archive',
       id
-    });
+    }));
+    if(!data)return;
 
     if (!data.success) {
-      toast(data.message || 'Failed archiving ops status', 'error');
+      handleModalError({modal:'ops',error:{message:data.message,status:data.status},fallbackMessage:'The operational status could not be archived. Please try again.'});
       return;
     }
 
-    toast('Ops status archived', 'success');
-    reloadAfterToast();
+    showModalSuccessAndClose({
+      modal:'ops',
+      message:'Operational status archived.',
+      onAfterClose:()=>location.reload()
+    });
 
   } catch (err) {
 
     console.error(err);
-
-    toast('Failed archiving ops status', 'error');
+    handleModalError({modal:'ops',button,error:err,fallbackMessage:'The operational status could not be archived. Please try again.'});
   }
 }
 
@@ -2097,6 +4358,45 @@ function bindSidebarTooltips() {
   requestAnimationFrame(placeOpenSubmenus);
 }
 
+function bindSidebarMenus() {
+  const sidebar = document.querySelector('.sidebar');
+  if (!sidebar) return;
+
+  const navMenus = [...sidebar.querySelectorAll('.nav-menu-wrap')];
+  const userMenu = sidebar.querySelector('.user-menu-wrap');
+  const allMenus = [...navMenus, ...(userMenu ? [userMenu] : [])];
+
+  const closeMenus = (except = null) => {
+    allMenus.forEach(menu => {
+      if (menu !== except) menu.open = false;
+    });
+  };
+
+  allMenus.forEach(menu => {
+    menu.addEventListener('toggle', () => {
+      if (menu.open) closeMenus(menu);
+    });
+  });
+
+  sidebar.addEventListener('click', event => {
+    const action = event.target.closest('a[href], button');
+    if (action && !action.closest('summary')) closeMenus();
+  });
+
+  document.addEventListener('click', event => {
+    if (!sidebar.contains(event.target)) closeMenus();
+  });
+
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    const openMenu = allMenus.find(menu => menu.open);
+    if (!openMenu) return;
+
+    openMenu.open = false;
+    openMenu.querySelector('summary')?.focus();
+  });
+}
+
 const email = document.querySelector('input[name="email"]');
 const password = document.querySelector('input[name="password"]');
 const btnLogin = document.querySelector('.btn-login');
@@ -2129,9 +4429,24 @@ if (email && password && btnLogin) {
 
 document.addEventListener('DOMContentLoaded', () => {
 
+  bindNativeFormLoading();
+  bindModalAjaxForms();
   bindQuickDatetimeInputs();
   bindOpsStatusControls();
+  bindSidebarMenus();
   bindSidebarTooltips();
+  initShiftReportReminders();
+
+  const loginError=document.querySelector('.login-card .err-box');
+  if(loginError?.textContent.trim()){
+    showToast(loginError.textContent.trim(),'error',{
+      context:'page',
+      position:'top-right',
+      persistent:true,
+      closable:true,
+      priority:'critical'
+    });
+  }
 
   /* ── Currency Converter ───────────────────── */
 
@@ -2155,17 +4470,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (document.getElementById('currency-result')) {
     convertCurrency();
-  }
-
-  /* ── Login Button Loading ─────────────────── */
-
-  const form = document.querySelector('form');
-
-  if (form && btnLogin) {
-
-    form.addEventListener('submit', () => {
-      btnLogin.classList.add('loading');
-    });
   }
 
   /* ── OPS STATUS SLIDER ────────────────────── */
@@ -2406,6 +4710,7 @@ function openEditDt(data) {
 async function saveEditDt() {
   const id     = val('dtId');
   const domain = val('dtDomain').trim();
+  const button = document.querySelector('#dtModal .modal-foot .btn-primary');
 
   if (!id)     { toast('Invalid record', 'error'); return; }
   if (!domain) { toast('Domain name is required', 'error'); return; }
@@ -2413,7 +4718,7 @@ async function saveEditDt() {
   const ta = document.getElementById('dtNotes');
   const notes = ta ? ta.value.trim() : '';
 
-  const d = await api(window.location.pathname, {
+  const d = await withLoadingState(button,'Saving...',()=>api(window.location.pathname, {
     action:                   'update',
     id,
     domain_name:              domain,
@@ -2422,14 +4727,17 @@ async function saveEditDt() {
     process_end_date:         val('dtEndDate')   || null,
     webnic_reseller_transfer: val('dtWebnic').trim() || null,
     notes:                    notes || null,
-  });
+  }));
+  if(!d)return;
 
   if (d.success) {
-    toast('Transfer updated', 'success');
-    closeModal('dt');
-    _reload();
+    showModalSuccessAndClose({
+      modal:'dt',
+      message:'Transfer updated.',
+      onAfterClose:()=>location.reload()
+    });
   } else {
-    toast(d.message || 'Error updating transfer', 'error');
+    handleModalError({modal:'dt',error:{message:d.message,status:d.status},fallbackMessage:'The transfer could not be updated. Please try again.'});
   }
 }
 
@@ -2528,6 +4836,7 @@ function openEditBt(data) {
 async function saveEditBt() {
   const id         = val('btId');
   const amount     = parseFloat(val('btAmount')) || 0;
+  const button = document.querySelector('#btModal .modal-foot .btn-primary');
 
   if (!id)                    { toast('Invalid record', 'error'); return; }
   if (!amount || amount <= 0) { toast('Amount is required', 'error'); return; }
@@ -2538,7 +4847,7 @@ async function saveEditBt() {
   if (sender_email   && !emailRx.test(sender_email))   { toast('Invalid sender email', 'error');   return; }
   if (receiver_email && !emailRx.test(receiver_email)) { toast('Invalid receiver email', 'error'); return; }
 
-  const d = await api(API.BT.UPDATE, {
+  const d = await withLoadingState(button,'Saving...',()=>api(API.BT.UPDATE, {
     id,
     transfer_date:    val('btDate'),
     sender_email:     sender_email   || '',
@@ -2550,14 +4859,17 @@ async function saveEditBt() {
     amount,
     status:           val('btStatus'),
     ticket_id:        val('btTicket').trim() || null
-  });
+  }));
+  if(!d)return;
 
   if (d.success) {
-    toast('Transfer updated', 'success');
-    closeModal('bt');
-    _reload();
+    showModalSuccessAndClose({
+      modal:'bt',
+      message:'Transfer updated.',
+      onAfterClose:()=>location.reload()
+    });
   } else {
-    toast(d.message || 'Error updating transfer', 'error');
+    handleModalError({modal:'bt',error:{message:d.message,status:d.status},fallbackMessage:'The transfer could not be updated. Please try again.'});
   }
 }
 
@@ -2594,6 +4906,9 @@ function filterActs(inp) {
 const TRACS_THEME_KEY = 'tracs_theme_preference';
 const TRACS_THEME_LEGACY_KEY = 'tracs-theme';
 const TRACS_THEME_CHOICES = new Set(['light', 'dark', 'auto']);
+const TRACS_VISUAL_THEME_KEY = 'tracs_visual_theme_preference';
+const TRACS_VISUAL_THEME_LEGACY_KEY = 'tracs-visual-theme';
+const TRACS_VISUAL_THEME_CHOICES = new Set(['default']);
 
 function tracsAutoThemeForDate(date = new Date()) {
   const hour = date.getHours();
@@ -2609,6 +4924,16 @@ function tracsNormalizeThemePreference(value) {
   return TRACS_THEME_CHOICES.has(value) ? value : '';
 }
 
+function tracsNormalizeVisualThemePreference(value) {
+  const normalized = String(value || '').trim().toLowerCase().replace(/[-\s]+/g, '_');
+  if (normalized === 'tracs_v2' || normalized === 'tracsv2' || normalized === 'intercom_inspired') return 'default';
+  return TRACS_VISUAL_THEME_CHOICES.has(normalized) ? normalized : '';
+}
+
+function tracsVisualThemeAttribute(value) {
+  return 'default';
+}
+
 function tracsGetThemePreference() {
   const stored = tracsNormalizeThemePreference(localStorage.getItem(TRACS_THEME_KEY));
   if (stored) return stored;
@@ -2620,6 +4945,19 @@ function tracsGetThemePreference() {
   }
 
   return '';
+}
+
+function tracsGetVisualThemePreference() {
+  const stored = tracsNormalizeVisualThemePreference(localStorage.getItem(TRACS_VISUAL_THEME_KEY));
+  if (stored) return stored;
+
+  const legacy = tracsNormalizeVisualThemePreference(localStorage.getItem(TRACS_VISUAL_THEME_LEGACY_KEY));
+  if (legacy) {
+    localStorage.setItem(TRACS_VISUAL_THEME_KEY, legacy);
+    return legacy;
+  }
+
+  return 'default';
 }
 
 function tracsResolveTheme(preference = tracsGetThemePreference()) {
@@ -2646,11 +4984,26 @@ function tracsApplyTheme(preference = tracsGetThemePreference()) {
   return applied;
 }
 
+function tracsApplyVisualTheme(preference = tracsGetVisualThemePreference()) {
+  const normalized = tracsNormalizeVisualThemePreference(preference) || 'default';
+  const html = document.documentElement;
+  html.setAttribute('data-visual-theme', tracsVisualThemeAttribute(normalized));
+  html.setAttribute('data-visual-theme-preference', normalized);
+  return normalized;
+}
+
 function tracsSetThemePreference(preference) {
   const normalized = tracsNormalizeThemePreference(preference) || 'auto';
   localStorage.setItem(TRACS_THEME_KEY, normalized);
   localStorage.setItem(TRACS_THEME_LEGACY_KEY, normalized);
   tracsApplyTheme(normalized);
+}
+
+function tracsSetVisualThemePreference(preference) {
+  const normalized = tracsNormalizeVisualThemePreference(preference) || 'default';
+  localStorage.setItem(TRACS_VISUAL_THEME_KEY, normalized);
+  localStorage.setItem(TRACS_VISUAL_THEME_LEGACY_KEY, normalized);
+  tracsApplyVisualTheme(normalized);
 }
 
 function tracsSyncThemeMenu(preference = tracsGetThemePreference(), applied = tracsResolveTheme(preference)) {
@@ -2702,6 +5055,7 @@ function tracsToggleTheme() {
 
 function tracsInitThemeMemory() {
   tracsApplyTheme();
+  tracsApplyVisualTheme();
 
   const toggle = document.getElementById('themeToggle');
   const wrap = document.getElementById('themeMenuWrap');
@@ -2738,6 +5092,7 @@ function tracsInitThemeMemory() {
 
   window.addEventListener('storage', event => {
     if (event.key === TRACS_THEME_KEY || event.key === TRACS_THEME_LEGACY_KEY) tracsApplyTheme();
+    if (event.key === TRACS_VISUAL_THEME_KEY || event.key === TRACS_VISUAL_THEME_LEGACY_KEY) tracsApplyVisualTheme();
   });
 }
 
@@ -2749,6 +5104,8 @@ if (document.readyState === 'loading') {
 
 /* ── Calendar Initialization (Flatpickr) ── */
 document.addEventListener('DOMContentLoaded', () => {
+  initTaskMonitoringTabs();
+
   // Only init visible inputs, avoid hidden master inputs
   document.querySelectorAll('.form-input[type="date"], .form-input[type="datetime-local"], .form-input[type="time"], .dt-date-input').forEach(el => {
     const isDateTime = el.type === 'datetime-local' || el.classList.contains('quick-datetime');
