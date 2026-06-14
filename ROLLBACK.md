@@ -232,3 +232,33 @@ git revert <phase-5-php-api-foundation-commit>
 No database schema or data changed. Future database batches must include
 reviewed `up.sql` and `down.sql`, a pre-change backup, verification queries, and
 a tested restoration procedure.
+
+## Phase 5.5 Pilot API Contract Rollback
+
+Phase 5.5 adds one route under `public/api/v1/`, its internal formatter, tests,
+and documentation. No page or React module calls the route yet.
+
+Discard uncommitted work:
+
+```bash
+git restore --staged .
+git restore .
+git clean -fd api/v1/ public/api/v1/ tests/php-api-contract.php
+```
+
+Switch to the approved base and delete a failed local branch:
+
+```bash
+git switch refactor/phase-5-php-api-foundation
+git branch -D refactor/phase-5-5-pilot-api-contract
+```
+
+After merge, revert without rewriting history:
+
+```bash
+git revert <phase-5-5-pilot-api-contract-commit>
+```
+
+No database restore, asset rollback, or UI fallback is required. After rollback,
+`/api/v1/context.php` should return `404`; existing APIs and pages remain
+unchanged.

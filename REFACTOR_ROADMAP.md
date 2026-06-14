@@ -85,17 +85,17 @@ their frontend migration remains late because of the system-wide risk.
 
 ## Current Phase
 
-Phase 5 creates an internal PHP API foundation under `api/`. It standardizes the
-future response envelope and provides namespaced wrappers for request parsing,
-required-field validation, authentication, permissions, CSRF, active users,
-audit/error logging, request IDs, and strict backend date parsing. A lightweight
-CLI contract check lives at `tests/php-api-foundation.php`.
+Phase 5.5 adopts the internal PHP API foundation in one additive pilot:
+`GET /api/v1/context.php`. It returns only safe current-user identity, role,
+effective permissions, CSRF handoff metadata, and a request ID for a fully
+authenticated active account. Tests cover its exact resource shape, sensitive
+field exclusions, unauthenticated `401`, method `405`, and the Phase 5
+foundation regression suite.
 
-The new foundation is not wired into existing routes. This phase performs no
-module refactor, production React conversion, PHP page layout change,
-business-logic change, existing endpoint contract change, database-schema
-change, or migration. `calendar.php`, `shifting-assignment.php`, and their
-current APIs remain untouched.
+This phase performs no module refactor, production React conversion, PHP page
+layout change, business-logic change, legacy endpoint replacement,
+database-schema change, or migration. `calendar.php`,
+`shifting-assignment.php`, and their current APIs remain untouched.
 
 Canonical Phase 2 plans:
 
@@ -126,3 +126,10 @@ Phase 5 implementation and operation notes:
 - `docs/php-api-architecture-plan.md`
 - `TESTING.md`
 - `ROLLBACK.md`
+
+Phase 5.5 pilot notes:
+
+- `api/README.md`
+- `docs/php-api-architecture-plan.md`
+- `docs/API_SECURITY_INVENTORY.md`
+- `tests/php-api-contract.php`

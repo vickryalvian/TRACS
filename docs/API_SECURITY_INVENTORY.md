@@ -1,9 +1,10 @@
 # TRACS API Security Inventory
 
-Review date: 2026-06-08. All `public/api/` routes require a fully authenticated, active account through `_bootstrap.php` or `_export_helpers.php`. Pending-2FA sessions receive `401`. Mutating methods require CSRF. Internal helper files return `404` on direct execution and are denied by the web-server template.
+Review date: 2026-06-15. All `public/api/` routes require a fully authenticated, active account through a reviewed bootstrap. Pending-2FA sessions receive `401`. Mutating methods require CSRF. Internal helper files return `404` on direct execution and are denied by the web-server template.
 
 | Endpoint | Purpose | Method | Required access | CSRF | Risk / action |
 | --- | --- | --- | --- | --- | --- |
+| `api/v1/context.php` | Safe current-session context for future React shells | GET | Fully authenticated active account | No; read-only, returns token for later mutations | Medium; Phase 5.5 five-key pilot contract, no email/server internals |
 | `api/api_mom.php` | Current MoM actions | POST | `moms.manage` plus object ownership | Yes | High; authenticated/permission mapped |
 | `api/mom-action.php` | Legacy MoM actions | POST | `moms.manage` plus controller ownership | Yes | High; retained legacy response, generic failures |
 | `api/mom-screenshot.php` | Serve protected MoM image | GET | `moms.view` plus MoM object access | No | High; replaces direct upload URL |

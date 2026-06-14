@@ -225,3 +225,55 @@ That batch must characterize the existing endpoint first and test:
 7. Validation `422` shape.
 8. Audit persistence and sanitized unexpected errors.
 9. Existing PHP client compatibility or an explicit version boundary.
+
+## Phase 5.5 Pilot Adoption
+
+The first adopter is:
+
+```text
+GET /api/v1/context.php
+```
+
+Implementation:
+
+```text
+public/api/v1/context.php  -> public route and authenticated bootstrap
+api/v1/context.php         -> allowlisted response resource formatter
+```
+
+The route:
+
+- Uses `TRACS\Api\bootstrap()` with GET as the only allowed method.
+- Requires a fully authenticated, non-expired session and active account.
+- Does not require a module permission because all authenticated frontend
+  shells need their own server-authoritative permission map.
+- Does not require CSRF for GET because it is read-only.
+- Returns the current CSRF token and `X-CSRF-Token` header name for future
+  mutations; this never removes server-side CSRF verification.
+- Returns only user ID, display name, role slug/name, effective permission keys,
+  CSRF handoff, and request ID.
+- Uses `Cache-Control: no-store` and removes `X-Powered-By`.
+- Does not expose email, password/status fields, division internals, 2FA data,
+  server/runtime details, paths, logs, environment values, or database data.
+
+The pilot does not replace or modify `public/api/_bootstrap.php`, Calendar APIs,
+or Shift Assignment APIs.
+
+Automated checks:
+
+```bash
+php tests/php-api-foundation.php
+php tests/php-api-contract.php
+find api tests public/api/v1 -name '*.php' -exec php -l {} \;
+```
+
+Live unauthenticated and method checks:
+
+```bash
+curl -i http://127.0.0.1:8080/api/v1/context.php
+curl -i -X POST http://127.0.0.1:8080/api/v1/context.php
+```
+
+Expected results are `401` for unauthenticated GET and `405` plus `Allow: GET`
+for POST. Both responses use the five-key JSON envelope and include
+`meta.request_id`.

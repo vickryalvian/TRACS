@@ -238,6 +238,13 @@ private error correlation, and strict backend dates. Existing endpoints retain
 their characterized contracts until a separately tested compatibility batch
 adopts the foundation.
 
+The first adopter is the additive `GET /api/v1/context.php` contract. It proves
+the authenticated bootstrap, response envelope, request ID, permission
+discovery, and CSRF handoff without replacing a legacy endpoint or moving
+module business logic. It is read-only, cache-disabled, and available to every
+fully authenticated active account; module permissions are still enforced by
+each module endpoint.
+
 The route boundary remains:
 
 ```text

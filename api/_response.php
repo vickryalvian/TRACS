@@ -28,6 +28,7 @@ function send_json(array $payload, int $status = 200): never
     http_response_code($status);
 
     if (!headers_sent()) {
+        header_remove('X-Powered-By');
         header('Content-Type: application/json; charset=utf-8');
         header('Cache-Control: no-store');
         header('X-Content-Type-Options: nosniff');

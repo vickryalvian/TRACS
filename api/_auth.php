@@ -49,7 +49,7 @@ function require_auth(?\mysqli $conn = null): array
                 \tracs_auth_clear_pending_2fa();
             }
         }
-        json_error('Authentication is required.', 401);
+        json_error('Authentication is required.', 401, [], ['request_id' => request_id()]);
     }
 
     $lastSeen = (int)($_SESSION['tracs_last_seen_at'] ?? time());
@@ -66,17 +66,32 @@ function require_auth(?\mysqli $conn = null): array
                 'idle_timeout'
             );
         }
-        json_error('Your session has expired. Please sign in again.', 401);
+        json_error(
+            'Your session has expired. Please sign in again.',
+            401,
+            [],
+            ['request_id' => request_id()]
+        );
     }
 
     if (!$conn instanceof \mysqli) {
         write_error_log('Authenticated API bootstrap is missing a database connection.');
-        json_error('The server could not complete the request.', 500);
+        json_error(
+            'The server could not complete the request.',
+            500,
+            [],
+            ['request_id' => request_id()]
+        );
     }
 
     $user = current_user($conn);
     if ($user === null) {
-        json_error('This account is inactive or unavailable.', 403);
+        json_error(
+            'This account is inactive or unavailable.',
+            403,
+            [],
+            ['request_id' => request_id()]
+        );
     }
 
     $_SESSION['tracs_last_seen_at'] = time();

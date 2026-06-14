@@ -106,11 +106,11 @@ assert_same(false, $unauthenticated['success'] ?? null, 'Unauthenticated respons
 assert_same(true, array_key_exists('data', $unauthenticated), 'Unauthenticated response omitted data.');
 assert_same(null, $unauthenticated['data'], 'Unauthenticated response exposed data.');
 assert_same([], $unauthenticated['errors'] ?? null, 'Unauthenticated response errors shape changed.');
-assert_same([], $unauthenticated['meta'] ?? null, 'Unauthenticated response meta shape changed.');
 assert_same(
     true,
-    str_contains(implode(PHP_EOL, $output), '"meta":{}'),
-    'Empty response metadata must serialize as an object.'
+    is_string($unauthenticated['meta']['request_id'] ?? null)
+        && strlen($unauthenticated['meta']['request_id']) >= 8,
+    'Unauthenticated response request ID is missing.'
 );
 
 $csrfCommand = escapeshellarg(PHP_BINARY)
@@ -135,8 +135,9 @@ assert_same(
 );
 assert_same(
     true,
-    str_contains(implode(PHP_EOL, $csrfOutput), '"meta":{}'),
-    'Invalid CSRF metadata must serialize as an object.'
+    is_string($invalidCsrf['meta']['request_id'] ?? null)
+        && strlen($invalidCsrf['meta']['request_id']) >= 8,
+    'Invalid CSRF request ID is missing.'
 );
 
 echo "TRACS PHP API foundation checks passed.\n";

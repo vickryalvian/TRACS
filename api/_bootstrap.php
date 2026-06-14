@@ -21,7 +21,7 @@ function require_method(string ...$methods): void
         if (!headers_sent()) {
             header('Allow: ' . implode(', ', $allowed));
         }
-        json_error('Method not allowed.', 405);
+        json_error('Method not allowed.', 405, [], ['request_id' => request_id()]);
     }
 }
 

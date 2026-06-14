@@ -37,3 +37,24 @@ $input = \TRACS\Api\get_request_json();
 This example is documentation only. No current route loads this foundation.
 Future endpoint batches must add contract, authentication, permission, CSRF,
 object-scope, validation, audit, and regression tests before production use.
+
+## Pilot Contract
+
+Phase 5.5 adds one public adopter:
+
+```text
+GET /api/v1/context.php
+```
+
+The route is available only to a fully authenticated, active account. It
+returns the current user's ID, display name, role, effective permission keys,
+the current CSRF token/header name, and a request ID. It does not return email,
+account status fields, division internals, 2FA data, credentials, environment
+data, server metrics, paths, logs, or database details.
+
+GET does not require CSRF because it is read-only. The returned token is for
+future same-session state-changing requests, which must still run
+`verify_csrf()` server-side. The endpoint intentionally has no module
+permission requirement: every authenticated React shell needs to discover the
+permissions PHP already grants. Module routes remain responsible for enforcing
+their own permissions and object scope.

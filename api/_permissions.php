@@ -7,6 +7,7 @@ require_once __DIR__ . '/../core/security/direct_access.php';
 \tracs_deny_direct_script_access(__FILE__);
 require_once __DIR__ . '/../core/user_management.php';
 require_once __DIR__ . '/_response.php';
+require_once __DIR__ . '/_logging.php';
 
 function require_permission(\mysqli $conn, string $permission, ?array $user = null): void
 {
@@ -28,7 +29,7 @@ function require_permission(\mysqli $conn, string $permission, ?array $user = nu
         );
     }
 
-    json_error('Forbidden.', 403);
+    json_error('Forbidden.', 403, [], ['request_id' => request_id()]);
 }
 
 function require_any_permission(\mysqli $conn, array $permissions, ?array $user = null): void
@@ -59,5 +60,5 @@ function require_any_permission(\mysqli $conn, array $permissions, ?array $user 
         );
     }
 
-    json_error('Forbidden.', 403);
+    json_error('Forbidden.', 403, [], ['request_id' => request_id()]);
 }

@@ -111,6 +111,56 @@ object-scope integration tests must use a disposable database and fixture
 accounts. Do not create fake production sessions or change production records
 for these checks.
 
+## Phase 5.5 Pilot API Contract
+
+Run:
+
+```bash
+php tests/php-api-foundation.php
+php tests/php-api-contract.php
+find api tests public/api/v1 -name '*.php' -exec php -l {} \;
+```
+
+The contract test verifies:
+
+- Exact five-key response envelope.
+- Allowlisted user and role fields only.
+- Sorted, unique effective permissions.
+- CSRF token/header handoff.
+- `meta.request_id`.
+- Exclusion of email, password, account status, division, and 2FA fields.
+- The public route uses the authenticated Phase 5 GET bootstrap and standard
+  response helper.
+
+With the local Docker app running, verify unauthenticated and wrong-method
+behavior:
+
+```bash
+curl -i http://127.0.0.1:8080/api/v1/context.php
+curl -i -X POST http://127.0.0.1:8080/api/v1/context.php
+```
+
+Expect `401` and `405` respectively, valid JSON, `Cache-Control: no-store`,
+`Allow: GET` on the second response, no `X-Powered-By`, and a request ID in
+metadata.
+
+For an authenticated manual check, sign in through the normal login and 2FA
+flow, then run this in the same browser's developer console:
+
+```js
+const response = await fetch('/api/v1/context.php', {
+  credentials: 'same-origin',
+  headers: { Accept: 'application/json' },
+});
+console.log(response.status, await response.json());
+```
+
+Expect `200`, `Context loaded.`, only the documented user fields, effective
+permission keys, a non-empty CSRF token, and `meta.request_id`. GET must not
+write module data. Permission-denial testing is not applicable to this
+bootstrap route because every fully authenticated active account is allowed;
+module pilots must add explicit `403` tests.
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:

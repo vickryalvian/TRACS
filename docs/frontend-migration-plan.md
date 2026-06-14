@@ -151,3 +151,9 @@ current endpoint behavior, permissions, object scope, CSRF, audit effects, and
 failure states have tests. The frontend client must consume the five-key
 envelope while treating `401`, `403`, `404`, `409`, `422`, and `500` as distinct
 server-authoritative states.
+
+Phase 5.5 provides `GET /api/v1/context.php` as the only production pilot. A
+future React shell may use it to obtain safe identity, effective permissions,
+and the CSRF header/token pair, but no current page calls it yet. UI controls
+may use returned permissions for presentation only; every module API must repeat
+the authoritative permission and object-scope checks in PHP.
