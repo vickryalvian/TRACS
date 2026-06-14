@@ -1,0 +1,94 @@
+/*
+ * Local preview values only. Production React modules inherit these variables
+ * from the authenticated PHP shell's existing public/assets/tracs.css.
+ */
+
+html,
+body,
+#tracs-foundation-sandbox-root {
+  min-height: 100%;
+  margin: 0;
+}
+
+.foundation-sandbox {
+  --bg: #eef1f5;
+  --bg2: #e5e9ef;
+  --s1: #ffffff;
+  --s2: #f7f8fa;
+  --s3: #eef0f3;
+  --s4: #e4e7eb;
+  --s5: #d9dde3;
+  --bd1: #dde2e9;
+  --bd2: #cfd5df;
+  --bd3: #b8c0cc;
+  --bd4: #9fa9b7;
+  --tx1: #242a33;
+  --tx2: #535d6b;
+  --tx3: #7f8896;
+  --tx4: #aeb5bf;
+  --blue: #2563eb;
+  --blue-dk: #1d4ed8;
+  --blue-lt: rgba(37, 99, 235, .07);
+  --blue-bd: rgba(37, 99, 235, .18);
+  --green: #16a34a;
+  --green-lt: rgba(22, 163, 74, .08);
+  --green-bd: rgba(22, 163, 74, .2);
+  --amber: #d97706;
+  --amber-lt: rgba(217, 119, 6, .08);
+  --amber-bd: rgba(217, 119, 6, .2);
+  --red: #dc2626;
+  --red-lt: rgba(220, 38, 38, .08);
+  --red-bd: rgba(220, 38, 38, .2);
+  --cyan: #0891b2;
+  --cyan-lt: rgba(8, 145, 178, .08);
+  --cyan-bd: rgba(8, 145, 178, .2);
+  --purple: #7c3aed;
+  --purple-lt: rgba(124, 58, 237, .08);
+  --purple-bd: rgba(124, 58, 237, .2);
+  --font: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  --ease: cubic-bezier(.16, 1, .3, 1);
+  --radius: 6px;
+  --radius-lg: 8px;
+  --r2: 7px;
+  --r4: 10px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --shadow: 0 8px 24px rgba(17, 24, 39, .055), 0 1px 2px rgba(17, 24, 39, .035);
+  --shadow-lg: 0 18px 44px rgba(17, 24, 39, .12), 0 3px 10px rgba(17, 24, 39, .08);
+}
+
+.foundation-sandbox[data-theme="dark"] {
+  --bg: #0d1117;
+  --bg2: #111821;
+  --s1: #151a22;
+  --s2: #18202a;
+  --s3: #1d2632;
+  --s4: #253040;
+  --s5: #2d3a4b;
+  --bd1: #253041;
+  --bd2: #303b4d;
+  --bd3: #3d4a5f;
+  --bd4: #4c5a70;
+  --tx1: #edf2f8;
+  --tx2: #b3bdca;
+  --tx3: #7d8899;
+  --tx4: #5d6879;
+  --blue: #3b82f6;
+  --blue-dk: #2563eb;
+  --blue-lt: rgba(59, 130, 246, .08);
+  --blue-bd: rgba(59, 130, 246, .2);
+  --green: #22c55e;
+  --amber: #f59e0b;
+  --red: #ef4444;
+  --cyan: #06b6d4;
+  --purple: #a855f7;
+  --shadow: 0 14px 34px rgba(0, 0, 0, .3);
+  --shadow-lg: 0 24px 62px rgba(0, 0, 0, .52);
+}

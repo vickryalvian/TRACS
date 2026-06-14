@@ -131,3 +131,16 @@ Shared React implementation must follow
 `docs/tailwind-design-system-plan.md` and `docs/design-token-map.md`. The Phase 3
 CSS templates under `frontend/src/styles/` remain non-production scaffolding
 until a component-foundation batch explicitly connects them to a Vite entry.
+
+Phase 4 connects those templates only to
+`frontend/src/modules/_sandbox/main.jsx`. The sandbox is a local build and
+component validation surface, not a migrated module. It has no production PHP
+mount, navigation link, real API endpoint, or database access. Its build output
+stays under ignored `frontend/dist/`.
+
+The first real module batch must not reuse the sandbox entry. It should add a
+separate named entry, characterize the existing PHP behavior, prepare and test
+the required PHP API contracts, add an authenticated PHP root with a PHP
+fallback, and load only that module's manifest assets. Shift Assignment remains
+the intended first module after the shared foundation and PHP API prerequisites
+are approved.

@@ -241,6 +241,69 @@ consolidation can move it only after visual and behavioral parity is verified.
 Production deploys build assets before switching the live release. Source maps
 should not be publicly deployed unless access is explicitly restricted.
 
+## Phase 4 Foundation Scaffold
+
+Phase 4 implements the first isolated package under `frontend/`:
+
+```text
+frontend/
+  index.html
+  package.json
+  vite.config.js
+  src/
+    components/ui/
+      Badge.jsx
+      Button.jsx
+      Card.jsx
+      EmptyState.jsx
+      LoadingState.jsx
+    lib/
+      apiClient.js
+      classNames.js
+      date.js
+      format.js
+    modules/_sandbox/
+      SandboxApp.jsx
+      main.jsx
+      sandbox-theme.css
+    styles/
+      tokens.css
+      tracs-tailwind.css
+```
+
+The Vite configuration currently exposes one named `sandbox` input and writes
+ignored validation artifacts to `frontend/dist/`. It does not write to
+`public/`, alter the root Calendar Vite configuration, or provide a production
+PHP mount. Future approved module entries will be added explicitly and may emit
+to `public/assets/react-dist/` only when the manifest loader and PHP fallback
+are implemented and reviewed together.
+
+The local sandbox provides fallback token values solely because it runs without
+an authenticated PHP shell. Production React roots inherit the authoritative
+variables from `public/assets/tracs.css`; module code must not carry a second
+production theme.
+
+`apiClient.js` is transport scaffolding, not a completed backend contract. It
+uses same-origin credentials, requests JSON, supports a CSRF header read from a
+meta tag, normalizes the approved response envelope, and exposes callbacks for
+401 and 403 behavior. Each real endpoint still requires server-side
+authentication, permission, CSRF, validation, and object-scope tests before a
+module may use it.
+
+Local validation:
+
+```bash
+cd frontend
+npm install
+npm run build
+npm run dev
+```
+
+Tailwind v4 configuration remains CSS-first. The build consumes `tokens.css`
+and `tracs-tailwind.css`; no Preflight import, JavaScript
+`tailwind.config.js`, PostCSS configuration, or global PHP stylesheet link is
+needed.
+
 ## React Mount Contract
 
 Each PHP page supplies only non-sensitive bootstrap data required before the

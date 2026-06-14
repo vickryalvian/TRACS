@@ -164,3 +164,40 @@ git revert <phase-1-documentation-commit>
 ```
 
 No database or runtime rollback is required for this phase.
+
+## Phase 4 Frontend Foundation Rollback
+
+Phase 4 adds an isolated `frontend/` package and documentation only. It does not
+load assets from PHP, modify production navigation, change APIs, or change the
+database.
+
+Discard uncommitted Phase 4 work:
+
+```bash
+git restore --staged .
+git restore .
+git clean -fd frontend/
+```
+
+Switch to the approved base and delete a failed local branch:
+
+```bash
+git switch refactor/phase-3-tailwind-design-system
+git branch -D refactor/phase-4-react-tailwind-foundation
+```
+
+After the Phase 4 commit is merged, revert it without rewriting history:
+
+```bash
+git revert <phase-4-frontend-foundation-commit>
+```
+
+Local generated files can be removed independently:
+
+```bash
+rm -rf frontend/dist frontend/node_modules
+```
+
+No database restore is required for Phase 4 because it contains no migration or
+data operation. Future database changes must still include reviewed `up.sql`
+and `down.sql` files and a tested backup restoration procedure.

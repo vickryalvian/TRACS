@@ -85,10 +85,16 @@ their frontend migration remains late because of the system-wide risk.
 
 ## Current Phase
 
-Phase 3 consolidates the Tailwind design-system plan and adds an isolated,
-non-loaded style template. It performs no module refactor, React conversion, UI
-change, business-logic change, dependency installation, production asset
-loading, or database-schema change.
+Phase 4 creates an isolated React and Tailwind foundation package under
+`frontend/`. It adds a sandbox-only named Vite entry, CSS-first Tailwind build,
+initial stateless UI primitives, and small API/date/format helpers. The sandbox
+is not connected to production navigation, PHP pages, real APIs, or TRACS data.
+Its local build output remains ignored under `frontend/dist/`.
+
+This phase performs no module refactor, production React conversion, PHP page
+layout change, business-logic change, API endpoint change, production asset
+loading, or database-schema change. `calendar.php` and the existing Calendar
+pilot build remain untouched and continue to be the zero-mistake reference.
 
 Canonical Phase 2 plans:
 
@@ -106,3 +112,9 @@ Canonical Phase 3 plans:
 
 - `docs/tailwind-design-system-plan.md`
 - `docs/design-token-map.md`
+
+Phase 4 implementation and operation notes:
+
+- `frontend/README.md`
+- `docs/react-tailwind-architecture.md`
+- `docs/frontend-migration-plan.md`

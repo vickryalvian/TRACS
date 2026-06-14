@@ -51,9 +51,9 @@ Legacy PHP classes such as `.btn`, `.panel`, `.modal`, and `.form-input` remain
 unchanged. Future React components use prefixed utilities and semantic
 component APIs; they must not redefine those legacy selectors.
 
-## Minimal Scaffold
+## Foundation Scaffold
 
-Phase 3 adds two non-loaded templates:
+Phase 3 added two initially non-loaded templates:
 
 ```text
 frontend/src/styles/
@@ -61,14 +61,16 @@ frontend/src/styles/
   tracs-tailwind.css
 ```
 
-They are not referenced by the current root Vite config, package scripts, PHP
-pages, or production assets. Their purpose is to review semantic names and the
-safe Tailwind import pattern before shared components are implemented.
+Phase 4 connects them only to the isolated frontend package's sandbox entry.
+They remain unreferenced by the root Calendar Vite config, PHP pages, and
+production assets. The sandbox validates semantic names, prefixed utility
+generation, light/dark token inheritance, and initial component density without
+migrating a TRACS module.
 
-No `tailwind.config.js` is needed yet because Tailwind v4 supports CSS-first
-theme declarations. No `postcss.config.js` is needed while the approved
-architecture uses `@tailwindcss/vite`. Add either file only for a demonstrated
-requirement.
+No `tailwind.config.js` is needed because Tailwind v4 supports CSS-first theme
+declarations. No `postcss.config.js` is needed while the approved architecture
+uses `@tailwindcss/vite`. Add either file only for a demonstrated requirement;
+an unused compatibility file would create two apparent sources of truth.
 
 ## Tailwind Theme Rules
 

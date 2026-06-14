@@ -212,6 +212,18 @@ components and independent module entries. PHP loads hashed assets through a
 shared allowlisted Vite manifest helper. Existing PHP rendering remains the
 fallback until characterization, permission, API, visual, and smoke checks pass.
 
+Phase 4 establishes that source root as an independent package. Its only Vite
+entry is `frontend/src/modules/_sandbox/main.jsx`; local builds write to ignored
+`frontend/dist/` and are not loaded by PHP. The package includes initial
+stateless UI primitives and request/date formatting helpers, but no TRACS
+module, API endpoint, or business rule has moved into it.
+
+Future approved production entries will remain named per module and emit to
+`public/assets/react-dist/`. An authenticated PHP shell must perform session and
+permission checks, render a dedicated `.tracs-react-root`, expose reviewed CSRF
+and user metadata, and load an allowlisted entry from the Vite manifest. React
+then calls same-origin PHP APIs; it never becomes the permission authority.
+
 See:
 
 - `docs/react-tailwind-architecture.md`
