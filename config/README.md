@@ -140,10 +140,18 @@ config/
 Use this naming pattern:
 
 ```text
-YYYY_MM_DD_short_description.sql
+YYYY_MM_DD_short_description/
+  up.sql
+  down.sql
 ```
 
-Migrations should be safe to re-run when practical. For column/index additions, use `information_schema` checks or helper procedures. For destructive changes, include backup instructions, rollback notes, and a clear reason.
+Existing single-file migrations remain part of the current deployment history.
+New refactor-phase migrations must use paired `up.sql` and `down.sql` files.
+They should be safe to re-run when practical. For column/index additions, use
+`information_schema` checks or helper procedures. For destructive changes,
+include backup instructions, rollback notes, verification queries, data-loss
+warnings, and a clear reason. A database backup remains mandatory when a down
+migration cannot recreate removed or transformed data.
 
 ## Backup Recommendation
 

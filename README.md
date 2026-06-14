@@ -92,6 +92,12 @@ Change this immediately after first login.
 | [docs/INFRASTRUCTURE_PULSE.md](docs/INFRASTRUCTURE_PULSE.md) | Current prototype scope and usage. |
 | [docs/SECURITY_AUDIT_2FA.md](docs/SECURITY_AUDIT_2FA.md) | Focused mandatory-2FA audit. |
 | [docs/TRACS_SIGNATURE.md](docs/TRACS_SIGNATURE.md) | Preserved build authorship/deployment marker. |
+| [TESTING.md](TESTING.md) | Pre-refactor testing baseline, priorities, tools, and future CI direction. |
+| [ROLLBACK.md](ROLLBACK.md) | Local, branch, commit, deployment, and database rollback procedures. |
+| [REFACTOR_ROADMAP.md](REFACTOR_ROADMAP.md) | Full-system React, Tailwind, PHP API, and MySQL migration direction. |
+| [docs/manual-smoke-checklist.md](docs/manual-smoke-checklist.md) | Manual smoke coverage for critical TRACS pages and workflows. |
+| [docs/permission-api-contract-checklist.md](docs/permission-api-contract-checklist.md) | Role, object-scope, CSRF, API, export, upload, and monitoring contracts. |
+| [docs/calendar-reference-regression-checklist.md](docs/calendar-reference-regression-checklist.md) | Zero-mistake Calendar reference regression checklist. |
 
 Files under `MOM README/` are historical package documentation. Files under backup trees are not current documentation.
 
