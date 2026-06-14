@@ -262,3 +262,34 @@ git revert <phase-5-5-pilot-api-contract-commit>
 No database restore, asset rollback, or UI fallback is required. After rollback,
 `/api/v1/context.php` should return `404`; existing APIs and pages remain
 unchanged.
+
+## Phase 6 Shift Assignment Contract Rollback
+
+Phase 6 adds a read-only versioned route, pure response formatter, contract
+check, and documentation. It does not alter the legacy Shift Assignment page,
+API, business logic, schema, or data.
+
+Before commit, review `git diff`, then discard only Phase 6 work:
+
+```bash
+git restore --staged .
+git restore .
+rm -rf api/v1/shift-assignment public/api/v1/shift-assignment
+rm tests/shift-assignment-api-contract.php
+rm docs/shift-assignment-api-contract.md
+```
+
+After commit:
+
+```bash
+git revert <phase-6-commit-sha>
+```
+
+To abandon the unmerged local branch:
+
+```bash
+git switch refactor/phase-5-5-pilot-api-contract
+git branch -D refactor/phase-6-shift-assignment-api-contracts
+```
+
+No database restore, asset rebuild, or UI rollback is required.

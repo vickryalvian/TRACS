@@ -58,3 +58,24 @@ future same-session state-changing requests, which must still run
 permission requirement: every authenticated React shell needs to discover the
 permissions PHP already grants. Module routes remain responsible for enforcing
 their own permissions and object scope.
+
+## Shift Assignment Context
+
+Phase 6 adds:
+
+```text
+GET /api/v1/shift-assignment/context.php
+```
+
+It requires `shifts.view` and returns safe, role-scoped bootstrap metadata for
+a future Shift Assignment React module. It does not return assignments, mutate
+data, replace the legacy route, or authorize an action by itself.
+
+```text
+public/api/v1/shift-assignment/context.php
+  -> authenticated GET bootstrap and shifts.view
+api/v1/shift-assignment/context.php
+  -> allowlisted resource formatter
+```
+
+See `docs/shift-assignment-api-contract.md`.

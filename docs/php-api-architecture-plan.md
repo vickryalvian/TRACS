@@ -259,6 +259,27 @@ The route:
 The pilot does not replace or modify `public/api/_bootstrap.php`, Calendar APIs,
 or Shift Assignment APIs.
 
+## Phase 6 Shift Assignment Context
+
+The first module-specific adopter is:
+
+```text
+GET /api/v1/shift-assignment/context.php
+```
+
+The route requires an authenticated active session and `shifts.view`. It is
+GET-only, uses the existing `ShiftingAssignmentService` for permission and
+role/division scope, and returns only allowlisted bootstrap/filter metadata.
+It does not return assignments or replace the legacy Shift Assignment API.
+
+Its permission flags are presentation hints. Future reads and writes must
+repeat route permission and object-scope enforcement in PHP. Mutations must
+also require CSRF and retain existing validation, transaction, audit,
+notification, conflict, and workload rules.
+
+See `docs/shift-assignment-api-contract.md` for the current data-flow,
+permission, filter, business-rule, and future endpoint characterization.
+
 Automated checks:
 
 ```bash

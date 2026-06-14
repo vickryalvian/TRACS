@@ -62,10 +62,19 @@ endpoint solely to make it match the target during baseline creation.
 ### Shift Assignment
 
 - [ ] `GET|POST /api/shifting-assignment.php`
+- [ ] `GET /api/v1/shift-assignment/context.php` requires `shifts.view`.
+- [ ] V1 context returns `401` unauthenticated, `403` without permission, and
+      `405` for non-GET methods.
+- [ ] V1 context omits email, credentials, 2FA data, internal notes, SQL,
+      paths, logs, and server details.
+- [ ] Agent/Intern options remain self-scoped and Supervisor options remain
+      division-scoped.
 - [ ] Data, assignment, history, and monthly-template reads are scoped.
 - [ ] Save, resize, status, confirm, replace, copy, warning, template, holiday,
       coverage, settings, apply, archive, and deactivate actions enforce their
       distinct management permissions.
+- [ ] No assignment DELETE behavior is assumed; deactivate is limited to
+      configuration records.
 - [ ] Invalid overlap, duration, date/time, availability, and enum input returns
       safe validation errors without partial writes.
 

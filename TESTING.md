@@ -161,6 +161,34 @@ write module data. Permission-denial testing is not applicable to this
 bootstrap route because every fully authenticated active account is allowed;
 module pilots must add explicit `403` tests.
 
+## Phase 6 Shift Assignment Contract
+
+Run:
+
+```bash
+php tests/php-api-foundation.php
+php tests/php-api-contract.php
+php tests/shift-assignment-api-contract.php
+find api tests public/api/v1 -name '*.php' -exec php -l {} \;
+```
+
+The test verifies the five-key envelope, request ID, canonical shift hours,
+Shift 3 cross-day storage, eight-hour rest threshold, supported views,
+date-format boundary, permission/action mapping, absent assignment-delete
+behavior, and sensitive-field exclusions.
+
+Manual endpoint checks:
+
+```bash
+curl -i http://127.0.0.1:8080/api/v1/shift-assignment/context.php
+curl -i -X POST http://127.0.0.1:8080/api/v1/shift-assignment/context.php
+```
+
+Expect unauthenticated GET `401` and POST `405` with `Allow: GET`. With normal
+fixture accounts in a disposable environment, verify `403` without
+`shifts.view`, `200` with it, and the role/division matrix in
+`docs/shift-assignment-api-contract.md`. Do not alter real schedules.
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:

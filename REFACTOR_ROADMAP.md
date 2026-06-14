@@ -85,17 +85,22 @@ their frontend migration remains late because of the system-wide risk.
 
 ## Current Phase
 
-Phase 5.5 adopts the internal PHP API foundation in one additive pilot:
-`GET /api/v1/context.php`. It returns only safe current-user identity, role,
-effective permissions, CSRF handoff metadata, and a request ID for a fully
-authenticated active account. Tests cover its exact resource shape, sensitive
-field exclusions, unauthenticated `401`, method `405`, and the Phase 5
-foundation regression suite.
+Phase 6 characterizes Shift Assignment before frontend migration and adds one
+additive protected contract:
 
-This phase performs no module refactor, production React conversion, PHP page
-layout change, business-logic change, legacy endpoint replacement,
-database-schema change, or migration. `calendar.php`,
-`shifting-assignment.php`, and their current APIs remain untouched.
+```text
+GET /api/v1/shift-assignment/context.php
+```
+
+It requires `shifts.view` and returns allowlisted user, permission, action,
+canonical shift, scoped filter, default, CSRF, and request-ID metadata. It
+returns no assignments and performs no module writes.
+
+The existing PHP page, legacy API, CSV export, service, Calendar reference,
+database schema, and production layout remain unchanged. Current data flows,
+tables, permission split, role/division scope, filters, business rules, risks,
+future contracts, and manual checks are recorded in
+`docs/shift-assignment-api-contract.md`.
 
 Canonical Phase 2 plans:
 
@@ -133,3 +138,10 @@ Phase 5.5 pilot notes:
 - `docs/php-api-architecture-plan.md`
 - `docs/API_SECURITY_INVENTORY.md`
 - `tests/php-api-contract.php`
+
+Phase 6 contract notes:
+
+- `docs/shift-assignment-api-contract.md`
+- `api/v1/shift-assignment/context.php`
+- `public/api/v1/shift-assignment/context.php`
+- `tests/shift-assignment-api-contract.php`
