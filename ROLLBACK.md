@@ -201,3 +201,34 @@ rm -rf frontend/dist frontend/node_modules
 No database restore is required for Phase 4 because it contains no migration or
 data operation. Future database changes must still include reviewed `up.sql`
 and `down.sql` files and a tested backup restoration procedure.
+
+## Phase 5 PHP API Foundation Rollback
+
+Phase 5 adds internal `api/` helpers, one CLI check, and documentation. Existing
+public routes do not load these files, so rollback requires no endpoint switch,
+cache purge, database restore, or UI rollback.
+
+Discard uncommitted Phase 5 work:
+
+```bash
+git restore --staged .
+git restore .
+git clean -fd api/ tests/
+```
+
+Switch to the approved base and delete a failed local branch:
+
+```bash
+git switch refactor/phase-4-react-tailwind-foundation
+git branch -D refactor/phase-5-php-api-foundation
+```
+
+After merge, revert without rewriting history:
+
+```bash
+git revert <phase-5-php-api-foundation-commit>
+```
+
+No database schema or data changed. Future database batches must include
+reviewed `up.sql` and `down.sql`, a pre-change backup, verification queries, and
+a tested restoration procedure.

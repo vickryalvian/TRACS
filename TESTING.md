@@ -88,6 +88,29 @@ The future standard API envelope is:
 }
 ```
 
+## Phase 5 PHP API Foundation Check
+
+The isolated foundation includes a dependency-free CLI check:
+
+```bash
+find api tests -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+php tests/php-api-foundation.php
+```
+
+It verifies:
+
+- The exact `success`, `message`, `data`, `errors`, and `meta` keys.
+- JSON object parsing and malformed JSON rejection.
+- Required-field error mapping.
+- Backend `YYYY-MM-DD` validation while UI remains `dd-mm-yyyy`.
+- Unauthenticated requests return a safe JSON error with no data.
+- Invalid CSRF requests return the same sanitized five-key JSON envelope.
+
+It does not connect to MySQL. Authenticated, permission, CSRF, audit-write, and
+object-scope integration tests must use a disposable database and fixture
+accounts. Do not create fake production sessions or change production records
+for these checks.
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:

@@ -85,16 +85,17 @@ their frontend migration remains late because of the system-wide risk.
 
 ## Current Phase
 
-Phase 4 creates an isolated React and Tailwind foundation package under
-`frontend/`. It adds a sandbox-only named Vite entry, CSS-first Tailwind build,
-initial stateless UI primitives, and small API/date/format helpers. The sandbox
-is not connected to production navigation, PHP pages, real APIs, or TRACS data.
-Its local build output remains ignored under `frontend/dist/`.
+Phase 5 creates an internal PHP API foundation under `api/`. It standardizes the
+future response envelope and provides namespaced wrappers for request parsing,
+required-field validation, authentication, permissions, CSRF, active users,
+audit/error logging, request IDs, and strict backend date parsing. A lightweight
+CLI contract check lives at `tests/php-api-foundation.php`.
 
-This phase performs no module refactor, production React conversion, PHP page
-layout change, business-logic change, API endpoint change, production asset
-loading, or database-schema change. `calendar.php` and the existing Calendar
-pilot build remain untouched and continue to be the zero-mistake reference.
+The new foundation is not wired into existing routes. This phase performs no
+module refactor, production React conversion, PHP page layout change,
+business-logic change, existing endpoint contract change, database-schema
+change, or migration. `calendar.php`, `shifting-assignment.php`, and their
+current APIs remain untouched.
 
 Canonical Phase 2 plans:
 
@@ -118,3 +119,10 @@ Phase 4 implementation and operation notes:
 - `frontend/README.md`
 - `docs/react-tailwind-architecture.md`
 - `docs/frontend-migration-plan.md`
+
+Phase 5 implementation and operation notes:
+
+- `api/README.md`
+- `docs/php-api-architecture-plan.md`
+- `TESTING.md`
+- `ROLLBACK.md`

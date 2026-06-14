@@ -3,9 +3,9 @@
 ## Purpose
 
 PHP will evolve gradually from page-level rendering and mixed endpoint logic
-into a clearer backend/API provider. This phase documents the direction only;
-it does not move files, change routes, normalize responses, or alter business
-logic.
+into a clearer backend/API provider. Phase 5 adds an isolated internal
+foundation but does not change routes, normalize existing responses, or alter
+business logic.
 
 ## Compatibility Boundary
 
@@ -25,13 +25,20 @@ Browser
 
 Public API files stay thin. They must not become a second business-logic layer.
 
-## Future Structure
+## Structure
 
 ```text
 api/
-  Controllers/
-  Requests/
-  Resources/
+  _bootstrap.php
+  _response.php
+  _request.php
+  _auth.php
+  _csrf.php
+  _permissions.php
+  _logging.php
+  Controllers/       # future, when a real module needs it
+  Requests/          # future
+  Resources/         # future
 includes/
 services/
 repositories/
@@ -45,6 +52,11 @@ public/
 
 Existing `core/`, `modules/`, and `public/api/` are migrated gradually. Do not
 perform a repository-wide namespace or directory rewrite.
+
+The Phase 5 files use the `TRACS\Api` namespace to avoid collisions with
+existing global helpers such as `verify_csrf()` and
+`tracs_require_permission()`. They accept the current `mysqli` connection
+instead of opening another connection or introducing a container/framework.
 
 Responsibilities:
 
@@ -109,6 +121,14 @@ Recommended status use:
 Existing endpoint differences must be characterized before normalization.
 Change response contracts only in separately reviewed compatibility batches.
 
+Phase 5 response functions:
+
+- `response_payload()` builds the five-key contract for tests and resources.
+- `json_success()` emits a success envelope and exits.
+- `json_error()` sanitizes the public message, emits an error envelope, and
+  exits.
+- Both response paths send JSON, `no-store`, and `nosniff` headers.
+
 ## Request And Query Conventions
 
 - JSON request bodies for new React mutations unless file upload requires multipart.
@@ -159,12 +179,49 @@ legacy contract. Compatible normalization can remain behind current routes.
 - Keep Super Admin log viewing bounded, sanitized, fixed-path, and exact-role
   restricted.
 
-## First Backend Preparation Batch
+Phase 5 generates a safe request ID and includes it only in private logs by
+default. It does not create a new log-viewing or server-monitoring endpoint.
+`write_error_log()` redacts password/token/secret-shaped context keys through
+the existing scrubber. Public errors continue through
+`tracs_public_error_message()`.
 
-After architecture approval and test-baseline implementation:
+## Phase 5 Foundation Batch
 
-1. Add response-contract characterization tests.
-2. Introduce shared response helpers that preserve existing output by default.
-3. Introduce a reusable request/validation boundary for one pilot endpoint.
-4. Keep its public route and business service unchanged.
-5. Verify all role, CSRF, object-scope, and audit behavior before reuse.
+Implemented:
+
+1. Internal helpers under `api/`, outside the public web root.
+2. Standard future response envelope without changing existing endpoint output.
+3. Hardened auth/session, permission, and CSRF wrappers around current rules.
+4. JSON-object parsing, required fields, and strict ISO date validation.
+5. Existing audit logger delegation and private correlated error logging.
+6. Dependency-free CLI checks in `tests/php-api-foundation.php`.
+7. No public endpoint, module migration, database migration, or route rewiring.
+
+Validation:
+
+```bash
+find api tests -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+php tests/php-api-foundation.php
+```
+
+The CLI check covers envelope keys, malformed JSON, required fields, ISO date
+validation, and unauthenticated JSON rejection. Authenticated-session,
+permission, CSRF, audit persistence, and object-scope integration tests require
+a disposable test database and fixture users; do not run those against
+production data.
+
+## Adoption Rule
+
+The next backend batch should adopt the foundation for one new or explicitly
+versioned pilot contract, not silently replace `public/api/_bootstrap.php`.
+That batch must characterize the existing endpoint first and test:
+
+1. Unauthenticated and pending-2FA `401`.
+2. Idle session expiry.
+3. Inactive-account rejection.
+4. Valid and invalid CSRF for mutations.
+5. Allowed and denied permissions.
+6. Object ownership/division scope.
+7. Validation `422` shape.
+8. Audit persistence and sanitized unexpected errors.
+9. Existing PHP client compatibility or an explicit version boundary.

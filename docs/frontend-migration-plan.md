@@ -144,3 +144,10 @@ the required PHP API contracts, add an authenticated PHP root with a PHP
 fallback, and load only that module's manifest assets. Shift Assignment remains
 the intended first module after the shared foundation and PHP API prerequisites
 are approved.
+
+Phase 5 provides those future API primitives under the `TRACS\Api` namespace,
+but no React module calls them yet. A module may adopt them only after its
+current endpoint behavior, permissions, object scope, CSRF, audit effects, and
+failure states have tests. The frontend client must consume the five-key
+envelope while treating `401`, `403`, `404`, `409`, `422`, and `500` as distinct
+server-authoritative states.

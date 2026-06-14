@@ -224,6 +224,32 @@ permission checks, render a dedicated `.tracs-react-root`, expose reviewed CSRF
 and user metadata, and load an allowlisted entry from the Vite manifest. React
 then calls same-origin PHP APIs; it never becomes the permission authority.
 
+## Refactor Backend Direction
+
+Phase 5 adds an internal, namespaced API foundation under `api/`. It is outside
+the current `public/` web root and is not required by legacy routes. The
+foundation reuses the existing database connection, hardened session/2FA
+checks, permission catalog, CSRF token strategy, active-user lookup, audit
+tables, and public error sanitizer.
+
+New endpoint batches may use `TRACS\Api` helpers for the standard JSON envelope,
+request parsing, validation, authentication, permissions, CSRF, audit logging,
+private error correlation, and strict backend dates. Existing endpoints retain
+their characterized contracts until a separately tested compatibility batch
+adopts the foundation.
+
+The route boundary remains:
+
+```text
+public/api/<route>.php
+  -> internal api/_bootstrap.php
+  -> controller/service/repository as appropriate
+  -> existing MySQL connection
+```
+
+No endpoint may treat React state, hidden controls, or client-provided roles as
+authorization.
+
 See:
 
 - `docs/react-tailwind-architecture.md`
