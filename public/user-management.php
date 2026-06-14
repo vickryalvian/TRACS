@@ -566,8 +566,14 @@ include __DIR__ . '/includes/header.php';
         <option value="">All Actions</option>
         <?php foreach($activity_actions as $action): ?><option value="<?=esc($action)?>" <?=($_GET['activity_action'] ?? '')===$action?'selected':''?>><?=esc(str_replace('_',' ', $action))?></option><?php endforeach; ?>
       </select>
-      <input type="date" name="from" class="form-input" value="<?=esc($_GET['from'] ?? '')?>">
-      <input type="date" name="to" class="form-input" value="<?=esc($_GET['to'] ?? '')?>">
+      <?=tracs_date_range_picker([
+          'id' => 'userActivityRange',
+          'start' => $_GET['from'] ?? '',
+          'end' => $_GET['to'] ?? '',
+          'start_name' => 'from',
+          'end_name' => 'to',
+          'label' => 'Activity date range',
+      ])?>
       <div class="search-form-wrap"><i data-lucide="search" class="search-ic icon-sm"></i><input type="text" name="activity_q" class="search-input" placeholder="Search audit log" value="<?=esc($_GET['activity_q'] ?? '')?>"></div>
       <button type="submit" class="btn btn-primary"><i data-lucide="filter" class="icon-sm"></i>Apply</button>
     </form>
@@ -1125,7 +1131,7 @@ function umOpenUserDrawer(btn){
       if(!u.mentor_user_id) warnings.push('Mentor is not assigned.');
       if(['not_started','in_review','needs_improvement'].includes(u.evaluation_status || '')) warnings.push('Evaluation is pending or needs follow-up.');
       document.getElementById('umDrawerInternDetails').innerHTML=[
-        ['University',u.university_name||'—'],['Study Program',u.study_program||'—'],['Period',`${u.internship_start_date||'—'} to ${u.internship_end_date||'—'}`],['Remaining',remainingText],
+        ['University',u.university_name||'—'],['Study Program',u.study_program||'—'],['Period',`${window.TRACSDate?.formatDateDisplay(u.internship_start_date)||'—'} to ${window.TRACSDate?.formatDateDisplay(u.internship_end_date)||'—'}`],['Remaining',remainingText],
         ['Mentor',u.mentor_name||'Unassigned'],['Internship Status',String(u.internship_status||'—').replaceAll('_',' ')],['Evaluation',String(u.evaluation_status||'—').replaceAll('_',' ')],['Skill Level',String(u.skill_level||'—').replaceAll('_',' ')],
         ['Task Scope',String(u.allowed_task_scope||'—').replaceAll('_',' ')]
       ].map(([k,v])=>`<div><span>${umEsc(k)}</span><strong>${umEsc(v)}</strong></div>`).join('');

@@ -266,12 +266,12 @@ ON DUPLICATE KEY UPDATE
 INSERT INTO `shift_templates`
   (`shift_name`, `start_time`, `end_time`, `duration_minutes`, `default_break_minutes`, `is_cross_day`, `color_label`, `default_assignment_type`, `count_as_work_hour`, `is_active`, `notes`)
 SELECT * FROM (
-  SELECT 'Shift 1' AS shift_name, '08:00:00' AS start_time, '16:00:00' AS end_time, 480 AS duration_minutes,
+  SELECT 'Shift 1' AS shift_name, '00:00:00' AS start_time, '08:00:00' AS end_time, 480 AS duration_minutes,
          0 AS default_break_minutes, 0 AS is_cross_day, '#4f46e5' AS color_label,
          'regular_shift' AS default_assignment_type, 1 AS count_as_work_hour, 1 AS is_active,
-         'Template only; times may be overridden' AS notes
-  UNION ALL SELECT 'Shift 2', '14:00:00', '22:00:00', 480, 0, 0, '#0ea5e9', 'regular_shift', 1, 1, 'Template only; times may be overridden'
-  UNION ALL SELECT 'Shift 3', '22:00:00', '06:00:00', 480, 0, 1, '#8b5cf6', 'regular_shift', 1, 1, 'Cross-day template'
+         'Main CS shift: 00:00-08:00' AS notes
+  UNION ALL SELECT 'Shift 2', '08:00:00', '16:00:00', 480, 0, 0, '#0ea5e9', 'regular_shift', 1, 1, 'Main CS shift: 08:00-16:00'
+  UNION ALL SELECT 'Shift 3', '16:00:00', '00:00:00', 480, 0, 1, '#8b5cf6', 'regular_shift', 1, 1, 'Main CS shift: 16:00-24:00'
   UNION ALL SELECT 'Middle Shift', '10:00:00', '14:00:00', 240, 0, 0, '#14b8a6', 'middle_shift', 1, 1, 'Flexible four-hour support shift'
   UNION ALL SELECT 'Weekend Standby', '09:00:00', '17:00:00', 480, 0, 0, '#f59e0b', 'standby', 1, 1, 'Weekend standby template'
   UNION ALL SELECT 'Holiday Lembur', '09:00:00', '17:00:00', 480, 0, 0, '#ec4899', 'holiday_coverage', 1, 1, 'Holiday coverage helper; override as needed'

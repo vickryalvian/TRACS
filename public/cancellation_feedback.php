@@ -153,21 +153,23 @@ include 'includes/header.php';
           </select>
         </div>
 
-        <div class="month-select-wrap">
-          <label>From</label>
-          <input type="date" name="df" class="form-input compact-select" value="<?=esc($filters['date_from'])?>" onchange="this.form.submit()" style="width:125px">
-        </div>
-
-        <div class="month-select-wrap">
-          <label>To</label>
-          <input type="date" name="dt" class="form-input compact-select" value="<?=esc($filters['date_to'])?>" onchange="this.form.submit()" style="width:125px">
+        <div class="month-select-wrap feedback-date-range-wrap">
+          <label>Date Range</label>
+          <?=tracs_date_range_picker([
+              'id' => 'feedbackFilterRange',
+              'start' => $filters['date_from'],
+              'end' => $filters['date_to'],
+              'start_name' => 'df',
+              'end_name' => 'dt',
+              'label' => 'Feedback date range',
+          ])?>
         </div>
 
         <input type="hidden" name="q" value="<?=esc($filters['q'])?>">
 
         <?php if(array_filter($filters)): ?>
         <a href="cancellation_feedback.php" class="btn btn-ghost btn-reset">
-          <i data-lucide="rotate-ccw" class="icon-xs" style="margin-right:4px"></i> Reset
+          <i data-lucide="rotate-ccw" class="icon-xs"></i> Reset
         </a>
         <?php endif; ?>
 
@@ -206,8 +208,14 @@ include 'includes/header.php';
               <i data-lucide="download" class="icon-xs"></i>
               Export CSV
             </div>
-            <label>From Date<input type="date" name="from" class="form-input" value="<?=esc($filters['date_from'])?>"></label>
-            <label>To Date<input type="date" name="to" class="form-input" value="<?=esc($filters['date_to'])?>"></label>
+            <?=tracs_date_range_picker([
+                'id' => 'feedbackExportRange',
+                'start' => $filters['date_from'],
+                'end' => $filters['date_to'],
+                'start_name' => 'from',
+                'end_name' => 'to',
+                'label' => 'Export date range',
+            ])?>
             <button type="submit" class="btn btn-primary"><i data-lucide="download" class="icon-sm"></i>Download CSV</button>
           </form>
         </details>

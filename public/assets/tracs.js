@@ -200,14 +200,14 @@ function tracsToastOptionsForSource(sourceElement,options={}){
   return {
     ...options,
     context,
-    position:options.position || (context === 'modal' ? 'modal-top-right' : 'top-right'),
+    position:options.position || (context === 'modal' ? 'modal-center' : 'top-right'),
     sourceElement:source,
     modal:options.modal || (context === 'modal' ? sourceModal : null)
   };
 }
 function tracsToastDock(context='page',position='',modal=null,sourceElement=null,maxWidth=null){
   const normalizedContext=['modal','inline'].includes(context) ? context : 'page';
-  const normalizedPosition=position || (normalizedContext === 'modal' ? 'modal-top-right' : 'top-right');
+  const normalizedPosition=position || (normalizedContext === 'modal' ? 'modal-center' : 'top-right');
   if(normalizedContext === 'modal'){
     const target=tracsResolveModal(modal || tracsSourceModal(sourceElement));
     if(target){
@@ -279,7 +279,7 @@ function showToast(...args){
   const duration=persistent ? 0 : (Number.isFinite(Number(options.duration)) ? Number(options.duration) : tracsToastDefaults[noticeType]);
   const sourceElement=tracsSourceElement(options.sourceElement);
   const context=tracsToastContext({...options,sourceElement});
-  const position=options.position || (context === 'modal' ? 'modal-top-right' : '');
+  const position=options.position || (context === 'modal' ? 'modal-center' : '');
   const modal=options.modal || options.contextElement || (context === 'modal' ? tracsSourceModal(sourceElement) : null);
   const dock=tracsToastDock(context,position,modal,sourceElement,options.maxWidth);
   const title=parsed.title;
@@ -495,6 +495,50 @@ function tracsOpenModalElement(modal,options={}){
   requestAnimationFrame(()=>window.TRACSUnsavedChanges?.markSaved(target));
   return target;
 }
+function tracsValidationTarget(field){
+  if(!(field instanceof Element))return null;
+  if(field.matches('select.tracs-native-select')){
+    return field.closest('.tracs-select')?.querySelector('.tracs-select-trigger') || field;
+  }
+  if(field._flatpickr?.altInput)return field._flatpickr.altInput;
+  if(field.matches('input[type="checkbox"], input[type="radio"]')){
+    return field.closest('label, .form-check, .shift-check-label, [data-check-row]') || field;
+  }
+  return field;
+}
+function tracsRevealInvalidField(field,modal){
+  if(!(field instanceof Element))return;
+  field.closest('details:not([open])')?.setAttribute('open','');
+  const pane=field.closest('[role="tabpanel"], [data-infra-modal-pane], [data-modal-pane]');
+  if(pane && getComputedStyle(pane).display === 'none'){
+    const paneId=pane.id;
+    const paneName=pane.getAttribute('data-infra-modal-pane') || pane.getAttribute('data-modal-pane');
+    const selector=paneId
+      ? `[aria-controls="${CSS.escape(paneId)}"]`
+      : paneName
+        ? `[data-infra-modal-tab="${CSS.escape(paneName)}"], [data-modal-tab="${CSS.escape(paneName)}"]`
+        : '';
+    if(selector)(modal || document).querySelector(selector)?.click();
+  }
+  field.dispatchEvent(new CustomEvent('tracs:reveal-invalid',{bubbles:true,detail:{field}}));
+}
+function tracsFocusInvalidField(field,options={}){
+  if(!(field instanceof Element))return;
+  const modal=tracsResolveModal(options.modal || field);
+  tracsRevealInvalidField(field,modal);
+  field.setAttribute('aria-invalid','true');
+  const target=tracsValidationTarget(field);
+  target?.classList.add('is-invalid');
+  requestAnimationFrame(()=>{
+    target?.scrollIntoView?.({behavior:'smooth',block:'center',inline:'nearest'});
+    window.setTimeout(()=>{
+      const focusNode=target?.matches?.('label, .form-check, .shift-check-label, [data-check-row]')
+        ? target.querySelector('input, select, textarea, button, [tabindex]')
+        : target;
+      focusNode?.focus?.({preventScroll:true});
+    },180);
+  });
+}
 function showModalSuccessAndClose(options={}){
   const modal=tracsResolveModal(options.modal);
   const delay=Math.min(1500,Math.max(800,Number(options.delay ?? options.closeDelay ?? 1000)));
@@ -507,7 +551,7 @@ function showModalSuccessAndClose(options={}){
   }
   const toastNode=showToast(message,'success',{
     context:'modal',
-    position:'modal-top-right',
+    position:'modal-center',
     modal,
     duration:Math.max(Number(options.duration || 0),delay+700),
     closable:false
@@ -539,7 +583,7 @@ function handleModalError(options={}){
     || /session has expired|permission|server is currently unavailable|could not be saved|network/i.test(message);
   const toastNode=showToast(message,'error',{
     context:'modal',
-    position:'modal-top-right',
+    position:'modal-center',
     modal,
     duration:critical?0:Number(options.duration || 10000),
     persistent:critical,
@@ -547,8 +591,54 @@ function handleModalError(options={}){
     priority:critical?'critical':'normal'
   });
   const focusTarget=options.focus || modal?.querySelector('[aria-invalid="true"], :invalid');
-  if(focusTarget?.focus)requestAnimationFrame(()=>focusTarget.focus({preventScroll:false}));
+  if(focusTarget)tracsFocusInvalidField(focusTarget,{modal});
   return toastNode;
+}
+function bindModalValidation(){
+  let pendingForm=null;
+  document.addEventListener('invalid',event=>{
+    const field=event.target;
+    if(!(field instanceof HTMLElement))return;
+    const modal=tracsSourceModal(field);
+    if(!modal)return;
+    const form=field.form || field.closest('form');
+    field.setAttribute('aria-invalid','true');
+    if(form && pendingForm===form)return;
+    pendingForm=form;
+    requestAnimationFrame(()=>{ pendingForm=null; });
+    form?.querySelectorAll('button[type="submit"], input[type="submit"]').forEach(resetButtonLoading);
+    if(form)delete form.dataset.tracsSubmitting;
+    handleModalError({
+      modal,
+      focus:field,
+      message:field.validationMessage || 'Complete the highlighted required field before saving.',
+      duration:7000
+    });
+  },true);
+  document.addEventListener('input',event=>{
+    const field=event.target;
+    if(!(field instanceof HTMLElement) || !field.hasAttribute('aria-invalid'))return;
+    if(typeof field.checkValidity === 'function' && !field.checkValidity())return;
+    field.removeAttribute('aria-invalid');
+    tracsValidationTarget(field)?.classList.remove('is-invalid');
+  });
+}
+function initModalAccessibility(){
+  document.querySelectorAll('.modal-close, .modal-close-btn, [data-modal-close], [data-infra-manage-close]').forEach(button=>{
+    if(button instanceof HTMLButtonElement && !button.hasAttribute('type'))button.type='button';
+    if(button.hasAttribute('aria-label'))return;
+    const panel=button.closest('.modal, .dpc-modal-content, .infra-modal__panel, [role="dialog"]');
+    const title=panel?.querySelector('.modal-title, .dpc-modal-header h3, .infra-modal__head h2, [data-modal-title]')?.textContent?.trim();
+    button.setAttribute('aria-label',title ? `Close ${title}` : 'Close dialog');
+  });
+  document.querySelectorAll('.modal-overlay, .dpc-modal, .infra-modal, .cf-modal').forEach(root=>{
+    const panel=tracsModalPanel(root);
+    if(!panel)return;
+    if(!panel.hasAttribute('role'))panel.setAttribute('role','dialog');
+    panel.setAttribute('aria-modal','true');
+    const title=panel.querySelector('.modal-title[id], .dpc-modal-header h3[id], .infra-modal__head h2[id], [data-modal-title][id]');
+    if(title && !panel.hasAttribute('aria-labelledby'))panel.setAttribute('aria-labelledby',title.id);
+  });
 }
 function initWhenVisible(target,callback,options={}){
   if(typeof target === 'string')target=document.querySelector(target);
@@ -584,6 +674,7 @@ window.handleModalError=handleModalError;
 window.tracsResolveModal=tracsResolveModal;
 window.tracsCloseModalElement=tracsCloseModalElement;
 window.tracsOpenModalElement=tracsOpenModalElement;
+window.tracsFocusInvalidField=tracsFocusInvalidField;
 window.initWhenVisible=initWhenVisible;
 
 function getShiftReportReminderState({shiftEndTime,reportSubmitted=false,now=new Date()}={}){
@@ -4431,6 +4522,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   bindNativeFormLoading();
   bindModalAjaxForms();
+  bindModalValidation();
+  initModalAccessibility();
   bindQuickDatetimeInputs();
   bindOpsStatusControls();
   bindSidebarMenus();
@@ -5129,11 +5222,11 @@ document.addEventListener('DOMContentLoaded', () => {
       time_24hr: true,
       dateFormat: isTimeOnly ? "H:i" : (isDateTime ? "Y-m-d H:i" : "Y-m-d"),
       altInput: true,
-      altFormat: isTimeOnly ? "H:i" : (isDateTime ? "d/m/Y H:i" : "d/m/Y"),
+      altFormat: isTimeOnly ? "H:i" : (isDateTime ? "d-m-Y H:i" : "d-m-Y"),
       allowInput: true,
       clickOpens: false,
       altInputClass: altClass,
-      placeholder: isTimeOnly ? "HH:MM" : (isDateTime ? "DD/MM/YYYY --:--" : "DD/MM/YYYY"),
+      placeholder: isTimeOnly ? "HH:MM" : (isDateTime ? "DD-MM-YYYY --:--" : "DD-MM-YYYY"),
       defaultDate: defDate,
       minDate: "today",
       onOpen: function(selectedDates, dateStr, instance) {

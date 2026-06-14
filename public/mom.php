@@ -429,7 +429,7 @@ include 'includes/header.php';
         <div class="progress-text"><?=$done_actions?>/<?=$total_actions?> completed</div>
         
         <?php if(!empty($actions)): ?>
-          <div class="action-quick-list" style="margin-top:12px;border-top:1px solid var(--bd1);padding-top:8px">
+          <div class="action-quick-list">
             <?php foreach(array_slice($actions,0,3) as $a): 
               $astatus=$a['status']??'pending';
               $adone=($astatus==='completed');
@@ -802,8 +802,12 @@ function render_mom_table($items, $MC, $mode='upcoming') {
 		            <i data-lucide="download" class="icon-xs"></i>
 		            Export CSV
 		          </div>
-		          <label>From Date<input type="date" name="from" class="form-input"></label>
-		          <label>To Date<input type="date" name="to" class="form-input"></label>
+		          <?=tracs_date_range_picker([
+		              'id' => 'momExportRange',
+		              'start_name' => 'from',
+		              'end_name' => 'to',
+		              'label' => 'Export date range',
+		          ])?>
 		          <button type="submit" class="btn btn-primary"><i data-lucide="download" class="icon-sm"></i>Download CSV</button>
 		        </form>
 		      </details>

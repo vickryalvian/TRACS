@@ -33,6 +33,47 @@ function safe_dt_local(mixed $v): string {
     return date('Y-m-d\TH:i', strtotime((string)$v));
 }
 function esc(mixed $v): string { return htmlspecialchars((string)($v??''), ENT_QUOTES,'UTF-8'); }
+function tracs_date_display(mixed $value, string $fallback = '—'): string {
+    if (!$value || !strtotime((string)$value)) return $fallback;
+    return date('d-m-Y', strtotime((string)$value));
+}
+function tracs_date_range_picker(array $options = []): string {
+    static $sequence = 0;
+    $sequence++;
+
+    $id = preg_replace('/[^a-zA-Z0-9_-]/', '', (string)($options['id'] ?? 'tracsDateRange' . $sequence));
+    $id = $id !== '' ? $id : 'tracsDateRange' . $sequence;
+    $start = (string)($options['start'] ?? '');
+    $end = (string)($options['end'] ?? '');
+    $startName = (string)($options['start_name'] ?? 'start_date');
+    $endName = (string)($options['end_name'] ?? 'end_date');
+    $startId = preg_replace('/[^a-zA-Z0-9_-]/', '', (string)($options['start_id'] ?? ''));
+    $endId = preg_replace('/[^a-zA-Z0-9_-]/', '', (string)($options['end_id'] ?? ''));
+    $preset = (string)($options['preset'] ?? '');
+    $label = (string)($options['label'] ?? 'Date range');
+    $placeholder = (string)($options['placeholder'] ?? 'Select date range');
+    $class = trim('tracs-date-range ' . (string)($options['class'] ?? ''));
+    $autoSubmit = !empty($options['auto_submit']);
+
+    ob_start();
+    ?>
+    <div
+      class="<?=esc($class)?>"
+      id="<?=esc($id)?>"
+      data-tracs-date-range
+      data-initial-start-date="<?=esc($start)?>"
+      data-initial-end-date="<?=esc($end)?>"
+      data-selected-preset="<?=esc($preset)?>"
+      data-label="<?=esc($label)?>"
+      data-placeholder="<?=esc($placeholder)?>"
+      <?=$autoSubmit ? 'data-auto-submit="true"' : ''?>
+    >
+      <input type="hidden" <?=$startId !== '' ? 'id="'.esc($startId).'"' : ''?> name="<?=esc($startName)?>" value="<?=esc($start)?>" data-tracs-range-start>
+      <input type="hidden" <?=$endId !== '' ? 'id="'.esc($endId).'"' : ''?> name="<?=esc($endName)?>" value="<?=esc($end)?>" data-tracs-range-end>
+    </div>
+    <?php
+    return trim((string)ob_get_clean());
+}
 
 function tracs_stat_delta_meta(int $current, int $previous, string $period_label, string $polarity = 'positive'): array {
     $diff = $current - $previous;

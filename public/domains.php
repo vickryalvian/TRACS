@@ -610,8 +610,12 @@ include 'includes/header.php';
             <i data-lucide="download" class="icon-xs"></i>
             Export CSV
           </div>
-          <label>From Date<input type="date" name="from" class="form-input"></label>
-          <label>To Date<input type="date" name="to" class="form-input"></label>
+          <?=tracs_date_range_picker([
+              'id' => 'domainsExportRange',
+              'start_name' => 'from',
+              'end_name' => 'to',
+              'label' => 'Export date range',
+          ])?>
           <button type="submit" class="btn btn-primary"><i data-lucide="download" class="icon-sm"></i>Download CSV</button>
         </form>
       </details>
@@ -714,8 +718,8 @@ include 'includes/header.php';
       $scls     = dt_status_class($status);
       $slabel   = dt_status_label($status);
 
-      $start_fmt = $dr['process_start_date'] ? date('d M Y', strtotime($dr['process_start_date'])) : null;
-      $end_fmt   = $dr['process_end_date']   ? date('d M Y', strtotime($dr['process_end_date']))   : null;
+      $start_fmt = $dr['process_start_date'] ? tracs_date_display($dr['process_start_date']) : null;
+      $end_fmt   = $dr['process_end_date']   ? tracs_date_display($dr['process_end_date'])   : null;
 
       $move_val = $dr['webnic_reseller_transfer'] ?? '';
 
@@ -849,7 +853,7 @@ include 'includes/header.php';
      EDIT DOMAIN TRANSFER MODAL
 ══════════════════════════════════════════════ -->
 <div class="modal-overlay hidden" id="dtModal">
-<div class="modal" style="max-width:520px">
+<div class="modal modal-domain">
   <div class="modal-head">
     <div>
       <div class="modal-title">Edit Domain Transfer</div>
@@ -905,7 +909,7 @@ include 'includes/header.php';
 
     <div class="form-group">
       <label class="form-label">Notes <span style="color:var(--tx4)">(optional)</span></label>
-      <textarea class="form-input" id="dtNotes" rows="3" placeholder="Add domain transfer notes, EPP code context, or next action" style="resize:vertical;min-height:60px"></textarea>
+      <textarea class="form-textarea" id="dtNotes" rows="3" placeholder="Add domain transfer notes, EPP code context, or next action"></textarea>
     </div>
   </div>
   <div class="modal-foot">

@@ -53,6 +53,8 @@ $_ti = $ticker_items??[['text'=>'All systems operational','class'=>'normal']];
 $_th = ''; foreach($_ti as $t){$rawText=(string)($t['text']??'');$c=htmlspecialchars(trim((string)($t['class']??'normal')).tracs_ticker_context_class($rawText));$x=htmlspecialchars($rawText);$_th.="<span class=\"ticker-item {$c}\">{$x}</span>";}
 $_th.=$_th; // double for infinite loop
 $_css_v = @filemtime(__DIR__.'/../assets/tracs.css') ?: time();
+$_date_range_css_v = @filemtime(__DIR__.'/../assets/tracs-date-range-picker.css') ?: time();
+$_spacing_css_v = @filemtime(__DIR__.'/../assets/tracs-spacing.css') ?: time();
 
 if (!function_exists('tracs_sidebar_active')) {
   function tracs_sidebar_active(?string $active_page, array $pages): bool {
@@ -140,10 +142,14 @@ $_show_task_monitoring = !empty(array_filter($_task_monitoring_items, fn($item) 
 <meta name="tracs-build-version" content="<?=htmlspecialchars(TRACS_BUILD_VERSION, ENT_QUOTES, 'UTF-8')?>">
 <title>TRACS — <?=htmlspecialchars($page_title??'Dashboard')?></title>
 <?php include __DIR__ . '/theme_bootstrap.php'; ?>
+<?php if(($active_page??'') === 'calendar'): ?>
+<script>document.documentElement.setAttribute('data-theme','dark');</script>
+<?php endif; ?>
 <link rel="icon" type="image/png" href="assets/images/task-monitoring-tab-icon.png">
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <link rel="stylesheet" href="assets/tracs.css?v=<?=$_css_v?>">
+<link rel="stylesheet" href="assets/tracs-date-range-picker.css?v=<?=$_date_range_css_v?>">
 <?php if(in_array(($active_page??''), ['mom','dashboard'], true)): $_mom_css_v = @filemtime(__DIR__.'/../assets/mom-styles.css') ?: time(); ?>
 <link rel="stylesheet" href="assets/mom-styles.css?v=<?=$_mom_css_v?>">
 <?php endif; ?>
@@ -156,6 +162,10 @@ $_show_task_monitoring = !empty(array_filter($_task_monitoring_items, fn($item) 
 <?php if(($active_page??'') === 'shifting-assignment'): $_shift_assignment_css_v = @filemtime(__DIR__.'/../assets/shifting-assignment.css') ?: time(); ?>
 <link rel="stylesheet" href="assets/shifting-assignment.css?v=<?=$_shift_assignment_css_v?>">
 <?php endif; ?>
+<link rel="stylesheet" href="assets/tracs-spacing.css?v=<?=$_spacing_css_v?>">
+<?php foreach (($calendar_styles ?? []) as $_calendar_style): ?>
+<link rel="stylesheet" href="<?=htmlspecialchars((string)$_calendar_style, ENT_QUOTES, 'UTF-8')?>">
+<?php endforeach; ?>
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script>
@@ -193,6 +203,10 @@ window.TRACS_BUILD_INFO = <?=json_encode($_tracs_build_info, JSON_UNESCAPED_SLAS
     <a href="reminders.php" class="nav-item <?=$active_page==='reminders'?'active':''?>">
       <i data-lucide="bell" class="icon-md"></i>
       <span class="nav-tip">Reminders</span>
+    </a>
+    <a href="calendar.php" class="nav-item <?=$active_page==='calendar'?'active':''?>">
+      <i data-lucide="calendar-range" class="icon-md"></i>
+      <span class="nav-tip">Calendar</span>
     </a>
     <a href="shift-reports.php" class="nav-item <?=$active_page==='shift-reports'?'active':''?>">
       <i data-lucide="clipboard-list" class="icon-md"></i>

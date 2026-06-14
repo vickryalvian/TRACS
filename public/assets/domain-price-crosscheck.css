@@ -11,8 +11,8 @@
   --dpc-radius-modal: var(--r2);
   --dpc-cheapest-bg: color-mix(in srgb, var(--green-lt) 64%, var(--s1));
   --dpc-cheapest-bd: color-mix(in srgb, var(--green) 58%, var(--green-bd));
-  --dpc-section-gap: 12px;
-  --dpc-card-padding: 10px;
+  --dpc-section-gap: var(--card-gap);
+  --dpc-card-padding: var(--space-3);
   --dpc-table-divider: color-mix(in srgb, var(--bd1) 82%, var(--tx3));
   --dpc-table-divider-strong: color-mix(in srgb, var(--bd2) 86%, var(--tx3));
   --dpc-highlight-divider: color-mix(in srgb, var(--blue-bd) 76%, var(--bd1));
@@ -1885,6 +1885,13 @@
 }
 
 .modal-close-btn {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  padding: 0;
+  border: 1px solid var(--bd2);
+  border-radius: var(--r);
+  background: var(--s3);
   color: var(--tx3);
   display: flex;
   align-items: center;
@@ -1893,6 +1900,8 @@
 }
 
 .modal-close-btn:hover {
+  border-color: var(--bd3);
+  background: var(--s4);
   color: var(--tx1);
 }
 
@@ -1915,7 +1924,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .dpc-new-month-modal-content .dpc-modal-form,
@@ -1986,9 +1995,9 @@
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 24px;
+  margin-top: 16px;
   border-top: 1px solid var(--bd1);
-  padding-top: 14px;
+  padding-top: 10px;
   position: sticky;
   bottom: -1px;
   z-index: 3;

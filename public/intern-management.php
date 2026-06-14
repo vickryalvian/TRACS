@@ -58,7 +58,7 @@ $ending_soon = count(array_filter($interns, fn($u) => ($u['internship_monitor_st
 $need_review = count(array_filter($interns, fn($u) => in_array((string)($u['evaluation_status'] ?? ''), ['not_started','in_review','needs_improvement'], true)));
 $without_mentor = count(array_filter($interns, fn($u) => empty($u['mentor_user_id'])));
 
-function im_dt(mixed $value, string $format = 'd M Y'): string {
+function im_dt(mixed $value, string $format = 'd-m-Y'): string {
     return ($value && strtotime((string)$value)) ? date($format, strtotime((string)$value)) : '-';
 }
 function im_status_badge(string $value): string {
@@ -105,8 +105,14 @@ include __DIR__ . '/includes/header.php';
     <select class="form-select compact-select" name="internship_status"><option value="">Any Internship Status</option><?php foreach(['upcoming'=>'Upcoming','active'=>'Active','ending_soon'=>'Ending Soon','completed'=>'Completed','extended'=>'Extended','terminated'=>'Terminated'] as $v=>$l): ?><option value="<?=$v?>" <?=($_GET['internship_status'] ?? '')===$v?'selected':''?>><?=$l?></option><?php endforeach; ?></select>
     <select class="form-select compact-select" name="evaluation_status"><option value="">Any Review Status</option><?php foreach(['not_started'=>'Not Started','in_review'=>'In Review','passed'=>'Passed','needs_improvement'=>'Needs Improvement','failed'=>'Failed'] as $v=>$l): ?><option value="<?=$v?>" <?=($_GET['evaluation_status'] ?? '')===$v?'selected':''?>><?=$l?></option><?php endforeach; ?></select>
     <select class="form-select compact-select" name="university"><option value="">Any University</option><?php foreach($intern_universities as $university): ?><option value="<?=esc($university)?>" <?=($_GET['university'] ?? '')===$university?'selected':''?>><?=esc($university)?></option><?php endforeach; ?></select>
-    <input class="form-input" type="date" name="start_from" value="<?=esc($_GET['start_from'] ?? '')?>" aria-label="Start from">
-    <input class="form-input" type="date" name="end_to" value="<?=esc($_GET['end_to'] ?? '')?>" aria-label="End by">
+    <?=tracs_date_range_picker([
+        'id' => 'internMonitoringRange',
+        'start' => $_GET['start_from'] ?? '',
+        'end' => $_GET['end_to'] ?? '',
+        'start_name' => 'start_from',
+        'end_name' => 'end_to',
+        'label' => 'Internship date range',
+    ])?>
     <select class="form-select compact-select" name="intern_monitor"><option value="">Any Signal</option><option value="ending_soon" <?=($_GET['intern_monitor'] ?? '')==='ending_soon'?'selected':''?>>Ending Soon</option><option value="without_mentor" <?=($_GET['intern_monitor'] ?? '')==='without_mentor'?'selected':''?>>Without Mentor</option><option value="pending_evaluation" <?=($_GET['intern_monitor'] ?? '')==='pending_evaluation'?'selected':''?>>Need Review</option></select>
     <button class="btn btn-primary" type="submit"><i data-lucide="filter" class="icon-sm"></i>Apply</button>
   </form>

@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/_bootstrap.php';
+require_once __DIR__ . '/../../core/shift_config.php';
 
 function tv_table_exists(mysqli $conn, string $table): bool {
     static $cache = [];
@@ -107,10 +108,7 @@ function tv_due(?string $date): string {
 }
 
 function tv_current_shift(): string {
-    $h = (int)date('G');
-    if ($h >= 7 && $h < 15) return 'Shift 1';
-    if ($h >= 15 && $h < 23) return 'Shift 2';
-    return 'Shift 3';
+    return tracs_detect_shift();
 }
 
 try {

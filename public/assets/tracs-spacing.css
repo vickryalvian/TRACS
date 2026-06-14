@@ -1,0 +1,704 @@
+/*! TRACS shared spacing and layout consistency layer. */
+
+:root {
+  --layout-inline-gutter: var(--page-padding-inline);
+  --layout-block-gutter: var(--page-padding-block);
+}
+
+.main-inner {
+  padding: var(--layout-block-gutter) var(--layout-inline-gutter);
+  gap: var(--page-section-gap);
+}
+
+.topbar {
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+}
+
+.page-sub {
+  margin-top: var(--space-1);
+}
+
+.dashboard-content,
+.dash-grid,
+.col-left,
+.dashboard-workspace,
+.col-productivity,
+.col-center,
+.col-right {
+  gap: var(--card-gap);
+}
+
+.stat-strip,
+.dashboard-stat-strip,
+.stat-group-grid,
+.case-stat-strip,
+.shift-handover-grid,
+.tm-summary-grid,
+.tm-split-layout,
+.tm-performance-grid,
+.tm-intern-grid,
+.tm-breakdown-grid,
+.um-overview-grid,
+.infra-summary-grid,
+.infra-layout {
+  gap: var(--card-gap);
+}
+
+.panel-head,
+.card-head,
+.section-head {
+  min-height: 44px;
+  gap: var(--space-3);
+  padding: var(--card-header-padding-y) var(--card-header-padding-x);
+}
+
+.panel-title,
+.card-title,
+.section-title {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-2);
+  line-height: 1.25;
+}
+
+.panel-right,
+.card-actions,
+.section-actions {
+  gap: var(--space-2);
+}
+
+.panel-body,
+.card-body {
+  padding: var(--card-body-padding);
+}
+
+.login-form {
+  padding: 0;
+}
+
+.modal-wide {
+  width: 580px;
+}
+
+.modal-domain {
+  width: 520px;
+}
+
+.form-section:last-child {
+  margin-bottom: 0;
+}
+
+.ticker-entry-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 105px auto;
+  align-items: end;
+  gap: var(--toolbar-gap);
+}
+
+.ticker-entry-list {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--bd1);
+  border-radius: var(--r2);
+}
+
+.checklist-progress-body {
+  padding-bottom: var(--space-3);
+}
+
+.dashboard-shift-scroll {
+  max-height: 260px;
+  padding-block: var(--space-2);
+}
+
+.panel-body > :first-child,
+.card-body > :first-child,
+.modal-body > :first-child {
+  margin-top: 0;
+}
+
+.panel-body > :last-child,
+.card-body > :last-child,
+.modal-body > :last-child {
+  margin-bottom: 0;
+}
+
+.filter-search-row,
+.filter-search-row .filter-bar,
+.filter-search-row .filter-group-wrap,
+.case-toolbar,
+.case-toolbar-actions,
+.month-select-wrap,
+.search-form-flex,
+.feedback-toolbar-row,
+.um-filter-actions,
+.infra-topbar__actions {
+  gap: var(--toolbar-gap);
+}
+
+.shift-toolbar-panel,
+.tm-filter,
+.um-user-filter,
+.tracs-domain-price-crosscheck .dpc-toolbar {
+  padding: var(--toolbar-padding);
+}
+
+.filter-search-row .search-input,
+.filter-search-row .form-input,
+.filter-search-row .form-select,
+.filter-search-row .compact-select,
+.filter-search-row .btn,
+.filter-search-row .filter-tab,
+.tracs-date-range-trigger {
+  min-height: var(--control-height);
+  height: var(--control-height);
+}
+
+.form-group {
+  gap: var(--space-1);
+}
+
+.form-row,
+.tm-form,
+.infra-server-form {
+  gap: var(--form-row-gap);
+}
+
+.form-section {
+  margin-bottom: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+}
+
+.form-section-title {
+  margin-bottom: var(--space-2);
+}
+
+.form-check,
+.tm-check,
+.shift-check-label {
+  gap: var(--space-2);
+}
+
+.badge,
+.pill,
+.bt-type,
+.bt-status,
+.dt-status,
+.shift-status,
+.mom-badge,
+.mom-status,
+.cf-chip,
+.infra-badge {
+  min-height: 20px;
+  gap: var(--space-1);
+  padding-inline: var(--space-2);
+  vertical-align: middle;
+}
+
+.user-cell,
+.um-user-cell,
+.shift-agent-cell,
+.tracs-creator-meta {
+  gap: var(--space-2);
+}
+
+.avatar {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+}
+
+.empty,
+.bt-empty,
+.dt-empty,
+.um-empty-state,
+.shift-empty-state,
+.notif-drop-empty {
+  padding: var(--empty-state-padding-y) var(--empty-state-padding-x);
+}
+
+.empty,
+.um-empty-state,
+.shift-empty-state {
+  gap: var(--space-2);
+}
+
+.empty-ic {
+  margin-bottom: var(--space-1);
+}
+
+.table-wrap,
+.tracs-table-wrap,
+.bt-table-wrap,
+.dt-table-wrap,
+.tracs-domain-price-crosscheck .table-container,
+.shift-workspace-pane .table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+:is(.tracs-table, .bt-table, .dt-table, .data-table) {
+  width: 100%;
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+
+:is(.tracs-table, .bt-table, .dt-table, .data-table) th {
+  height: 40px;
+  padding: var(--table-head-padding-y) var(--table-cell-padding-x);
+  text-align: left;
+  vertical-align: middle;
+  line-height: 1.25;
+}
+
+:is(.tracs-table, .bt-table, .dt-table, .data-table) td {
+  height: var(--table-row-height);
+  padding: var(--table-cell-padding-y) var(--table-cell-padding-x);
+  vertical-align: middle;
+  line-height: 1.4;
+}
+
+:is(.tracs-table, .bt-table, .dt-table, .data-table) th:first-child,
+:is(.tracs-table, .bt-table, .dt-table, .data-table) td:first-child {
+  padding-left: var(--card-body-padding);
+}
+
+:is(.tracs-table, .bt-table, .dt-table, .data-table) th:last-child,
+:is(.tracs-table, .bt-table, .dt-table, .data-table) td:last-child {
+  padding-right: var(--card-body-padding);
+}
+
+.tracs-table td:last-child,
+.bt-table td:last-child,
+.dt-table td:last-child {
+  padding-right: var(--card-body-padding);
+}
+
+:is(.tracs-table:not(.mom-table), .bt-table, .dt-table) td:last-child:has(.row-action-menu) {
+  padding-right: calc(var(--card-body-padding) + 36px);
+}
+
+.tracs-table td.shift-actions-cell {
+  padding-right: 92px;
+}
+
+.shifting-page .data-table th,
+.shifting-page .data-table td {
+  height: var(--table-row-height);
+  padding: var(--table-cell-padding-y) var(--table-cell-padding-x);
+  vertical-align: middle;
+}
+
+.shifting-page .data-table th:last-child,
+.shifting-page .data-table td:last-child {
+  text-align: right;
+}
+
+.tracs-domain-price-crosscheck :is(
+  .dpc-matrix-table,
+  .dpc-notes-table,
+  .dpc-meta-table,
+  .dpc-adjustment-table
+) {
+  border-spacing: 0;
+}
+
+.tracs-domain-price-crosscheck :is(
+  .dpc-matrix-table,
+  .dpc-notes-table,
+  .dpc-meta-table,
+  .dpc-adjustment-table
+) th {
+  height: 40px;
+  padding: var(--table-head-padding-y) var(--table-cell-padding-x);
+  text-align: left;
+  vertical-align: middle;
+  line-height: 1.25;
+}
+
+.tracs-domain-price-crosscheck :is(
+  .dpc-matrix-table,
+  .dpc-notes-table,
+  .dpc-meta-table,
+  .dpc-adjustment-table
+) td {
+  height: var(--table-row-height);
+  padding: var(--table-cell-padding-y) var(--table-cell-padding-x);
+  vertical-align: middle;
+  line-height: 1.4;
+}
+
+.modal-overlay,
+.dpc-modal,
+.infra-modal {
+  padding: var(--modal-padding);
+}
+
+.modal {
+  max-height: calc(100dvh - var(--modal-padding) - var(--modal-padding));
+}
+
+.modal-head,
+.dpc-modal-header,
+.infra-modal__head {
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+}
+
+.modal-body,
+.dpc-modal-form,
+.dpc-extension-modal-content .dpc-extension-modal-body,
+.infra-modal__body {
+  gap: var(--modal-section-gap);
+  padding: var(--space-4);
+}
+
+.modal-foot,
+.dpc-modal-footer,
+.dpc-extension-modal-content > .dpc-extension-modal-footer,
+.infra-server-form__actions {
+  gap: var(--space-2);
+  margin-top: 0;
+  padding: var(--space-3) var(--space-4);
+}
+
+.dpc-modal-content,
+.infra-modal__panel {
+  max-height: calc(100dvh - var(--modal-padding) - var(--modal-padding));
+}
+
+.dpc-modal-grid,
+.dpc-period-preview,
+.infra-server-form__grid,
+.infra-method-grid {
+  gap: var(--space-3);
+}
+
+.dpc-modal-form .form-group {
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
+}
+
+.infra-modal__tabs {
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+}
+
+.infra-server-form__actions {
+  bottom: calc(0px - var(--space-4));
+  margin: var(--space-1) calc(0px - var(--space-4)) calc(0px - var(--space-4));
+}
+
+.um-drawer-head {
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.um-drawer-body {
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.um-drawer-foot {
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+}
+
+.toast-dock,
+.toast-dock--inline {
+  gap: var(--space-2);
+}
+
+.toast {
+  gap: var(--space-3);
+  padding: var(--space-3);
+}
+
+/* Shift Assignment uses the same rhythm while preserving its horizontal grid. */
+.shifting-page {
+  --sh-xs: var(--space-1);
+  --sh-sm: var(--space-2);
+  --sh-md: var(--space-3);
+  --sh-lg: var(--space-4);
+  --sh-xl: var(--space-6);
+  --sh-ctrl-h: var(--control-height);
+  --shift-agent-column: 188px;
+  --shift-grid-width: 1104px;
+  --shift-row-height: 56px;
+  --shift-block-height: 38px;
+}
+
+.shifting-page .main-inner {
+  gap: var(--page-section-gap);
+  padding: var(--layout-block-gutter) var(--layout-inline-gutter);
+}
+
+.shift-toolbar-panel {
+  padding: var(--toolbar-padding);
+}
+
+.shift-toolbar,
+.shift-scope-controls,
+.shift-filter-actions {
+  gap: var(--toolbar-gap);
+}
+
+.shift-workspace-tabs {
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0 0 var(--space-1);
+}
+
+.shift-pane-toolbar,
+.shift-timeline-toolbar,
+.shift-audit-filters {
+  min-height: 44px;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+}
+
+.shift-quick-actions {
+  gap: var(--space-2);
+}
+
+.shift-timeline-scroll {
+  padding: var(--space-4);
+}
+
+.shift-timeline {
+  --shift-agent-column: 188px;
+}
+
+.shift-timeline-header,
+.shift-timeline-row {
+  grid-template-columns: var(--shift-agent-column) var(--shift-grid-width);
+}
+
+.shift-timeline-header {
+  height: 32px;
+}
+
+.shift-timeline-header .shift-agent-cell {
+  min-height: 32px;
+  padding: 0 var(--space-3);
+}
+
+.shift-hours span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.shift-timeline-row,
+.shift-agent-cell,
+.shift-track {
+  min-height: var(--shift-row-height);
+}
+
+.shift-agent-cell {
+  padding: var(--space-2) var(--space-3);
+}
+
+.shift-agent-cell > span:not(.shift-agent-avatar):not(.shift-agent-warning) {
+  min-width: 0;
+}
+
+.shift-agent-avatar {
+  width: 30px;
+  height: 30px;
+  flex-basis: 30px;
+}
+
+.shift-agent-cell strong {
+  max-width: 112px;
+  font-size: 11px;
+}
+
+.shift-agent-warning {
+  padding: 2px var(--space-2);
+}
+
+.shift-block {
+  top: calc((var(--shift-row-height) - var(--shift-block-height)) / 2);
+  height: var(--shift-block-height);
+}
+
+.shift-block-copy {
+  padding: var(--space-2);
+}
+
+.shift-timeline-day {
+  margin-bottom: var(--card-gap);
+}
+
+.shift-schedule-insights {
+  margin: 0;
+  padding: var(--card-body-padding);
+}
+
+.shift-insights-head,
+.shift-insights-grid {
+  gap: var(--space-3);
+}
+
+.shift-insights-grid {
+  margin-top: var(--space-3);
+}
+
+.shift-insight-compact,
+.shift-recap-mini > div,
+.shift-config-card {
+  padding: var(--card-body-padding);
+}
+
+.shift-recap-mini,
+.shift-warning-list,
+.shift-config-filter,
+.shift-config-cards {
+  gap: var(--space-3);
+}
+
+.shift-recap-mini,
+.shift-warning-list,
+.shift-config-pane {
+  padding: var(--card-body-padding);
+}
+
+.shift-modal-overlay {
+  padding: var(--modal-padding);
+}
+
+/* MOM owns two internal scroll columns, so the outer page must not double-pad it. */
+.main-inner:has(> .mom-workspace) {
+  padding: 0;
+  gap: 0;
+}
+
+.mom-workspace {
+  gap: 0;
+}
+
+.mom-main,
+.mom-sidebar {
+  gap: var(--page-section-gap);
+  padding: var(--layout-block-gutter) var(--layout-inline-gutter);
+  scroll-padding-bottom: var(--layout-block-gutter);
+}
+
+.mom-header {
+  gap: var(--space-4);
+  padding: var(--card-body-padding);
+}
+
+.mom-section-row {
+  gap: var(--card-gap);
+}
+
+@media (max-width: 760px) {
+  :root {
+    --page-padding-inline: var(--space-3);
+    --page-padding-block: var(--space-3);
+    --page-section-gap: var(--space-4);
+    --card-gap: var(--space-3);
+    --card-header-padding-x: var(--space-3);
+    --card-body-padding: var(--space-3);
+    --panel-padding: var(--space-3);
+    --modal-padding: 10px;
+    --empty-state-padding-y: var(--space-5);
+  }
+
+  .topbar {
+    gap: var(--space-2);
+  }
+
+  .filter-search-row,
+  .case-toolbar,
+  .feedback-toolbar-row {
+    align-items: stretch;
+  }
+
+  .filter-search-row > *,
+  .search-form-wrap,
+  .search-form-flex {
+    min-width: 0;
+  }
+
+  .modal,
+  .dpc-modal-content,
+  .infra-modal__panel {
+    max-height: calc(100dvh - var(--modal-padding) - var(--modal-padding));
+  }
+
+  .modal-head,
+  .modal-body,
+  .modal-foot,
+  .dpc-modal-header,
+  .dpc-modal-form,
+  .dpc-modal-footer,
+  .infra-modal__head,
+  .infra-modal__body {
+    padding-inline: var(--space-3);
+  }
+
+  .infra-modal__tabs {
+    padding-inline: var(--space-3);
+  }
+
+  .shift-pane-toolbar,
+  .shift-timeline-toolbar,
+  .shift-audit-filters,
+  .shift-timeline-scroll {
+    padding: var(--space-3);
+  }
+
+}
+
+@media (max-width: 520px) {
+  .topbar-left {
+    flex: 1 1 100%;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .topbar-right,
+  .shifting-topbar .topbar-actions {
+    justify-content: flex-start;
+    margin-left: 0;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .page-title,
+  .page-sub {
+    overflow-wrap: anywhere;
+  }
+
+  .form-row,
+  .dpc-modal-grid,
+  .infra-server-form__grid,
+  .infra-method-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-foot,
+  .dpc-modal-footer,
+  .infra-server-form__actions,
+  .um-drawer-foot {
+    flex-wrap: wrap;
+  }
+
+  .modal-foot .btn,
+  .dpc-modal-footer .btn,
+  .infra-server-form__buttons .btn {
+    flex: 1 1 120px;
+  }
+
+  .ticker-entry-row {
+    grid-template-columns: 1fr;
+  }
+}

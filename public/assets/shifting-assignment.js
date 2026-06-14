@@ -24,6 +24,7 @@
       start: window.TRACS_SHIFTING_INITIAL?.range?.start || '',
       end: window.TRACS_SHIFTING_INITIAL?.range?.end || '',
     },
+    pendingRefresh: null,
     activeModal: null,
     modalBodyOverflow: '',
     suppressAssignmentClickUntil: 0,
@@ -61,6 +62,36 @@
     next.setDate(next.getDate() + days);
     return next;
   };
+  const rangeForView = (view, anchor) => {
+    const date = startOfDay(anchor || new Date());
+    if (view === 'daily') {
+      const key = dateKey(date);
+      return { start: key, end: key };
+    }
+    if (view === 'monthly') {
+      return {
+        start: dateKey(new Date(date.getFullYear(), date.getMonth(), 1)),
+        end: dateKey(new Date(date.getFullYear(), date.getMonth() + 1, 0)),
+      };
+    }
+    const monday = addDays(date, -((date.getDay() + 6) % 7));
+    return { start: dateKey(monday), end: dateKey(addDays(monday, 6)) };
+  };
+  const currentRangeAnchor = () => {
+    const startValue = $('#shiftFilterStart')?.value || state.data.range?.start || '';
+    const endValue = $('#shiftFilterEnd')?.value || state.data.range?.end || '';
+    const start = parseLocal(`${startValue} 00:00:00`);
+    const end = parseLocal(`${endValue} 00:00:00`);
+    if (!start || !end) return new Date();
+    const today = startOfDay(new Date());
+    if (today >= start && today <= end) return today;
+    return new Date(start.getTime() + Math.floor((end.getTime() - start.getTime()) / 2));
+  };
+  const setViewRange = (view, anchor) => {
+    const range = rangeForView(view, anchor);
+    setDateRange(range.start, range.end, 'custom');
+    return range;
+  };
   const startOfDay = date => new Date(date.getFullYear(), date.getMonth(), date.getDate());
   const minutes = value => {
     const total = Math.max(0, Number(value) || 0);
@@ -94,6 +125,16 @@
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}`;
   };
   const time = value => String(value || '').slice(11, 16);
+  const clock = value => String(value || '').slice(0, 5);
+  const isMainShiftThree = row =>
+    String(row?.shift_name || '').trim().toLowerCase() === 'shift 3'
+    && clock(row?.start_time || row?.start_datetime?.slice(11)) === '16:00'
+    && clock(row?.end_time || row?.end_datetime?.slice(11)) === '00:00';
+  const displayShiftEnd = row => isMainShiftThree(row)
+    ? '24:00'
+    : clock(row?.end_time || row?.end_datetime?.slice(11));
+  const displayShiftRange = row =>
+    `${clock(row?.start_time || row?.start_datetime?.slice(11))}-${displayShiftEnd(row)}`;
   const notify = (message, type = 'info') => {
     if (typeof window.showToast !== 'function') return;
     const activeModal = state.activeModal && !state.activeModal.classList.contains('hidden') ? state.activeModal : null;
@@ -110,8 +151,27 @@
   };
   const setPickerValue = (input, value) => {
     if (!input) return;
-    if (input._flatpickr) input._flatpickr.setDate(value, false);
-    else input.value = value;
+    if (input._flatpickr) {
+      input._flatpickr.setDate(value, false);
+      input.value = value;
+      return;
+    }
+    input.value = value;
+  };
+  const shiftDateRangeRoot = $('#shiftDateRangePicker');
+  const shiftDateRangePicker = shiftDateRangeRoot && window.TRACSDateRangePicker
+    ? new window.TRACSDateRangePicker(shiftDateRangeRoot)
+    : null;
+  const setDateRange = (start, end, preset = 'custom', options = {}) => {
+    if (shiftDateRangePicker) {
+      shiftDateRangePicker.setRange(start, end, preset, {
+        apply: Boolean(options.apply),
+        silent: Boolean(options.silent),
+      });
+      return;
+    }
+    setPickerValue($('#shiftFilterStart'), start);
+    setPickerValue($('#shiftFilterEnd'), end);
   };
   const singletonModalDefinitions = {
     assignment: {
@@ -225,7 +285,16 @@
       alert.textContent = message;
       alert.hidden = false;
     }
-    firstField?.focus();
+    if (firstField && typeof window.handleModalError === 'function') {
+      window.handleModalError({
+        modal: form.closest('.modal-overlay'),
+        focus: firstField,
+        message: message || 'Review the highlighted fields before saving.',
+        duration: 7000,
+      });
+    } else {
+      window.tracsFocusInvalidField?.(firstField, { modal: form.closest('.modal-overlay') });
+    }
   }
 
   function validateAssignmentForm(form) {
@@ -288,7 +357,7 @@
       $('#shiftMonthlyTemplateForm select[name="shift_template_id"]'),
       (data.templates || []).filter(row => Number(row.is_active)),
       'id',
-      row => `${row.shift_name} · ${String(row.start_time).slice(0, 5)}-${String(row.end_time).slice(0, 5)}`,
+      row => `${row.shift_name} · ${displayShiftRange(row)}`,
       'Select shift pattern',
     );
     fillSelect(
@@ -304,7 +373,7 @@
     $$('select[name="assignment_type"], select[name="default_assignment_type"]', root).forEach(select => {
       fillSelect(select, data.assignment_types || [], 'type_slug', 'type_name');
     });
-    fillSelect($('#shiftAssignmentForm select[name="shift_template_id"]'), (data.templates || []).filter(row => Number(row.is_active)), 'id', row => `${row.shift_name} · ${String(row.start_time).slice(0, 5)}-${String(row.end_time).slice(0, 5)}`, 'Custom shift');
+    fillSelect($('#shiftAssignmentForm select[name="shift_template_id"]'), (data.templates || []).filter(row => Number(row.is_active)), 'id', row => `${row.shift_name} · ${displayShiftRange(row)}`, 'Custom shift');
     $$('select[name="division_id"]', $('#shiftCoverageForm') || document).forEach(select => {
       fillSelect(select, data.divisions || [], 'id', 'name', 'All divisions');
     });
@@ -373,11 +442,47 @@
   function assignmentsForDay(day) {
     const dayStart = startOfDay(day);
     const dayEnd = addDays(dayStart, 1);
-    return (state.data.assignments || []).filter(row => {
+    return filteredAssignments().filter(row => {
       const start = parseLocal(row.start_datetime);
       const end = parseLocal(row.end_datetime);
       return start && end && start < dayEnd && end > dayStart;
     });
+  }
+
+  function groupAssignmentsByShift(rows) {
+    const groups = new Map();
+    rows.forEach(row => {
+      const key = [
+        Number(row.shift_template_id || 0),
+        row.shift_name || '',
+        time(row.start_datetime),
+        displayShiftEnd(row),
+      ].join('|');
+      const group = groups.get(key) || {
+        id: row.id,
+        shift_name: row.shift_name,
+        start_time: time(row.start_datetime),
+        end_time: displayShiftEnd(row),
+        color_label: row.color_label,
+        agents: [],
+      };
+      if (!group.agents.includes(row.agent_name)) group.agents.push(row.agent_name);
+      groups.set(key, group);
+    });
+    return [...groups.values()].sort((left, right) =>
+      [left.start_time, left.shift_name].join('|').localeCompare([right.start_time, right.shift_name].join('|'))
+    );
+  }
+
+  function riskFilteredUserIds() {
+    if (!state.recapFilters.size) return null;
+    return new Set((state.data.recap || []).filter(recapVisible).map(row => Number(row.user_id)));
+  }
+
+  function filteredAssignments() {
+    const userIds = riskFilteredUserIds();
+    if (!userIds) return state.data.assignments || [];
+    return (state.data.assignments || []).filter(row => userIds.has(Number(row.user_id)));
   }
 
   function agentWarning(userId) {
@@ -410,14 +515,14 @@
     const continuationClass = firstSegment ? '' : 'is-continuation';
     const continuesClass = lastSegment ? '' : 'continues-next-day';
     const crossDayCopy = row.is_cross_day && firstSegment
-      ? `${time(row.start_datetime)}-${time(row.end_datetime)} · next day`
-      : `${time(row.start_datetime)}-${time(row.end_datetime)} · ${minutes(row.calculated_duration_minutes)}`;
+      ? `${time(row.start_datetime)}-${displayShiftEnd(row)} · next day`
+      : `${time(row.start_datetime)}-${displayShiftEnd(row)} · ${minutes(row.calculated_duration_minutes)}`;
     return `
       <div class="shift-block ${canResize ? 'is-draggable' : ''} ${row.status === 'cancelled' ? 'is-cancelled' : ''} ${continuationClass} ${continuesClass}"
         data-assignment-id="${row.id}" data-day="${dateKey(day)}"
         style="left:${left}%;width:${Math.max(width, .45)}%;--shift-color:${esc(row.color_label || '#4f46e5')}"
-        role="button" tabindex="0" aria-label="${esc(`${row.agent_name}, ${row.shift_name}, ${time(row.start_datetime)} to ${time(row.end_datetime)}`)}"
-        title="${esc(`${row.shift_name} · ${time(row.start_datetime)}-${time(row.end_datetime)} · ${minutes(row.calculated_duration_minutes)}`)}">
+        role="button" tabindex="0" aria-label="${esc(`${row.agent_name}, ${row.shift_name}, ${time(row.start_datetime)} to ${displayShiftEnd(row)}`)}"
+        title="${esc(`${row.shift_name} · ${time(row.start_datetime)}-${displayShiftEnd(row)} · ${minutes(row.calculated_duration_minutes)}`)}">
         ${handles}
         ${firstSegment ? '' : '<span class="shift-continuation-mark" aria-hidden="true">↪</span>'}
         <span class="shift-block-copy"><strong>${esc(row.shift_name)}</strong><small>${esc(crossDayCopy)}</small></span>
@@ -469,7 +574,8 @@
     const today = dateKey(new Date());
     return `<div class="shift-month-grid">${days.map(day => {
       const key = dateKey(day);
-      const rows = assignmentsForDay(day);
+      const rows = filteredAssignments().filter(row => row.assignment_date === key);
+      const shifts = groupAssignmentsByShift(rows);
       const holiday = (state.data.holidays || []).find(item => item.holiday_date === key);
       const classes = [
         day.getMonth() !== first.getMonth() ? 'is-outside' : '',
@@ -477,9 +583,12 @@
         holiday ? 'is-holiday' : '',
       ].filter(Boolean).join(' ');
       return `<article class="shift-month-day ${classes}">
-        <div class="shift-month-date">${day.getDate()}<span>${holiday ? esc(holiday.holiday_name) : rows.length ? `${rows.length} shift(s)` : ''}</span></div>
-        ${rows.slice(0, 6).map(row => `<button type="button" class="shift-month-item" data-edit-assignment="${row.id}" style="--shift-color:${esc(row.color_label)}">${esc(time(row.start_datetime))} ${esc(row.agent_name)} · ${esc(row.shift_name)}</button>`).join('')}
-        ${rows.length > 6 ? `<small>+${rows.length - 6} more</small>` : ''}
+        <div class="shift-month-date">${day.getDate()}<span>${holiday ? esc(holiday.holiday_name) : shifts.length ? `${shifts.length} shift(s)` : ''}</span></div>
+        ${shifts.map(shift => {
+          const agents = shift.agents.join(', ');
+          const label = `${shift.shift_name} · ${agents}`;
+          return `<button type="button" class="shift-month-item" data-edit-assignment="${shift.id}" style="--shift-color:${esc(shift.color_label)}" title="${esc(`${shift.start_time}-${shift.end_time} · ${agents}`)}">${esc(label)}</button>`;
+        }).join('')}
       </article>`;
     }).join('')}</div>`;
   }
@@ -538,7 +647,38 @@
       user_id: row.user_id,
       suggestion: `Reduce or reassign part of ${row.agent_name}'s weekly schedule.`,
     }));
+    (state.data.recap || []).filter(row => row.status === 'Over Target').forEach(row => rows.push({
+      severity: 'info', label: 'Over Target', type: 'over-target', icon: 'trending-up',
+      message: `${row.agent_name} is ${minutes(row.difference_minutes)} above target.`,
+      date: state.data.range.end,
+      user_id: row.user_id,
+      suggestion: `Review ${row.agent_name}'s assignments before the workload reaches overtime risk.`,
+    }));
+    (state.data.recap || []).filter(row => row.status === 'No Schedule').forEach(row => rows.push({
+      severity: 'warning', label: 'Agent Without Schedule', type: 'agent-without-schedule', icon: 'calendar-x',
+      message: `${row.agent_name} has no counted assignment in this range.`,
+      date: state.data.range.start,
+      user_id: row.user_id,
+      suggestion: `Open Workload Recap and add an assignment if ${row.agent_name} should be scheduled.`,
+    }));
+    (state.data.assignments || []).filter(row => row.approval_status === 'pending').forEach(row => rows.push({
+      severity: 'warning', label: 'Approval Pending', type: 'approval-pending', icon: 'badge-alert',
+      message: `${row.agent_name}'s ${row.assignment_type_name} assignment is awaiting approval.`,
+      date: row.assignment_date,
+      user_id: row.user_id,
+      assignment_id: row.id,
+      suggestion: 'Review and confirm the assignment from Assignment Audit.',
+    }));
+    (state.data.assignments || []).filter(row => row.is_cross_day).forEach(row => rows.push({
+      severity: 'info', label: 'Cross-day Shift Risk', type: 'cross-day-shift-risk', icon: 'moon-star',
+      message: `${row.agent_name}'s shift on ${shortDate(row.assignment_date)} ends the next day.`,
+      date: row.assignment_date,
+      user_id: row.user_id,
+      assignment_id: row.id,
+      suggestion: 'Review the next assignment and minimum rest gap in Assignment Audit.',
+    }));
     const dismissed = new Set(state.data.dismissed_warning_keys || []);
+    const userIds = riskFilteredUserIds();
     return rows.map((row, index) => {
       const firstAssignmentId = Number(row.assignment_id || row.next_assignment_id || row.assignment_ids?.[0] || 0);
       const relatedAssignment = firstAssignmentId
@@ -564,7 +704,10 @@
         assignment_id: firstAssignmentId,
         target,
       };
-    }).filter(row => !dismissed.has(row.warning_key));
+    }).filter(row =>
+      !dismissed.has(row.warning_key)
+      && (!userIds || (Number(row.user_id || 0) > 0 && userIds.has(Number(row.user_id))))
+    );
   }
 
   function renderWarnings() {
@@ -658,7 +801,7 @@
   }
 
   function renderRecapMini() {
-    const recap = state.data.recap || [];
+    const recap = (state.data.recap || []).filter(recapVisible);
     const assigned = recap.filter(row => Number(row.total_minutes) > 0);
     const average = assigned.length ? Math.round(assigned.reduce((sum, row) => sum + Number(row.total_minutes || 0), 0) / assigned.length) : 0;
     const metrics = [
@@ -682,7 +825,7 @@
   }
 
   function renderAssignments() {
-    const rows = state.data.assignments || [];
+    const rows = filteredAssignments();
     $('#shiftAssignmentMeta').textContent = `${rows.length} assignment(s)`;
     $('#shiftAssignmentBody').innerHTML = rows.length ? rows.map(row => {
       const warnings = assignmentWarnings(row);
@@ -696,7 +839,7 @@
         <td class="shift-assignment-agent"><strong>${esc(row.agent_name)}</strong><small>#${row.user_id}</small></td>
         <td>${esc(row.division_name)}</td>
         <td><span class="shift-config-color" style="--shift-color:${esc(row.color_label)}"></span> ${esc(row.shift_name)}</td>
-        <td>${esc(time(row.start_datetime))}-${esc(time(row.end_datetime))}</td><td>${minutes(row.calculated_duration_minutes)}</td>
+        <td>${esc(time(row.start_datetime))}-${esc(displayShiftEnd(row))}</td><td>${minutes(row.calculated_duration_minutes)}</td>
         <td>${esc(row.assignment_type_name)}</td><td><span class="shift-status ${slug(row.status)}">${esc(row.status.replace('_', ' '))}</span></td>
         <td><span class="shift-status ${slug(row.approval_status)}">${esc(row.approval_status.replace('_', ' '))}</span></td>
         <td>${warnings.length ? warnings.map(item => `<span class="shift-status ${slug(item)}">${esc(item)}</span>`).join(' ') : '—'}</td>
@@ -711,9 +854,15 @@
     const node = $('#shiftTodayCoverage');
     if (!node) return;
     const coverage = state.data.summary?.today_coverage || {};
-    const scheduled = Number(coverage.scheduled_agents || 0);
+    const today = dateKey(new Date());
+    const userIds = riskFilteredUserIds();
+    const scheduled = userIds
+      ? new Set(filteredAssignments()
+        .filter(row => row.assignment_date === today && !['cancelled', 'no_show', 'replaced'].includes(row.status))
+        .map(row => Number(row.user_id))).size
+      : Number(coverage.scheduled_agents || 0);
     const required = Number(coverage.minimum_agents || 0);
-    const missing = Number(coverage.missing_agents || 0);
+    const missing = Math.max(0, required - scheduled);
     node.innerHTML = `
       <div class="shift-today-coverage">
         <strong>${scheduled} / ${required}</strong>
@@ -722,8 +871,34 @@
       </div>`;
   }
 
-  function renderInsights() {
+  function activeSummary() {
     const summary = state.data.summary || {};
+    if (!state.recapFilters.size) return summary;
+    const recap = (state.data.recap || []).filter(recapVisible);
+    const userIds = riskFilteredUserIds() || new Set();
+    const assignmentIds = new Set(filteredAssignments().map(row => Number(row.id)));
+    const jumps = (state.data.warnings?.jumpshift || []).filter(row =>
+      userIds.has(Number(row.user_id || 0))
+    );
+    const conflicts = (state.data.warnings?.conflicts || []).filter(row =>
+      (row.assignment_ids || []).some(id => assignmentIds.has(Number(id)))
+    );
+    return {
+      ...summary,
+      under_target: recap.filter(row => row.status === 'Under Target').length,
+      over_target: recap.filter(row => ['Over Target', 'Overtime Risk', 'Critical Overload'].includes(row.status)).length,
+      overtime_risk: recap.filter(row => ['Overtime Risk', 'Critical Overload'].includes(row.status)).length,
+      jumpshift_risk: new Set(jumps.map(row => Number(row.user_id || 0))).size,
+      conflicts: conflicts.length,
+      coverage_gaps: 0,
+      overtime_minutes: recap.reduce((sum, row) => sum + Number(row.overtime_minutes || 0), 0),
+      holiday_minutes: recap.reduce((sum, row) => sum + Number(row.holiday_minutes || 0), 0),
+      scheduled_minutes: recap.reduce((sum, row) => sum + Number(row.total_minutes || 0), 0),
+    };
+  }
+
+  function renderInsights() {
+    const summary = activeSummary();
     const score = Math.max(0, 100
       - Math.min(35, Number(summary.coverage_gaps || 0) * 2)
       - Math.min(24, Number(summary.conflicts || 0) * 12)
@@ -747,11 +922,11 @@
       if (!holiday) {
         holidayNode.innerHTML = '<div class="shift-insight-empty">No upcoming holiday found.</div>';
       } else {
-        const coverage = (state.data.assignments || []).filter(row =>
+        const coverage = filteredAssignments().filter(row =>
           row.assignment_date === holiday.holiday_date
           && ['holiday_coverage', 'lembur', 'standby', 'replacement_shift'].includes(row.assignment_type)
           && !['cancelled', 'no_show', 'replaced'].includes(row.status));
-        const agents = Array.isArray(holiday.assigned_agents) ? holiday.assigned_agents : [...new Set(coverage.map(row => row.agent_name))];
+        const agents = [...new Set(coverage.map(row => row.agent_name))];
         const warningMissing = (state.data.warnings?.coverage || [])
           .filter(row => (row.date || row.assignment_date) === holiday.holiday_date)
           .reduce((sum, row) => sum + Number(row.missing_agents || 0), 0);
@@ -820,6 +995,9 @@
             <span><strong>${row.agent_count}</strong> agents</span>
             <span><strong>${row.assignment_count}</strong> assignments</span>
             <span><strong>${row.applied_count}</strong> applied</span>
+            ${row.settings?.schedule_mode === 'weekly_matrix'
+              ? `<span><strong>${esc(row.settings.calendar_week_count || row.settings.week_labels?.length || 4)}</strong> calendar weeks</span>`
+              : ''}
           </div>
           <div class="shift-monthly-template-meta">
             <span>Created by ${esc(row.created_by_name)}</span>
@@ -829,7 +1007,7 @@
             <button class="btn btn-ghost btn-sm" type="button" data-preview-monthly="${row.id}">Preview</button>
             ${['draft', 'previewed'].includes(row.status) ? `<button class="btn btn-primary btn-sm" type="button" data-apply-monthly="${row.id}">Review & Apply</button>` : ''}
             <button class="btn btn-ghost btn-sm" type="button" data-duplicate-monthly="${row.id}">Duplicate</button>
-            ${['draft', 'previewed'].includes(row.status) ? `<button class="btn btn-ghost btn-sm" type="button" data-edit-monthly="${row.id}">Edit</button>` : ''}
+            ${['draft', 'previewed'].includes(row.status) && row.settings?.schedule_mode !== 'weekly_matrix' ? `<button class="btn btn-ghost btn-sm" type="button" data-edit-monthly="${row.id}">Edit</button>` : ''}
             ${row.status !== 'archived' ? `<button class="btn btn-ghost btn-sm" type="button" data-archive-monthly="${row.id}">Archive</button>` : ''}
           </div>
         </article>`).join('') : '<div class="shift-empty-state is-compact">No monthly templates match this filter.</div>';
@@ -849,7 +1027,7 @@
       <article class="shift-config-card">
         <div class="shift-config-card-head"><span class="shift-config-color" style="--shift-color:${esc(row.color_label)}"></span><strong>${esc(row.shift_name)}</strong><span class="shift-status ${Number(row.is_active) ? 'normal' : 'no-schedule'}">${Number(row.is_active) ? 'Active' : 'Inactive'}</span></div>
         <p>${esc(row.notes || 'Flexible reusable template')}</p>
-        <div class="shift-config-card-meta"><span>${esc(String(row.start_time).slice(0, 5))}-${esc(String(row.end_time).slice(0, 5))}</span><span>${minutes(row.duration_minutes)}</span><span>${esc(row.default_assignment_type.replaceAll('_', ' '))}</span></div>
+        <div class="shift-config-card-meta"><span>${esc(displayShiftRange(row))}</span><span>${minutes(row.duration_minutes)}</span><span>${esc(row.default_assignment_type.replaceAll('_', ' '))}</span></div>
         <div class="shift-config-card-actions"><button class="btn btn-ghost btn-sm" type="button" data-edit-template="${row.id}">Edit</button>${Number(row.is_active) ? `<button class="btn btn-ghost btn-sm" type="button" data-deactivate="template:${row.id}">Deactivate</button>` : ''}</div>
       </article>`).join('') || '<div class="shift-empty-state is-compact">No templates match this filter.</div>';
 
@@ -945,15 +1123,20 @@
   }
 
   function syncRangePickers() {
-    [
-      [$('#shiftFilterStart'), state.data.range?.start || ''],
-      [$('#shiftFilterEnd'), state.data.range?.end || ''],
-    ].forEach(([input, value]) => {
-      if (!input) return;
-      if (input._flatpickr) input._flatpickr.destroy();
-      input.type = 'date';
-      input.classList.add('form-input');
-      input.value = value;
+    const start = state.data.range?.start || '';
+    const end = state.data.range?.end || '';
+    if (start && end) {
+      setDateRange(start, end, shiftDateRangePicker?.selectedPreset || 'custom', { silent: true });
+    }
+
+    $$('.form-input[type="date"], .form-input[type="time"]', root).forEach(input => {
+      const picker = input._flatpickr;
+      if (!picker) return;
+      picker.set('clickOpens', true);
+      picker.set('minDate', null);
+      picker.calendarContainer?.classList.add('shift-flatpickr-calendar');
+      const trigger = picker.altInput || input;
+      trigger.setAttribute('aria-label', input.getAttribute('aria-label') || input.name?.replaceAll('_', ' ') || 'Choose date or time');
     });
   }
 
@@ -976,6 +1159,7 @@
 
   function filterPayload() {
     return {
+      view_mode: state.view,
       start: $('#shiftFilterStart').value,
       end: $('#shiftFilterEnd').value,
       division_id: $('#shiftFilterDivision').value,
@@ -987,10 +1171,10 @@
     };
   }
 
-  async function refresh(message = '') {
-    if (state.loading) return;
-    const start = $('#shiftFilterStart')?.value || '';
-    const end = $('#shiftFilterEnd')?.value || '';
+  async function refresh(message = '', requestedPayload = null) {
+    const payload = requestedPayload || filterPayload();
+    const start = payload.start || '';
+    const end = payload.end || '';
     if (!start || !end) {
       notify('Select both a From and To date.', 'error');
       return;
@@ -1000,10 +1184,14 @@
       $('#shiftFilterEnd')?.focus();
       return;
     }
+    if (state.loading) {
+      state.pendingRefresh = { message, payload };
+      return;
+    }
     state.loading = true;
     root.classList.add('is-loading');
     try {
-      const json = await api('data', filterPayload(), 'GET');
+      const json = await api('data', payload, 'GET');
       state.data = json.data;
       renderAll();
       if (message) notify(message, 'success');
@@ -1012,6 +1200,9 @@
     } finally {
       state.loading = false;
       root.classList.remove('is-loading');
+      const pending = state.pendingRefresh;
+      state.pendingRefresh = null;
+      if (pending) await refresh(pending.message, pending.payload);
     }
   }
 
@@ -1255,11 +1446,11 @@
         <div><span>Warnings</span><strong class="${preview.warning_count ? 'is-warning' : ''}">${preview.warning_count}</strong></div>
         <div><span>Conflicts</span><strong class="${preview.conflict_count ? 'is-critical' : ''}">${preview.conflict_count}</strong></div>
       </div>
-      ${conflicts.length ? `<section class="shift-monthly-review-block is-critical"><h4>Protected assignments detected</h4><p>Existing confirmed, active, completed, or otherwise overlapping assignments will not be overwritten.</p>${conflicts.slice(0, 20).map(row => `<div><strong>${esc(row.agent_name)}</strong><span>${esc(row.assignment_date)} ${esc(row.start_time)}-${esc(row.end_time)} · ${esc(row.message)}</span></div>`).join('')}</section>` : ''}
+      ${conflicts.length ? `<section class="shift-monthly-review-block is-critical"><h4>Protected assignments detected</h4><p>Existing confirmed, active, completed, or otherwise overlapping assignments will not be overwritten.</p>${conflicts.slice(0, 20).map(row => `<div><strong>${esc(row.agent_name)}</strong><span>${esc(row.assignment_date)} ${esc(displayShiftRange(row))} · ${esc(row.message)}</span></div>`).join('')}</section>` : ''}
       ${warnings.length ? `<section class="shift-monthly-review-block is-warning"><h4>Potential warnings</h4>${warnings.slice(0, 20).map(row => `<div><strong>${esc(String(row.type || 'warning').replaceAll('_', ' '))}</strong><span>${esc(row.date || '')} ${esc(row.message)}</span></div>`).join('')}</section>` : ''}
       <section class="shift-monthly-review-block"><h4>Generated schedule preview</h4>
         <div class="table-wrap"><table class="data-table shift-monthly-preview-table"><thead><tr><th>Date</th><th>Agent</th><th>Shift</th><th>Time</th><th>Type</th></tr></thead><tbody>
-          ${items.slice(0, 100).map(row => `<tr><td>${esc(shortDate(row.assignment_date))}</td><td>${esc(row.agent_name || `Agent #${row.agent_id}`)}</td><td>${esc(row.shift_name || '')}</td><td>${esc(String(row.start_time).slice(0, 5))}-${esc(String(row.end_time).slice(0, 5))}</td><td>${esc(String(row.assignment_type).replaceAll('_', ' '))}</td></tr>`).join('')}
+          ${items.slice(0, 100).map(row => `<tr><td>${esc(shortDate(row.assignment_date))}</td><td>${esc(row.agent_name || `Agent #${row.agent_id}`)}</td><td>${esc(row.shift_name || '')}</td><td>${esc(displayShiftRange(row))}</td><td>${esc(String(row.assignment_type).replaceAll('_', ' '))}</td></tr>`).join('')}
         </tbody></table></div>
         ${items.length > 100 ? `<p class="shift-monthly-preview-note">Showing the first 100 of ${items.length} generated assignments.</p>` : ''}
       </section>`;
@@ -1278,9 +1469,13 @@
     try {
       const json = await api('preview_monthly_template', input);
       renderMonthlyPreview(json.data, templateId || input.id || input.template_id || 0);
+      notify(json.message || 'Template preview generated.', 'success');
+      await refresh();
+      return json;
     } catch (error) {
       if (content) content.innerHTML = `<div class="shift-empty-state is-compact">${esc(error.message)}</div>`;
       notify(error.message, 'error');
+      return null;
     }
   }
 
@@ -1481,10 +1676,7 @@
       const userId = warningTarget.dataset.warningUser || '';
       const date = warningTarget.dataset.warningDate || '';
       if (userId && userId !== '0') $('#shiftFilterAgent').value = userId;
-      if (date) {
-        setPickerValue($('#shiftFilterStart'), date);
-        setPickerValue($('#shiftFilterEnd'), date);
-      }
+      if (date) setDateRange(date, date, 'custom');
       window.TRACSDropdowns?.syncAll?.();
       activateWorkspace(targetTab);
       await refresh();
@@ -1523,7 +1715,8 @@
       state.view = view.dataset.shiftView;
       savePreference('view', state.view);
       $$('[data-shift-view]').forEach(button => button.classList.toggle('active', button === view));
-      renderTimeline();
+      setViewRange(state.view, currentRangeAnchor());
+      await refresh();
       return;
     }
     const workload = event.target.closest('[data-workload-filter]');
@@ -1537,12 +1730,15 @@
     const range = event.target.closest('[data-shift-range]');
     if (range) {
       const amount = Number(range.dataset.shiftRange);
-      const days = state.view === 'daily' ? 1 : state.view === 'monthly' ? 28 : 7;
-      const start = parseLocal(`${$('#shiftFilterStart').value} 00:00:00`);
-      const end = parseLocal(`${$('#shiftFilterEnd').value} 00:00:00`);
-      setPickerValue($('#shiftFilterStart'), dateKey(addDays(start, amount * days)));
-      setPickerValue($('#shiftFilterEnd'), dateKey(addDays(end, amount * days)));
-      refresh();
+      if (shiftDateRangePicker) shiftDateRangePicker.shift(amount);
+      else {
+        const anchor = currentRangeAnchor();
+        const next = state.view === 'monthly'
+          ? new Date(anchor.getFullYear(), anchor.getMonth() + amount, 1)
+          : addDays(anchor, amount * (state.view === 'daily' ? 1 : 7));
+        setViewRange(state.view, next);
+      }
+      await refresh();
       return;
     }
     const edit = event.target.closest('[data-edit-assignment], .shift-block');
@@ -1624,8 +1820,11 @@
         });
         closeModal(button, { bypassUnsaved: true });
         const target = parseLocal(`${json.data.target_month} 00:00:00`);
-        setPickerValue($('#shiftFilterStart'), dateKey(new Date(target.getFullYear(), target.getMonth(), 1)));
-        setPickerValue($('#shiftFilterEnd'), dateKey(new Date(target.getFullYear(), target.getMonth() + 1, 0)));
+        setDateRange(
+          dateKey(new Date(target.getFullYear(), target.getMonth(), 1)),
+          dateKey(new Date(target.getFullYear(), target.getMonth() + 1, 0)),
+          'custom'
+        );
         state.view = 'monthly';
         savePreference('view', state.view);
         activateWorkspace('timeline');
@@ -1665,10 +1864,11 @@
     editAssignment(block.dataset.assignmentId);
   });
 
-  $('#shiftApplyFilters')?.addEventListener('click', () => refresh());
+  $('#shiftApplyFilters')?.addEventListener('click', () => {
+    refresh();
+  });
   $('#shiftResetFilters')?.addEventListener('click', () => {
-    setPickerValue($('#shiftFilterStart'), state.defaultRange.start);
-    setPickerValue($('#shiftFilterEnd'), state.defaultRange.end);
+    setDateRange(state.defaultRange.start, state.defaultRange.end, 'custom');
     ['shiftFilterAgent', 'shiftFilterDivision', 'shiftFilterType', 'shiftFilterStatus'].forEach(id => {
       const select = $(`#${id}`);
       if (select) select.value = '';
@@ -1685,28 +1885,18 @@
     updateRiskCount();
     refresh();
   });
-  $('#shiftTodayBtn')?.addEventListener('click', () => {
-    const today = new Date();
-    if (state.view === 'daily') {
-      setPickerValue($('#shiftFilterStart'), dateKey(today));
-      setPickerValue($('#shiftFilterEnd'), dateKey(today));
-    } else if (state.view === 'monthly') {
-      setPickerValue($('#shiftFilterStart'), dateKey(new Date(today.getFullYear(), today.getMonth(), 1)));
-      setPickerValue($('#shiftFilterEnd'), dateKey(new Date(today.getFullYear(), today.getMonth() + 1, 0)));
-    } else {
-      const mondayOffset = (today.getDay() + 6) % 7;
-      const monday = addDays(today, -mondayOffset);
-      setPickerValue($('#shiftFilterStart'), dateKey(monday));
-      setPickerValue($('#shiftFilterEnd'), dateKey(addDays(monday, 6)));
-    }
-    refresh();
-  });
 
   $$('[data-recap-filter]').forEach(input => input.addEventListener('change', () => {
     if (input.checked) state.recapFilters.add(input.dataset.recapFilter);
     else state.recapFilters.delete(input.dataset.recapFilter);
     updateRiskCount();
+    renderTimeline();
     renderRecap();
+    renderWarnings();
+    renderAssignments();
+    renderInsights();
+    renderTodayCoverage();
+    icons();
   }));
   $('#shiftHolidayOnly')?.addEventListener('change', updateRiskCount);
   $('#shiftWarningType')?.addEventListener('change', event => {
@@ -1725,20 +1915,10 @@
       icons();
     });
   });
-  let filterSearchTimer = null;
-  $('#shiftFilterSearch')?.addEventListener('input', () => {
-    window.clearTimeout(filterSearchTimer);
-    filterSearchTimer = window.setTimeout(() => refresh(), 300);
-  });
   $('#shiftFilterSearch')?.addEventListener('keydown', event => {
     if (event.key !== 'Enter') return;
-    window.clearTimeout(filterSearchTimer);
     refresh();
   });
-  ['shiftFilterStart', 'shiftFilterEnd'].forEach(id => {
-    $(`#${id}`)?.addEventListener('change', () => refresh());
-  });
-
   $('#shiftAssignmentForm')?.addEventListener('input', event => {
     if (!['start_time', 'end_time', 'break_minutes'].includes(event.target.name)) return;
     event.currentTarget.elements.is_manual_duration_override.value = '1';
@@ -1774,21 +1954,36 @@
       const json = await api('save_assignment', formObject(form));
       window.TRACSUnsavedChanges?.markSaved(form);
       notify(json.message || 'Assignment saved.', 'success');
-      await new Promise(resolve => setTimeout(resolve, 260));
+      await new Promise(resolve => setTimeout(resolve, 900));
       closeModal(form, { bypassUnsaved: true });
       await refresh();
-    } catch (error) {
-      showFormErrors(form, error.errors || {}, error.message || 'Could not save. Try again.');
-      notify(error.message, 'error');
+      } catch (error) {
+        showFormErrors(form, error.errors || {}, error.message || 'Could not save. Try again.');
+        if (!Object.keys(error.errors || {}).length) {
+          window.handleModalError?.({ modal: form.closest('.modal-overlay'), button, error });
+        }
     } finally {
       window.resetButtonLoading?.(button);
     }
   });
 
-  $('#shiftMonthlyPreviewDraft')?.addEventListener('click', () => {
+  $('#shiftMonthlyPreviewDraft')?.addEventListener('click', async event => {
     const form = $('#shiftMonthlyTemplateForm');
     if (!validateMonthlyTemplateForm(form)) return;
-    previewMonthlyTemplate(monthlyFormPayload(form), Number(form.elements.id.value) || 0);
+    const button = event.currentTarget;
+    if (window.setButtonLoading && !window.setButtonLoading(button, 'Generating...')) return;
+    try {
+      const saved = await api('save_monthly_template', monthlyFormPayload(form));
+      const templateId = Number(saved.data?.id || 0);
+      form.elements.id.value = templateId;
+      window.TRACSUnsavedChanges?.markSaved(form);
+      await previewMonthlyTemplate({ id: templateId }, templateId);
+    } catch (error) {
+      showFormErrors(form, error.errors || {}, error.message || 'Could not generate preview.');
+      notify(error.message, 'error');
+    } finally {
+      window.resetButtonLoading?.(button);
+    }
   });
 
   $('#shiftMonthlyTemplateForm')?.addEventListener('submit', async event => {
@@ -1801,12 +1996,14 @@
       const json = await api('save_monthly_template', monthlyFormPayload(form));
       window.TRACSUnsavedChanges?.markSaved(form);
       notify(json.message || 'Template saved as draft.', 'success');
-      await new Promise(resolve => setTimeout(resolve, 260));
+      await new Promise(resolve => setTimeout(resolve, 900));
       closeModal(form, { bypassUnsaved: true });
       await refresh();
-    } catch (error) {
-      showFormErrors(form, error.errors || {}, error.message || 'Could not save. Try again.');
-      notify(error.message, 'error');
+      } catch (error) {
+        showFormErrors(form, error.errors || {}, error.message || 'Could not save. Try again.');
+        if (!Object.keys(error.errors || {}).length) {
+          window.handleModalError?.({ modal: form.closest('.modal-overlay'), button, error });
+        }
     } finally {
       window.resetButtonLoading?.(button);
     }
@@ -1830,9 +2027,12 @@
       try {
         const json = await api(action, formObject(form));
         window.TRACSUnsavedChanges?.markSaved(form);
-        if (form.closest('.modal-overlay')) closeModal(form, { bypassUnsaved: true });
-        syncModalState();
         notify(json.message, 'success');
+        if (form.closest('.modal-overlay')) {
+          await new Promise(resolve => setTimeout(resolve, 900));
+          closeModal(form, { bypassUnsaved: true });
+        }
+        syncModalState();
         await refresh();
       } catch (error) {
         notify(error.message, 'error');
@@ -1875,6 +2075,11 @@
   }
 
   renderAll();
+  const initialQuery = new URLSearchParams(window.location.search);
+  if (!initialQuery.has('start') && !initialQuery.has('end') && state.view !== 'weekly') {
+    setViewRange(state.view, new Date());
+    refresh();
+  }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => requestAnimationFrame(syncRangePickers), { once: true });
   } else {

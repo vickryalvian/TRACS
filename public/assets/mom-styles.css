@@ -12,7 +12,7 @@
 
 .mom-workspace {
   display: flex;
-  gap: var(--page-section-gap, var(--gap));
+  gap: var(--page-section-gap);
   flex: 1 1 auto;
   height: auto;
   min-height: 0;
@@ -28,11 +28,11 @@
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 12px;
-  scroll-padding-bottom: 12px;
+  padding: var(--page-padding-block) var(--page-padding-inline);
+  scroll-padding-bottom: var(--page-padding-block);
   display: flex;
   flex-direction: column;
-  gap: var(--page-section-gap, var(--gap));
+  gap: var(--page-section-gap);
 }
 
 .mom-sidebar {
@@ -44,9 +44,9 @@
   overflow-x: hidden;
   display: flex;
   flex-direction: column;
-  gap: var(--page-section-gap, var(--gap));
-  padding: 12px;
-  scroll-padding-bottom: 12px;
+  gap: var(--page-section-gap);
+  padding: var(--page-padding-block) var(--page-padding-inline);
+  scroll-padding-bottom: var(--page-padding-block);
   border-left: 1px solid var(--bd1);
   background: var(--bg);
   position: sticky;
@@ -988,7 +988,10 @@
 .action-quick-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
+  margin-top: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--bd1);
 }
 
 .quick-action-item {

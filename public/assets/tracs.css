@@ -79,34 +79,67 @@
   --r3: var(--radius-lg);
   --r4: 10px;
 
+  /* ── Spacing scale + semantic layout rhythm ── */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+
+  /* Backward-compatible aliases used by older modules. */
+  --sp-1: var(--space-1);
+  --sp-2: var(--space-2);
+  --sp-3: var(--space-3);
+  --sp-4: var(--space-4);
+  --sp-5: var(--space-5);
+  --sp-6: var(--space-6);
+  --sp-8: var(--space-8);
+
+  --page-padding-inline: var(--space-4);
+  --page-padding-block: var(--space-4);
+  --page-section-gap: var(--space-5);
+  --card-gap: var(--space-4);
+  --card-padding: var(--space-4);
+  --card-header-padding-y: 10px;
+  --card-header-padding-x: var(--space-4);
+  --card-body-padding: var(--space-4);
+  --content-gap: var(--space-3);
+  --toolbar-gap: var(--space-2);
+  --toolbar-padding: var(--space-3);
+  --form-group-gap: var(--space-2);
+  --form-row-gap: var(--space-3);
+  --table-cell-padding-y: 10px;
+  --table-cell-padding-x: var(--space-3);
+  --table-head-padding-y: 9px;
+  --table-row-height: 44px;
+  --modal-padding: var(--space-4);
+  --modal-section-gap: var(--space-3);
+  --empty-state-padding-y: var(--space-6);
+  --empty-state-padding-x: var(--space-4);
+  --control-height: 36px;
+
   /* ── Dashboard Scale ── */
-  --card-padding: 12px 14px 11px;
-  --panel-padding: 12px;
-  --dashboard-widget-gap: var(--gap);
-  --dashboard-column-gap: var(--gap);
-  --dashboard-row-gap: var(--gap);
+  --panel-padding: var(--card-body-padding);
+  --dashboard-widget-gap: var(--card-gap);
+  --dashboard-column-gap: var(--card-gap);
+  --dashboard-row-gap: var(--card-gap);
   --dashboard-widget-padding: 20px;
   --dashboard-widget-padding-compact: 18px;
   --dashboard-widget-padding-sm: 16px;
-  --dashboard-inner-gap: 16px;
-  --dashboard-section-gap: 18px;
+  --dashboard-inner-gap: var(--space-4);
+  --dashboard-section-gap: var(--space-5);
   --dashboard-carousel-safe-area: 44px;
-  --gap: 12px;
-  --page-section-gap: var(--gap);
+  --gap: var(--card-gap);
   --font-size: 13.5px;
   --shadow: 0 8px 24px rgba(17, 24, 39, .055), 0 1px 2px rgba(17, 24, 39, .035);
   --shadow-lg: 0 18px 44px rgba(17, 24, 39, .12), 0 3px 10px rgba(17, 24, 39, .08);
 
-  /* ── Spacing (8px system) ── */
-  --sp-1: 4px;
-  --sp-2: 8px;
-  --sp-3: 12px;
-  --sp-4: 16px;
-  --sp-5: 20px;
-  --sp-6: 24px;
-
   /* ── Toolbar Controls ── */
-  --toolbar-h: 34px;
+  --toolbar-h: var(--control-height);
   --toolbar-px: 12px;
   --toolbar-fz: 12px;
 
@@ -1802,7 +1835,7 @@ input, select, textarea { font-family: inherit }
 
 .task-monitoring-panel .dashboard-checklist-scroll {
   flex: 0 1 auto;
-  max-height: calc(46px * 5 + 8px);
+  max-height: calc(230px + var(--space-2));
   padding: 2px 12px 6px 8px;
 }
 
@@ -3585,6 +3618,7 @@ input, select, textarea { font-family: inherit }
 
 /* ── Flatpickr Premium Theme Overrides ── */
 .flatpickr-calendar {
+  z-index: 12000 !important;
   background: var(--s1) !important;
   border: 1px solid var(--bd2) !important;
   border-radius: 12px !important;
@@ -3759,7 +3793,9 @@ input, select, textarea { font-family: inherit }
 
 .form-select option { background: var(--s3); color: var(--tx1) }
 .form-check { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; color: var(--tx2) }
-.form-check input { accent-color: var(--blue); cursor: pointer; width: 13px; height: 13px }
+.form-check input { accent-color: var(--blue); cursor: pointer; width: 15px; height: 15px; margin: 0; flex: 0 0 15px }
+.form-check:has(input:focus-visible) { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: var(--r) }
+.form-check:has(input:disabled) { cursor: not-allowed; opacity: .65 }
 
 /* Search */
 .search-wrap { position: relative }
@@ -3810,6 +3846,8 @@ input, select, textarea { font-family: inherit }
   justify-content: center;
   backdrop-filter: blur(3px);
   animation: ov-in var(--dur) ease;
+  padding: 16px;
+  box-sizing: border-box;
 }
 .modal-overlay.hidden { display: none }
 @keyframes ov-in { from{opacity:0} to{opacity:1} }
@@ -3818,9 +3856,11 @@ input, select, textarea { font-family: inherit }
   border: 0;
   border-radius: var(--r4);
   width: 480px;
-  max-width: 95vw;
-  max-height: 92vh;
-  overflow-y: auto;
+  max-width: 100%;
+  max-height: calc(100dvh - 32px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   animation: m-in .2s var(--ease);
   box-shadow: 0 12px 40px rgba(0,0,0,.14), 0 2px 8px rgba(0,0,0,.08);
 }
@@ -3833,10 +3873,11 @@ input, select, textarea { font-family: inherit }
   align-items: flex-start;
   justify-content: space-between;
   padding: 14px 16px 12px;
-  position: sticky;
-  top: 0;
+  position: relative;
   background: var(--s2);
   z-index: 10;
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--bd1);
 }
 .modal-title { font-size: 13px; font-weight: 600; color: var(--tx1); letter-spacing: 0 }
 .modal-sub   { font-size: 9.5px; color: var(--tx3); margin-top: 2px; font-family: var(--mono) }
@@ -3854,6 +3895,11 @@ input, select, textarea { font-family: inherit }
   flex-shrink: 0;
 }
 .modal-close:hover { background: var(--s4); color: var(--tx1); border-color: var(--bd3) }
+.modal-close:focus-visible,
+.modal-close-btn:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
 .modal-close svg { width: 10px; height: 10px; stroke-width: 2.5 }
 [data-tracs-success-pending="1"] .modal-close,
 [data-tracs-success-pending="1"] .modal-close-btn,
@@ -3893,7 +3939,15 @@ input, select, textarea { font-family: inherit }
   height: 12px;
   stroke-width: 2.3;
 }
-.modal-body { padding: 16px; display: flex; flex-direction: column; gap: 12px }
+.modal-body {
+  min-height: 0;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
 .modal-foot {
   display: flex;
   justify-content: flex-end;
@@ -3901,6 +3955,27 @@ input, select, textarea { font-family: inherit }
   padding: 10px 16px;
   background: var(--s2);
   border-radius: 0 0 var(--r4) var(--r4);
+  border-top: 1px solid var(--bd1);
+  flex: 0 0 auto;
+  align-items: center;
+}
+.modal-foot .btn { min-height: 34px }
+
+.modal [aria-invalid="true"],
+.dpc-modal-content [aria-invalid="true"],
+.infra-modal__panel [aria-invalid="true"],
+.modal .is-invalid,
+.dpc-modal-content .is-invalid,
+.infra-modal__panel .is-invalid {
+  border-color: var(--red) !important;
+  box-shadow: 0 0 0 3px var(--red-lt) !important;
+}
+
+.modal label:has(> input[type="checkbox"][aria-invalid="true"]),
+.modal label:has(> input[type="radio"][aria-invalid="true"]) {
+  color: var(--red);
+  border-radius: var(--r);
+  background: var(--red-lt);
 }
 
 .case-upload-group { gap: 7px }
@@ -5781,7 +5856,7 @@ input, select, textarea { font-family: inherit }
   bottom: 16px;
 }
 .toast-dock--modal {
-  z-index: 40000;
+  z-index: 13000;
 }
 .toast-dock--modal-center {
   position: absolute;
@@ -6170,6 +6245,34 @@ input, select, textarea { font-family: inherit }
 }
 
 @media (max-width: 560px) {
+  .modal-overlay {
+    align-items: flex-end;
+    padding: 10px;
+  }
+
+  .modal {
+    width: 100%;
+    max-height: calc(100dvh - 20px);
+  }
+
+  .modal-head,
+  .modal-body {
+    padding-inline: 14px;
+  }
+
+  .modal-foot {
+    flex-wrap: wrap;
+    padding: 10px 14px;
+  }
+
+  .modal-foot .btn {
+    flex: 1 1 120px;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
   .toast-dock {
     right: 10px;
     left: 10px;

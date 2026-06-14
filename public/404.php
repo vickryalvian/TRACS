@@ -6,6 +6,7 @@ require_once __DIR__ . '/../core/security/csrf.php';
 tracs_start_session();
 $dashboardHref = '/index.php';
 $_css_v = @filemtime(__DIR__ . '/assets/tracs.css') ?: time();
+$_spacing_css_v = @filemtime(__DIR__ . '/assets/tracs-spacing.css') ?: time();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -15,6 +16,7 @@ $_css_v = @filemtime(__DIR__ . '/assets/tracs.css') ?: time();
 <title>TRACS — 404 Page Not Found</title>
 <?php include __DIR__ . '/includes/theme_bootstrap.php'; ?>
 <link rel="stylesheet" href="/assets/tracs.css?v=<?=$_css_v?>">
+<link rel="stylesheet" href="/assets/tracs-spacing.css?v=<?=$_spacing_css_v?>">
 <style>
   html, body { min-height: 100%; overflow: auto; }
   body {
@@ -127,7 +129,24 @@ $_css_v = @filemtime(__DIR__ . '/assets/tracs.css') ?: time();
   @media (max-width: 760px) {
     .not-found-page {
       place-items: center;
-      overflow-x: auto;
+      overflow-x: hidden;
+      padding: var(--space-6) var(--page-padding-inline);
+    }
+    .not-found-shell,
+    .not-found-copy {
+      min-width: 0;
+      width: 100%;
+    }
+    .not-found-shell {
+      max-width: 520px;
+    }
+    .not-found-title {
+      overflow-wrap: anywhere;
+      white-space: normal;
+    }
+    .not-found-actions {
+      gap: var(--toolbar-gap);
+      width: 100%;
     }
     .not-found-actions .btn {
       flex: 1 1 180px;

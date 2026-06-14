@@ -55,6 +55,19 @@ font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Ro
 - The dashboard reminder starts 30 minutes before shift change and escalates visually near handover.
 - Scheduled browser/in-app shift notification creation currently occurs within the final 15 minutes and requires the notification worker or an active dashboard request.
 
+## Shift Assignment Rules
+
+- Main CS shifts are Shift 1 `00:00-08:00`, Shift 2 `08:00-16:00`, and Shift 3 `16:00-24:00`.
+- Shift 3 stores `00:00` as the next-day end time with `is_cross_day=1`; `24:00` is display-only.
+- The default CS monthly schedule uses `weekly_matrix` settings with canonical English `Week 1`-`Week 5` and `Monday`-`Sunday` values; Week 5 repeats the Week 4 pattern.
+- Actual dated assignments cover every calendar date in each generated month.
+- Run `php bin/seed-default-shift-schedule.php --apply` for the current month through December, `--start=YYYY-MM --end=YYYY-MM` for an explicit range, or `--month=YYYY-MM` for one month.
+- Reruns only replace rows owned by `default_cs_monthly_shift_v1`; manual assignments and sensitive existing user fields are not overwritten.
+- The seed removes only the three explicitly identified June 2026 dummy rows before conflict validation; unknown manual, leave, off-day, and special assignments remain protected.
+- Timeline modes share the same dated-assignment endpoint. Daily uses one date, Weekly uses Monday-Sunday, and Monthly fetches the complete calendar month.
+- Assignment range overlap is half-open (`start < range_end` and `end > range_start`) so Shift 3 ending at midnight does not leak into or conflict with the next day's Shift 1.
+- The canonical Customer Support-equivalent role is currently `Agent`; Vickry remains `Super Admin` and is still eligible for shift assignment.
+
 ## Infrastructure Pulse
 
 - **Partially Implemented:** full page, dashboard mini widget, and TV Mode widget share `public/assets/infrastructure-pulse-data.js`.

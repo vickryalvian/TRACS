@@ -11,6 +11,7 @@ TRACS is a compact operational control panel for support, legal, CS, and monitor
 | Reminders | Full reminder page plus Reminder List inside the dashboard `Checklist and Reminder` tab. |
 | Task Monitoring | Dashboard tabs are `Checklist and Reminder`, `Assignments`, and `Activity`; full assignment/review workflow is at `monitoring.php`. |
 | Shift Reports | Active/On Hold/Resolved handover context, dashboard shift reminder, activity snapshots, exports, and image attachments. |
+| Shift Assignment | Exact-date scheduling, workload/coverage warnings, monthly templates, and the idempotent default CS agent/schedule seed. |
 | MoM | Scheduled meetings, meeting lifecycle, agenda, notes, decisions, action items, reminders, case links, screenshots, history/export. |
 | Finance | Balance transfer logging, filtering, CSV export, currency conversion support. |
 | Domains | Domain Transfer Log and Domain Pricing Crosscheck under `Tasks & Monitoring`. |
@@ -127,6 +128,7 @@ Current active schema includes core `tracs_` tables plus legacy names still used
 - `tracs_cases`, `case_attachments`, `tracs_reminders`, `tracs_side_tasks`, `tracs_side_task_logs`
 - `tracs_tasks`, `tracs_task_assignments`, `tracs_task_logs`, `tracs_task_reviews`, `tracs_task_reminders`
 - `tracs_shift_reports`, `tracs_shift_activities`, `shift_report_attachments`
+- `shift_assignment_types`, `shift_templates`, `shift_assignments`, `shift_monthly_templates`, `shift_monthly_template_items`, `shift_workload_settings`, `shift_coverage_rules`, `shift_warnings`
 - `tracs_moms`, `tracs_mom_*`
 - `tracs_notifications`, `tracs_notification_triggers`, `tracs_notification_logs`
 - `tracs_activity_logs`, `tracs_user_activity_logs`, `tracs_ticker_messages`, `tracs_ticker_events`, `ops_status`
@@ -158,6 +160,13 @@ docker compose up -d --build
 
 # Run notification scheduling once
 php bin/tracs-notification-worker.php
+
+# Preview and apply the default CS schedule from the current month through year-end
+php bin/seed-default-shift-schedule.php
+php bin/seed-default-shift-schedule.php --apply
+
+# Reconcile an explicit range
+php bin/seed-default-shift-schedule.php --start=2026-06 --end=2026-12 --apply
 ```
 
 ## Production Deployment Script

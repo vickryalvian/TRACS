@@ -28,3 +28,4 @@ public/uploads/shift_report_attachments/*
 storage/deployment/deployment.meta
 graphify-out/
 .cursor/
+node_modules/

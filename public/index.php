@@ -1584,7 +1584,7 @@ include 'includes/header.php';
           <div class="empty-t">No reports today</div>
         </div>
         <?php else: ?>
-        <div class="scroll-y" style="max-height:260px;padding:8px 0">
+        <div class="scroll-y dashboard-shift-scroll">
           <?php foreach($shift_reports as $sname => $items): ?>
           <div class="shift-group">
             <div class="shift-group-title"><?=esc($sname)?></div>

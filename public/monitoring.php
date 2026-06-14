@@ -264,7 +264,7 @@ include __DIR__ . '/includes/header.php';
           <?php foreach($interns as $i): ?>
           <div class="tm-intern-card">
             <div><strong><?=esc($i['user_name'])?></strong><span><?=esc($i['university_name'])?> · <?=esc($i['study_program'] ?? 'Program not set')?></span></div>
-            <div class="tm-intern-meta"><span><?=esc($i['internship_start_date'])?> to <?=esc($i['internship_end_date'])?></span><span>Mentor: <?=esc($i['mentor_name'] ?? 'No mentor')?></span><span><?=esc(tm_label($i['skill_level'] ?? 'beginner'))?></span></div>
+            <div class="tm-intern-meta"><span><?=tracs_date_display($i['internship_start_date'] ?? null)?> to <?=tracs_date_display($i['internship_end_date'] ?? null)?></span><span>Mentor: <?=esc($i['mentor_name'] ?? 'No mentor')?></span><span><?=esc(tm_label($i['skill_level'] ?? 'beginner'))?></span></div>
             <div class="tm-snap-stats"><span><?=esc($i['assigned_tasks'])?> tasks</span><span><?=esc($i['completed_tasks'])?> completed</span><span><?=esc($i['overdue_tasks'] ?? 0)?> overdue</span><span><?=esc($i['review_tasks'])?> review</span><span><?=tm_duration(isset($i['avg_completion_seconds']) ? (int)$i['avg_completion_seconds'] : null)?> avg</span></div>
           </div>
           <?php endforeach; ?>

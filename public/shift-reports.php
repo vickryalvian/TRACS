@@ -377,8 +377,12 @@ include 'includes/header.php';
               <i data-lucide="download" class="icon-xs"></i>
               Export CSV
             </div>
-            <label>From Date<input type="date" name="from" class="form-input"></label>
-            <label>To Date<input type="date" name="to" class="form-input"></label>
+            <?=tracs_date_range_picker([
+                'id' => 'shiftReportsExportRange',
+                'start_name' => 'from',
+                'end_name' => 'to',
+                'label' => 'Export date range',
+            ])?>
             <button type="submit" class="btn btn-primary"><i data-lucide="download" class="icon-sm"></i>Download CSV</button>
           </form>
         </details>

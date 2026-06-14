@@ -62,8 +62,8 @@ final class ShiftingAssignmentService {
         if ($endDate < $startDate) {
             [$startDate, $endDate] = [$endDate, $startDate];
         }
-        if ($startDate->diff($endDate)->days > 92) {
-            $endDate = $startDate->modify('+92 days');
+        if ($startDate->diff($endDate)->days > 366) {
+            $endDate = $startDate->modify('+366 days');
         }
         return [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')];
     }
@@ -131,7 +131,7 @@ final class ShiftingAssignmentService {
         [$start, $end] = $this->normalizeRange($filters['start'] ?? null, $filters['end'] ?? null);
         $where = [
             'a.start_datetime < DATE_ADD(?, INTERVAL 1 DAY)',
-            'a.end_datetime >= ?',
+            'a.end_datetime > ?',
         ];
         $params = [$end, $start];
         $types = 'ss';
@@ -235,6 +235,24 @@ final class ShiftingAssignmentService {
                 ORDER BY l.created_at DESC, l.id DESC
                 LIMIT 100
             ", 'i', [$id]);
+        }
+        if ($this->tableExists('assignment_audit_logs')) {
+            $auditRows = $this->fetchAll("
+                SELECT l.id, l.action, COALESCE(l.note, 'Assignment updated') AS description,
+                       l.changed_at AS created_at,
+                       COALESCE(NULLIF(u.name,''), u.email, 'System') AS creator_name
+                FROM assignment_audit_logs l
+                LEFT JOIN tracs_users u ON u.id = l.changed_by
+                WHERE l.assignment_id = ?
+                ORDER BY l.changed_at DESC, l.id DESC
+                LIMIT 100
+            ", 'i', [$id]);
+            $history = array_merge($history, $auditRows);
+            usort($history, static fn(array $left, array $right): int =>
+                strcmp((string)$right['created_at'], (string)$left['created_at'])
+                ?: ((int)$right['id'] <=> (int)$left['id'])
+            );
+            $history = array_slice($history, 0, 100);
         }
         return ['assignment' => $assignment, 'history' => $history];
     }
@@ -378,7 +396,10 @@ final class ShiftingAssignmentService {
                 $stmt->close();
             }
 
-            if ($this->columnExists('shift_assignments', 'source')) {
+            if (
+                $this->columnExists('shift_assignments', 'source')
+                && $this->columnExists('shift_assignments', 'monthly_template_id')
+            ) {
                 $stmt = $this->conn->prepare('UPDATE shift_assignments SET source=?, monthly_template_id=? WHERE id=?');
                 if (!$stmt) throw new RuntimeException('Unable to save assignment source.');
                 $stmt->bind_param('sii', $source, $monthlyTemplateId, $id);
@@ -479,7 +500,13 @@ final class ShiftingAssignmentService {
         if ($key === '' || !preg_match('/^[a-z0-9-]+:[a-z0-9]+$/', $key)) {
             throw new InvalidArgumentException('Invalid warning reference.');
         }
-        $type = str_replace('-', '_', $this->cleanText($input['warning_type'] ?? 'duration', 80));
+        $typeSlug = str_replace('-', '_', $this->cleanText($input['warning_type'] ?? 'duration', 80));
+        $type = [
+            'holiday_coverage' => 'holiday_missing_coverage',
+            'under_target' => 'under_target',
+            'over_target' => 'over_target',
+            'coverage_gap' => 'coverage_gap',
+        ][$typeSlug] ?? $typeSlug;
         $allowedTypes = [
             'conflict','jumpshift','overtime','under_target','over_target','coverage_gap',
             'holiday_missing_coverage','availability','duration','rest_day_violation',
@@ -871,6 +898,9 @@ final class ShiftingAssignmentService {
         $source = $this->getMonthlyTemplate($id);
         if (!$source) throw new RuntimeException('Monthly template not found.');
         $settings = $source['settings'];
+        if (($settings['schedule_mode'] ?? '') === 'weekly_matrix') {
+            return $this->duplicateWeeklyMatrixMonthlyTemplate($source, $targetMonth, $name);
+        }
         $payload = array_merge($settings, [
             'name' => $this->cleanText($name ?: $source['name'] . ' - Copy', 160),
             'target_month' => $targetMonth,
@@ -1071,6 +1101,18 @@ final class ShiftingAssignmentService {
             'count_standby_as_work_hour' => empty($input['count_standby_as_work_hour']) ? 0 : 1,
             'holiday_minimum_agents' => max(1, min(100, (int)($input['holiday_minimum_agents'] ?? 2))),
         ];
+        if ($values['min_weekly_minutes'] > $values['max_weekly_minutes']) {
+            throw new InvalidArgumentException('Minimum weekly hours cannot exceed maximum weekly hours.');
+        }
+        if ($values['weekly_target_minutes'] > $values['max_weekly_minutes']) {
+            throw new InvalidArgumentException('Weekly target hours cannot exceed maximum weekly hours.');
+        }
+        if ($values['daily_target_minutes'] > $values['max_daily_minutes']) {
+            throw new InvalidArgumentException('Daily target hours cannot exceed maximum daily hours.');
+        }
+        if ($values['minimum_rest_between_shifts_minutes'] <= 0) {
+            throw new InvalidArgumentException('Minimum rest between shifts must be greater than zero.');
+        }
         if ($divisionId === null) {
             $global = $this->fetchOne('SELECT id FROM shift_workload_settings WHERE division_id IS NULL ORDER BY id LIMIT 1');
             if ($global) {
@@ -1649,6 +1691,160 @@ final class ShiftingAssignmentService {
         return $items;
     }
 
+    private function duplicateWeeklyMatrixMonthlyTemplate(array $source, string $targetMonth, ?string $name): array {
+        $this->requireMonthlyTemplateTables();
+        $monthValue = trim($targetMonth);
+        if (preg_match('/^\d{4}-\d{2}$/', $monthValue)) $monthValue .= '-01';
+        $target = $this->parseDate($monthValue);
+        $currentMonth = new DateTimeImmutable('first day of this month', $this->timezone);
+        if (!$target || $target->format('d') !== '01' || $target <= $currentMonth) {
+            throw new InvalidArgumentException('Target month must be a future month.');
+        }
+
+        $templateName = $this->cleanText($name ?: $source['name'] . ' - Copy', 160);
+        if ($templateName === '') throw new InvalidArgumentException('Template name is required.');
+        $divisionId = (int)$source['division_id'];
+        $allowedDivisions = array_map(static fn(array $row): int => (int)$row['id'], $this->getDivisions());
+        if (!in_array($divisionId, $allowedDivisions, true)) {
+            throw new InvalidArgumentException('Select a division in your scheduling scope.');
+        }
+
+        $settings = $source['settings'];
+        $matrix = is_array($settings['weekly_matrix'] ?? null) ? $settings['weekly_matrix'] : [];
+        if (!$matrix) throw new InvalidArgumentException('The weekly matrix is empty.');
+
+        $agents = [];
+        foreach ($this->getAgents() as $agent) {
+            if ((int)$agent['division_id'] === $divisionId) $agents[(int)$agent['id']] = $agent;
+        }
+        $templates = [];
+        foreach ($this->getTemplates() as $template) {
+            if (!empty($template['is_active'])) $templates[(int)$template['id']] = $template;
+        }
+        $dayNumbers = [
+            'Monday' => 1,
+            'Tuesday' => 2,
+            'Wednesday' => 3,
+            'Thursday' => 4,
+            'Friday' => 5,
+            'Saturday' => 6,
+            'Sunday' => 7,
+        ];
+
+        $items = [];
+        foreach ($matrix as $entry) {
+            $weekIndex = (int)($entry['week_index'] ?? 0);
+            $dayName = (string)($entry['day_of_week'] ?? '');
+            $agentId = (int)($entry['agent_id'] ?? 0);
+            $shiftTemplateId = (int)($entry['shift_template_id'] ?? 0);
+            if ($weekIndex < 1 || $weekIndex > 5 || !isset($dayNumbers[$dayName])) {
+                throw new InvalidArgumentException('Weekly matrix contains an invalid English week/day value.');
+            }
+            if (!isset($agents[$agentId])) {
+                throw new InvalidArgumentException('Weekly matrix contains an inactive or out-of-division agent.');
+            }
+            if (!isset($templates[$shiftTemplateId])) {
+                throw new InvalidArgumentException('Weekly matrix contains an inactive shift pattern.');
+            }
+            $offset = ($dayNumbers[$dayName] - (int)$target->format('N') + 7) % 7;
+            $date = $target->modify('+' . ($offset + (($weekIndex - 1) * 7)) . ' days');
+            if ($date->format('Y-m') !== $target->format('Y-m')) {
+                continue;
+            }
+            $shift = $templates[$shiftTemplateId];
+            $items[] = [
+                'id' => 0,
+                'agent_id' => $agentId,
+                'shift_template_id' => $shiftTemplateId,
+                'assignment_date' => $date->format('Y-m-d'),
+                'start_time' => (string)$shift['start_time'],
+                'end_time' => (string)$shift['end_time'],
+                'break_minutes' => (int)$shift['default_break_minutes'],
+                'assignment_type' => (string)$shift['default_assignment_type'],
+                'notes' => $this->cleanText($settings['notes'] ?? '', 500),
+                'generated_assignment_id' => null,
+                'agent_name' => (string)$agents[$agentId]['agent_name'],
+                'shift_name' => (string)$shift['shift_name'],
+                'color_label' => (string)$shift['color_label'],
+            ];
+        }
+        if (!$items) throw new InvalidArgumentException('The weekly matrix does not generate any assignments.');
+        usort($items, static fn(array $left, array $right): int =>
+            [$left['assignment_date'], $left['start_time'], $left['agent_name']]
+            <=> [$right['assignment_date'], $right['start_time'], $right['agent_name']]
+        );
+
+        $settings['agent_ids'] = array_values(array_unique(array_map(
+            static fn(array $item): int => (int)$item['agent_id'],
+            $items
+        )));
+        $settingsJson = json_encode($settings, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if ($settingsJson === false) throw new RuntimeException('Unable to encode monthly template settings.');
+
+        $this->conn->begin_transaction();
+        try {
+            $stmt = $this->conn->prepare("
+                INSERT INTO shift_monthly_templates
+                  (name,division_id,target_month,status,settings_json,created_by,updated_by,created_at,updated_at)
+                VALUES (?,?,?,'draft',?,?,?,NOW(),NOW())
+            ");
+            if (!$stmt) throw new RuntimeException('Unable to prepare monthly template.');
+            $targetDate = $target->format('Y-m-d');
+            $stmt->bind_param(
+                'sissii',
+                $templateName,
+                $divisionId,
+                $targetDate,
+                $settingsJson,
+                $this->actorId,
+                $this->actorId
+            );
+            if (!$stmt->execute()) throw new RuntimeException('Unable to create monthly template.');
+            $id = (int)$stmt->insert_id;
+            $stmt->close();
+
+            $stmt = $this->conn->prepare("
+                INSERT INTO shift_monthly_template_items
+                  (template_id,agent_id,shift_template_id,assignment_date,start_time,end_time,
+                   break_minutes,assignment_type,notes,created_at)
+                VALUES (?,?,?,?,?,?,?,?,?,NOW())
+            ");
+            if (!$stmt) throw new RuntimeException('Unable to prepare monthly template items.');
+            foreach ($items as $item) {
+                $stmt->bind_param(
+                    'iiisssiss',
+                    $id,
+                    $item['agent_id'],
+                    $item['shift_template_id'],
+                    $item['assignment_date'],
+                    $item['start_time'],
+                    $item['end_time'],
+                    $item['break_minutes'],
+                    $item['assignment_type'],
+                    $item['notes']
+                );
+                if (!$stmt->execute()) throw new RuntimeException('Unable to save monthly template items.');
+            }
+            $stmt->close();
+            $this->conn->commit();
+        } catch (Throwable $e) {
+            $this->conn->rollback();
+            throw $e;
+        }
+
+        return [
+            'id' => $id,
+            'assignment_count' => count($items),
+            'preview' => $this->buildMonthlyTemplatePreview(
+                $templateName,
+                $target->format('Y-m-d'),
+                $divisionId,
+                $settings,
+                $items
+            ),
+        ];
+    }
+
     private function buildMonthlyTemplatePreview(
         string $name,
         string $targetMonth,
@@ -1676,6 +1872,7 @@ final class ShiftingAssignmentService {
                     'agent_id' => (int)$item['agent_id'],
                     'agent_name' => $item['agent_name'] ?? ('Agent #' . $item['agent_id']),
                     'assignment_date' => $item['assignment_date'],
+                    'shift_name' => (string)($item['shift_name'] ?? ''),
                     'start_time' => substr((string)$item['start_time'], 0, 5),
                     'end_time' => substr((string)$item['end_time'], 0, 5),
                     'existing_assignment_id' => (int)$conflict['id'],

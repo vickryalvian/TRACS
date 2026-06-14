@@ -68,47 +68,45 @@ include __DIR__ . '/includes/header.php';
 
     <section class="panel shift-toolbar-panel">
       <div class="shift-toolbar">
-        <div class="shift-filter-row shift-filter-row-range">
-          <span class="shift-filter-label">Date Range</span>
-          <div class="shift-range-control">
-            <button class="btn btn-ghost btn-icon" type="button" data-shift-range="-1" aria-label="Previous period"><i data-lucide="chevron-left" class="icon-sm"></i></button>
-            <label><span>From</span><input class="form-input" type="date" id="shiftFilterStart" value="<?=htmlspecialchars($initialData['range']['start'])?>"></label>
-            <label><span>To</span><input class="form-input" type="date" id="shiftFilterEnd" value="<?=htmlspecialchars($initialData['range']['end'])?>"></label>
-            <button class="btn btn-ghost btn-icon" type="button" data-shift-range="1" aria-label="Next period"><i data-lucide="chevron-right" class="icon-sm"></i></button>
-          </div>
-          <button class="btn btn-ghost" type="button" id="shiftTodayBtn"><i data-lucide="calendar-clock" class="icon-xs"></i>Today</button>
+        <div class="shift-date-nav" role="group" aria-label="Schedule date range">
+          <button class="btn btn-ghost btn-icon" type="button" data-shift-range="-1" aria-label="Previous date range"><i data-lucide="chevron-left" class="icon-sm"></i></button>
+          <?=tracs_date_range_picker([
+              'id' => 'shiftDateRangePicker',
+              'start' => $initialData['range']['start'],
+              'end' => $initialData['range']['end'],
+              'start_name' => 'start',
+              'end_name' => 'end',
+              'start_id' => 'shiftFilterStart',
+              'end_id' => 'shiftFilterEnd',
+              'label' => 'Schedule date range',
+          ])?>
+          <button class="btn btn-ghost btn-icon" type="button" data-shift-range="1" aria-label="Next date range"><i data-lucide="chevron-right" class="icon-sm"></i></button>
         </div>
-        <div class="shift-filter-row shift-filter-row-scope">
-          <span class="shift-filter-label">Scope Filters</span>
-          <div class="shift-scope-controls">
-            <select class="form-select" id="shiftFilterAgent" aria-label="Filter by agent"><option value="">All agents</option></select>
-            <select class="form-select" id="shiftFilterDivision" aria-label="Filter by division"><option value="">All divisions</option></select>
-            <select class="form-select" id="shiftFilterType" aria-label="Filter by shift type"><option value="">All shift types</option></select>
-            <select class="form-select" id="shiftFilterStatus" aria-label="Filter by status">
-              <option value="">All statuses</option>
-              <option value="assigned">Assigned</option><option value="confirmed">Confirmed</option>
-              <option value="active">Active</option><option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option><option value="no_show">No Show</option><option value="replaced">Replaced</option>
-            </select>
-          </div>
-          <details class="shift-risk-menu">
-            <summary><i data-lucide="shield-alert" class="icon-xs"></i>Risk Filters<span id="shiftRiskCount"></span></summary>
-            <div class="shift-risk-popover">
-              <label><input type="checkbox" data-recap-filter="under">Under target</label>
-              <label><input type="checkbox" data-recap-filter="over">Over target</label>
-              <label><input type="checkbox" data-recap-filter="jumpshift">Jumpshift</label>
-              <label><input type="checkbox" data-recap-filter="conflict">Conflict</label>
-              <label><input type="checkbox" id="shiftHolidayOnly">Holiday / lembur</label>
-            </div>
-          </details>
+        <div class="shift-scope-controls">
+          <select class="form-select" id="shiftFilterAgent" aria-label="Filter by agent"><option value="">All agents</option></select>
+          <select class="form-select" id="shiftFilterDivision" aria-label="Filter by division"><option value="">All divisions</option></select>
+          <select class="form-select" id="shiftFilterType" aria-label="Filter by shift type"><option value="">All shift types</option></select>
+          <select class="form-select" id="shiftFilterStatus" aria-label="Filter by status">
+            <option value="">All statuses</option>
+            <option value="assigned">Assigned</option><option value="confirmed">Confirmed</option>
+            <option value="active">Active</option><option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option><option value="no_show">No Show</option><option value="replaced">Replaced</option>
+          </select>
         </div>
-        <div class="shift-filter-row shift-filter-row-actions">
-          <span class="shift-filter-label">Search + Actions</span>
-          <input class="form-input" id="shiftFilterSearch" type="search" placeholder="Search agent, shift, type, or notes">
-          <div class="shift-filter-actions">
-            <button class="btn btn-primary" id="shiftApplyFilters" type="button"><i data-lucide="filter" class="icon-sm"></i>Apply</button>
-            <button class="btn btn-ghost" id="shiftResetFilters" type="button"><i data-lucide="rotate-ccw" class="icon-xs"></i>Reset</button>
+        <details class="shift-risk-menu">
+          <summary><i data-lucide="shield-alert" class="icon-xs"></i>Risk<span id="shiftRiskCount"></span></summary>
+          <div class="shift-risk-popover">
+            <label><input type="checkbox" data-recap-filter="under">Under target</label>
+            <label><input type="checkbox" data-recap-filter="over">Over target</label>
+            <label><input type="checkbox" data-recap-filter="jumpshift">Jumpshift</label>
+            <label><input type="checkbox" data-recap-filter="conflict">Conflict</label>
+            <label><input type="checkbox" id="shiftHolidayOnly">Holiday / lembur</label>
           </div>
+        </details>
+        <input class="form-input shift-filter-search" id="shiftFilterSearch" type="search" placeholder="Search agent" aria-label="Search assignments">
+        <div class="shift-filter-actions">
+          <button class="btn btn-primary" id="shiftApplyFilters" type="button"><i data-lucide="filter" class="icon-sm"></i>Apply</button>
+          <button class="btn btn-ghost btn-icon" id="shiftResetFilters" type="button" title="Reset filters" aria-label="Reset filters"><i data-lucide="rotate-ccw" class="icon-sm"></i></button>
         </div>
       </div>
     </section>
@@ -239,7 +237,7 @@ include __DIR__ . '/includes/header.php';
                   <div><h3>Shift Patterns</h3><p>Reusable shift time, break, type, and color definitions.</p></div>
                   <button class="btn btn-primary" type="button" data-shift-open="template"><i data-lucide="plus" class="icon-sm"></i>Add Shift Pattern</button>
                 </div>
-                <div class="shift-config-filter"><input class="form-input" id="shiftTemplateSearch" type="search" placeholder="Search shift patterns"><select class="form-select" id="shiftTemplateStatus"><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
+                <div class="shift-config-filter"><input class="form-input" id="shiftTemplateSearch" type="search" placeholder="Search shift patterns" aria-label="Search shift patterns"><select class="form-select" id="shiftTemplateStatus"><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
                 <div class="shift-config-cards" id="shiftTemplateList"></div>
               </section>
             </div>
@@ -255,7 +253,7 @@ include __DIR__ . '/includes/header.php';
                   <button class="btn btn-primary" type="button" data-shift-open="monthlyTemplate"><i data-lucide="plus" class="icon-sm"></i>Create Monthly Template</button>
                 </div>
                 <div class="shift-config-filter shift-monthly-filter">
-                  <input class="form-input" id="shiftMonthlyTemplateSearch" type="search" placeholder="Search monthly templates">
+                  <input class="form-input" id="shiftMonthlyTemplateSearch" type="search" placeholder="Search monthly templates" aria-label="Search monthly templates">
                   <select class="form-select" id="shiftMonthlyTemplateStatus"><option value="all">All statuses</option><option value="draft">Draft</option><option value="previewed">Previewed</option><option value="applied">Applied</option><option value="archived">Archived</option></select>
                 </div>
                 <div class="shift-monthly-template-list" id="shiftMonthlyTemplateList"></div>
@@ -280,7 +278,7 @@ include __DIR__ . '/includes/header.php';
                 <label>Overtime risk (hours)<input class="form-input" name="overtime_threshold_hours" type="number" min="1" max="168" step=".25"></label>
                 <label>Maximum weekly (hours)<input class="form-input" name="max_weekly_hours" type="number" min="1" max="168" step=".25"></label>
                 <label>Maximum daily (hours)<input class="form-input" name="max_daily_hours" type="number" min="1" max="24" step=".25"></label>
-                <label>Minimum rest (hours)<input class="form-input" name="minimum_rest_hours" type="number" min="0" max="24" step=".25"></label>
+                <label>Minimum rest (hours)<input class="form-input" name="minimum_rest_hours" type="number" min=".25" max="24" step=".25"></label>
                 <label>Timeline snap (minutes)<input class="form-input" name="timeline_snap_minutes" type="number" min="5" max="60" step="5"></label>
                 <label>Minimum shift (hours)<input class="form-input" name="minimum_shift_hours" type="number" min=".25" max="12" step=".25"></label>
                 <label>Normal work days<input class="form-input" name="normal_working_days_per_week" type="number" min="1" max="7"></label>
@@ -452,8 +450,10 @@ include __DIR__ . '/includes/header.php';
       <div class="form-row"><label class="form-group"><span class="form-label">Start</span><input class="form-input" name="start_time" type="time" required></label><label class="form-group"><span class="form-label">End</span><input class="form-input" name="end_time" type="time" required></label></div>
       <div class="form-row"><label class="form-group"><span class="form-label">Break Minutes</span><input class="form-input" name="default_break_minutes" type="number" min="0" value="0"></label><label class="form-group"><span class="form-label">Color</span><input class="form-input" name="color_label" type="color" value="#4f46e5"></label></div>
       <label class="form-group"><span class="form-label">Default Type</span><select class="form-select" name="default_assignment_type"></select></label>
-      <label class="shift-check-label"><input type="checkbox" name="count_as_work_hour" checked>Count as work hour</label>
-      <label class="shift-check-label"><input type="checkbox" name="is_active" checked>Active</label>
+      <div class="shift-modal-checks">
+        <label class="shift-check-label"><input type="checkbox" name="count_as_work_hour" checked>Count as work hour</label>
+        <label class="shift-check-label"><input type="checkbox" name="is_active" checked>Active</label>
+      </div>
       <label class="form-group"><span class="form-label">Notes</span><textarea class="form-textarea" name="notes"></textarea></label>
     </div>
     <div class="modal-foot"><button class="btn btn-ghost" type="button" data-shift-close>Cancel</button><button class="btn btn-primary" type="submit">Save Template</button></div>

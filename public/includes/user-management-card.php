@@ -45,7 +45,7 @@ $twoFactorReady = !empty($user['two_factor_enabled']) && empty($user['two_factor
     <div class="um-intern-card-meta">
       <span>Intern</span>
       <span><?=esc($user['university_name'] ?: 'University not set')?></span>
-      <span><?=esc($user['internship_end_date'] ? 'Ends ' . $user['internship_end_date'] : 'End date not set')?></span>
+      <span><?=esc($user['internship_end_date'] ? 'Ends ' . tracs_date_display($user['internship_end_date']) : 'End date not set')?></span>
       <?php if($remainingLabel): ?><span><?=esc($remainingLabel)?></span><?php endif; ?>
       <span>Mentor: <?=esc($user['mentor_name'] ?: 'Unassigned')?></span>
     </div>

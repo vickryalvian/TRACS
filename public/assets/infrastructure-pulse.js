@@ -793,7 +793,7 @@
         if (state.selectedCode === code) state.selectedCode = nodes[0]?.code || '';
         store.ingest({ ...snapshot, nodes });
         renderServerRegistry(modal, store);
-        showToast('Server removed from monitoring.','success',{context:'modal',position:'modal-top-right',modal,duration:1800});
+        showToast('Server removed from monitoring.','success',{context:'modal',position:'modal-center',modal,duration:1800});
         return;
       }
       if (!remove) return;

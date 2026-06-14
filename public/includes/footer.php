@@ -333,14 +333,14 @@ $_tracs_case_can_delete = in_array($_tracs_case_role, ['super_admin', 'admin'], 
     <button class="modal-close" onclick="closeModal('ticker')"><i data-lucide="x"></i></button>
   </div>
   <div class="modal-body">
-    <div style="display:flex;gap:7px;align-items:flex-end">
-      <div class="form-group" style="flex:1"><label class="form-label">Announcement Message</label><input type="text" class="form-input" id="newTickerText" placeholder="Operational announcement for the CS team" onkeydown="if(event.key==='Enter')addTickerMsg()"></div>
-      <div class="form-group" style="width:105px"><label class="form-label">Type</label>
+    <div class="ticker-entry-row">
+      <div class="form-group"><label class="form-label">Announcement Message</label><input type="text" class="form-input" id="newTickerText" placeholder="Operational announcement for the CS team" onkeydown="if(event.key==='Enter')addTickerMsg()"></div>
+      <div class="form-group"><label class="form-label">Type</label>
         <select class="form-select" id="newTickerCls"><option value="normal">Normal</option><option value="info">Info</option><option value="urgent">Urgent</option><option value="critical">Critical</option></select>
       </div>
-      <button class="btn btn-primary" id="tickerAddBtn" data-loading-text="Adding..." onclick="addTickerMsg()" style="height:34px;flex-shrink:0"><i data-lucide="plus" class="icon-sm"></i>Add</button>
+      <button class="btn btn-primary" id="tickerAddBtn" data-loading-text="Adding..." onclick="addTickerMsg()"><i data-lucide="plus" class="icon-sm"></i>Add</button>
     </div>
-    <div style="border:1px solid var(--bd1);border-radius:var(--r2);overflow:hidden;max-height:300px;overflow-y:auto">
+    <div class="ticker-entry-list">
       <?php
       $mgr=array_filter($ticker_items??[],fn($t)=>isset($t['id']));
       if(empty($mgr)):?>
@@ -533,6 +533,11 @@ First Deployment Build
 window.TRACS_CASE_CAPS = <?=json_encode(['canManage' => $_tracs_case_can_manage, 'canDelete' => $_tracs_case_can_delete], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)?>;
 </script>
 <script src="assets/tracs.js?v=<?=$_tracs_js_v?>"></script>
+<?php if(!empty($calendar_script ?? '')): ?>
+<script type="module" src="<?=htmlspecialchars((string)$calendar_script, ENT_QUOTES, 'UTF-8')?>"></script>
+<?php endif; ?>
+<?php $_tracs_date_range_js_v = @filemtime(__DIR__.'/../assets/tracs-date-range-picker.js') ?: time(); ?>
+<script src="assets/tracs-date-range-picker.js?v=<?=$_tracs_date_range_js_v?>"></script>
 <?php $_tracs_unsaved_js_v = @filemtime(__DIR__.'/../assets/unsaved-changes-guard.js') ?: time(); ?>
 <script src="assets/unsaved-changes-guard.js?v=<?=$_tracs_unsaved_js_v?>"></script>
 <?php if(($active_page??'') === 'shifting-assignment'): ?>

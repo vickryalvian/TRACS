@@ -53,7 +53,7 @@ include 'includes/header.php';
       <span class="panel-title">Overall Progress</span>
     </div>
   </div>
-  <div class="prog-wrap" style="padding-bottom:10px">
+  <div class="prog-wrap checklist-progress-body">
     <div class="prog-track"><div class="prog-fill" id="prog-fill" style="width:<?=$pct?>%"></div></div>
     <div class="prog-info"><span>Completion</span><span id="prog-pct"><?=$pct?>%</span></div>
   </div>

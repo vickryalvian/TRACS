@@ -4,6 +4,7 @@ RewriteEngine On
 RewriteRule ^modules/ - [F,L]
 RewriteRule ^includes/ - [F,L]
 RewriteRule ^api/(?:_|.*-lib\.php$) - [F,L,NC]
+RewriteRule ^api/(?:.*/)?_ - [F,L,NC]
 RewriteRule ^uploads/(?!avatars/[A-Za-z0-9._-]+\.(?:png|jpe?g|webp)$) - [F,L,NC]
 RewriteRule ^uploads/.*\.(php|phtml|phar|cgi|pl|py|asp|aspx|jsp|sh)$ - [F,L,NC]
 RewriteRule (^|/)[^/]*(backup|bak|old|orig|save|copy)[^/]*\.(css|js|php|html?|json|txt|sql|zip|tar|gz)$ - [F,L,NC]

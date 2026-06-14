@@ -56,6 +56,9 @@ Current migrations:
 - `2026_05_26_shift_report_resolved_status.sql`
 - `2026_05_27_case_in_progress_status.sql`
 - `2026_05_27_domain_price_cctld_pricing.sql`
+- `2026_06_08_shifting_assignment.sql`
+- `2026_06_13_main_shift_hours.sql`
+- `2026_06_13_shifting_assignment_audit_fixes.sql`
 
 ## File Structure
 
@@ -97,6 +100,7 @@ config/
 | MoM | `tracs_moms`, `tracs_mom_agenda`, `tracs_mom_notes`, `tracs_mom_decisions`, `tracs_mom_actions`, `tracs_mom_case_links`, `tracs_mom_screenshots`, `tracs_mom_audit_log` |
 | Task Management | `tracs_tasks`, `tracs_task_assignments`, `tracs_task_logs`, `tracs_task_reviews`, `tracs_task_reminders` |
 | Shift Reports | `tracs_shift_reports`, `tracs_shift_activities`, `shift_report_attachments` |
+| Shift Assignment | `shift_assignment_types`, `shift_templates`, `shift_assignments`, `shift_monthly_templates`, `shift_monthly_template_items`, `shift_workload_settings`, `shift_coverage_rules`, `shift_warnings`, `assignment_audit_logs` |
 | Activity Logs | `tracs_activity_logs` |
 | Ticker/Notifications | `tracs_ticker_messages`, `tracs_ticker_events`, `tracs_notifications`, `tracs_notification_triggers`, `tracs_notification_logs` |
 | Theme/User Preferences | `tracs_user_preferences` |
@@ -162,6 +166,22 @@ Do not run archived SQL against production unless you have reviewed it against t
 TRACS should remain modular. Future analytics, AI summaries, SLA monitoring, escalation rules, automation, notifications, audit logs, attachments, role permissions, APIs, portals, and reporting should be added as separate schema modules plus dated migrations.
 
 Prefer stable extension tables and clear foreign keys over rewriting existing operational tables. When in doubt, add documentation first and defer deletion until usage is proven obsolete.
+
+## Default CS Shift Seed
+
+After the Shift Assignment migrations, preview and apply the default agent/monthly schedule seed:
+
+```bash
+php bin/seed-default-shift-schedule.php
+php bin/seed-default-shift-schedule.php --apply
+php bin/seed-default-shift-schedule.php --start=2026-06 --end=2026-12 --apply
+```
+
+Without range options, the command targets the current month through December of the current year. `--start=YYYY-MM --end=YYYY-MM` selects an explicit inclusive month range, while `--month=YYYY-MM` reconciles one month. It maps Vickry to the canonical `Super Admin` role and Aria, Lala, Annisa, Gagas, Nurlina, and M. Idris to the canonical Customer Support-equivalent `Agent` role. All seven users are active members of the `Customer Support` / `CS` division.
+
+The seed stores English `Week 1`-`Week 5`, numeric day indexes, and `Monday`-`Sunday` values in `settings_json`, then creates actual assignments for every date. Week 5 repeats the Week 4 pattern. Shift 1 is `00:00-08:00`, Shift 2 is `08:00-16:00`, and Shift 3 is stored as `16:00` through next-day `00:00` while the UI displays `16:00-24:00`.
+
+Reruns match users by normalized name, username, or seed email. Existing passwords, email addresses, avatars, 2FA state, and personal settings are preserved. New users receive random temporary passwords printed once by the CLI and remain subject to TRACS mandatory 2FA setup. TRACS does not currently enforce a first-login password change, so an administrator must rotate those temporary passwords before normal use. The command replaces only assignments linked to its `default_cs_monthly_shift_v1` templates and refuses to overwrite conflicting manual schedules. Its cleanup removes only the three known June 2026 dummy slots; other manual, leave, off-day, and special rows are preserved.
 
 ## Login Hardening Migration
 

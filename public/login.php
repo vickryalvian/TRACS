@@ -27,6 +27,7 @@ $show_help = !empty($_SESSION['login_show_help'])
 unset($_SESSION['login_error'], $_SESSION['login_show_help']);
 $tracs_build_info = tracs_build_public_payload();
 $_css_v = @filemtime(__DIR__ . '/assets/tracs.css') ?: time();
+$_spacing_css_v = @filemtime(__DIR__ . '/assets/tracs-spacing.css') ?: time();
 $login_help = TRACS_AUTH_HELP_MESSAGE;
 $login_contact = trim((string)tracs_auth_env('TRACS_LOGIN_HELP_CONTACT', ''));
 if ($login_contact !== '') {
@@ -45,6 +46,7 @@ if ($login_contact !== '') {
 <?php include __DIR__ . '/includes/theme_bootstrap.php'; ?>
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="/assets/tracs.css?v=<?=$_css_v?>">
+<link rel="stylesheet" href="/assets/tracs-spacing.css?v=<?=$_spacing_css_v?>">
 <?php if($show_captcha && tracs_auth_turnstile_enabled()): ?><script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script><?php endif; ?>
 <script>
 window.TRACS_BUILD_INFO = <?=json_encode($tracs_build_info, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)?>;
@@ -63,7 +65,7 @@ window.TRACS_BUILD_INFO = <?=json_encode($tracs_build_info, JSON_UNESCAPED_SLASH
     </div>
     <div class="login-body">
       <?php if($error):?><div class="err-box" role="alert"><?=htmlspecialchars($error, ENT_QUOTES, 'UTF-8')?></div><?php endif;?>
-      <form action="/auth/login.php" method="POST" class="login-body" style="padding:0">
+      <form action="/auth/login.php" method="POST" class="login-body login-form">
         <?= csrf_input() ?>
         <div class="form-group">
           <label class="form-label">Email or Username</label>

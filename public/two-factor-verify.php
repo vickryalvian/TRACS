@@ -81,6 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $tracs_build_info = tracs_build_public_payload();
 $_tracs_visual_theme_preference = tracs_normalize_visual_theme(tracs_get_user_preference($conn, $pendingUserId, 'visual_theme', 'default'));
 $_css_v = @filemtime(__DIR__ . '/assets/tracs.css') ?: time();
+$_spacing_css_v = @filemtime(__DIR__ . '/assets/tracs-spacing.css') ?: time();
 $login_help = TRACS_AUTH_HELP_MESSAGE;
 $login_contact = trim((string)tracs_auth_env('TRACS_LOGIN_HELP_CONTACT', ''));
 if ($login_contact !== '') {
@@ -98,6 +99,7 @@ if ($login_contact !== '') {
 <?php include __DIR__ . '/includes/theme_bootstrap.php'; ?>
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="/assets/tracs.css?v=<?=$_css_v?>">
+<link rel="stylesheet" href="/assets/tracs-spacing.css?v=<?=$_spacing_css_v?>">
 <script>window.TRACS_BUILD_INFO = <?=json_encode($tracs_build_info, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)?>;</script>
 </head><body>
 <div class="login-shell two-factor-shell">

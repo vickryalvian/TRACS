@@ -5,7 +5,7 @@
 .infra-page {
   display: flex;
   flex-direction: column;
-  gap: var(--gap);
+  gap: var(--page-section-gap);
   max-width: 100%;
   overflow-x: clip;
   --infra-degraded: #f97316;
@@ -65,7 +65,7 @@
 .infra-summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: var(--gap);
+  gap: var(--card-gap);
 }
 
 .infra-summary-card {
@@ -163,7 +163,7 @@
 .infra-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(510px, 572px);
-  gap: var(--gap);
+  gap: var(--card-gap);
   align-items: stretch;
   min-width: 0;
 }

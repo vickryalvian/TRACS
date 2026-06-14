@@ -267,8 +267,12 @@ include 'includes/header.php';
             <i data-lucide="download" class="icon-xs"></i>
             Export CSV
           </div>
-          <label>From Date<input type="date" name="from" class="form-input"></label>
-          <label>To Date<input type="date" name="to" class="form-input"></label>
+          <?=tracs_date_range_picker([
+              'id' => 'financeExportRange',
+              'start_name' => 'from',
+              'end_name' => 'to',
+              'label' => 'Export date range',
+          ])?>
           <button type="submit" class="btn btn-primary"><i data-lucide="download" class="icon-sm"></i>Download CSV</button>
         </form>
       </details>
@@ -518,7 +522,7 @@ include 'includes/header.php';
      EDIT TRANSFER MODAL (edit only — new entries use inline form)
 ══════════════════════════════════════════════ -->
 <div class="modal-overlay hidden" id="btModal">
-<div class="modal" style="max-width:580px">
+<div class="modal modal-wide">
   <div class="modal-head">
     <div>
       <div class="modal-title">Edit Transfer</div>
@@ -541,8 +545,8 @@ include 'includes/header.php';
     </div>
 
     <!-- Sender -->
-    <div style="border:1px solid var(--bd1);border-radius:var(--r2);padding:10px 12px;margin-bottom:10px">
-      <div style="font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--tx3);font-family:var(--mono);margin-bottom:8px">Sender Account</div>
+    <div class="form-section">
+      <div class="form-section-title">Sender Account</div>
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Email</label>
@@ -564,8 +568,8 @@ include 'includes/header.php';
     </div>
 
     <!-- Receiver -->
-    <div style="border:1px solid var(--bd1);border-radius:var(--r2);padding:10px 12px;margin-bottom:10px">
-      <div style="font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--tx3);font-family:var(--mono);margin-bottom:8px">Receiver Account</div>
+    <div class="form-section">
+      <div class="form-section-title">Receiver Account</div>
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Email</label>
