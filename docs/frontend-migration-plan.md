@@ -126,3 +126,8 @@ Every module batch documents:
 - Calendar reference behavior and visual density are matched.
 - Manual and automated regression checks pass.
 - PHP fallback and rollback are proven before release.
+
+Shared React implementation must follow
+`docs/tailwind-design-system-plan.md` and `docs/design-token-map.md`. The Phase 3
+CSS templates under `frontend/src/styles/` remain non-production scaffolding
+until a component-foundation batch explicitly connects them to a Vite entry.

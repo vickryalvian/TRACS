@@ -348,3 +348,8 @@ A React module is ready for cutover only when:
 - No global CSS or Tailwind leakage affects non-React pages.
 - Rollback requires no database reversal unless that batch explicitly includes
   reviewed migrations.
+
+The canonical token and component contracts are maintained in:
+
+- `docs/tailwind-design-system-plan.md`
+- `docs/design-token-map.md`

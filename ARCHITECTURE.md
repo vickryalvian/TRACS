@@ -217,6 +217,8 @@ See:
 - `docs/react-tailwind-architecture.md`
 - `docs/frontend-migration-plan.md`
 - `docs/php-api-architecture-plan.md`
+- `docs/tailwind-design-system-plan.md`
+- `docs/design-token-map.md`
 
 ## Deployment And Docker
 
