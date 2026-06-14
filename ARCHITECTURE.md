@@ -195,6 +195,29 @@ Use `config/install.sql` for a fresh database and dated files in `config/migrati
 - Prefer compact panels, consistent gaps/padding, contextual icons, readable completed states, and blue only for active/highlighted state.
 - Use shared modal, toast, loading, error, dropdown, and theme helpers before adding module-specific copies.
 
+## Refactor Frontend Direction
+
+The current application remains server-rendered PHP during the incremental
+refactor. New React modules follow the Calendar pilot pattern: authenticated PHP
+shell, explicit React root, module-specific manifest assets, same-origin PHP
+APIs, and source-owned business rules.
+
+Tailwind must not load Preflight into hybrid pages. React bundles use prefixed
+utilities, separate output, root-scoped handwritten CSS, and semantic theme
+tokens mapped to the existing TRACS CSS variables. Existing Calendar uses the
+`cal:` prefix and remains unchanged until a dedicated migration is approved.
+
+The future consolidated source root is `frontend/`, with shared UI/pattern
+components and independent module entries. PHP loads hashed assets through a
+shared allowlisted Vite manifest helper. Existing PHP rendering remains the
+fallback until characterization, permission, API, visual, and smoke checks pass.
+
+See:
+
+- `docs/react-tailwind-architecture.md`
+- `docs/frontend-migration-plan.md`
+- `docs/php-api-architecture-plan.md`
+
 ## Deployment And Docker
 
 - Production target: Ubuntu 24.04-class VPS with Nginx or Apache, PHP-FPM, MySQL/MariaDB, HTTPS, cron, backups, and monitoring.

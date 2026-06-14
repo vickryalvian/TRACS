@@ -85,6 +85,13 @@ their frontend migration remains late because of the system-wide risk.
 
 ## Current Phase
 
-Phase 1 establishes documentation and test expectations only. It performs no
-module refactor, React conversion, UI change, business-logic change, dependency
-installation, or database-schema change.
+Phase 2 defines the React-island, Tailwind-isolation, Vite build, shared
+component, API-client, PHP backend, and module migration architecture. It
+performs no module refactor, React conversion, UI change, business-logic change,
+dependency installation, or database-schema change.
+
+Canonical Phase 2 plans:
+
+- `docs/react-tailwind-architecture.md`
+- `docs/frontend-migration-plan.md`
+- `docs/php-api-architecture-plan.md`

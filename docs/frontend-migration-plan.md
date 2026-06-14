@@ -1,0 +1,128 @@
+# TRACS Frontend Migration Plan
+
+## Migration Unit
+
+The unit of migration is one reviewable behavior slice within one module, not an
+entire system phase. Existing PHP rendering remains the fallback until all
+required slices reach parity.
+
+Recommended module sequence:
+
+1. Shift Assignment.
+2. Checklist and Reminder.
+3. Task Assignment and Monitoring.
+4. Dashboard widgets, one widget at a time.
+5. Cases board and ticket workflow.
+6. Shift Reports.
+7. MoM / Meeting.
+8. Cancellation Feedback.
+9. Domain Transfer Log and Finance.
+10. Domain Price Crosscheck.
+11. Infrastructure Pulse.
+12. OpsTrack, Network Pulse, and TV Mode.
+13. User Management, roles, and permissions.
+14. Activity Log, reports, and CSV exports.
+15. Settings and Profile.
+16. Authentication, login, and 2FA UI.
+17. Super Admin monitoring and deployment tools.
+
+Authentication and permission contracts are tested early, but their UI migrates
+late because errors affect every protected route.
+
+## Per-Module Stages
+
+1. **Inventory:** routes, assets, APIs, permissions, tables, uploads, exports,
+   audit effects, notifications, and linked modules.
+2. **Characterize:** automate or document current behavior and role scope.
+3. **API readiness:** expose stable read contracts without changing business rules.
+4. **Read-only React island:** render existing data while PHP remains available.
+5. **Filters and navigation:** reproduce query, date, sorting, and responsive behavior.
+6. **Mutations:** migrate one create/update/action flow at a time.
+7. **Advanced interaction:** drag/drop, realtime/polling, uploads, or complex tables.
+8. **Parity review:** Calendar visual reference, accessibility, permissions, and data.
+9. **Controlled cutover:** server-side feature flag selects React or PHP rendering.
+10. **Cleanup:** remove legacy frontend code only after stable production evidence.
+
+## Shift Assignment Batches
+
+Shift Assignment is the first major migration after Calendar, but must be split:
+
+1. Contract tests and read-only timeline.
+2. Shared toolbar, range navigation, filters, and search.
+3. Daily, Weekly, and Monthly views using the same assignment source.
+4. Assignment create/edit/confirm/status actions.
+5. Drag/resize, overlap, rest, jumpshift, and overtime feedback.
+6. Workload recap, warnings, Schedule Insights, and audit.
+7. Copy Last Week and replacement.
+8. Monthly templates and configuration.
+9. Permission matrix, seeded-data parity, fallback, and cutover.
+
+The canonical shifts remain:
+
+- Shift 1: `00:00-08:00`.
+- Shift 2: `08:00-16:00`.
+- Shift 3: `16:00-24:00`, stored as a cross-day midnight end.
+
+Seeded assignments must remain visible in Daily and Weekly views throughout the
+migration.
+
+## Dashboard Strategy
+
+Do not replace `public/index.php` in one batch. Migrate independent widgets
+behind separate roots while the PHP page continues coordinating layout:
+
+- Stat strip.
+- Cases.
+- Checklist and Reminder.
+- Assignments and Activity.
+- Shift Handover.
+- Currency Converter.
+- Infrastructure Pulse summary.
+- Attention Center and notifications.
+
+Shared state between widgets should stay server-backed until multiple React
+widgets demonstrate a need for a common client cache.
+
+## Feature Flags And Rollback
+
+Flags are evaluated by PHP before rendering and must default to the current PHP
+implementation. Suggested future shape:
+
+```text
+TRACS_REACT_SHIFT_ASSIGNMENT=0
+TRACS_REACT_CHECKLIST_REMINDER=0
+```
+
+Do not expose an unrestricted browser switch. A rollback should disable the
+module flag and restore the PHP rendering without changing the database.
+
+Every module batch documents:
+
+- Branch and commit.
+- Changed files and generated assets.
+- Enabled roles/environments.
+- API and database dependencies.
+- Test evidence.
+- Feature-flag rollback.
+- Code rollback.
+- Database restore or down migration when applicable.
+
+## Migration Risk
+
+| Risk | Areas | Required approach |
+| --- | --- | --- |
+| Critical | Auth, roles, permissions, User Management, Shift Assignment, Server Health | Small slices, complete role matrix, no client authority |
+| High | Calendar, Dashboard, Cases, MoM, Domain Price, notifications, uploads | Cross-module tests and PHP fallback |
+| Medium | Shift Reports, Checklist, Reminders, Tasks, Domains, Finance, Activity, Feedback | Standard island migration and object-scope tests |
+| Medium / unknown | Infrastructure Pulse, OpsTrack, Network Pulse, TV Mode | Separate implemented behavior from planned telemetry |
+
+## Definition Of Done
+
+- Existing business behavior and data are preserved.
+- PHP permission and object-scope enforcement remains authoritative.
+- API contracts and errors are documented and tested.
+- React has loading, empty, error, success, and permission states.
+- Tailwind follows TRACS tokens and does not leak globally.
+- Calendar reference behavior and visual density are matched.
+- Manual and automated regression checks pass.
+- PHP fallback and rollback are proven before release.

@@ -98,6 +98,9 @@ Change this immediately after first login.
 | [docs/manual-smoke-checklist.md](docs/manual-smoke-checklist.md) | Manual smoke coverage for critical TRACS pages and workflows. |
 | [docs/permission-api-contract-checklist.md](docs/permission-api-contract-checklist.md) | Role, object-scope, CSRF, API, export, upload, and monitoring contracts. |
 | [docs/calendar-reference-regression-checklist.md](docs/calendar-reference-regression-checklist.md) | Zero-mistake Calendar reference regression checklist. |
+| [docs/react-tailwind-architecture.md](docs/react-tailwind-architecture.md) | React islands, Tailwind isolation, Vite loading, components, tokens, and API client direction. |
+| [docs/frontend-migration-plan.md](docs/frontend-migration-plan.md) | Module order, behavior-slice migration stages, feature flags, parity, and rollback. |
+| [docs/php-api-architecture-plan.md](docs/php-api-architecture-plan.md) | Gradual PHP controller, middleware, service, repository, response, and security direction. |
 
 Files under `MOM README/` are historical package documentation. Files under backup trees are not current documentation.
 
