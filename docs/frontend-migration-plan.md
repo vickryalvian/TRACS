@@ -189,3 +189,9 @@ Phase 12 hardens the same isolated page as a read-only production candidate:
 compact Calendar-aligned density, staged filters, `dd-mm-yyyy` inputs with ISO
 API conversion, stale-request cancellation, responsive table/cards, clearer
 error states, and holiday/overtime notices. It remains unlinked and restricted.
+
+Phase 13 plans mutations without activating them. The preview retains its
+read-only banner and GET-only API client. Future forms remain absent or disabled
+until one backend endpoint has passed CSRF, permission/scope, transaction,
+audit, idempotency, rollback, and disposable-database tests. Create and update
+are planned first; delete remains blocked pending a retention decision.

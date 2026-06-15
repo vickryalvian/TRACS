@@ -322,6 +322,24 @@ and `403` client handling, request cancellation, responsive read surfaces,
 approved GET-only resources, access restrictions, navigation isolation, and
 bundle entry/size budgets.
 
+## Phase 13 Write API Contract Planning
+
+Run the non-mutating planning guard:
+
+```bash
+php tests/shift-assignment-write-contract-plan.php
+```
+
+It verifies the documented endpoint, permission, CSRF, migration, and delete
+decision gates. It also confirms the v1 assignments route remains GET-only, the
+React API client contains no write method, pilot access/banner remain intact,
+the preview is absent from navigation, and no planned v1 write route exists.
+
+No write integration test is permitted against production data. A future
+implementation needs a disposable MySQL database and fixture users before
+testing CSRF, permission/scope, transactions, audit persistence, idempotency,
+conflicts, or rollback.
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:

@@ -85,8 +85,17 @@ their frontend migration remains late because of the system-wide risk.
 
 ## Current Phase
 
-Phase 12 hardens the authenticated, unlinked React preview as a read-only
-production candidate:
+Phase 13 plans Shift Assignment write API contracts without implementing them.
+The plan defines future create/update/template/copy/overtime/warning/export
+contracts, CSRF and validation rules, audit/data-safety expectations, proposed
+granular permissions, and React form behavior.
+
+Delete remains blocked pending an approved retention or soft-delete design.
+No v1 write route, active React action, permission seed, migration, data write,
+navigation change, Calendar change, or legacy-page change is included.
+
+Phase 12 previously hardened the authenticated, unlinked React preview as a
+read-only production candidate:
 
 ```text
 /shifting-assignment.php
@@ -187,3 +196,10 @@ Phase 12 candidate notes:
 - `frontend/tests/preview-bundle-contract.mjs`
 - `tests/shift-assignment-readonly-candidate.php`
 - `docs/shift-assignment-preview-parity.md`
+
+Phase 13 write-contract notes:
+
+- `docs/shift-assignment-write-api-contract.md`
+- `tests/shift-assignment-write-contract-plan.php`
+- `docs/permission-api-contract-checklist.md`
+- `docs/API_SECURITY_INVENTORY.md`

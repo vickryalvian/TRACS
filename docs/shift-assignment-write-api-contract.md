@@ -1,0 +1,387 @@
+# Shift Assignment Write API Contract Plan
+
+## Phase 13 Boundary
+
+This document plans future Shift Assignment mutations. Phase 13 does not add a
+write route, change the React preview, seed permissions, alter the database, or
+modify real schedules.
+
+Current authority remains:
+
+- `public/shifting-assignment.php` and its legacy API;
+- `modules/shifting-assignment/ShiftingAssignmentService.php`;
+- the existing `shifts.manage`, `shifts.settings`,
+  `shifts.monthly_templates`, and `shifts.export` permissions;
+- the read-only v1 context and assignments endpoints.
+
+The React preview remains an exact `super_admin` plus `shifts.view` read-only
+pilot. `public/calendar.php` remains the zero-mistake visual reference.
+
+## Contract Status
+
+| Contract | Proposed method and path | Status |
+| --- | --- | --- |
+| Create assignment | `POST /api/v1/shift-assignment/assignments.php` | Planned; first implementation candidate |
+| Update assignment | `PATCH /api/v1/shift-assignment/assignments/{id}.php` | Planned after create |
+| Delete assignment | `DELETE /api/v1/shift-assignment/assignments/{id}.php` | Blocked pending delete/soft-delete decision |
+| Generate monthly template preview | `POST /api/v1/shift-assignment/templates/generate.php` | Planned mutation because legacy preview may update state |
+| Copy schedule | `POST /api/v1/shift-assignment/templates/copy.php` | Planned preview/confirm bulk workflow |
+| Apply monthly template | `POST /api/v1/shift-assignment/templates/{id}/apply.php` | Planned separately from generation |
+| Assign overtime | `POST /api/v1/shift-assignment/overtime.php` | Planned facade over normal assignment validation |
+| Resolve warning | `POST /api/v1/shift-assignment/warnings/{key}/resolve.php` | Planned only for dismissible warnings |
+| CSV export | `GET /api/v1/shift-assignment/export.php` | Planned read/export contract; no CSRF |
+| Bulk update | `PATCH /api/v1/shift-assignment/assignments/bulk.php` | Deferred until single-record writes are proven |
+
+Paths containing `{id}` or `{key}` describe the target contract. The eventual
+thin PHP route layout may use an equivalent validated query/path adapter if the
+current server cannot route dynamic PHP filenames safely.
+
+## Permission Transition
+
+The database currently defines only:
+
+- `shifts.view`
+- `shifts.manage`
+- `shifts.settings`
+- `shifts.monthly_templates`
+- `shifts.export`
+
+The granular permissions below are target contracts and do not exist yet:
+
+| Future permission | Future capability | Current compatibility gate |
+| --- | --- | --- |
+| `shifts.create` | Create assignment or overtime assignment | `shifts.manage` |
+| `shifts.update` | Edit, resize, confirm, or change status | `shifts.manage` |
+| `shifts.delete` | Delete/soft-delete an assignment | No current assignment-delete behavior |
+| `shifts.template.generate` | Create/save/preview a monthly template | `shifts.monthly_templates` or `shifts.settings` |
+| `shifts.template.copy` | Copy last week or duplicate a monthly template | `shifts.manage` or `shifts.monthly_templates` |
+| `shifts.overtime.create` | Create overtime/holiday coverage assignment | `shifts.manage` |
+| `shifts.warning.resolve` | Dismiss an allowed warning | `shifts.manage` |
+| `shifts.export` | Export scoped data | Existing permission |
+| `shifts.audit.view` | View assignment history/audit detail | Currently covered by `shifts.view` |
+
+Do not make a v1 write depend on a permission key that has not been seeded. A
+later permission migration must include paired `up.sql` and `down.sql`, role
+grant verification, and compatibility tests. Until that migration is approved,
+an implemented endpoint must use the current gate and document the future
+granular mapping.
+
+Suggested initial role intent, subject to explicit approval:
+
+| Role | Intended write scope |
+| --- | --- |
+| Super Admin | All approved permissions and global scope |
+| Admin | Create/update/template/overtime/export; delete only if separately approved |
+| Supervisor | Create/update/template copy within assigned division; no global settings |
+| Agent | Read own schedule; no assignment writes by default |
+| Intern | Read own schedule; no assignment writes by default |
+
+Role names never grant a write by themselves. PHP must check the exact
+permission and then enforce object, agent, and division scope.
+
+## Common Security Contract
+
+Every future mutation must:
+
+1. Accept only its documented HTTP method and return `405` with `Allow`
+   otherwise.
+2. Require a fully authenticated, active session with completed 2FA.
+3. Reject missing authentication with `401`.
+4. Require its exact current or future permission and reject denial with `403`.
+5. Verify object/division/agent scope before reading before-values or writing.
+6. Require CSRF from the context response using
+   `X-CSRF-Token: <token>`.
+7. Reject missing or invalid CSRF with the standard JSON envelope and `403`.
+8. Parse a JSON object and reject malformed bodies with `400`.
+9. Return field validation failures with `422`.
+10. Return state, overlap, version, or idempotency conflicts with `409`.
+11. Use prepared queries and a service-owned transaction for linked writes.
+12. Write the required audit record before reporting success.
+13. Return sanitized errors without SQL, stack traces, paths, credentials,
+    environment values, session identifiers, or CSRF tokens.
+
+Frontend permission flags are presentation hints only. Hiding a button cannot
+replace any server-side check.
+
+## Standard Envelopes
+
+Success:
+
+```json
+{
+  "success": true,
+  "message": "Assignment created.",
+  "data": {
+    "assignment": {},
+    "warnings": []
+  },
+  "errors": [],
+  "meta": {
+    "request_id": "..."
+  }
+}
+```
+
+Validation failure:
+
+```json
+{
+  "success": false,
+  "message": "Validation failed.",
+  "data": {},
+  "errors": [
+    {
+      "field": "agent_id",
+      "message": "Agent is required."
+    }
+  ],
+  "meta": {
+    "request_id": "..."
+  }
+}
+```
+
+Recommended statuses:
+
+- `201` create succeeded.
+- `200` update/action/export metadata succeeded.
+- `400` malformed JSON or request.
+- `401` missing, expired, or incomplete authentication.
+- `403` permission, scope, or CSRF denial.
+- `404` missing resource or intentional concealment.
+- `405` unsupported method.
+- `409` overlap, stale version, duplicate execution, or state conflict.
+- `422` field/business validation.
+- `500` sanitized unexpected failure with private correlated logging.
+
+## Assignment Create
+
+```text
+POST /api/v1/shift-assignment/assignments.php
+```
+
+Required permission: future `shifts.create`; current compatibility gate
+`shifts.manage`.
+
+Proposed JSON:
+
+```json
+{
+  "agent_id": 21,
+  "date": "2026-07-01",
+  "shift_type": "regular_shift",
+  "shift_template_id": 1,
+  "start_time": "00:00",
+  "end_time": "08:00",
+  "break_minutes": 0,
+  "status": "assigned",
+  "notes": "",
+  "client_request_id": "..."
+}
+```
+
+Validation:
+
+- `agent_id` is a positive active user inside the caller's scheduling scope.
+- `date` is strict ISO `YYYY-MM-DD`; UI conversion from `dd-mm-yyyy` occurs
+  before the request.
+- `shift_type`, status, and template use server allowlists.
+- start and end are strict 24-hour times; equal times are invalid.
+- Shift 3 `16:00-24:00` is represented internally as a cross-day midnight end.
+- break is non-negative, below gross duration, and within the current limit.
+- calculated duration respects division workload settings.
+- new records cannot begin as active or completed.
+- overlapping counted assignments are rejected.
+- unavailable agents are rejected according to current behavior.
+- rest below 480 minutes returns a jumpshift warning; it is not silently lost.
+- weekly totals, holiday coverage, overtime, approval, notifications, and
+  English day-name conventions remain service-owned.
+- source defaults to `manual`; clients cannot claim template/system provenance.
+- dummy reset or automatic data replacement is never accepted.
+
+The endpoint should accept an idempotency/client request ID before production
+activation so a retry cannot create duplicate real assignments.
+
+## Assignment Update
+
+```text
+PATCH /api/v1/shift-assignment/assignments/{id}.php
+```
+
+Required permission: future `shifts.update`; current gate `shifts.manage`.
+
+The request uses the same field rules as create and must include a concurrency
+token such as the last observed `updated_at` or an opaque version:
+
+```json
+{
+  "agent_id": 21,
+  "date": "2026-07-01",
+  "shift_type": "regular_shift",
+  "start_time": "08:00",
+  "end_time": "16:00",
+  "status": "confirmed",
+  "version": "..."
+}
+```
+
+PHP must load the scoped record, capture the before snapshot, reject stale
+versions with `409`, validate the complete resulting resource, and update
+holiday coverage and notifications consistently. PATCH must not permit
+unlisted fields such as creator IDs, approver IDs, source, audit fields, or
+division overrides.
+
+Status, confirmation, and resize may later receive narrower action endpoints,
+but they must not bypass the same validation, permission, scope, concurrency,
+and audit rules.
+
+## Assignment Delete
+
+```text
+DELETE /api/v1/shift-assignment/assignments/{id}.php
+```
+
+This contract is not approved for implementation. The legacy module has no
+assignment-delete action. Before approval, decide:
+
+- whether cancellation is sufficient;
+- whether the schema supports a safe soft delete;
+- retention requirements for generated assignments and holiday coverage;
+- behavior for monthly-template links, notifications, warnings, and history;
+- who may delete and whether exact Super Admin approval is required.
+
+No hard delete may be added merely to satisfy REST naming. A later proposal
+must preserve a before snapshot and audit trail and include restoration tests.
+
+## Templates And Copy
+
+Template generation and copy operations are bulk mutations even when called
+"preview". The current monthly preview may mark a draft as previewed.
+
+Every future bulk flow requires:
+
+1. A non-committing preview response with counts, conflicts, warnings, target
+   range, and a short-lived confirmation token.
+2. A second explicit confirmation request carrying that token.
+3. Idempotency protection.
+4. A transaction boundary or a documented per-item partial-success model.
+5. Created/skipped IDs and reasons in the response.
+6. Audit records for the parent action and affected assignments.
+7. No overwrite of seeded real schedules and no automatic dummy reset.
+
+`templates/generate.php` validates target month, division, agents, patterns,
+rest days, shift definitions, and future-month rules. `templates/copy.php`
+validates source and target ranges and must skip or explicitly resolve
+conflicts. Applying a monthly template remains a separate confirmed operation.
+
+## Overtime
+
+```text
+POST /api/v1/shift-assignment/overtime.php
+```
+
+Required permission: future `shifts.overtime.create`; current gate
+`shifts.manage`.
+
+Overtime is still an assignment. This endpoint must delegate to the same
+assignment service and validation rather than create parallel write logic. It
+must validate assignment type flags, approval state, holiday coverage, weekly
+thresholds, overlap, availability, and minimum rest. The response must identify
+pending approval and warnings without exposing private agent fields.
+
+## Warning Resolution
+
+```text
+POST /api/v1/shift-assignment/warnings/{key}/resolve.php
+```
+
+Required permission: future `shifts.warning.resolve`; current gate
+`shifts.manage`.
+
+Only allowlisted dismissible warning types may be resolved. The warning key,
+optional assignment/user reference, date, and note must remain scoped and
+validated. Structural conflicts must not be hidden by changing frontend state
+alone. Recalculation may reopen a warning when the underlying schedule changes.
+
+## Export
+
+```text
+GET /api/v1/shift-assignment/export.php
+```
+
+Export remains a read action requiring `shifts.export` plus the same data scope
+as the assignments API. GET does not require CSRF. Date/filter validation,
+headers, filename, CSV escaping, UTF-8 behavior, and sensitive-field
+allowlisting require contract tests before replacing the legacy export.
+
+## Audit And Observability
+
+Every mutation audit must include, where supported:
+
+- actor user ID;
+- safe actor display/email reference only under the existing audit policy;
+- action type;
+- assignment/template/warning target;
+- before snapshot for update/delete/status actions;
+- after snapshot for create/update actions;
+- timestamp;
+- API request ID;
+- safe IP/user-agent metadata if the existing logger supports it;
+- success/failure outcome where appropriate.
+
+Never log session IDs, CSRF tokens, passwords, 2FA secrets, raw request headers,
+or database credentials. Audit failure policy must be explicit: security- or
+compliance-critical writes should fail closed rather than report success
+without the required audit.
+
+## React Write Behavior
+
+Until each backend contract is implemented and tested, Add/Edit/Delete/Template
+controls remain absent or disabled and the read-only pilot banner remains.
+
+Future forms must:
+
+- derive visibility from permission metadata but rely on PHP enforcement;
+- show a saving state and prevent duplicate submission;
+- send the context-provided CSRF header;
+- keep the modal open on failure;
+- map field errors and focus the first invalid control;
+- show success toast only after confirmed API success;
+- keep modal-contained toast width within the modal;
+- warn about unsaved changes when dirty;
+- avoid optimistic mutation until rollback semantics are proven;
+- refresh the read assignments contract after success;
+- handle `401`, `403`, `409`, and `422` distinctly.
+
+## Implementation Order And Gates
+
+Recommended future batches:
+
+1. Permission compatibility decision and disposable-database fixtures.
+2. Create assignment endpoint with CSRF, scope, transaction, audit, and tests.
+3. Disabled internal React create form, then limited activation.
+4. Update assignment endpoint with concurrency protection.
+5. Status/confirm/resize parity.
+6. Overtime and warning resolution.
+7. Template preview/confirm and copy.
+8. Export parity.
+9. Delete only after a separately approved retention design.
+10. Bulk update only after single-record production evidence.
+
+Each endpoint is implemented and reviewed alone. It needs unit/contract,
+integration, role/scope, CSRF, audit, idempotency, rollback, and manual browser
+evidence before its React control becomes active.
+
+## Data And Rollback Safety
+
+- No write test may run against production data.
+- Use a disposable MySQL database and fixture users/schedules.
+- Back up affected tables before an approved production pilot.
+- Prefer transactions for linked assignment/holiday/template writes.
+- Bulk operations require preview and explicit confirmation.
+- Destructive behavior prefers soft delete only when the existing schema and
+  restoration contract support it.
+- Every future migration includes `up.sql`, `down.sql`, verification queries,
+  backup instructions, and tested rollback.
+- Rollout remains role-gated or feature-flagged with the legacy page available.
+

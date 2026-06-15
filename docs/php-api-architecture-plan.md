@@ -303,6 +303,23 @@ cannot expand access. Future write resources remain prohibited until separate
 CSRF, permission, object-scope, transaction, validation, audit, notification,
 and rollback contracts are approved.
 
+## Phase 13 Shift Assignment Write Planning
+
+`docs/shift-assignment-write-api-contract.md` defines the future mutation
+boundary without adding routes. New JSON writes will use the Phase 5 bootstrap,
+CSRF header validation, five-key envelope, request IDs, service transactions,
+server-side scope, and sanitized error handling.
+
+The current database has broad Shift Assignment permissions. Proposed granular
+keys are documentation-only until a separately reviewed paired `up.sql` and
+`down.sql` migration is approved. Implemented endpoints must not require
+unseeded permissions or weaken the existing compatibility gate.
+
+Create is the first recommended write slice. Update follows with concurrency
+protection. Delete remains blocked because the current module has no assignment
+delete behavior. Template and copy operations require preview/confirmation,
+idempotency, audit, and an explicit partial-success or transaction contract.
+
 Automated checks:
 
 ```bash

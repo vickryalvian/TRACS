@@ -482,3 +482,34 @@ git branch -D refactor/phase-12-shift-readonly-production-candidate
 ```
 
 No database restore, navigation rollback, or legacy-page fallback is required.
+
+## Phase 13 Write API Contract Planning Rollback
+
+Phase 13 adds documentation and a non-mutating source guard only. It does not
+add endpoints, permissions, schema, data writes, UI actions, navigation, or
+changes to the legacy page.
+
+Before commit:
+
+```bash
+git restore --staged .
+git restore .
+rm docs/shift-assignment-write-api-contract.md
+rm tests/shift-assignment-write-contract-plan.php
+```
+
+After commit:
+
+```bash
+git revert <phase-13-commit-sha>
+```
+
+To abandon the unmerged branch:
+
+```bash
+git switch refactor/phase-12-shift-readonly-production-candidate
+git branch -D refactor/phase-13-shift-write-api-contracts
+```
+
+No database restore, frontend rebuild, navigation rollback, or legacy-page
+fallback is required.

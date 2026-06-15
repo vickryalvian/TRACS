@@ -356,6 +356,22 @@ CSRF, validation, transaction, conflict, audit, notification, and rollback
 contract. DELETE needs separate approval because the current module has no
 assignment-delete action.
 
+## Phase 13 Write Contract Plan
+
+The canonical future mutation plan is:
+
+- `docs/shift-assignment-write-api-contract.md`
+
+It defines create, update, blocked delete, template generation/copy/apply,
+overtime, warning resolution, export, and deferred bulk contracts. It also
+records the transition from the existing broad permissions to proposed
+granular permissions, without seeding or enforcing new permission keys yet.
+
+Phase 13 adds no route, service mutation, React action, schema change, seed, or
+data write. The v1 assignments endpoint remains GET-only, the preview remains
+read-only and exact `super_admin` plus `shifts.view`, and the legacy module
+remains authoritative.
+
 ## Visible Risks To Protect
 
 1. The legacy aggregate payload includes agent email and mixed concerns; future

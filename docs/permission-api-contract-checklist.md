@@ -84,6 +84,14 @@ endpoint solely to make it match the target during baseline creation.
       configuration records.
 - [ ] Invalid overlap, duration, date/time, availability, and enum input returns
       safe validation errors without partial writes.
+- [ ] Future v1 writes follow
+      `docs/shift-assignment-write-api-contract.md`; Phase 13 creates no route.
+- [ ] Every future mutation requires authenticated session, exact permission,
+      server-side scope, valid `X-CSRF-Token`, validation, transaction, and audit.
+- [ ] Proposed granular Shift Assignment permissions are not used until paired
+      `up.sql` and `down.sql` permission seeding is approved and verified.
+- [ ] Assignment DELETE remains unavailable until retention, soft-delete,
+      restoration, template-link, and audit behavior receive separate approval.
 
 ### Authentication And Administration
 
