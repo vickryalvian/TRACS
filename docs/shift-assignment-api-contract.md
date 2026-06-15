@@ -309,6 +309,19 @@ npm run build:preview
 Missing or malformed assets produce a safe build-required panel instead of a
 fatal PHP error or filesystem detail.
 
+## Phase 10 Parity Gate
+
+Role-based expectations and the manual parity procedure are canonical in:
+
+- `docs/shift-assignment-role-test-matrix.md`
+- `docs/shift-assignment-preview-parity.md`
+
+`tests/shift-assignment-preview-parity.php` provides a non-mutating source gate
+for shared page authentication, `shifts.view`, navigation isolation, approved
+GET resources, v1 route permissions, default role grants, and server-side
+self/division scope. Live record and visual parity still require authenticated
+disposable fixtures and recorded browser evidence.
+
 Future writes are not approved in this phase:
 
 ```text

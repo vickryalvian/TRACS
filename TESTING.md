@@ -260,6 +260,27 @@ flow. With an authenticated fixture account, verify the preview renders without
 console errors, the three GET APIs remain scoped, filters load data, and the
 legacy page and sidebar remain unchanged.
 
+## Phase 10 Role-Based Preview Parity
+
+Canonical manual evidence and role expectations:
+
+- `docs/shift-assignment-preview-parity.md`
+- `docs/shift-assignment-role-test-matrix.md`
+
+Run the non-mutating parity gate:
+
+```bash
+php tests/shift-assignment-preview-parity.php
+```
+
+The gate protects shared authentication and `shifts.view` requirements,
+production navigation isolation, GET-only React API use, v1 route permissions,
+default role grants, and server-side self/division scope characterization.
+
+Authenticated role evidence still requires disposable fixture accounts and a
+browser environment. Record each role result in the matrix without passwords,
+2FA secrets, session IDs, or production user data.
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:

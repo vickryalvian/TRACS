@@ -390,3 +390,34 @@ git branch -D refactor/phase-9-shift-assignment-react-preview
 No database restore or legacy UI fallback operation is required. Removing the
 preview page or assets returns its URL to unavailable while
 `public/shifting-assignment.php` continues normally.
+
+## Phase 10 Preview Parity Testing Rollback
+
+Phase 10 adds documentation and a non-mutating source-level parity test only.
+It does not change pages, navigation, APIs, business logic, schema, or data.
+
+Before commit:
+
+```bash
+git restore --staged .
+git restore .
+rm docs/shift-assignment-preview-parity.md
+rm docs/shift-assignment-role-test-matrix.md
+rm tests/shift-assignment-preview-parity.php
+```
+
+After commit:
+
+```bash
+git revert <phase-10-commit-sha>
+```
+
+To abandon the unmerged branch:
+
+```bash
+git switch refactor/phase-9-shift-assignment-react-preview
+git branch -D refactor/phase-10-shift-preview-parity-testing
+```
+
+No database restore, frontend rebuild, navigation rollback, or legacy page
+fallback is required.

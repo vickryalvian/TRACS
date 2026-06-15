@@ -85,16 +85,18 @@ their frontend migration remains late because of the system-wide risk.
 
 ## Current Phase
 
-Phase 9 mounts the read-only Shift Assignment React/Tailwind entry at the
-authenticated, unlinked preview:
+Phase 10 validates role, permission, data, security, and visual parity between
+the legacy Shift Assignment page and the authenticated, unlinked React preview:
 
 ```text
+/shifting-assignment.php
 /shift-assignment-react-preview.php
 ```
 
-The page requires `shifts.view`, resolves a fixed allowlisted Vite manifest
-entry, and safely explains when preview assets need building. React continues
-to use only the three protected GET contracts.
+The source-level parity gate protects shared authentication and `shifts.view`
+requirements, server-side self/division scope, GET-only API use, and navigation
+isolation. The manual guide requires role evidence for Super Admin, Admin,
+Supervisor, Agent, and Intern before any replacement decision.
 
 The existing PHP page, legacy API, CSV export, service, Calendar reference,
 database schema, data, production navigation, and Calendar remain unchanged.
@@ -166,3 +168,9 @@ Phase 9 authenticated preview notes:
 - `public/assets/react-dist/`
 - `frontend/vite.preview.config.js`
 - `tests/shift-assignment-react-preview.php`
+
+Phase 10 parity notes:
+
+- `docs/shift-assignment-preview-parity.md`
+- `docs/shift-assignment-role-test-matrix.md`
+- `tests/shift-assignment-preview-parity.php`
