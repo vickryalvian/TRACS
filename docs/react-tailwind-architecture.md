@@ -271,8 +271,8 @@ frontend/
       tracs-tailwind.css
 ```
 
-The Vite configuration currently exposes one named `sandbox` input and writes
-ignored validation artifacts to `frontend/dist/`. It does not write to
+The Vite configuration exposes named `sandbox` and `shiftAssignment` inputs and
+writes ignored validation artifacts to `frontend/dist/`. It does not write to
 `public/`, alter the root Calendar Vite configuration, or provide a production
 PHP mount. Future approved module entries will be added explicitly and may emit
 to `public/assets/react-dist/` only when the manifest loader and PHP fallback
@@ -303,6 +303,24 @@ Tailwind v4 configuration remains CSS-first. The build consumes `tokens.css`
 and `tracs-tailwind.css`; no Preflight import, JavaScript
 `tailwind.config.js`, PostCSS configuration, or global PHP stylesheet link is
 needed.
+
+## Phase 8 Shift Assignment Entry
+
+The `shiftAssignment` entry points to:
+
+```text
+frontend/src/modules/shift-assignment/main.jsx
+```
+
+It imports the shared no-Preflight `tr:` stylesheet and uses existing semantic
+TRACS variables. Its density follows Calendar: compact toolbar controls, four
+summary cards, a dense bordered table, responsive cards, a narrow warning
+panel, and explicit loading, empty, error, permission, and session states.
+
+The entry is not loaded by PHP and has no production navigation. A later
+approved authenticated pilot mount must provide the existing TRACS shell and
+load only this manifest entry. That mount must preserve
+`public/shifting-assignment.php` as the fallback until parity is verified.
 
 ## React Mount Contract
 

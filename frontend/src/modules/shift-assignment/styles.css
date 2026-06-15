@@ -1,0 +1,20 @@
+.shift-assignment-react-shell {
+  isolation: isolate;
+}
+
+.shift-assignment-react-shell :where(table) {
+  border-spacing: 0;
+}
+
+.shift-assignment-react-shell :where(select, input) {
+  color-scheme: light;
+}
+
+[data-theme="dark"] .shift-assignment-react-shell :where(select, input) {
+  color-scheme: dark;
+}
+
+.shift-assignment-react-shell :where(option) {
+  background: var(--s2);
+  color: var(--tx1);
+}

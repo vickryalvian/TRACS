@@ -18,6 +18,12 @@ npm run dev
 ignored validation output to `frontend/dist/`; it does not write into the
 production web root.
 
+Contract validation:
+
+```bash
+npm run test:contracts
+```
+
 ## Safety boundaries
 
 - `src/modules/_sandbox/` contains demonstration data and has no TRACS API
@@ -35,3 +41,16 @@ Tailwind v4 is configured through `src/styles/tokens.css` and
 `src/styles/tracs-tailwind.css`. A JavaScript `tailwind.config.js` or
 `postcss.config.js` is intentionally absent because the approved CSS-first
 configuration and `@tailwindcss/vite` plugin do not require them.
+
+## Shift Assignment read-only entry
+
+Phase 8 adds the named `shiftAssignment` Vite entry under
+`src/modules/shift-assignment/`. It consumes only:
+
+- `GET /api/v1/context.php`
+- `GET /api/v1/shift-assignment/context.php`
+- `GET /api/v1/shift-assignment/assignments.php`
+
+No PHP page or navigation item loads this entry yet. Local Vite output alone
+does not provide an authenticated TRACS session, so authenticated browser
+preview remains deferred until an approved PHP pilot mount is added.

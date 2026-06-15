@@ -31,6 +31,16 @@ async function readJson(response) {
   return response.json();
 }
 
+function normalizeErrors(errors) {
+  if (Array.isArray(errors)) {
+    return errors;
+  }
+  if (errors && typeof errors === 'object') {
+    return errors;
+  }
+  return [];
+}
+
 export function createApiClient({
   baseUrl = '',
   csrfMetaName = DEFAULT_CSRF_META_NAME,
@@ -87,7 +97,7 @@ export function createApiClient({
     if (!response.ok || payload.success !== true) {
       throw new ApiError(payload.message || 'The request could not be completed.', {
         status: response.status,
-        errors: Array.isArray(payload.errors) ? payload.errors : [],
+        errors: normalizeErrors(payload.errors),
         meta: payload.meta ?? {},
         response,
       });
@@ -97,7 +107,7 @@ export function createApiClient({
       success: true,
       message: payload.message ?? '',
       data: payload.data ?? null,
-      errors: Array.isArray(payload.errors) ? payload.errors : [],
+      errors: normalizeErrors(payload.errors),
       meta: payload.meta ?? {},
     };
   }

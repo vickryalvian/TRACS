@@ -157,3 +157,14 @@ future React shell may use it to obtain safe identity, effective permissions,
 and the CSRF header/token pair, but no current page calls it yet. UI controls
 may use returned permissions for presentation only; every module API must repeat
 the authoritative permission and object-scope checks in PHP.
+
+Phase 8 adds an isolated, read-only Shift Assignment React entry. It consumes
+the global context, Shift Assignment context, and Shift Assignment assignments
+GET contracts. It provides daily/weekly/monthly range controls, scoped filters,
+summary cards, responsive assignment table/cards, warnings, and loading,
+empty, validation, session, permission, and network states.
+
+The entry is build-only and is not mounted by a PHP page or linked from
+navigation. The existing `public/shifting-assignment.php` remains the production
+UI and rollback path. No create, update, delete, template, copy, overtime, or
+holiday mutation is present in the React shell.

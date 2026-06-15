@@ -85,20 +85,23 @@ their frontend migration remains late because of the system-wide risk.
 
 ## Current Phase
 
-Phase 7 adds the first scoped Shift Assignment data resource:
+Phase 8 adds an isolated read-only Shift Assignment React/Tailwind entry that
+consumes:
 
 ```text
+GET /api/v1/context.php
+GET /api/v1/shift-assignment/context.php
 GET /api/v1/shift-assignment/assignments.php
 ```
 
-It requires `shifts.view`, accepts GET only, validates ISO dates and allowlisted
-filters, and returns scoped assignments, workload summary, warnings, holiday
-notices, UI display dates, and a request ID. It uses the existing service for
-all reads, permission scope, and calculations.
+It includes read-only view/range/filter controls, summary cards, responsive
+assignments, warnings, and loading/empty/error states using isolated `tr:`
+Tailwind utilities with no Preflight.
 
 The existing PHP page, legacy API, CSV export, service, Calendar reference,
-database schema, data, and production layout remain unchanged. No write route,
-React page, or frontend integration is added.
+database schema, data, production layout, and navigation remain unchanged. The
+entry is not mounted by PHP, so `public/shifting-assignment.php` remains the
+only production Shift Assignment UI.
 
 Canonical Phase 2 plans:
 
@@ -150,3 +153,10 @@ Phase 7 read-resource notes:
 - `public/api/v1/shift-assignment/assignments.php`
 - `tests/shift-assignment-assignments-api-contract.php`
 - `docs/shift-assignment-api-contract.md`
+
+Phase 8 read-only frontend notes:
+
+- `frontend/src/modules/shift-assignment/`
+- `frontend/vite.config.js`
+- `frontend/tests/apiClient-contract.mjs`
+- `docs/frontend-migration-plan.md`

@@ -324,3 +324,34 @@ git branch -D refactor/phase-7-shift-assignment-read-api
 ```
 
 No database restore, frontend rebuild, or production page rollback is required.
+
+## Phase 8 Shift Assignment React Shell Rollback
+
+Phase 8 adds an unmounted frontend entry, frontend contract check, and
+documentation. It does not change PHP pages, navigation, APIs, schema, or data.
+
+Before commit:
+
+```bash
+git restore --staged .
+git restore .
+rm -rf frontend/src/modules/shift-assignment
+rm frontend/tests/apiClient-contract.mjs
+rm -rf frontend/dist
+```
+
+After commit:
+
+```bash
+git revert <phase-8-commit-sha>
+```
+
+To abandon the unmerged branch:
+
+```bash
+git switch refactor/phase-7-shift-assignment-read-api
+git branch -D refactor/phase-8-shift-assignment-react-shell
+```
+
+No database restore, asset deployment rollback, PHP fallback switch, or
+production navigation change is required because the entry is not mounted.

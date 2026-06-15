@@ -218,6 +218,24 @@ verify invalid query `422`, denied permission `403`, valid scoped data `200`,
 and seeded assignments in daily, weekly, and monthly views. These GET checks
 must not alter assignment or audit table counts.
 
+## Phase 8 Shift Assignment React Shell
+
+From `frontend/`:
+
+```bash
+npm run test:contracts
+npm run build
+```
+
+The frontend contract check covers the five-key response, object-shaped
+validation errors, `401` session callback, same-origin credentials,
+daily/weekly/monthly ranges, range navigation, and `dd-mm-yyyy` display.
+
+The build must contain separate sandbox and `shiftAssignment` entries and must
+write only ignored files under `frontend/dist/`. No PHP page currently mounts
+the Shift Assignment bundle, so browser auth/permission/render checks remain a
+later authenticated pilot-mount task.
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:

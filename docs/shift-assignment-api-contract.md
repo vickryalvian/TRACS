@@ -269,6 +269,23 @@ enforced the caller's server-side scope.
 
 No write method exists at this route. The legacy page and API remain unchanged.
 
+## Phase 8 Read-Only React Consumer
+
+The isolated frontend entry consumes the three protected GET contracts:
+
+- `/api/v1/context.php`
+- `/api/v1/shift-assignment/context.php`
+- `/api/v1/shift-assignment/assignments.php`
+
+It uses ISO query dates internally and displays API `dd-mm-yyyy` fields. Filter
+controls only change GET query parameters. The shell has no mutation request,
+action button, PHP mount, navigation link, or database behavior.
+
+HTTP failures remain distinct: `401` session expired, `403` permission denied,
+`422` filter validation, unexpected response/network failure, and successful
+empty data. Messages are rendered from sanitized API responses without raw
+stack traces.
+
 Future writes are not approved in this phase:
 
 ```text

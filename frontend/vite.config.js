@@ -17,6 +17,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         sandbox: fromFrontendRoot('./src/modules/_sandbox/main.jsx'),
+        shiftAssignment: fromFrontendRoot('./src/modules/shift-assignment/main.jsx'),
       },
     },
   },

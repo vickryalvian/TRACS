@@ -1,0 +1,30 @@
+import { createApiClient } from '../../lib/apiClient';
+
+const apiClient = createApiClient();
+
+function queryString(filters) {
+  const params = new URLSearchParams();
+
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value !== '' && value !== null && value !== undefined) {
+      params.set(key, String(value));
+    }
+  });
+
+  return params.toString();
+}
+
+export async function loadGlobalContext() {
+  return apiClient.request('/api/v1/context.php');
+}
+
+export async function loadShiftContext() {
+  return apiClient.request('/api/v1/shift-assignment/context.php');
+}
+
+export async function loadShiftAssignments(filters) {
+  const query = queryString(filters);
+  return apiClient.request(
+    `/api/v1/shift-assignment/assignments.php${query ? `?${query}` : ''}`,
+  );
+}
