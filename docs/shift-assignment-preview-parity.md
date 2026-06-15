@@ -311,8 +311,28 @@ Phase 23 result:
       Create/Edit, permission hiding, and a clean browser console.
 - [x] Phase 26 exact assignment/dependent restoration and duplicate prevention
       passed in the guarded API matrix.
-- [ ] Template generation, copy/paste, production navigation, and legacy
-      replacement remain unapproved.
+- [x] Phase 27 documents template generation and copy/paste as future
+      preview-before-commit contracts only.
+- [ ] Template generation endpoints, copy/paste endpoints, React template UI,
+      production navigation, and legacy replacement remain unapproved.
+
+## Phase 27 Template Contract Gate
+
+Before any template or copy/paste UI appears in the preview, verify:
+
+- [ ] `templates/preview.php` and `templates/copy-preview.php` exist only as
+      documented future contracts and are designed as non-mutating previews.
+- [ ] `templates/commit.php` and `templates/copy-commit.php` require CSRF,
+      confirmation, conflict re-checks, and audit evidence before writing.
+- [ ] Existing real assignments are never overwritten silently.
+- [ ] Weekly hours, jumpshift/rest warnings, holiday/overtime advisories, and
+      overlap conflicts appear in the preview step.
+- [ ] Bulk rollback or reversal evidence is documented and tested on a
+      disposable database.
+- [ ] Granular template permissions are either migrated with `up.sql` and
+      `down.sql` or the implementation remains exact Super Admin plus
+      `shifts.manage`.
+- [ ] React still has no active template generator or copy/paste control.
 
 ## Phase 17 Completed Browser Matrix
 

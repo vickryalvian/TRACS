@@ -320,6 +320,19 @@ protection. Delete remains blocked because the current module has no assignment
 delete behavior. Template and copy operations require preview/confirmation,
 idempotency, audit, and an explicit partial-success or transaction contract.
 
+Phase 27 documents the future template/copy v1 shape without adding routes.
+Bulk scheduling must be split into non-mutating preview and confirmed commit:
+
+- `POST /api/v1/shift-assignment/templates/preview.php`
+- `POST /api/v1/shift-assignment/templates/commit.php`
+- `POST /api/v1/shift-assignment/templates/copy-preview.php`
+- `POST /api/v1/shift-assignment/templates/copy-commit.php`
+
+Preview endpoints must not wrap legacy behavior that changes draft template
+state. Commit endpoints must require authenticated session, CSRF, exact
+permission/scope checks, confirmation, conflict re-checks, audit evidence, and
+rollback data before writing.
+
 ## Phase 14 Controlled Create Resource
 
 The existing assignments route branches by method:

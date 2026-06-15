@@ -284,3 +284,23 @@ Delete confirmation remains exact and case-sensitive, recovery is described
 as manual rather than undo, protected template links fail closed, and write
 actions disappear when `shifts.manage` is removed. The legacy page remains
 authoritative and preview access remains direct URL only.
+
+## Phase 27 Template UI Planning Boundary
+
+No template generation or copy/paste UI is added in Phase 27. Future React
+work must wait for backend contracts that split every bulk operation into
+preview and commit:
+
+- Template Generator preview: non-mutating.
+- Template Generator commit: confirmed mutation.
+- Copy Schedule preview: non-mutating.
+- Copy Schedule commit: confirmed mutation.
+
+The future UI should be a gated modal or wizard visible only from server-issued
+capabilities. It must collect the date range and pattern/source, render the
+previewed assignments, show conflicts, warnings, weekly-hour results, holiday
+and overtime advisories, then require explicit confirmation before commit.
+
+The UI must never call a bulk mutation directly from the first form step, must
+not optimistically write rows, and must keep Create/Edit/Delete pilot behavior
+unchanged until the template contracts pass disposable database validation.

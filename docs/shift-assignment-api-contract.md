@@ -376,6 +376,7 @@ active React Delete UI remains absent pending its own approved pilot.
 The canonical future mutation plan is:
 
 - `docs/shift-assignment-write-api-contract.md`
+- `docs/shift-assignment-template-api-contract.md`
 
 It defines create, update, blocked delete, template generation/copy/apply,
 overtime, warning resolution, export, and deferred bulk contracts. It also
@@ -385,6 +386,42 @@ granular permissions, without seeding or enforcing new permission keys yet.
 Phase 13 adds no route, service mutation, React action, schema change, seed, or
 data write. That historical planning boundary is superseded only by the
 controlled Phase 14 create contract below.
+
+## Phase 27 Template Contract Plan
+
+Template generation and copy/paste are bulk operations and require their own
+preview-before-commit contracts before any new backend endpoint or React UI is
+allowed.
+
+Planned future v1 routes:
+
+```text
+POST /api/v1/shift-assignment/templates/preview.php
+POST /api/v1/shift-assignment/templates/commit.php
+POST /api/v1/shift-assignment/templates/copy-preview.php
+POST /api/v1/shift-assignment/templates/copy-commit.php
+```
+
+Phase 27 implements none of them. The legacy monthly-template action
+`preview_monthly_template` remains characterized as potentially mutating
+because it can mark a draft as `previewed`. Future v1 preview endpoints must be
+non-mutating and must not wrap that legacy behavior without extracting a
+side-effect-free generation path.
+
+Current schema support exists for template ownership through
+`shift_assignments.source`, `shift_assignments.monthly_template_id`,
+`shift_monthly_templates`, and
+`shift_monthly_template_items.generated_assignment_id`. Current audit support
+is narrower: `assignment_audit_logs.action` has `template_applied` but not the
+proposed granular preview/copy/commit action names. Future implementation must
+either use approved general activity logging for parent bulk summaries or add
+a reviewed `up.sql`/`down.sql` audit-action migration.
+
+Until granular permissions are seeded, template preview/commit and copy
+preview/commit must remain exact `super_admin` plus explicit `shifts.manage`
+if implemented. Every POST route requires CSRF. Commit routes require stronger
+confirmation, conflict re-checking, audit evidence, and disposable database
+validation before any React UI activation.
 
 ## Phase 14 Controlled Create Contract
 
@@ -474,6 +511,9 @@ non-mutation, and database teardown. No React PATCH call or edit control exists.
 - [ ] Weekly target, overtime-risk, and overload states remain accurate.
 - [ ] Copy last week skips conflicts and does not replace real data.
 - [ ] Monthly template preview/apply behavior and audits remain intact.
+- [ ] Future v1 template preview/copy-preview remains non-mutating.
+- [ ] Future v1 template commit/copy-commit never overwrites real schedules
+      silently and records rollback evidence.
 - [ ] CSV contains only permitted scoped recap rows.
 - [ ] UI date controls display `dd-mm-yyyy`.
 - [ ] New context returns `401`, `403`, `405`, or `200` as appropriate.

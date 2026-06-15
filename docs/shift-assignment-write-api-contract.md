@@ -24,9 +24,13 @@ pilot. `public/calendar.php` remains the zero-mistake visual reference.
 | Create assignment | `POST /api/v1/shift-assignment/assignments.php` | Implemented in Phase 14 under controlled pilot gate |
 | Update assignment | `PATCH /api/v1/shift-assignment/assignment.php?id=<id>` | Implemented; controlled React pilot |
 | Delete assignment | `DELETE /api/v1/shift-assignment/assignment.php?id=<id>` | Implemented backend-only in Phase 21; React UI blocked |
-| Generate monthly template preview | `POST /api/v1/shift-assignment/templates/generate.php` | Planned mutation because legacy preview may update state |
-| Copy schedule | `POST /api/v1/shift-assignment/templates/copy.php` | Planned preview/confirm bulk workflow |
-| Apply monthly template | `POST /api/v1/shift-assignment/templates/{id}/apply.php` | Planned separately from generation |
+| Generate monthly template preview | `POST /api/v1/shift-assignment/templates/preview.php` | Planned non-mutating Phase 27 preview contract |
+| Commit monthly template generation | `POST /api/v1/shift-assignment/templates/commit.php` | Planned confirmed bulk mutation |
+| Copy schedule preview | `POST /api/v1/shift-assignment/templates/copy-preview.php` | Planned non-mutating copy preview |
+| Copy schedule commit | `POST /api/v1/shift-assignment/templates/copy-commit.php` | Planned confirmed copy mutation |
+| Legacy generate placeholder | `POST /api/v1/shift-assignment/templates/generate.php` | Superseded naming; no route exists |
+| Legacy copy placeholder | `POST /api/v1/shift-assignment/templates/copy.php` | Superseded naming; no route exists |
+| Apply monthly template | `POST /api/v1/shift-assignment/templates/{id}/apply.php` | Deferred; commit contract must decide whether this remains separate |
 | Assign overtime | `POST /api/v1/shift-assignment/overtime.php` | Planned facade over normal assignment validation |
 | Resolve warning | `POST /api/v1/shift-assignment/warnings/{key}/resolve.php` | Planned only for dismissible warnings |
 | CSV export | `GET /api/v1/shift-assignment/export.php` | Planned read/export contract; no CSRF |
@@ -53,8 +57,12 @@ The granular permissions below are target contracts and do not exist yet:
 | `shifts.create` | Create assignment or overtime assignment | `shifts.manage` |
 | `shifts.update` | Edit, resize, confirm, or change status | `shifts.manage` |
 | `shifts.delete` | Delete/soft-delete an assignment | No current assignment-delete behavior |
-| `shifts.template.generate` | Create/save/preview a monthly template | `shifts.monthly_templates` or `shifts.settings` |
-| `shifts.template.copy` | Copy last week or duplicate a monthly template | `shifts.manage` or `shifts.monthly_templates` |
+| `shifts.template.generate` | Historical umbrella for template generation | `shifts.monthly_templates` or `shifts.settings` |
+| `shifts.template.copy` | Historical umbrella for copy last week or duplicate template | `shifts.manage` or `shifts.monthly_templates` |
+| `shifts.template.preview` | Preview a generated template without mutation | Exact `super_admin` plus `shifts.manage` until seeded |
+| `shifts.template.commit` | Commit a generated template batch | Exact `super_admin` plus `shifts.manage` until seeded |
+| `shifts.template.copy_preview` | Preview copy/paste schedule output without mutation | Exact `super_admin` plus `shifts.manage` until seeded |
+| `shifts.template.copy_commit` | Commit a copied schedule batch | Exact `super_admin` plus `shifts.manage` until seeded |
 | `shifts.overtime.create` | Create overtime/holiday coverage assignment | `shifts.manage` |
 | `shifts.warning.resolve` | Dismiss an allowed warning | `shifts.manage` |
 | `shifts.export` | Export scoped data | Existing permission |
@@ -483,10 +491,36 @@ Every future bulk flow requires:
 6. Audit records for the parent action and affected assignments.
 7. No overwrite of seeded real schedules and no automatic dummy reset.
 
-`templates/generate.php` validates target month, division, agents, patterns,
-rest days, shift definitions, and future-month rules. `templates/copy.php`
-validates source and target ranges and must skip or explicitly resolve
-conflicts. Applying a monthly template remains a separate confirmed operation.
+Phase 27 narrows the future v1 contract into explicit preview-before-commit
+routes:
+
+```text
+POST /api/v1/shift-assignment/templates/preview.php
+POST /api/v1/shift-assignment/templates/commit.php
+POST /api/v1/shift-assignment/templates/copy-preview.php
+POST /api/v1/shift-assignment/templates/copy-commit.php
+```
+
+`templates/preview.php` and `templates/copy-preview.php` must be non-mutating.
+They may not update draft state, create rows, reserve assignments, archive
+templates, or write generated links. `templates/commit.php` and
+`templates/copy-commit.php` are the only planned mutating bulk routes, and they
+must re-check permissions, CSRF, scope, preview freshness, conflicts, weekly
+hours, jumpshift/rest warnings, holiday/overtime advisories, and real-schedule
+overwrite risk immediately before writing.
+
+The detailed canonical contract is:
+
+- `docs/shift-assignment-template-api-contract.md`
+
+The current schema already contains `shift_assignments.source`,
+`shift_assignments.monthly_template_id`, `shift_monthly_templates`, and
+`shift_monthly_template_items.generated_assignment_id`. Those fields support
+template ownership and rollback targeting, but the current
+`assignment_audit_logs.action` enum does not contain the proposed granular
+template action names. A future implementation must either use the approved
+general activity audit for parent action summaries or include reviewed
+`up.sql` and `down.sql` to expand the enum.
 
 ## Overtime
 

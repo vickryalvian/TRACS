@@ -349,3 +349,21 @@ Phase 26 delete-hardening notes:
 
 Template generation, copy/paste, production navigation, and legacy replacement
 still require separate explicit approval.
+
+Phase 27 template-contract notes:
+
+- legacy monthly-template actions remain characterized but unchanged;
+- future v1 template generation is split into non-mutating preview and
+  confirmed commit routes;
+- future copy/paste is split into non-mutating copy-preview and confirmed
+  copy-commit routes;
+- all four planned routes require authenticated session, CSRF, exact
+  permission/scope checks, audit evidence, and rollback planning;
+- legacy monthly preview can update draft status, so future v1 preview must be
+  side-effect free rather than a direct wrapper;
+- current schema supports template ownership through `source`,
+  `monthly_template_id`, and generated item links, but granular template
+  permissions and audit action names still require future migrations with
+  `up.sql` and `down.sql`;
+- no endpoint, React UI, schema, Calendar, navigation, or legacy-page behavior
+  changes in this phase.

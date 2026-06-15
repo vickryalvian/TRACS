@@ -835,6 +835,53 @@ verified restored GET visibility and duplicate prevention, and removed its
 disposable database. The browser database and app were also removed.
 Production data was not used.
 
+## Phase 27 Template API Contract Planning
+
+Phase 27 is non-mutating documentation and source-contract validation only.
+It defines the future template generation and copy/paste contracts without
+creating routes, React controls, schema changes, or data writes.
+
+Required contract command:
+
+```bash
+php tests/shift-assignment-template-contract-plan.php
+```
+
+The contract check verifies:
+
+- future routes are documented as
+  `templates/preview.php`, `templates/commit.php`,
+  `templates/copy-preview.php`, and `templates/copy-commit.php`;
+- preview and copy-preview are explicitly non-mutating;
+- commit routes require CSRF, confirmation, audit evidence, conflict re-checks,
+  and rollback data;
+- granular template permissions are documented but not seeded;
+- legacy monthly preview side effects are documented;
+- no template/copy route file exists;
+- the React preview does not expose template or copy controls.
+
+Phase 27 uses the normal non-mutating validation suite:
+
+```bash
+cd frontend && npm run test:contracts
+cd frontend && npm run build
+php tests/php-api-foundation.php
+php tests/php-api-contract.php
+php tests/shift-assignment-api-contract.php
+php tests/shift-assignment-assignments-api-contract.php
+php tests/shift-assignment-create-api-contract.php
+php tests/shift-assignment-update-api-contract.php
+php tests/shift-assignment-delete-api-contract.php
+php tests/shift-assignment-delete-restore-drill.php
+php tests/shift-assignment-dependent-restore-drill.php
+php tests/shift-assignment-template-contract-plan.php
+find api tests public/api/v1/shift-assignment -name '*.php' -exec php -l {} \;
+php -l public/shift-assignment-react-preview.php
+```
+
+No browser mutation, disposable database, or production data access is required
+for Phase 27 because no executable template workflow is added.
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:

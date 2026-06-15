@@ -985,3 +985,26 @@ php tests/shift-assignment-delete-hardening-browser-environment.php cleanup
 
 Code rollback cannot restore a deleted production record. Approved recovery
 must still use the reviewed assignment and dependent snapshots.
+
+## Phase 27 Template API Contract Rollback
+
+Phase 27 adds documentation and non-mutating source checks for future template
+generation and copy/paste contracts. It adds no endpoint, schema, React UI,
+navigation, Calendar, legacy-page, or data change.
+
+After commit:
+
+```bash
+git revert <phase-27-commit-sha>
+```
+
+To abandon the branch before commit:
+
+```bash
+git switch refactor/phase-26-shift-delete-hardening
+git branch -D refactor/phase-27-shift-template-api-contracts
+```
+
+No database restore is needed for Phase 27 because it performs no data writes.
+Future template/copy implementation phases must define their own rollback and
+disposable database cleanup before any mutation is enabled.
