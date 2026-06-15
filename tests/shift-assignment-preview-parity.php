@@ -73,19 +73,16 @@ parity_assert(
     'React Shift Assignment API client contains a write method.'
 );
 
-foreach ([
-    'context route' => $contextRoute,
-    'assignments route' => $assignmentsRoute,
-] as $label => $source) {
-    parity_assert(
-        str_contains($source, "methods: ['GET']"),
-        "{$label} is no longer GET-only."
-    );
-    parity_assert(
-        str_contains($source, "permissions: ['shifts.view']"),
-        "{$label} no longer requires shifts.view."
-    );
-}
+parity_assert(
+    str_contains($contextRoute, "methods: ['GET']")
+        && str_contains($contextRoute, "permissions: ['shifts.view']"),
+    'Context route no longer preserves protected GET behavior.'
+);
+parity_assert(
+    str_contains($assignmentsRoute, "methods: ['GET', 'POST']")
+        && str_contains($assignmentsRoute, "require_permission(\$conn, 'shifts.view'"),
+    'Assignments route no longer preserves protected GET behavior.'
+);
 
 foreach ([
     "'super_admin' => \$all",

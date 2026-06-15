@@ -9,7 +9,7 @@ require_once __DIR__ . '/../core/security/csrf.php';
 require_once __DIR__ . '/_response.php';
 require_once __DIR__ . '/_logging.php';
 
-function verify_csrf(): void
+function verify_csrf(?\mysqli $conn = null, ?array $user = null): void
 {
     \tracs_start_session();
 
@@ -22,6 +22,17 @@ function verify_csrf(): void
         && hash_equals($expected, $provided)
     ) {
         return;
+    }
+
+    if ($conn instanceof \mysqli && function_exists('tracs_auth_log_event')) {
+        \tracs_auth_log_event(
+            $conn,
+            'csrf_validation_failed',
+            'blocked',
+            (string)($_SESSION['user_email'] ?? ''),
+            (int)($user['id'] ?? $_SESSION['user_id'] ?? 0) ?: null,
+            'api_mutation'
+        );
     }
 
     json_error('Invalid CSRF token.', 403, [], ['request_id' => request_id()]);

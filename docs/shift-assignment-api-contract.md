@@ -368,9 +368,37 @@ records the transition from the existing broad permissions to proposed
 granular permissions, without seeding or enforcing new permission keys yet.
 
 Phase 13 adds no route, service mutation, React action, schema change, seed, or
-data write. The v1 assignments endpoint remains GET-only, the preview remains
-read-only and exact `super_admin` plus `shifts.view`, and the legacy module
-remains authoritative.
+data write. That historical planning boundary is superseded only by the
+controlled Phase 14 create contract below.
+
+## Phase 14 Controlled Create Contract
+
+The assignments resource now accepts:
+
+```text
+GET  /api/v1/shift-assignment/assignments.php
+POST /api/v1/shift-assignment/assignments.php
+```
+
+GET retains `shifts.view`, query validation, role/division scope, and the Phase
+7 response. POST requires authentication, automatic mutation CSRF validation,
+existing `shifts.manage`, and exact `super_admin` because `shifts.create` has
+not been seeded.
+
+POST accepts one strict JSON assignment, forces `source=manual`, maps
+`agent_id` to the service's `user_id`, accepts ISO dates, and normalizes Shift
+3 `24:00` to cross-day midnight storage. The current service enforces agent
+scope, overlap, availability, duration, template/type/status, holiday,
+overtime, approval, notification, warning, and audit behavior.
+
+Success returns `201` with an allowlisted assignment summary and warnings.
+Field errors return `422` with `{field,message}` rows. Domain conflicts return
+`409`; malformed JSON returns `400`; authentication, CSRF, and authorization
+retain `401`/`403`; unsupported methods return `405`.
+
+No React write call or control is added. The preview remains read-only and
+exact `super_admin` plus `shifts.view`. No update, delete, template, copy,
+overtime, warning, or bulk endpoint exists.
 
 ## Visible Risks To Protect
 
@@ -411,7 +439,10 @@ remains authoritative.
 - [ ] ISO query dates and `dd-mm-yyyy` display fields refer to the same dates.
 - [ ] Role, agent, and division filters cannot expand server scope.
 - [ ] Assignment responses omit email, notes, actor IDs, SQL, paths, and logs.
-- [ ] POST, PATCH, and DELETE are rejected; no read request writes data.
+- [ ] GET remains read-only and compatible.
+- [ ] POST requires exact Super Admin, `shifts.manage`, and CSRF and creates
+      only one validated manual assignment in a disposable/staging database.
+- [ ] PATCH and DELETE remain rejected.
 
 ## Validation
 
@@ -420,6 +451,7 @@ php tests/php-api-foundation.php
 php tests/php-api-contract.php
 php tests/shift-assignment-api-contract.php
 php tests/shift-assignment-assignments-api-contract.php
+php tests/shift-assignment-create-api-contract.php
 find api tests public/api/v1 -name '*.php' -exec php -l {} \;
 ```
 

@@ -27,6 +27,7 @@ function context_data(
     };
 
     $manage = (bool)($capabilities['manage'] ?? false);
+    $controlledCreate = $manage && (string)($user['role_slug'] ?? '') === 'super_admin';
     $manageSettings = (bool)($capabilities['settings'] ?? false);
     $manageMonthlyTemplates = (bool)($capabilities['monthly_templates'] ?? false);
     $export = (bool)($capabilities['export'] ?? false);
@@ -43,6 +44,7 @@ function context_data(
         'permissions' => [
             'view' => true,
             'manage' => $manage,
+            'create' => $controlledCreate,
             'settings' => $manageSettings,
             'monthly_templates' => $manageMonthlyTemplates,
             'export' => $export,
@@ -52,7 +54,7 @@ function context_data(
             'view_schedule' => true,
             'view_warnings' => true,
             'view_audit' => true,
-            'create_assignment' => $manage,
+            'create_assignment' => $controlledCreate,
             'update_assignment' => $manage,
             'resize_assignment' => $manage,
             'update_status' => $manage,

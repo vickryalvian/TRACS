@@ -211,16 +211,25 @@ foreach ([
 $route = file_get_contents(__DIR__ . '/../public/api/v1/shift-assignment/assignments.php');
 assignments_contract_assert($route !== false, 'Assignments public route is unreadable.');
 assignments_contract_assert(
-    str_contains($route, "permissions: ['shifts.view']"),
-    'Assignments route no longer enforces shifts.view.'
+    str_contains($route, "require_permission(\$conn, 'shifts.view'"),
+    'Assignments GET route no longer enforces shifts.view.'
 );
 assignments_contract_assert(
-    str_contains($route, "methods: ['GET']"),
-    'Assignments route no longer rejects non-GET methods.'
+    str_contains($route, "methods: ['GET', 'POST']"),
+    'Assignments route no longer preserves GET and controlled POST methods.'
 );
-foreach (['POST', 'PATCH', 'DELETE'] as $method) {
+assignments_contract_assert(
+    str_contains($route, "\$method === 'GET' ? 422 : 400")
+        && str_contains($route, "\$method === 'GET' ? \$error->errors : []"),
+    'Assignments GET validation no longer preserves the Phase 7 422 contract.'
+);
+assignments_contract_assert(
+    substr_count($route, "if (\$method !== 'POST')") >= 3,
+    'Read exceptions may be handled as create failures.'
+);
+foreach (['PATCH', 'DELETE'] as $method) {
     assignments_contract_assert(
-        !str_contains($route, "methods: ['{$method}']"),
+        !str_contains($route, "'{$method}'"),
         "Assignments route unexpectedly supports {$method}."
     );
 }

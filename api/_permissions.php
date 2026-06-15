@@ -62,3 +62,27 @@ function require_any_permission(\mysqli $conn, array $permissions, ?array $user 
 
     json_error('Forbidden.', 403, [], ['request_id' => request_id()]);
 }
+
+function require_exact_role(\mysqli $conn, string $role, ?array $user = null): void
+{
+    $role = trim($role);
+    $userId = (int)($user['id'] ?? $_SESSION['user_id'] ?? 0);
+    $actualRole = (string)($user['role_slug'] ?? '');
+
+    if ($role !== '' && $actualRole === $role) {
+        return;
+    }
+
+    if (function_exists('tracs_auth_log_event')) {
+        \tracs_auth_log_event(
+            $conn,
+            'permission_denied',
+            'blocked',
+            (string)($_SESSION['user_email'] ?? ''),
+            $userId ?: null,
+            $role !== '' ? $role . '_only' : 'invalid_role'
+        );
+    }
+
+    json_error('Forbidden.', 403, [], ['request_id' => request_id()]);
+}

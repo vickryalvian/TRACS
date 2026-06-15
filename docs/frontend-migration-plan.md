@@ -195,3 +195,8 @@ read-only banner and GET-only API client. Future forms remain absent or disabled
 until one backend endpoint has passed CSRF, permission/scope, transaction,
 audit, idempotency, rollback, and disposable-database tests. Create and update
 are planned first; delete remains blocked pending a retention decision.
+
+Phase 14 implements the controlled create backend contract only. The React
+preview API client remains GET-only, no Add button or modal is activated, and
+the pilot banner remains read-only. UI activation requires staging database
+evidence and a separately approved branch.

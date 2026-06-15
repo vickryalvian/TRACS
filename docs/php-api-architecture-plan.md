@@ -320,6 +320,25 @@ protection. Delete remains blocked because the current module has no assignment
 delete behavior. Template and copy operations require preview/confirmation,
 idempotency, audit, and an explicit partial-success or transaction contract.
 
+## Phase 14 Controlled Create Resource
+
+The existing assignments route branches by method:
+
+```text
+GET  -> shifts.view -> existing scoped read pipeline
+POST -> CSRF -> shifts.manage -> exact super_admin -> saveAssignment()
+```
+
+The internal v1 resource owns strict JSON-to-service normalization and safe
+response serialization. It does not duplicate persistence queries. The
+existing service continues to own prepared writes, transactions, overlap and
+availability checks, holiday linkage, notifications, warnings, and assignment
+audit behavior.
+
+Because `shifts.create` is not seeded, Phase 14 uses the documented temporary
+exact-role gate. Broader access requires a later paired permission migration
+and role tests. The React client does not call POST in this phase.
+
 Automated checks:
 
 ```bash

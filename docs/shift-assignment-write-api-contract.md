@@ -21,7 +21,7 @@ pilot. `public/calendar.php` remains the zero-mistake visual reference.
 
 | Contract | Proposed method and path | Status |
 | --- | --- | --- |
-| Create assignment | `POST /api/v1/shift-assignment/assignments.php` | Planned; first implementation candidate |
+| Create assignment | `POST /api/v1/shift-assignment/assignments.php` | Implemented in Phase 14 under controlled pilot gate |
 | Update assignment | `PATCH /api/v1/shift-assignment/assignments/{id}.php` | Planned after create |
 | Delete assignment | `DELETE /api/v1/shift-assignment/assignments/{id}.php` | Blocked pending delete/soft-delete decision |
 | Generate monthly template preview | `POST /api/v1/shift-assignment/templates/generate.php` | Planned mutation because legacy preview may update state |
@@ -78,6 +78,52 @@ Suggested initial role intent, subject to explicit approval:
 
 Role names never grant a write by themselves. PHP must check the exact
 permission and then enforce object, agent, and division scope.
+
+## Phase 14 Controlled Create Adoption
+
+Phase 14 implements only:
+
+```text
+POST /api/v1/shift-assignment/assignments.php
+```
+
+The same file retains the Phase 7 GET behavior. `PATCH`, `DELETE`, template,
+copy, overtime, warning-resolution, export-v1, and bulk routes remain absent.
+
+`shifts.create` is not present in the current permission catalog. The temporary
+controlled pilot therefore requires all of:
+
+1. fully authenticated active session;
+2. valid `X-CSRF-Token`;
+3. existing `shifts.manage`;
+4. exact `super_admin` role.
+
+The future `shifts.create` migration remains required before broader role
+access. The context endpoint advertises create capability only when the current
+user meets this temporary gate.
+
+The JSON body accepts required `agent_id`, `assignment_date`, `shift_type`,
+`start_time`, and `end_time`, plus optional `shift_template_id` or
+`template_id`, `break_minutes`, `status`, and `notes`.
+
+Unknown fields are rejected. Client-controlled `source`, `is_overtime`, role,
+division, creator, approver, and audit fields are not accepted. Source is
+forced to `manual`; overtime, holiday, approval, division, duration, and
+cross-day state are calculated by the existing service.
+
+`24:00` is accepted as an API display boundary and normalized to the existing
+next-day `00:00` storage behavior. Create status is limited to `assigned` or
+`confirmed`.
+
+The existing service remains authoritative for active-agent scope, overlap,
+availability, duration, template/type/status, holiday coverage, overtime,
+approval, notification, jumpshift warnings, and assignment audit records.
+
+Phase 14 also writes a correlated activity audit summary through the Phase 5
+helper. It excludes notes and sensitive identity fields. Authentication,
+permission, exact-role, and invalid-CSRF denials use the existing security
+audit path. Audit storage remains best-effort where an optional legacy audit
+table is unavailable; no schema is added.
 
 ## Common Security Contract
 
@@ -160,8 +206,8 @@ Recommended statuses:
 POST /api/v1/shift-assignment/assignments.php
 ```
 
-Required permission: future `shifts.create`; current compatibility gate
-`shifts.manage`.
+Required permission: future `shifts.create`; the Phase 14 compatibility gate is
+exact `super_admin` plus `shifts.manage`.
 
 Proposed JSON:
 
@@ -384,4 +430,3 @@ evidence before its React control becomes active.
 - Every future migration includes `up.sql`, `down.sql`, verification queries,
   backup instructions, and tested rollback.
 - Rollout remains role-gated or feature-flagged with the legacy page available.
-

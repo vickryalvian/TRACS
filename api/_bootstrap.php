@@ -38,7 +38,7 @@ function bootstrap(
     $user = require_auth($conn);
     $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
     if ($requireCsrfForMutation && in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
-        verify_csrf();
+        verify_csrf($conn, $user);
     }
 
     foreach ($permissions as $permission) {

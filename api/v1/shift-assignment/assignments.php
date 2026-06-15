@@ -137,6 +137,211 @@ function filter_agents_by_role(array $agents, string $role): array
     ));
 }
 
+function create_assignment_input(array $input): array
+{
+    $allowedFields = [
+        'agent_id',
+        'assignment_date',
+        'shift_type',
+        'start_time',
+        'end_time',
+        'shift_template_id',
+        'template_id',
+        'break_minutes',
+        'status',
+        'notes',
+    ];
+    $errors = [];
+
+    foreach ($input as $key => $value) {
+        if (!is_string($key) || !in_array($key, $allowedFields, true)) {
+            $errors[(string)$key] = 'Field is not supported.';
+            continue;
+        }
+        $numericField = in_array($key, [
+            'agent_id', 'shift_template_id', 'template_id', 'break_minutes',
+        ], true);
+        if ($numericField) {
+            if (!is_int($value) && !is_string($value)) {
+                $errors[$key] = 'Field must be an integer.';
+            }
+        } elseif (!is_string($value)) {
+            $errors[$key] = 'Field must be a string.';
+        }
+    }
+
+    foreach ([
+        'agent_id' => 'Agent',
+        'assignment_date' => 'Assignment date',
+        'shift_type' => 'Shift type',
+        'start_time' => 'Start time',
+        'end_time' => 'End time',
+    ] as $key => $label) {
+        $value = $input[$key] ?? null;
+        if ($value === null || (is_string($value) && trim($value) === '')) {
+            $errors[$key] = $label . ' is required.';
+        }
+    }
+
+    $agentId = trim((string)($input['agent_id'] ?? ''));
+    if ($agentId !== '' && !preg_match('/^[1-9]\d*$/', $agentId)) {
+        $errors['agent_id'] = 'Agent must be a positive integer.';
+    }
+
+    $assignmentDate = trim((string)($input['assignment_date'] ?? ''));
+    if ($assignmentDate !== '' && !\TRACS\Api\safe_date_parse($assignmentDate)) {
+        $errors['assignment_date'] = 'Assignment date must use YYYY-MM-DD.';
+    }
+
+    $assignmentTypes = [
+        'regular_shift', 'middle_shift', 'lembur', 'standby', 'replacement_shift',
+        'holiday_coverage', 'emergency_coverage', 'training', 'off_leave',
+    ];
+    $shiftType = trim((string)($input['shift_type'] ?? ''));
+    if ($shiftType !== '' && !in_array($shiftType, $assignmentTypes, true)) {
+        $errors['shift_type'] = 'Shift type is not supported.';
+    }
+
+    $startTime = trim((string)($input['start_time'] ?? ''));
+    $endTime = trim((string)($input['end_time'] ?? ''));
+    if ($startTime !== '' && !preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $startTime)) {
+        $errors['start_time'] = 'Start time must use HH:MM.';
+    }
+    if ($endTime !== '' && $endTime !== '24:00'
+        && !preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $endTime)) {
+        $errors['end_time'] = 'End time must use HH:MM or 24:00.';
+    }
+    $serviceEndTime = $endTime === '24:00' ? '00:00' : $endTime;
+    if ($startTime !== '' && $serviceEndTime !== '' && $startTime === $serviceEndTime) {
+        $errors['end_time'] = 'Shift duration cannot be zero.';
+    }
+
+    $templateRaw = $input['shift_template_id'] ?? $input['template_id'] ?? '';
+    $templateId = trim((string)$templateRaw);
+    if (array_key_exists('shift_template_id', $input)
+        && array_key_exists('template_id', $input)
+        && trim((string)$input['shift_template_id']) !== trim((string)$input['template_id'])) {
+        $errors['shift_template_id'] = 'Provide only one shift template value.';
+    }
+    if ($templateId !== '' && !preg_match('/^[1-9]\d*$/', $templateId)) {
+        $errors['shift_template_id'] = 'Shift template must be a positive integer.';
+    }
+
+    $breakRaw = trim((string)($input['break_minutes'] ?? '0'));
+    if (!preg_match('/^\d+$/', $breakRaw) || (int)$breakRaw > 720) {
+        $errors['break_minutes'] = 'Break minutes must be between 0 and 720.';
+    }
+
+    $status = trim((string)($input['status'] ?? 'assigned'));
+    if (!in_array($status, ['assigned', 'confirmed'], true)) {
+        $errors['status'] = 'New assignments may be assigned or confirmed.';
+    }
+
+    $notes = trim((string)($input['notes'] ?? ''));
+    $notesLength = function_exists('mb_strlen') ? mb_strlen($notes) : strlen($notes);
+    if ($notesLength > 3000) {
+        $errors['notes'] = 'Notes must not exceed 3000 characters.';
+    }
+
+    if ($errors !== []) {
+        throw new \TRACS\Api\RequestValidationException('Validation failed.', $errors);
+    }
+
+    return [
+        'user_id' => (int)$agentId,
+        'assignment_date' => $assignmentDate,
+        'assignment_type' => $shiftType,
+        'start_time' => $startTime,
+        'end_time' => $serviceEndTime,
+        'shift_template_id' => $templateId === '' ? null : (int)$templateId,
+        'break_minutes' => (int)$breakRaw,
+        'status' => $status,
+        'notes' => $notes,
+        'source' => 'manual',
+    ];
+}
+
+function validation_error_list(array $errors): array
+{
+    $result = [];
+    foreach ($errors as $field => $message) {
+        $result[] = [
+            'field' => (string)$field,
+            'message' => (string)$message,
+        ];
+    }
+    return $result;
+}
+
+function create_assignment_audit_summary(array $input): array
+{
+    return [
+        'agent_id' => (int)($input['user_id'] ?? 0),
+        'assignment_date' => (string)($input['assignment_date'] ?? ''),
+        'shift_type' => (string)($input['assignment_type'] ?? ''),
+        'start_time' => (string)($input['start_time'] ?? ''),
+        'end_time' => (string)($input['end_time'] ?? ''),
+        'shift_template_id' => isset($input['shift_template_id'])
+            ? (int)$input['shift_template_id']
+            : null,
+        'break_minutes' => (int)($input['break_minutes'] ?? 0),
+        'status' => (string)($input['status'] ?? ''),
+        'source' => 'manual',
+    ];
+}
+
+function create_assignment_attempt_summary(array $input): array
+{
+    $scalar = static fn(string $key): string =>
+        is_scalar($input[$key] ?? null) ? trim((string)$input[$key]) : '';
+
+    return [
+        'agent_id' => preg_match('/^[1-9]\d*$/', $scalar('agent_id'))
+            ? (int)$scalar('agent_id')
+            : null,
+        'assignment_date' => substr($scalar('assignment_date'), 0, 10),
+        'shift_type' => substr($scalar('shift_type'), 0, 80),
+        'start_time' => substr($scalar('start_time'), 0, 5),
+        'end_time' => substr($scalar('end_time'), 0, 5),
+        'status' => substr($scalar('status') ?: 'assigned', 0, 20),
+        'source' => 'manual',
+    ];
+}
+
+function create_assignment_data(array $input, callable $save): array
+{
+    $normalized = create_assignment_input($input);
+    $result = $save($normalized);
+    $displayEnd = trim((string)($input['end_time'] ?? '')) === '24:00'
+        && !empty($result['is_cross_day'])
+            ? '24:00'
+            : $normalized['end_time'];
+    $date = \TRACS\Api\safe_date_parse($normalized['assignment_date']);
+
+    return [
+        'assignment' => [
+            'id' => (int)($result['id'] ?? 0),
+            'agent_id' => (int)$normalized['user_id'],
+            'assignment_date' => $normalized['assignment_date'],
+            'assignment_date_display' => $date?->format('d-m-Y') ?? '',
+            'shift_template_id' => $normalized['shift_template_id'],
+            'shift_type' => $normalized['assignment_type'],
+            'start_time' => $normalized['start_time'],
+            'end_time' => $normalized['end_time'],
+            'end_time_display' => $displayEnd,
+            'display_range' => $normalized['start_time'] . '-' . $displayEnd,
+            'break_minutes' => $normalized['break_minutes'],
+            'duration_minutes' => (int)($result['duration_minutes'] ?? 0),
+            'status' => $normalized['status'],
+            'source' => 'manual',
+            'is_cross_day' => (bool)($result['is_cross_day'] ?? false),
+        ],
+        'warnings' => array_values(is_array($result['warnings'] ?? null)
+            ? $result['warnings']
+            : []),
+    ];
+}
+
 function assignments_data(
     array $query,
     array $assignments,

@@ -121,6 +121,11 @@ shift_contract_assert(
     'Permission-to-action mapping changed.'
 );
 shift_contract_assert(
+    $decoded['data']['permissions']['create'] === false
+        && $decoded['data']['allowed_actions']['create_assignment'] === false,
+    'Controlled create must not be advertised to a non-Super Admin.'
+);
+shift_contract_assert(
     $decoded['data']['defaults']['minimum_rest_minutes'] === 480,
     'The eight-hour jumpshift threshold changed.'
 );

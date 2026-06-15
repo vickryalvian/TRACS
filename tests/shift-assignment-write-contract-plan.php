@@ -53,8 +53,8 @@ write_plan_assert(
     'Disposable-data safety rule is missing.'
 );
 write_plan_assert(
-    str_contains($readRoute, "methods: ['GET']"),
-    'The v1 assignments route is no longer GET-only.'
+    str_contains($readRoute, "methods: ['GET', 'POST']"),
+    'The v1 assignments route no longer exposes only the approved GET and create POST methods.'
 );
 write_plan_assert(
     !preg_match('/\b(method\s*:\s*[\'"](POST|PUT|PATCH|DELETE)|\.(post|put|patch|delete)\s*\()/i', $frontendApi),

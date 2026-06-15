@@ -70,16 +70,16 @@ foreach ([
     );
 }
 
-foreach ([
-    'context route' => $contextRoute,
-    'assignments route' => $assignmentsRoute,
-] as $label => $source) {
-    pilot_assert(str_contains($source, "methods: ['GET']"), "{$label} is no longer GET-only.");
-    pilot_assert(
-        str_contains($source, "permissions: ['shifts.view']"),
-        "{$label} no longer requires shifts.view."
-    );
-}
+pilot_assert(str_contains($contextRoute, "methods: ['GET']"), 'Context route is no longer GET-only.');
+pilot_assert(
+    str_contains($contextRoute, "permissions: ['shifts.view']"),
+    'Context route no longer requires shifts.view.'
+);
+pilot_assert(
+    str_contains($assignmentsRoute, "methods: ['GET', 'POST']")
+        && str_contains($assignmentsRoute, "require_permission(\$conn, 'shifts.view'"),
+    'Assignments route no longer preserves protected GET behavior.'
+);
 
 pilot_assert(
     !preg_match('/\b(method\s*:\s*[\'"](POST|PUT|PATCH|DELETE)|\.(post|put|patch|delete)\s*\()/i', $frontendApi),

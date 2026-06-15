@@ -69,8 +69,13 @@ endpoint solely to make it match the target during baseline creation.
       paths, logs, and server details.
 - [ ] Agent/Intern options remain self-scoped and Supervisor options remain
       division-scoped.
-- [ ] `GET /api/v1/shift-assignment/assignments.php` requires `shifts.view`,
-      accepts GET only, and returns the standard five-key envelope.
+- [ ] `GET /api/v1/shift-assignment/assignments.php` requires `shifts.view`
+      and retains the Phase 7 standard response.
+- [ ] `POST /api/v1/shift-assignment/assignments.php` requires authentication,
+      CSRF, `shifts.manage`, and exact `super_admin` until `shifts.create` is
+      seeded through a paired migration.
+- [ ] POST rejects unknown/server-owned fields, unsafe dates/times/statuses,
+      invalid agents/templates, overlap, and out-of-scope records.
 - [ ] Assignment query filters cannot expand role/division/object scope.
 - [ ] Invalid view, date range, agent, division, role, type, or status returns
       `422` without a database write.
@@ -85,7 +90,7 @@ endpoint solely to make it match the target during baseline creation.
 - [ ] Invalid overlap, duration, date/time, availability, and enum input returns
       safe validation errors without partial writes.
 - [ ] Future v1 writes follow
-      `docs/shift-assignment-write-api-contract.md`; Phase 13 creates no route.
+      `docs/shift-assignment-write-api-contract.md`; Phase 14 approves create only.
 - [ ] Every future mutation requires authenticated session, exact permission,
       server-side scope, valid `X-CSRF-Token`, validation, transaction, and audit.
 - [ ] Proposed granular Shift Assignment permissions are not used until paired

@@ -331,14 +331,66 @@ php tests/shift-assignment-write-contract-plan.php
 ```
 
 It verifies the documented endpoint, permission, CSRF, migration, and delete
-decision gates. It also confirms the v1 assignments route remains GET-only, the
-React API client contains no write method, pilot access/banner remain intact,
-the preview is absent from navigation, and no planned v1 write route exists.
+decision gates. After Phase 14 it confirms the v1 assignments route exposes
+only GET and the controlled create POST, while the React API client remains
+read-only and no additional planned write route exists.
 
 No write integration test is permitted against production data. A future
 implementation needs a disposable MySQL database and fixture users before
 testing CSRF, permission/scope, transactions, audit persistence, idempotency,
 conflicts, or rollback.
+
+## Phase 14 Controlled Create Assignment API
+
+Run:
+
+```bash
+php tests/shift-assignment-create-api-contract.php
+php tests/shift-assignment-assignments-api-contract.php
+php tests/shift-assignment-api-contract.php
+php tests/php-api-foundation.php
+php tests/php-api-contract.php
+```
+
+The create contract uses a callback mock, not MySQL. It verifies required and
+unknown fields, ISO dates, allowlisted type/status, Shift 3 `24:00` conversion,
+manual source enforcement, response allowlisting, warning passthrough, GET/POST
+configuration, exact temporary authorization, audit helper use, and the
+absence of React or additional write paths.
+
+Live unauthenticated checks:
+
+```bash
+curl -i -X POST \
+  -H 'Content-Type: application/json' \
+  --data '{}' \
+  http://127.0.0.1:8080/api/v1/shift-assignment/assignments.php
+
+curl -i -X PATCH \
+  http://127.0.0.1:8080/api/v1/shift-assignment/assignments.php
+```
+
+Expect `401` for unauthenticated POST and `405` with `Allow: GET, POST` for
+PATCH. Authenticated CSRF, role, success, overlap, and audit checks require a
+disposable database.
+
+### Manual staging-only success test
+
+1. Restore a disposable MySQL snapshot and use a fixture Super Admin that has
+   `shifts.manage`.
+2. Record row counts for `shift_assignments`, `assignment_audit_logs`, and the
+   available TRACS activity audit table.
+3. Sign in, obtain the context CSRF token, and send one JSON POST with
+   `X-CSRF-Token`.
+4. Confirm `201`, the five-key envelope, `source=manual`, and the expected
+   `dd-mm-yyyy` display date.
+5. GET the same date/agent and confirm the record is visible.
+6. Repeat the same overlapping slot and confirm `409` with no second assignment.
+7. Test missing/invalid CSRF (`403`), non-Super Admin (`403`), missing
+   `shifts.manage` (`403`), and invalid fields (`422`).
+8. Confirm assignment and activity audit rows contain request/result metadata
+   without notes, tokens, credentials, or raw errors.
+9. Restore the disposable snapshot. Do not run this procedure on production.
 
 ## Future Automated Test Tools
 

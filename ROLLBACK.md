@@ -513,3 +513,35 @@ git branch -D refactor/phase-13-shift-write-api-contracts
 
 No database restore, frontend rebuild, navigation rollback, or legacy-page
 fallback is required.
+
+## Phase 14 Controlled Create Assignment API Rollback
+
+Phase 14 adds POST handling to the existing v1 assignments resource, an
+exact-role API helper, contract tests, and documentation. It does not add a
+schema migration, React write UI, navigation, Calendar, or legacy-page change.
+
+Before commit:
+
+```bash
+git restore --staged .
+git restore .
+rm tests/shift-assignment-create-api-contract.php
+```
+
+After commit:
+
+```bash
+git revert <phase-14-commit-sha>
+```
+
+To abandon the unmerged branch:
+
+```bash
+git switch refactor/phase-13-shift-write-api-contracts
+git branch -D refactor/phase-14-shift-create-assignment-api
+```
+
+Code rollback does not delete assignments already created through an approved
+staging or production pilot. If the endpoint was exercised, restore the
+recorded database backup or follow an explicitly approved, audited data
+correction procedure. Never delete real schedules ad hoc.
