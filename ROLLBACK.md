@@ -1008,3 +1008,31 @@ git branch -D refactor/phase-27-shift-template-api-contracts
 No database restore is needed for Phase 27 because it performs no data writes.
 Future template/copy implementation phases must define their own rollback and
 disposable database cleanup before any mutation is enabled.
+
+## Phase 28 Template Preview API Rollback
+
+Phase 28 adds a non-mutating template preview endpoint, internal helper,
+disposable integration test, and documentation. It adds no commit/copy route,
+React UI, schema, navigation, Calendar, legacy-page, or data change.
+
+After commit:
+
+```bash
+git revert <phase-28-commit-sha>
+```
+
+To abandon the branch before commit:
+
+```bash
+git switch refactor/phase-27-shift-template-api-contracts
+git branch -D refactor/phase-28-shift-template-preview-api
+```
+
+Emergency disposable cleanup:
+
+```sql
+DROP DATABASE IF EXISTS tracs_phase28_test;
+```
+
+No production data restore is needed because preview must not mutate data.
+Future commit/copy phases need their own rollback plan before implementation.

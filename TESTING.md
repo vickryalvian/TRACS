@@ -857,7 +857,8 @@ The contract check verifies:
   and rollback data;
 - granular template permissions are documented but not seeded;
 - legacy monthly preview side effects are documented;
-- no template/copy route file exists;
+- after Phase 28, only the approved non-mutating `templates/preview.php`
+  route exists;
 - the React preview does not expose template or copy controls.
 
 Phase 27 uses the normal non-mutating validation suite:
@@ -879,8 +880,43 @@ find api tests public/api/v1/shift-assignment -name '*.php' -exec php -l {} \;
 php -l public/shift-assignment-react-preview.php
 ```
 
-No browser mutation, disposable database, or production data access is required
-for Phase 27 because no executable template workflow is added.
+No browser mutation or production data access is required for Phase 27 because
+no executable template workflow is added.
+
+## Phase 28 Template Preview API
+
+Phase 28 adds only:
+
+```text
+POST /api/v1/shift-assignment/templates/preview.php
+```
+
+The endpoint is non-mutating and remains backend/API-only. It does not add
+commit, copy-preview, copy-commit, React template UI, navigation, schema, or
+legacy-page changes.
+
+Required checks:
+
+```bash
+php tests/shift-assignment-template-preview-api-contract.php
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 \
+php tests/shift-assignment-template-preview-integration.php
+```
+
+The disposable integration uses `tracs_phase28_test`, validates auth, CSRF,
+exact Super Admin, invalid payloads, Shift 1/2/3 preview generation, overlap
+conflict output, warning output, and proves these persisted table counts remain
+unchanged after a valid preview:
+
+- `shift_assignments`
+- `shift_warnings`
+- `holiday_coverage_assignments`
+- `shift_monthly_templates`
+- `shift_monthly_template_items`
+- `assignment_audit_logs`
+
+The disposable database is removed after the test. Commit/copy work and React
+template UI require separate approval.
 
 ## Future Automated Test Tools
 

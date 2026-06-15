@@ -126,17 +126,25 @@ foreach ([
 
 foreach ([
     'public/api/v1/shift-assignment/templates/preview.php',
+    'api/v1/shift-assignment/templates/preview.php',
+] as $approvedPreviewRoute) {
+    template_contract_assert(
+        is_file(__DIR__ . '/../' . $approvedPreviewRoute),
+        "Phase 28 approved preview route is missing: {$approvedPreviewRoute}."
+    );
+}
+
+foreach ([
     'public/api/v1/shift-assignment/templates/commit.php',
     'public/api/v1/shift-assignment/templates/copy-preview.php',
     'public/api/v1/shift-assignment/templates/copy-commit.php',
-    'api/v1/shift-assignment/templates/preview.php',
     'api/v1/shift-assignment/templates/commit.php',
     'api/v1/shift-assignment/templates/copy-preview.php',
     'api/v1/shift-assignment/templates/copy-commit.php',
 ] as $plannedRoute) {
     template_contract_assert(
         !is_file(__DIR__ . '/../' . $plannedRoute),
-        "Phase 27 unexpectedly created {$plannedRoute}."
+        "Planning unexpectedly created {$plannedRoute}."
     );
 }
 
@@ -145,7 +153,6 @@ foreach ([
     'Copy Schedule',
     'copy-preview.php',
     'copy-commit.php',
-    'templates/preview.php',
     'templates/commit.php',
 ] as $forbiddenFrontendNeedle) {
     template_contract_assert(

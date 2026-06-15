@@ -367,3 +367,19 @@ Phase 27 template-contract notes:
   `up.sql` and `down.sql`;
 - no endpoint, React UI, schema, Calendar, navigation, or legacy-page behavior
   changes in this phase.
+
+Phase 28 template-preview notes:
+
+- `POST /api/v1/shift-assignment/templates/preview.php` is implemented as a
+  non-mutating backend/API-only route;
+- it requires session auth, CSRF, exact Super Admin, and explicit
+  `shifts.manage`;
+- it accepts a scoped weekly-rotation/date pattern, returns preview items,
+  summary, warnings, conflicts, and blocked items;
+- Shift 1, Shift 2, and Shift 3 `16:00-24:00` preview output passed disposable
+  validation;
+- valid preview was proven not to change assignment, warning, holiday coverage,
+  monthly template, monthly template item, or assignment audit counts in
+  `tracs_phase28_test`;
+- commit, copy-preview, copy-commit, React template UI, navigation, schema,
+  Calendar, and legacy-page changes remain blocked.

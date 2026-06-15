@@ -287,9 +287,9 @@ authoritative and preview access remains direct URL only.
 
 ## Phase 27 Template UI Planning Boundary
 
-No template generation or copy/paste UI is added in Phase 27. Future React
-work must wait for backend contracts that split every bulk operation into
-preview and commit:
+No template generation or copy/paste UI is added in Phase 27 or Phase 28.
+Future React work must wait for backend contracts that split every bulk
+operation into preview and commit:
 
 - Template Generator preview: non-mutating.
 - Template Generator commit: confirmed mutation.
@@ -301,6 +301,12 @@ capabilities. It must collect the date range and pattern/source, render the
 previewed assignments, show conflicts, warnings, weekly-hour results, holiday
 and overtime advisories, then require explicit confirmation before commit.
 
+Phase 28 implements the backend-only Template Generator preview API. The React
+preview still has no template button, modal, wizard, or API caller. UI work
+remains blocked until the commit/copy contracts are designed and preview
+browser behavior is approved.
+
 The UI must never call a bulk mutation directly from the first form step, must
 not optimistically write rows, and must keep Create/Edit/Delete pilot behavior
-unchanged until the template contracts pass disposable database validation.
+unchanged until the template commit contracts pass disposable database
+validation.

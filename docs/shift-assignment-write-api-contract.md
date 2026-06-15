@@ -24,7 +24,7 @@ pilot. `public/calendar.php` remains the zero-mistake visual reference.
 | Create assignment | `POST /api/v1/shift-assignment/assignments.php` | Implemented in Phase 14 under controlled pilot gate |
 | Update assignment | `PATCH /api/v1/shift-assignment/assignment.php?id=<id>` | Implemented; controlled React pilot |
 | Delete assignment | `DELETE /api/v1/shift-assignment/assignment.php?id=<id>` | Implemented backend-only in Phase 21; React UI blocked |
-| Generate monthly template preview | `POST /api/v1/shift-assignment/templates/preview.php` | Planned non-mutating Phase 27 preview contract |
+| Generate monthly template preview | `POST /api/v1/shift-assignment/templates/preview.php` | Implemented non-mutating Phase 28 preview contract |
 | Commit monthly template generation | `POST /api/v1/shift-assignment/templates/commit.php` | Planned confirmed bulk mutation |
 | Copy schedule preview | `POST /api/v1/shift-assignment/templates/copy-preview.php` | Planned non-mutating copy preview |
 | Copy schedule commit | `POST /api/v1/shift-assignment/templates/copy-commit.php` | Planned confirmed copy mutation |
@@ -501,13 +501,21 @@ POST /api/v1/shift-assignment/templates/copy-preview.php
 POST /api/v1/shift-assignment/templates/copy-commit.php
 ```
 
-`templates/preview.php` and `templates/copy-preview.php` must be non-mutating.
-They may not update draft state, create rows, reserve assignments, archive
+`templates/preview.php` is implemented as a non-mutating in-memory preview.
+`templates/copy-preview.php` must follow the same rule when approved. Preview
+routes may not update draft state, create rows, reserve assignments, archive
 templates, or write generated links. `templates/commit.php` and
 `templates/copy-commit.php` are the only planned mutating bulk routes, and they
 must re-check permissions, CSRF, scope, preview freshness, conflicts, weekly
 hours, jumpshift/rest warnings, holiday/overtime advisories, and real-schedule
 overwrite risk immediately before writing.
+
+Phase 28 preview accepts a scoped weekly-rotation/date pattern and selected
+agents, requires exact Super Admin plus explicit `shifts.manage`, and returns
+preview items, conflicts, warnings, and blocked items without writing
+assignments, templates, warnings, dependents, or assignment audits. Disposable
+validation in `tracs_phase28_test` proved table counts did not change after a
+valid preview.
 
 The detailed canonical contract is:
 

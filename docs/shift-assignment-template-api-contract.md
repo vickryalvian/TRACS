@@ -1,11 +1,22 @@
 # Shift Assignment Template API Contract Plan
 
-## Phase 27 Boundary
+## Phase 27/28 Boundary
 
 Phase 27 is planning only. It defines a preview-before-commit bulk scheduling
 direction, but it does not add template endpoints, copy/paste endpoints, React
 template UI, backend write routes, schema migrations, navigation links,
 Calendar changes, or legacy page changes.
+
+Phase 28 implements only the first endpoint:
+
+```text
+POST /api/v1/shift-assignment/templates/preview.php
+```
+
+The Phase 28 endpoint is side-effect free. It does not create template drafts,
+change draft status, create assignments, write audit rows, or persist preview
+state. Commit, copy-preview, copy-commit, and React template UI remain
+unimplemented.
 
 The existing Create/Edit/Delete pilot remains limited to the direct-URL React
 preview and exact Super Admin plus `shifts.manage`. `public/calendar.php`
@@ -108,6 +119,13 @@ POST /api/v1/shift-assignment/templates/preview.php
 
 Purpose: generate a non-mutating preview of assignments that would be created
 for a selected date range or month.
+
+Phase 28 implementation accepts a `weekly_rotation` pattern with explicit
+`date` items or `day_of_week` items and selected in-scope agents. It returns
+in-memory preview items, overlap conflicts, blocked items, advisory warnings,
+holiday/overtime flags, and workload-derived warnings. It requires
+authentication, mutation CSRF, exact `super_admin`, and explicit
+`shifts.manage`.
 
 Required security:
 
@@ -302,11 +320,26 @@ The future React template workflow must be a wizard or modal flow:
 There must be no direct bulk write button, no optimistic bulk mutation, and no
 frontend-only permission reliance.
 
+## Phase 28 Disposable Evidence
+
+`tests/shift-assignment-template-preview-integration.php` validates the route
+against `tracs_phase28_test`. It covers unauthenticated, missing CSRF, invalid
+CSRF, non-Super-Admin, invalid payload, valid Shift 1/2/3 preview, overlap
+conflict output, warning output, and no persisted table-count changes across:
+
+- `shift_assignments`
+- `shift_warnings`
+- `holiday_coverage_assignments`
+- `shift_monthly_templates`
+- `shift_monthly_template_items`
+- `assignment_audit_logs`
+
+The disposable database is dropped after the run.
+
 ## Implementation Gate
 
-Before any endpoint is implemented:
+Before any commit or copy endpoint is implemented:
 
-- add non-mutating route contract tests;
 - prove no production data is touched;
 - decide whether preview state is persisted or signed;
 - decide audit storage for parent template actions;

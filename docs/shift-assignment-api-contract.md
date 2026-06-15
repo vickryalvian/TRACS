@@ -402,11 +402,18 @@ POST /api/v1/shift-assignment/templates/copy-preview.php
 POST /api/v1/shift-assignment/templates/copy-commit.php
 ```
 
-Phase 27 implements none of them. The legacy monthly-template action
-`preview_monthly_template` remains characterized as potentially mutating
-because it can mark a draft as `previewed`. Future v1 preview endpoints must be
-non-mutating and must not wrap that legacy behavior without extracting a
-side-effect-free generation path.
+Phase 28 implements only:
+
+```text
+POST /api/v1/shift-assignment/templates/preview.php
+```
+
+The legacy monthly-template action `preview_monthly_template` remains
+characterized as potentially mutating because it can mark a draft as
+`previewed`. The v1 preview endpoint does not wrap that mutating behavior. It
+generates preview items in memory and must not insert assignments, create draft
+templates, update draft status, write template metadata, or write commit-style
+audit entries.
 
 Current schema support exists for template ownership through
 `shift_assignments.source`, `shift_assignments.monthly_template_id`,
@@ -419,9 +426,15 @@ a reviewed `up.sql`/`down.sql` audit-action migration.
 
 Until granular permissions are seeded, template preview/commit and copy
 preview/commit must remain exact `super_admin` plus explicit `shifts.manage`
-if implemented. Every POST route requires CSRF. Commit routes require stronger
-confirmation, conflict re-checking, audit evidence, and disposable database
-validation before any React UI activation.
+if implemented. Every POST route requires CSRF. Phase 28 preview uses that
+temporary gate. Commit routes require stronger confirmation, conflict
+re-checking, audit evidence, and disposable database validation before any
+React UI activation.
+
+Phase 28 disposable validation proved Shift 1/2/3 preview output, overlap
+conflict output, warnings, and no persisted count changes for assignments,
+warnings, holiday coverage, monthly templates, monthly template items, and
+assignment audits in `tracs_phase28_test`.
 
 ## Phase 14 Controlled Create Contract
 
@@ -511,7 +524,8 @@ non-mutation, and database teardown. No React PATCH call or edit control exists.
 - [ ] Weekly target, overtime-risk, and overload states remain accurate.
 - [ ] Copy last week skips conflicts and does not replace real data.
 - [ ] Monthly template preview/apply behavior and audits remain intact.
-- [ ] Future v1 template preview/copy-preview remains non-mutating.
+- [x] Future v1 template preview remains non-mutating.
+- [ ] Future v1 copy-preview remains non-mutating.
 - [ ] Future v1 template commit/copy-commit never overwrites real schedules
       silently and records rollback evidence.
 - [ ] CSV contains only permitted scoped recap rows.

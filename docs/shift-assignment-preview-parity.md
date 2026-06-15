@@ -313,15 +313,18 @@ Phase 23 result:
       passed in the guarded API matrix.
 - [x] Phase 27 documents template generation and copy/paste as future
       preview-before-commit contracts only.
-- [ ] Template generation endpoints, copy/paste endpoints, React template UI,
+- [x] Phase 28 implements only the non-mutating template preview endpoint.
+- [ ] Template commit endpoints, copy/paste endpoints, React template UI,
       production navigation, and legacy replacement remain unapproved.
 
 ## Phase 27 Template Contract Gate
 
 Before any template or copy/paste UI appears in the preview, verify:
 
-- [ ] `templates/preview.php` and `templates/copy-preview.php` exist only as
-      documented future contracts and are designed as non-mutating previews.
+- [x] `templates/preview.php` exists as a backend-only, non-mutating API and
+      passed disposable no-mutation validation.
+- [ ] `templates/copy-preview.php` exists only as a documented future contract
+      and must be designed as a non-mutating preview.
 - [ ] `templates/commit.php` and `templates/copy-commit.php` require CSRF,
       confirmation, conflict re-checks, and audit evidence before writing.
 - [ ] Existing real assignments are never overwritten silently.
@@ -332,7 +335,7 @@ Before any template or copy/paste UI appears in the preview, verify:
 - [ ] Granular template permissions are either migrated with `up.sql` and
       `down.sql` or the implementation remains exact Super Admin plus
       `shifts.manage`.
-- [ ] React still has no active template generator or copy/paste control.
+- [x] React still has no active template generator or copy/paste control.
 
 ## Phase 17 Completed Browser Matrix
 
