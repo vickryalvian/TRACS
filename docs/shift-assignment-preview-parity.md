@@ -239,6 +239,27 @@ Phase 16 manual QA:
 - [ ] Confirm dirty close and page navigation prompt before discarding input.
 - [ ] Confirm no edit/delete/template/copy control or request exists.
 
+## Phase 17 Completed Browser Matrix
+
+| Check | Disposable browser result |
+| --- | --- |
+| Unauthenticated access | Redirected to `/login.php` |
+| Exact Super Admin with view/manage | Preview and Add Assignment available |
+| Non-Super Admin with view/manage | Safe concealed not-found response |
+| Exact Super Admin without manage | Preview visible; Add Assignment absent |
+| Missing agent/time validation | Modal retained; field errors displayed |
+| Shift 3 preset | Populated `16:00-24:00` |
+| Create success | Success toast; modal closed; GET refreshed |
+| Outside current range | Safe filter/range explanation displayed |
+| Matching daily range | Created row visible with eight-hour duration |
+| Duplicate overlap | Safe conflict toast; modal retained |
+| Assignment/activity audit | One matching record in each audit store |
+| Console errors | None observed during React flow |
+| Cleanup | Temporary container removed; database count zero |
+
+Test identity and operational data were disposable fixtures only. No
+production credential, user, schedule, or database was used.
+
 ## Phase 12 Read-Only Production Candidate Checklist
 
 The preview is a candidate only; the legacy page remains production.

@@ -617,3 +617,43 @@ git branch -D refactor/phase-16-shift-create-ui-pilot
 Code rollback does not remove an assignment created during an approved
 disposable/staging browser test. Clean only the disposable database or use an
 approved audited data-correction procedure.
+
+## Phase 17 Disposable Browser Validation Rollback
+
+Phase 17 adds test-only disposable browser environment/contract files,
+documentation evidence, and one preview-shell include for the existing
+`page_helpers.php` dependency. It adds no production navigation, API route,
+schema migration, Calendar change, or legacy Shift Assignment change.
+
+Before commit:
+
+```bash
+git restore --staged .
+git restore .
+rm tests/shift-assignment-create-ui-browser-environment.php
+rm tests/shift-assignment-create-ui-browser-validation.php
+```
+
+After commit:
+
+```bash
+git revert <phase-17-commit-sha>
+```
+
+To abandon the unmerged branch:
+
+```bash
+git switch refactor/phase-16-shift-create-ui-pilot
+git branch -D refactor/phase-17-shift-create-ui-staging-validation
+```
+
+Emergency test-resource cleanup:
+
+```bash
+docker rm -f tracs_phase17_app
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 \
+TRACS_TEST_DB_NAME=tracs_phase17_test \
+php tests/shift-assignment-create-ui-browser-environment.php cleanup
+```
+
+Never substitute an unmarked database name in the cleanup command.

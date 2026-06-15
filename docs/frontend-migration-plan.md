@@ -213,3 +213,15 @@ existing GET view refreshes after success. Accessibility labels, field errors,
 duplicate-submit protection, dirty-form confirmation, and success/conflict
 feedback are included. Update, delete, templates, copy/paste, navigation
 exposure, and legacy replacement remain blocked.
+
+Phase 17 proves the activated create path in an isolated browser environment.
+A temporary app container targeted a schema-only disposable clone, and the
+real login plus 2FA flow established the session. The browser confirmed
+capability-gated controls, frontend validation, Shift 3 `24:00`, successful
+create and refresh, filtered row visibility, safe overlap feedback, role
+concealment, and missing-permission hiding. Database audits were verified
+before the container and database were destroyed.
+
+No browser authentication bypass or public test route was added. The
+environment helper is CLI-only under `tests/`, requires explicit mutation
+consent, and refuses unsafe database names.

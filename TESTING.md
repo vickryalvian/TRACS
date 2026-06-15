@@ -482,6 +482,67 @@ Do not run this browser workflow against production. Update/delete,
 template/copy, broad role access, navigation exposure, and legacy replacement
 remain blocked.
 
+## Phase 17 Disposable Browser Evidence
+
+Phase 17 adds a guarded browser environment helper:
+
+```bash
+TRACS_ENV=test \
+TRACS_ALLOW_MUTATION_TESTS=1 \
+TRACS_TEST_DB_NAME=tracs_phase17_test \
+php tests/shift-assignment-create-ui-browser-environment.php setup
+```
+
+The helper refuses missing test/mutation flags and unsafe database names. It
+clones schema only, seeds dedicated Phase 17 users and shift fixtures, and
+supports explicit `verify` and `cleanup` actions. The test application runs in
+a separate temporary container pointed only at the disposable database.
+
+Authenticated browser validation completed on June 15, 2026:
+
+- environment: local Docker disposable test;
+- database: `tracs_phase17_test`;
+- test URL: `http://127.0.0.1:8082/shift-assignment-react-preview.php`;
+- authorized identity: `phase17-super`, exact `super_admin`, `shifts.view`,
+  and explicit `shifts.manage`;
+- target agent: fixture user ID `9733`;
+- target date: July 13, 2026;
+- assignment: `regular_shift`, Shift 3, `16:00-24:00`;
+- real login and required 2FA setup completed;
+- unauthenticated and expired sessions redirected to `/login.php`;
+- non-Super Admin access returned the safe concealed not-found response;
+- exact Super Admin without explicit `shifts.manage` saw no Add Assignment
+  control;
+- required-field errors remained in the modal and focused the agent field;
+- Shift 3 preset populated `16:00` and `24:00`;
+- successful create closed the modal and showed the safe success toast;
+- the initial out-of-range state explained that filters could hide the row;
+- daily July 13 filters showed one row, eight hours, and `16:00-24:00`;
+- a duplicate browser create returned the safe overlap conflict message and
+  retained the modal;
+- no console error or warning was observed during the React flow;
+- verification found one assignment audit and one Phase 5 activity audit.
+
+The browser pass also found that the preview shell omitted the canonical
+`page_helpers.php` dependency required by the shared footer. The preview now
+loads that existing helper so footer rendering completes and the isolated
+React module script is emitted.
+
+Missing/invalid CSRF, `401`, `403`, and `422` response contracts remain covered
+by the Phase 14-16 API, integration, and frontend contract tests. Phase 17 did
+not deliberately tamper with an authenticated browser token.
+
+Cleanup completed:
+
+```bash
+docker rm -f tracs_phase17_app
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 \
+TRACS_TEST_DB_NAME=tracs_phase17_test \
+php tests/shift-assignment-create-ui-browser-environment.php cleanup
+```
+
+Final database existence count was zero. No fixture or assignment remains.
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:

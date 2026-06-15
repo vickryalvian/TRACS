@@ -179,6 +179,25 @@ This activation does not approve update, delete, templates, copy/paste,
 overtime-specific controls, broad role access, navigation exposure, or
 production replacement.
 
+## Phase 17 Browser Validation Result
+
+The controlled create contract was genuinely exercised through the React UI
+against `tracs_phase17_test`. The test used the real login and mandatory 2FA
+setup flow, exact Super Admin plus explicit `shifts.manage`, and fixture agent
+ID `9733`.
+
+Shift 3 on `2026-07-13` created successfully with the `16:00-24:00` display
+boundary, appeared through the read API after applying the matching daily
+range, and produced both assignment and activity audit records. Repeating the
+same create returned the safe overlap conflict without a second row.
+
+Non-Super Admin access was concealed, and removing explicit `shifts.manage`
+from the disposable Super Admin role hid the create entry point. The temporary
+container and disposable database were then removed.
+
+This evidence clears the create UI's disposable-browser gate. It does not
+approve update/delete/template/copy contracts or production replacement.
+
 ## Common Security Contract
 
 Every future mutation must:

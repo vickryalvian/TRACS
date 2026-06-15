@@ -9,6 +9,7 @@ require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/auth/auth_check.php';
 require_once __DIR__ . '/../core/access_control.php';
 require_once __DIR__ . '/../modules/alert-ticker/controller.php';
+require_once __DIR__ . '/includes/page_helpers.php';
 require_once __DIR__ . '/includes/react_manifest.php';
 
 tracs_require_page_permission($conn, 'shifts.view');

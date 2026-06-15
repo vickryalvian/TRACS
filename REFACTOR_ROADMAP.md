@@ -90,6 +90,13 @@ preview. `Add Assignment` is rendered from the backend context capability,
 uses the Phase 14 POST contract and in-memory CSRF handoff, validates supported
 fields, refreshes the current read view, and retains the pilot warning.
 
+Phase 17 validates that UI end to end against `tracs_phase17_test` through a
+separate temporary app container. Real login/2FA, role concealment,
+permission-gated visibility, frontend validation, Shift 3 creation, filtered
+GET visibility, overlap feedback, audits, and cleanup passed. The temporary
+container was removed and the disposable database existence count returned
+zero.
+
 Phase 15 validated that create contract against a guarded disposable MySQL
 database. Authenticated create, read-after-write, Shift 3, overlap, CSRF, exact
 role, explicit `shifts.manage`, audits, and database teardown passed.
