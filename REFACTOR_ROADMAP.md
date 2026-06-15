@@ -85,22 +85,20 @@ their frontend migration remains late because of the system-wide risk.
 
 ## Current Phase
 
-Phase 6 characterizes Shift Assignment before frontend migration and adds one
-additive protected contract:
+Phase 7 adds the first scoped Shift Assignment data resource:
 
 ```text
-GET /api/v1/shift-assignment/context.php
+GET /api/v1/shift-assignment/assignments.php
 ```
 
-It requires `shifts.view` and returns allowlisted user, permission, action,
-canonical shift, scoped filter, default, CSRF, and request-ID metadata. It
-returns no assignments and performs no module writes.
+It requires `shifts.view`, accepts GET only, validates ISO dates and allowlisted
+filters, and returns scoped assignments, workload summary, warnings, holiday
+notices, UI display dates, and a request ID. It uses the existing service for
+all reads, permission scope, and calculations.
 
 The existing PHP page, legacy API, CSV export, service, Calendar reference,
-database schema, and production layout remain unchanged. Current data flows,
-tables, permission split, role/division scope, filters, business rules, risks,
-future contracts, and manual checks are recorded in
-`docs/shift-assignment-api-contract.md`.
+database schema, data, and production layout remain unchanged. No write route,
+React page, or frontend integration is added.
 
 Canonical Phase 2 plans:
 
@@ -145,3 +143,10 @@ Phase 6 contract notes:
 - `api/v1/shift-assignment/context.php`
 - `public/api/v1/shift-assignment/context.php`
 - `tests/shift-assignment-api-contract.php`
+
+Phase 7 read-resource notes:
+
+- `api/v1/shift-assignment/assignments.php`
+- `public/api/v1/shift-assignment/assignments.php`
+- `tests/shift-assignment-assignments-api-contract.php`
+- `docs/shift-assignment-api-contract.md`

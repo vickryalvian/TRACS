@@ -69,6 +69,13 @@ endpoint solely to make it match the target during baseline creation.
       paths, logs, and server details.
 - [ ] Agent/Intern options remain self-scoped and Supervisor options remain
       division-scoped.
+- [ ] `GET /api/v1/shift-assignment/assignments.php` requires `shifts.view`,
+      accepts GET only, and returns the standard five-key envelope.
+- [ ] Assignment query filters cannot expand role/division/object scope.
+- [ ] Invalid view, date range, agent, division, role, type, or status returns
+      `422` without a database write.
+- [ ] Read responses omit email, notes, creator/approver IDs, SQL, paths, and
+      logs.
 - [ ] Data, assignment, history, and monthly-template reads are scoped.
 - [ ] Save, resize, status, confirm, replace, copy, warning, template, holiday,
       coverage, settings, apply, archive, and deactivate actions enforce their

@@ -293,3 +293,34 @@ git branch -D refactor/phase-6-shift-assignment-api-contracts
 ```
 
 No database restore, asset rebuild, or UI rollback is required.
+
+## Phase 7 Shift Assignment Read API Rollback
+
+Phase 7 adds one GET-only route, its internal validator/resource formatter,
+contract tests, and documentation. It does not alter existing pages, the
+legacy Shift Assignment API, business logic, schema, or data.
+
+Before commit, review the diff and remove only Phase 7 work:
+
+```bash
+git restore --staged .
+git restore .
+rm api/v1/shift-assignment/assignments.php
+rm public/api/v1/shift-assignment/assignments.php
+rm tests/shift-assignment-assignments-api-contract.php
+```
+
+After commit:
+
+```bash
+git revert <phase-7-commit-sha>
+```
+
+To abandon the unmerged branch:
+
+```bash
+git switch refactor/phase-6-shift-assignment-api-contracts
+git branch -D refactor/phase-7-shift-assignment-read-api
+```
+
+No database restore, frontend rebuild, or production page rollback is required.

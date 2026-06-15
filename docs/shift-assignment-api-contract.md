@@ -212,28 +212,62 @@ It does not return assignments, email addresses, passwords, 2FA data, template
 notes, type descriptions, raw SQL, paths, logs, environment values, database
 credentials, or server details.
 
-## Planned Assignment Read Contract
+## Phase 7 Assignment Read Contract
 
-Future, not implemented in Phase 6:
+Implemented as an additive read-only endpoint:
 
 ```text
 GET /api/v1/shift-assignment/assignments.php
 ```
 
-Proposed query:
+It requires a fully authenticated active session and `shifts.view`, accepts GET
+only, and reuses the current service for role/division scope, assignment reads,
+workload recap, holidays, jumpshift warnings, overlap warnings, and coverage
+warnings.
 
-- `start_date` and `end_date` as ISO dates
+Supported query:
+
+- `start_date` and `end_date` as ISO `YYYY-MM-DD` dates
 - `view=daily|weekly|monthly`
 - `agent_id`
-- `division_id`
-- `assignment_type`
+- `role`
+- `division`
+- `shift_type`
 - `status`
-- `holiday_only`
-- `q`
 
-It must reuse current scope and business services, return only allowlisted
-assignment fields, preserve seeded real schedules, and keep recap/warnings as
-separately testable resource sections or endpoints.
+Dates are intentionally ISO-only at the API boundary. The response also returns
+`dd-mm-yyyy` display fields for the UI. This avoids ambiguous server parsing
+while preserving the TRACS display convention.
+
+Range rules:
+
+- Daily requires one date.
+- Weekly supports at most seven inclusive dates.
+- Monthly must stay within one calendar month.
+- Start and end must be supplied together or both omitted.
+- Defaults are today for daily, Monday-Sunday for weekly, and the current
+  calendar month for monthly.
+
+Positive integer validation applies to agent and division. Role, shift type,
+status, and view use allowlists. Invalid query input returns `422` using the
+standard five-key envelope.
+
+The response returns:
+
+- view and raw/display date range;
+- allowlisted assignment, agent, division, shift, type, status, approval,
+  source, overtime, holiday, availability, and duration fields;
+- aggregate counts and the current workload recap;
+- allowlisted jumpshift, overlap, and coverage warnings;
+- allowlisted holiday notices;
+- `meta.request_id`.
+
+It excludes user emails, assignment notes, credentials, 2FA data, creator and
+approver IDs, raw SQL, internal paths, logs, environment values, and server
+details. Role filtering is applied only after the existing service has already
+enforced the caller's server-side scope.
+
+No write method exists at this route. The legacy page and API remain unchanged.
 
 Future writes are not approved in this phase:
 
@@ -282,6 +316,12 @@ assignment-delete action.
 - [ ] UI date controls display `dd-mm-yyyy`.
 - [ ] New context returns `401`, `403`, `405`, or `200` as appropriate.
 - [ ] No new context request writes module data.
+- [ ] New assignments endpoint returns scoped seeded assignments for daily,
+      weekly, and monthly ranges.
+- [ ] ISO query dates and `dd-mm-yyyy` display fields refer to the same dates.
+- [ ] Role, agent, and division filters cannot expand server scope.
+- [ ] Assignment responses omit email, notes, actor IDs, SQL, paths, and logs.
+- [ ] POST, PATCH, and DELETE are rejected; no read request writes data.
 
 ## Validation
 
@@ -289,6 +329,7 @@ assignment-delete action.
 php tests/php-api-foundation.php
 php tests/php-api-contract.php
 php tests/shift-assignment-api-contract.php
+php tests/shift-assignment-assignments-api-contract.php
 find api tests public/api/v1 -name '*.php' -exec php -l {} \;
 ```
 

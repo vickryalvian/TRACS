@@ -62,6 +62,7 @@ Review date: 2026-06-15. All `public/api/` routes require a fully authenticated,
 | `api/server-health.php` | Fixed server metrics and sanitized logs | GET | Exact `super_admin` role | No | Critical; no parameters, rate limited, fixed paths only |
 | `api/v1/context.php` | Safe authenticated frontend context | GET | Any fully authenticated active user | No | Medium; allowlisted identity, permissions, CSRF handoff |
 | `api/v1/shift-assignment/context.php` | Safe Shift Assignment bootstrap context | GET | `shifts.view` plus role/division scope | No | High; no assignments or sensitive fields |
+| `api/v1/shift-assignment/assignments.php` | Scoped Shift Assignment read resource | GET | `shifts.view` plus role/division scope | No | High; strict query and allowlisted output |
 | `api/export-activity.php` | Activity CSV | GET | `reports.export` and `users.view_activity` | No | High; authenticated export |
 | `api/export-cases.php` | Cases CSV | GET | `reports.export` and `cases.view` | No | High; user-scoped export |
 | `api/export-domain-price-crosscheck.php` | Domain pricing CSV | GET | `reports.export` and `domain_price.view` | No | High; permission checked |

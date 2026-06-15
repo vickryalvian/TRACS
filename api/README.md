@@ -79,3 +79,17 @@ api/v1/shift-assignment/context.php
 ```
 
 See `docs/shift-assignment-api-contract.md`.
+
+## Shift Assignment Read Resource
+
+Phase 7 adds:
+
+```text
+GET /api/v1/shift-assignment/assignments.php
+```
+
+It requires `shifts.view`, validates an ISO date range and allowlisted filters,
+and delegates scoped reads and calculations to the existing module service.
+The v1 resource formatter excludes email, notes, credentials, actor IDs, and
+server internals. It supports no write method and does not replace the legacy
+Shift Assignment endpoint.

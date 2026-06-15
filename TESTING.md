@@ -189,6 +189,35 @@ fixture accounts in a disposable environment, verify `403` without
 `shifts.view`, `200` with it, and the role/division matrix in
 `docs/shift-assignment-api-contract.md`. Do not alter real schedules.
 
+## Phase 7 Shift Assignment Read API
+
+Run:
+
+```bash
+php tests/php-api-foundation.php
+php tests/php-api-contract.php
+php tests/shift-assignment-api-contract.php
+php tests/shift-assignment-assignments-api-contract.php
+find api tests public/api/v1 -name '*.php' -exec php -l {} \;
+```
+
+The Phase 7 contract verifies strict query validation, daily/weekly/monthly
+defaults and range limits, role filtering, five-key output, ISO/display dates,
+Shift 3 `16:00-24:00`, summary and jumpshift compatibility, request IDs,
+sensitive-field exclusion, and GET-only route configuration.
+
+Live unauthenticated and method checks:
+
+```bash
+curl -i http://127.0.0.1:8080/api/v1/shift-assignment/assignments.php
+curl -i -X POST http://127.0.0.1:8080/api/v1/shift-assignment/assignments.php
+```
+
+Expect `401` and `405` respectively. With an authenticated disposable fixture,
+verify invalid query `422`, denied permission `403`, valid scoped data `200`,
+and seeded assignments in daily, weekly, and monthly views. These GET checks
+must not alter assignment or audit table counts.
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:

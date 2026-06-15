@@ -280,6 +280,29 @@ notification, conflict, and workload rules.
 See `docs/shift-assignment-api-contract.md` for the current data-flow,
 permission, filter, business-rule, and future endpoint characterization.
 
+## Phase 7 Shift Assignment Read Resource
+
+Phase 7 adds:
+
+```text
+GET /api/v1/shift-assignment/assignments.php
+```
+
+The thin public route validates authentication, `shifts.view`, GET, and query
+input, then delegates all reads and calculations to the existing
+`ShiftingAssignmentService`. The internal v1 resource allowlists output fields
+and supplies ISO raw dates plus `dd-mm-yyyy` display dates.
+
+This batch intentionally does not introduce a parallel repository or service.
+The current module service already owns prepared queries, role/division scope,
+workload calculations, holidays, and warning rules. Extracting those layers
+before behavioral parity would increase risk.
+
+Role filtering is a response filter over the already scoped agent set; it
+cannot expand access. Future write resources remain prohibited until separate
+CSRF, permission, object-scope, transaction, validation, audit, notification,
+and rollback contracts are approved.
+
 Automated checks:
 
 ```bash
