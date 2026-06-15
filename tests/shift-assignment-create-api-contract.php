@@ -224,8 +224,9 @@ create_contract_assert(
     'Create success status or message changed.'
 );
 create_contract_assert(
-    !preg_match('/\b(method\s*:\s*[\'"](POST|PUT|PATCH|DELETE)|\.(post|put|patch|delete)\s*\()/i', $frontendApi),
-    'React preview API client contains a write method.'
+    substr_count($frontendApi, "method: 'POST'") === 1
+        && !preg_match('/\b(method\s*:\s*[\'"](PUT|PATCH|DELETE)|\.(put|patch|delete)\s*\()/i', $frontendApi),
+    'React preview API client must contain only the controlled create POST.'
 );
 
 foreach ([

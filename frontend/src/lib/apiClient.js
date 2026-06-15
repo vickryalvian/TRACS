@@ -54,7 +54,12 @@ export function createApiClient({
   }
 
   async function request(path, options = {}) {
-    const method = (options.method ?? 'GET').toUpperCase();
+    const {
+      csrfToken: requestCsrfToken,
+      csrfHeaderName: requestCsrfHeaderName,
+      ...fetchOptions
+    } = options;
+    const method = (fetchOptions.method ?? 'GET').toUpperCase();
     const headers = new Headers(options.headers);
     const isFormData =
       typeof FormData !== 'undefined' && options.body instanceof FormData;
@@ -72,14 +77,14 @@ export function createApiClient({
     }
 
     if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
-      const csrfToken = readCsrfToken(csrfMetaName);
+      const csrfToken = requestCsrfToken ?? readCsrfToken(csrfMetaName);
       if (csrfToken) {
-        headers.set(csrfHeaderName, csrfToken);
+        headers.set(requestCsrfHeaderName ?? csrfHeaderName, csrfToken);
       }
     }
 
     const response = await fetchImpl(`${baseUrl}${path}`, {
-      ...options,
+      ...fetchOptions,
       method,
       headers,
       body,

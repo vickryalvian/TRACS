@@ -156,6 +156,29 @@ permission semantics elsewhere are unchanged.
 React create UI remains blocked until approved staging browser evidence and a
 separate UI activation review.
 
+## Phase 16 Controlled React Adoption
+
+The direct-URL React preview now exposes create only when the context returns
+`allowed_actions.create_assignment=true`. The PHP page still requires
+`shifts.view` and exact Super Admin access; the POST route independently
+requires exact `super_admin`, explicit `shifts.manage`, authentication, and
+valid CSRF.
+
+The frontend accepts only the implemented API fields, sends `assignment_date`
+as ISO after displaying `dd-mm-yyyy`, supports Shift 1/2/3 presets including
+the `24:00` boundary, disables duplicate submission, maps `422` field errors,
+keeps the modal open on failure, refreshes GET after success, and warns when
+the created row may be outside current filters.
+
+The CSRF token remains in React memory from the protected context response and
+is sent using that response's header name. It is not written to local or
+session storage. Frontend checks are usability controls only; PHP remains the
+authority.
+
+This activation does not approve update, delete, templates, copy/paste,
+overtime-specific controls, broad role access, navigation exposure, or
+production replacement.
+
 ## Common Security Contract
 
 Every future mutation must:
@@ -413,8 +436,9 @@ without the required audit.
 
 ## React Write Behavior
 
-Until each backend contract is implemented and tested, Add/Edit/Delete/Template
-controls remain absent or disabled and the read-only pilot banner remains.
+Only the implemented and tested create contract is active in the controlled
+preview. Edit/Delete/Template/Copy controls remain absent or disabled, and the
+pilot banner continues to identify the legacy page as production authority.
 
 Future forms must:
 

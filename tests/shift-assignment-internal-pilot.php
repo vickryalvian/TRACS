@@ -43,8 +43,8 @@ pilot_assert(
     'Super Admin pilot denials are no longer audit-characterized.'
 );
 pilot_assert(
-    str_contains($preview, 'React Preview Pilot — Read-only.'),
-    'Pilot read-only banner changed.'
+    str_contains($preview, 'React Preview Pilot — Create action is enabled only for Super Admin'),
+    'Pilot controlled-create banner changed.'
 );
 pilot_assert(
     str_contains($preview, 'remains the production source of'),
@@ -82,10 +82,11 @@ pilot_assert(
 );
 
 pilot_assert(
-    !preg_match('/\b(method\s*:\s*[\'"](POST|PUT|PATCH|DELETE)|\.(post|put|patch|delete)\s*\()/i', $frontendApi),
-    'Pilot React client contains a write method.'
+    substr_count($frontendApi, "method: 'POST'") === 1
+        && !preg_match('/\b(method\s*:\s*[\'"](PUT|PATCH|DELETE)|\.(put|patch|delete)\s*\()/i', $frontendApi),
+    'Pilot React client must contain only the controlled create POST.'
 );
-foreach (['POST', 'PATCH', 'DELETE'] as $method) {
+foreach (['PATCH', 'DELETE'] as $method) {
     pilot_assert(
         !str_contains($preview, $method),
         "Pilot preview unexpectedly contains {$method} behavior."

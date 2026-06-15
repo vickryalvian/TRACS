@@ -85,15 +85,18 @@ their frontend migration remains late because of the system-wide risk.
 
 ## Current Phase
 
-Phase 15 validates the controlled Shift Assignment create API against a
-guarded disposable MySQL database. Authenticated create, read-after-write,
-Shift 3, overlap, CSRF, exact role, explicit `shifts.manage`, audits, and
-database teardown have passed.
+Phase 16 enables the first controlled React mutation only inside the unlinked
+preview. `Add Assignment` is rendered from the backend context capability,
+uses the Phase 14 POST contract and in-memory CSRF handoff, validates supported
+fields, refreshes the current read view, and retains the pilot warning.
+
+Phase 15 validated that create contract against a guarded disposable MySQL
+database. Authenticated create, read-after-write, Shift 3, overlap, CSRF, exact
+role, explicit `shifts.manage`, audits, and database teardown passed.
 
 Delete remains blocked pending an approved retention or soft-delete design.
-No active React action, update/delete/template/copy endpoint, permission seed,
-migration, navigation change, Calendar change, or legacy-page change is
-included.
+No update/delete/template/copy action or endpoint, permission seed, migration,
+navigation change, Calendar change, or legacy-page change is included.
 
 Phase 12 previously hardened the authenticated, unlinked React preview as a
 read-only production candidate:

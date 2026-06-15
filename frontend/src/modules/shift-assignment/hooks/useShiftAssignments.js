@@ -31,5 +31,5 @@ export function useShiftAssignments(filters, enabled = true) {
     return () => controller.abort();
   }, [load]);
 
-  return { ...state, retry: () => load() };
+  return { ...state, refresh: () => load(), retry: () => load() };
 }

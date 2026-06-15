@@ -440,8 +440,47 @@ Validated on June 15, 2026:
 - assignment, activity, and security audit rows were present;
 - `tracs_phase15_test` was dropped.
 
-React create UI remains disabled. Disposable CLI evidence is necessary but not
-sufficient for UI activation.
+At the end of Phase 15, React create UI remained disabled. Disposable CLI
+evidence was the prerequisite for the separately approved Phase 16 activation.
+
+## Phase 16 Controlled React Create Pilot
+
+The unlinked authenticated preview at
+`/shift-assignment-react-preview.php` now exposes `Add Assignment` only when
+the Shift Assignment context returns `allowed_actions.create_assignment=true`.
+That server-derived capability requires the exact `super_admin` role, explicit
+`shifts.manage`, and the page still requires `shifts.view`.
+
+The modal uses only fields accepted by the Phase 14 API. It displays dates as
+`dd-mm-yyyy`, submits ISO dates, supports the three established shift presets,
+sends the context CSRF token in the context-provided header, disables duplicate
+submits, preserves backend field errors, warns before discarding dirty input,
+and refreshes the current GET view after success.
+
+Run the frontend and source contracts:
+
+```bash
+cd frontend && npm run test:contracts
+cd frontend && npm run build
+php tests/shift-assignment-create-ui-pilot.php
+```
+
+Browser mutation validation must use a disposable or staging database only:
+
+1. Point the local application at a safely marked disposable database.
+2. Sign in as an exact Super Admin role with explicit `shifts.view` and
+   `shifts.manage`.
+3. Open the preview by direct URL and confirm no navigation link exists.
+4. Create one unique test assignment, including a Shift 3 `16:00-24:00` case.
+5. Confirm the success toast, current-view refresh, GET visibility, and audit
+   rows.
+6. Confirm overlap, invalid input, expired session, denied permission, and
+   invalid CSRF remain safely handled.
+7. Drop or otherwise clean the disposable database.
+
+Do not run this browser workflow against production. Update/delete,
+template/copy, broad role access, navigation exposure, and legacy replacement
+remain blocked.
 
 ## Future Automated Test Tools
 

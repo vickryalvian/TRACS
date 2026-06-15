@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Card } from '../../components/ui/Card';
 import { ShiftAssignmentBoard } from './components/ShiftAssignmentBoard';
 import { ShiftAssignmentTable } from './components/ShiftAssignmentTable';
+import { ShiftCreateModal } from './components/ShiftCreateModal';
 import { ShiftEmptyState } from './components/ShiftEmptyState';
 import { ShiftErrorState } from './components/ShiftErrorState';
 import { ShiftFilterBar } from './components/ShiftFilterBar';
@@ -9,10 +10,12 @@ import { ShiftLoadingState } from './components/ShiftLoadingState';
 import { ShiftOperationalNotices } from './components/ShiftOperationalNotices';
 import { ShiftSummaryCards } from './components/ShiftSummaryCards';
 import { ShiftToolbar } from './components/ShiftToolbar';
+import { ShiftToast } from './components/ShiftToast';
 import { ShiftWarnings } from './components/ShiftWarnings';
 import { useShiftAssignmentContext } from './hooks/useShiftAssignmentContext';
 import { useShiftAssignments } from './hooks/useShiftAssignments';
 import { rangeForView, shiftRange } from './utils/shiftDates';
+import { createdAssignmentMatchesFilters } from './utils/shiftCreate';
 
 const initialRange = rangeForView('weekly');
 
@@ -27,9 +30,12 @@ const initialFilters = {
 
 export function ShiftAssignmentApp() {
   const [filters, setFilters] = useState(initialFilters);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [toast, setToast] = useState(null);
   const context = useShiftAssignmentContext();
   const requestFilters = useMemo(() => filters, [filters]);
   const assignments = useShiftAssignments(requestFilters, Boolean(context.shift));
+  const canCreate = Boolean(context.shift?.allowed_actions?.create_assignment);
 
   function applyFilters(nextFilters) {
     setFilters(nextFilters);
@@ -65,6 +71,17 @@ export function ShiftAssignmentApp() {
     }));
   }
 
+  async function handleCreated(assignment, message) {
+    await assignments.refresh();
+    const visible = createdAssignmentMatchesFilters(assignment, filters);
+    setToast({
+      type: 'success',
+      message: visible
+        ? message || 'The assignment is now visible in the current schedule.'
+        : `${message || 'Shift assignment created.'} It may be outside the current filters or date range.`,
+    });
+  }
+
   const theme = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
 
   return (
@@ -74,7 +91,9 @@ export function ShiftAssignmentApp() {
     >
       <div className="tr:flex tr:flex-col tr:gap-tracs-4 tr:pb-tracs-6">
         <ShiftToolbar
+          canCreate={canCreate}
           filters={filters}
+          onCreate={() => setCreateOpen(true)}
           onMove={moveRange}
           onToday={useToday}
           onViewChange={changeView}
@@ -102,7 +121,7 @@ export function ShiftAssignmentApp() {
                       {filters.view[0].toUpperCase() + filters.view.slice(1)} assignments
                     </h2>
                     <p className="tr:mt-1 tr:text-xs tr:text-tracs-muted">
-                      Read-only pilot · {context.global?.user?.name || 'Authenticated user'}
+                      Controlled create pilot · {context.global?.user?.name || 'Authenticated user'}
                     </p>
                   </div>
                   <span className="tr:font-mono tr:text-[9px] tr:text-tracs-muted">
@@ -156,6 +175,14 @@ export function ShiftAssignmentApp() {
           </>
         )}
       </div>
+      <ShiftCreateModal
+        context={context.shift}
+        onClose={() => setCreateOpen(false)}
+        onCreated={handleCreated}
+        onToast={setToast}
+        open={createOpen && canCreate}
+      />
+      <ShiftToast onDismiss={() => setToast(null)} toast={toast} />
     </main>
   );
 }

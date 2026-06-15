@@ -205,3 +205,11 @@ Phase 15 supplies disposable-database integration evidence but does not change
 that UI gate. React create still requires approved staging browser evidence,
 form accessibility, unsaved-change, duplicate-submit, modal/toast, and rollback
 review.
+
+Phase 16 activates only the controlled create path in the direct-URL preview.
+The button is rendered solely from the backend `create_assignment` capability,
+the modal sends the context CSRF token without persistent storage, and the
+existing GET view refreshes after success. Accessibility labels, field errors,
+duplicate-submit protection, dirty-form confirmation, and success/conflict
+feedback are included. Update, delete, templates, copy/paste, navigation
+exposure, and legacy replacement remain blocked.

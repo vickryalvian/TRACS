@@ -582,3 +582,38 @@ DROP DATABASE IF EXISTS tracs_phase15_test;
 ```
 
 Never run cleanup against an unmarked database.
+
+## Phase 16 Controlled React Create UI Pilot Rollback
+
+Phase 16 changes only the isolated React preview bundle, its preview warning,
+frontend contracts, and documentation. It adds no route, schema migration,
+navigation entry, Calendar change, or legacy Shift Assignment change.
+
+Before commit:
+
+```bash
+git restore --staged .
+git restore .
+rm frontend/src/modules/shift-assignment/components/ShiftCreateModal.jsx
+rm frontend/src/modules/shift-assignment/components/ShiftToast.jsx
+rm frontend/src/modules/shift-assignment/utils/shiftCreate.js
+rm frontend/tests/shift-create-contract.mjs
+rm tests/shift-assignment-create-ui-pilot.php
+```
+
+After commit:
+
+```bash
+git revert <phase-16-commit-sha>
+```
+
+To abandon the unmerged branch:
+
+```bash
+git switch refactor/phase-15-shift-create-api-integration-testing
+git branch -D refactor/phase-16-shift-create-ui-pilot
+```
+
+Code rollback does not remove an assignment created during an approved
+disposable/staging browser test. Clean only the disposable database or use an
+approved audited data-correction procedure.

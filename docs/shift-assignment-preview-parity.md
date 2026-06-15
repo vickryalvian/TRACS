@@ -211,6 +211,34 @@ Pilot manual QA:
 Any expansion to Admin, Supervisor, or named users requires a separately
 approved server-side allowlist or feature-flag change and another access review.
 
+## Phase 16 Controlled Create Pilot Addendum
+
+The Phase 11 checklist above records the original read-only pilot baseline.
+Phase 16 permits exactly one mutation in the same direct-URL preview:
+
+- `Add Assignment` appears only when backend context advertises
+  `allowed_actions.create_assignment=true`.
+- The page remains exact `super_admin` plus `shifts.view`; the POST route also
+  requires explicit `shifts.manage` and valid CSRF.
+- The banner identifies controlled Super Admin create validation and keeps the
+  legacy page as production source of truth.
+- Update, delete, templates, copy/paste, overtime-specific controls, and broad
+  navigation exposure remain absent.
+- Authenticated browser creation must be tested only against a disposable or
+  staging database.
+
+Phase 16 manual QA:
+
+- [ ] Confirm a permitted user sees exactly one `Add Assignment` entry point.
+- [ ] Confirm denied capability hides the entry point.
+- [ ] Confirm Shift 1/2/3 presets populate expected times, including `24:00`.
+- [ ] Confirm invalid fields stay in the modal and focus the first field.
+- [ ] Confirm duplicate submit is blocked while `Saving...` is visible.
+- [ ] Confirm success refreshes the current view and shows a success toast.
+- [ ] Confirm `401`, `403`, `409`, and `422` keep the modal safe and actionable.
+- [ ] Confirm dirty close and page navigation prompt before discarding input.
+- [ ] Confirm no edit/delete/template/copy control or request exists.
+
 ## Phase 12 Read-Only Production Candidate Checklist
 
 The preview is a candidate only; the legacy page remains production.

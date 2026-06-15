@@ -56,8 +56,9 @@ candidate_assert(
     'Stale Shift Assignment request cancellation changed.'
 );
 candidate_assert(
-    !preg_match('/\b(method\s*:\s*[\'"](POST|PUT|PATCH|DELETE)|\.(post|put|patch|delete)\s*\()/i', $frontendApi),
-    'Production candidate frontend API contains a write method.'
+    substr_count($frontendApi, "method: 'POST'") === 1
+        && !preg_match('/\b(method\s*:\s*[\'"](PUT|PATCH|DELETE)|\.(put|patch|delete)\s*\()/i', $frontendApi),
+    'Production candidate frontend API must contain only the controlled create POST.'
 );
 foreach ([
     '/api/v1/context.php',

@@ -57,14 +57,15 @@ write_plan_assert(
     'The v1 assignments route no longer exposes only the approved GET and create POST methods.'
 );
 write_plan_assert(
-    !preg_match('/\b(method\s*:\s*[\'"](POST|PUT|PATCH|DELETE)|\.(post|put|patch|delete)\s*\()/i', $frontendApi),
-    'The React preview API client contains a write method.'
+    substr_count($frontendApi, "method: 'POST'") === 1
+        && !preg_match('/\b(method\s*:\s*[\'"](PUT|PATCH|DELETE)|\.(put|patch|delete)\s*\()/i', $frontendApi),
+    'The React preview API client must contain only the controlled create POST.'
 );
 write_plan_assert(
-    str_contains($preview, 'Read-only')
+    str_contains($preview, 'Create action is enabled only for Super Admin')
         && str_contains($preview, "tracs_require_page_permission(\$conn, 'shifts.view')")
         && str_contains($preview, 'tracs_require_super_admin_page($conn)'),
-    'The read-only pilot banner or access restrictions changed.'
+    'The controlled-create pilot banner or access restrictions changed.'
 );
 write_plan_assert(
     !str_contains($header, 'shift-assignment-react-preview.php'),

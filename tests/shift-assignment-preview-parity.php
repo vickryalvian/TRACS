@@ -69,8 +69,9 @@ foreach ([
     );
 }
 parity_assert(
-    !preg_match('/\b(method\s*:\s*[\'"](POST|PUT|PATCH|DELETE)|\.(post|put|patch|delete)\s*\()/i', $frontendApi),
-    'React Shift Assignment API client contains a write method.'
+    substr_count($frontendApi, "method: 'POST'") === 1
+        && !preg_match('/\b(method\s*:\s*[\'"](PUT|PATCH|DELETE)|\.(put|patch|delete)\s*\()/i', $frontendApi),
+    'React Shift Assignment API client must contain only the controlled create POST.'
 );
 
 parity_assert(

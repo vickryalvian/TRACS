@@ -39,6 +39,18 @@
   animation: shift-loading-pulse 1.4s ease-in-out infinite;
 }
 
+.shift-create-backdrop {
+  backdrop-filter: blur(2px);
+}
+
+.shift-create-modal {
+  overscroll-behavior: contain;
+}
+
+.shift-create-toast {
+  width: min(420px, calc(100vw - 2rem));
+}
+
 @keyframes shift-loading-pulse {
   0%, 100% { opacity: .45; }
   50% { opacity: 1; }
