@@ -322,6 +322,12 @@ approved authenticated pilot mount must provide the existing TRACS shell and
 load only this manifest entry. That mount must preserve
 `public/shifting-assignment.php` as the fallback until parity is verified.
 
+The Phase 19 edit pilot remains isolated inside that authenticated preview
+shell. React renders Edit only from the server-provided controlled update
+capability, carries the in-memory CSRF token, and refreshes the existing GET
+contract after success. It does not weaken the PHP role, permission, scope, or
+validation authority.
+
 Phase 9 supplies that pilot mount without changing navigation:
 
 ```text

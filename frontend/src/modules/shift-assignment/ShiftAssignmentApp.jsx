@@ -3,6 +3,7 @@ import { Card } from '../../components/ui/Card';
 import { ShiftAssignmentBoard } from './components/ShiftAssignmentBoard';
 import { ShiftAssignmentTable } from './components/ShiftAssignmentTable';
 import { ShiftCreateModal } from './components/ShiftCreateModal';
+import { ShiftEditModal } from './components/ShiftEditModal';
 import { ShiftEmptyState } from './components/ShiftEmptyState';
 import { ShiftErrorState } from './components/ShiftErrorState';
 import { ShiftFilterBar } from './components/ShiftFilterBar';
@@ -16,6 +17,7 @@ import { useShiftAssignmentContext } from './hooks/useShiftAssignmentContext';
 import { useShiftAssignments } from './hooks/useShiftAssignments';
 import { rangeForView, shiftRange } from './utils/shiftDates';
 import { createdAssignmentMatchesFilters } from './utils/shiftCreate';
+import { updatedAssignmentMatchesFilters } from './utils/shiftEdit';
 
 const initialRange = rangeForView('weekly');
 
@@ -31,11 +33,13 @@ const initialFilters = {
 export function ShiftAssignmentApp() {
   const [filters, setFilters] = useState(initialFilters);
   const [createOpen, setCreateOpen] = useState(false);
+  const [editingAssignment, setEditingAssignment] = useState(null);
   const [toast, setToast] = useState(null);
   const context = useShiftAssignmentContext();
   const requestFilters = useMemo(() => filters, [filters]);
   const assignments = useShiftAssignments(requestFilters, Boolean(context.shift));
   const canCreate = Boolean(context.shift?.allowed_actions?.create_assignment);
+  const canEdit = Boolean(context.shift?.allowed_actions?.update_assignment);
 
   function applyFilters(nextFilters) {
     setFilters(nextFilters);
@@ -76,9 +80,22 @@ export function ShiftAssignmentApp() {
     const visible = createdAssignmentMatchesFilters(assignment, filters);
     setToast({
       type: 'success',
+      title: 'Assignment created',
       message: visible
         ? message || 'The assignment is now visible in the current schedule.'
         : `${message || 'Shift assignment created.'} It may be outside the current filters or date range.`,
+    });
+  }
+
+  async function handleUpdated(assignment, message) {
+    await assignments.refresh();
+    const visible = updatedAssignmentMatchesFilters(assignment, filters);
+    setToast({
+      type: 'success',
+      title: 'Assignment updated',
+      message: visible
+        ? message || 'The updated assignment is visible in the current schedule.'
+        : `${message || 'Shift assignment updated.'} It may now be outside the current filters or date range.`,
     });
   }
 
@@ -121,7 +138,7 @@ export function ShiftAssignmentApp() {
                       {filters.view[0].toUpperCase() + filters.view.slice(1)} assignments
                     </h2>
                     <p className="tr:mt-1 tr:text-xs tr:text-tracs-muted">
-                      Controlled create pilot · {context.global?.user?.name || 'Authenticated user'}
+                      Controlled create/edit pilot · {context.global?.user?.name || 'Authenticated user'}
                     </p>
                   </div>
                   <span className="tr:font-mono tr:text-[9px] tr:text-tracs-muted">
@@ -137,9 +154,17 @@ export function ShiftAssignmentApp() {
                   </div>
                 ) : assignments.data?.assignments?.length ? (
                   <>
-                    <ShiftAssignmentTable assignments={assignments.data.assignments} />
+                    <ShiftAssignmentTable
+                      assignments={assignments.data.assignments}
+                      canEdit={canEdit}
+                      onEdit={setEditingAssignment}
+                    />
                     <div className="tr:p-tracs-3 tr:md:hidden">
-                      <ShiftAssignmentBoard assignments={assignments.data.assignments} />
+                      <ShiftAssignmentBoard
+                        assignments={assignments.data.assignments}
+                        canEdit={canEdit}
+                        onEdit={setEditingAssignment}
+                      />
                     </div>
                   </>
                 ) : (
@@ -181,6 +206,14 @@ export function ShiftAssignmentApp() {
         onCreated={handleCreated}
         onToast={setToast}
         open={createOpen && canCreate}
+      />
+      <ShiftEditModal
+        assignment={editingAssignment}
+        context={context.shift}
+        onClose={() => setEditingAssignment(null)}
+        onToast={setToast}
+        onUpdated={handleUpdated}
+        open={Boolean(editingAssignment) && canEdit}
       />
       <ShiftToast onDismiss={() => setToast(null)} toast={toast} />
     </main>

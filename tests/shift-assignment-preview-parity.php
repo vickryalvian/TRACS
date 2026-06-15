@@ -70,8 +70,9 @@ foreach ([
 }
 parity_assert(
     substr_count($frontendApi, "method: 'POST'") === 1
-        && !preg_match('/\b(method\s*:\s*[\'"](PUT|PATCH|DELETE)|\.(put|patch|delete)\s*\()/i', $frontendApi),
-    'React Shift Assignment API client must contain only the controlled create POST.'
+        && substr_count($frontendApi, "method: 'PATCH'") === 1
+        && !preg_match('/\b(method\s*:\s*[\'"](PUT|DELETE)|\.(put|delete)\s*\()/i', $frontendApi),
+    'React Shift Assignment API client must contain only approved create/update mutations.'
 );
 
 parity_assert(

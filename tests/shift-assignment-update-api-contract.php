@@ -128,6 +128,25 @@ update_contract_assert(
     \TRACS\Api\V1\ShiftAssignment\update_assignment_id(['id' => '701']) === 701,
     'Valid assignment ID no longer parses.'
 );
+$customAssignment = $existing;
+$customAssignment['shift_template_id'] = 0;
+$customUpdate = \TRACS\Api\V1\ShiftAssignment\update_assignment_input(
+    ['status' => 'confirmed'],
+    $customAssignment
+);
+update_contract_assert(
+    $customUpdate['shift_template_id'] === null
+        && $customUpdate['status'] === 'confirmed',
+    'Inherited custom assignment template zero is not normalized safely.'
+);
+$clearedTemplate = \TRACS\Api\V1\ShiftAssignment\update_assignment_input(
+    ['shift_template_id' => null],
+    $existing
+);
+update_contract_assert(
+    $clearedTemplate['shift_template_id'] === null,
+    'Explicit template clearing falls back to the existing template.'
+);
 
 $route = file_get_contents(__DIR__ . '/../public/api/v1/shift-assignment/assignment.php');
 $getPostRoute = file_get_contents(__DIR__ . '/../public/api/v1/shift-assignment/assignments.php');
@@ -158,8 +177,9 @@ update_contract_assert(
 );
 update_contract_assert(
     substr_count($frontendApi, "method: 'POST'") === 1
-        && !preg_match('/\b(method\s*:\s*[\'"](PUT|PATCH|DELETE)|\.(put|patch|delete)\s*\()/i', $frontendApi),
-    'React preview must remain create-only without an update call.'
+        && substr_count($frontendApi, "method: 'PATCH'") === 1
+        && !preg_match('/\b(method\s*:\s*[\'"](PUT|DELETE)|\.(put|delete)\s*\()/i', $frontendApi),
+    'React preview must expose only the approved create and update calls.'
 );
 
 $json = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);

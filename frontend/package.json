@@ -7,7 +7,7 @@
     "build": "vite build",
     "build:preview": "vite build --config vite.preview.config.js",
     "preview": "vite preview --host 127.0.0.1",
-    "test:contracts": "node tests/apiClient-contract.mjs && node tests/shift-create-contract.mjs",
+    "test:contracts": "node tests/apiClient-contract.mjs && node tests/shift-create-contract.mjs && node tests/shift-edit-contract.mjs",
     "test:preview-bundle": "node tests/preview-bundle-contract.mjs"
   },
   "dependencies": {

@@ -57,8 +57,9 @@ candidate_assert(
 );
 candidate_assert(
     substr_count($frontendApi, "method: 'POST'") === 1
-        && !preg_match('/\b(method\s*:\s*[\'"](PUT|PATCH|DELETE)|\.(put|patch|delete)\s*\()/i', $frontendApi),
-    'Production candidate frontend API must contain only the controlled create POST.'
+        && substr_count($frontendApi, "method: 'PATCH'") === 1
+        && !preg_match('/\b(method\s*:\s*[\'"](PUT|DELETE)|\.(put|delete)\s*\()/i', $frontendApi),
+    'Production candidate frontend API must contain only approved create/update mutations.'
 );
 foreach ([
     '/api/v1/context.php',

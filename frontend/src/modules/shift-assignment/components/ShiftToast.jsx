@@ -15,7 +15,7 @@ export function ShiftToast({ toast, onDismiss }) {
     >
       <div className="tr:min-w-0 tr:flex-1">
         <strong className="tr:block tr:text-xs tr:font-semibold">
-          {toast.type === 'success' ? 'Assignment created' : 'Create assignment failed'}
+          {toast.title || (toast.type === 'success' ? 'Assignment saved' : 'Assignment action failed')}
         </strong>
         <span className="tr:mt-1 tr:block tr:text-xs tr:leading-5 tr:text-tracs-secondary">
           {toast.message}

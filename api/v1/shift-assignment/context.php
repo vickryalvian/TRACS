@@ -28,6 +28,7 @@ function context_data(
 
     $manage = (bool)($capabilities['manage'] ?? false);
     $controlledCreate = (bool)($capabilities['create'] ?? false);
+    $controlledUpdate = (bool)($capabilities['update'] ?? false);
     $manageSettings = (bool)($capabilities['settings'] ?? false);
     $manageMonthlyTemplates = (bool)($capabilities['monthly_templates'] ?? false);
     $export = (bool)($capabilities['export'] ?? false);
@@ -55,7 +56,7 @@ function context_data(
             'view_warnings' => true,
             'view_audit' => true,
             'create_assignment' => $controlledCreate,
-            'update_assignment' => $manage,
+            'update_assignment' => $controlledUpdate,
             'resize_assignment' => $manage,
             'update_status' => $manage,
             'confirm_assignment' => $manage,

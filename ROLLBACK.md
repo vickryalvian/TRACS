@@ -698,3 +698,47 @@ DROP DATABASE IF EXISTS tracs_phase18_test;
 Code rollback does not reverse an update made through an approved non-test
 environment. Restore the recorded database backup or use an explicitly
 approved, audited correction; never overwrite real schedules ad hoc.
+
+## Phase 19 Controlled React Edit UI Rollback
+
+Phase 19 changes only the isolated preview UI, its server-provided update
+capability, a compatibility normalization in the existing PATCH helper,
+frontend/PHP contracts, disposable browser verification, and documentation.
+It adds no endpoint, schema, navigation, Calendar, or legacy-page change.
+
+Before commit:
+
+```bash
+git restore --staged .
+git restore .
+rm frontend/src/modules/shift-assignment/components/ShiftEditModal.jsx
+rm frontend/src/modules/shift-assignment/utils/shiftEdit.js
+rm frontend/tests/shift-edit-contract.mjs
+rm tests/shift-assignment-edit-ui-pilot.php
+```
+
+After commit:
+
+```bash
+git revert <phase-19-commit-sha>
+```
+
+To abandon the unmerged branch:
+
+```bash
+git switch refactor/phase-18-shift-update-assignment-api
+git branch -D refactor/phase-19-shift-edit-ui-pilot
+```
+
+Emergency disposable cleanup:
+
+```bash
+docker rm -f tracs_phase19_app
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 \
+TRACS_TEST_DB_NAME=tracs_phase19_test \
+php tests/shift-assignment-create-ui-browser-environment.php cleanup
+```
+
+Code rollback does not reverse a real assignment update. Use an approved,
+audited correction or restore the recorded backup; never mutate production
+schedules through test cleanup.

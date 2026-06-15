@@ -463,10 +463,16 @@ without the required audit.
 
 ## React Write Behavior
 
-Only the implemented and tested create contract is active in the controlled
-preview. The update API is server-side only; Edit/Delete/Template/Copy controls
-remain absent or disabled, and the pilot banner continues to identify the
-legacy page as production authority.
+The implemented and tested create and update contracts are active only in the
+controlled preview. Edit visibility comes from the exact-Super-Admin plus
+explicit-`shifts.manage` server capability. Delete/Template/Copy controls
+remain absent, and the pilot banner continues to identify the legacy page as
+production authority.
+
+The edit modal uses only safe fields returned by the read API. It does not
+invent or overwrite notes, role, division, overtime, source, creator, or
+approver fields. Only changed fields are sent. Custom assignments represented
+with inherited template ID `0` are normalized to no template.
 
 Future forms must:
 

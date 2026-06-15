@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '../../../components/ui/Button';
-import { createShiftAssignment } from '../api';
+import { updateShiftAssignment } from '../api';
+import { fieldErrorsFromApi } from '../utils/shiftCreate';
 import {
-  applyShiftPreset,
-  fieldErrorsFromApi,
-  initialCreateDraft,
-  validateCreateDraft,
-} from '../utils/shiftCreate';
+  applyEditShiftPreset,
+  initialEditDraft,
+  validateEditDraft,
+} from '../utils/shiftEdit';
 
 const fieldClass =
   'tr:min-h-9 tr:w-full tr:rounded-tracs tr:border tr:border-tracs-border tr:bg-tracs-card tr:px-tracs-3 tr:text-xs tr:text-tracs-primary tr:outline-none tr:focus:border-tracs-accent tr:focus:ring-2 tr:focus:ring-tracs-accent-soft';
@@ -17,7 +17,7 @@ function Field({ children, error, label, name }) {
       <span className="tr:text-xs tr:font-semibold tr:text-tracs-secondary">{label}</span>
       {children}
       {error ? (
-        <span className="tr:text-[10px] tr:leading-4 tr:text-tracs-danger" id={`${name}-error`}>
+        <span className="tr:text-[10px] tr:leading-4 tr:text-tracs-danger" id={`edit-${name}-error`}>
           {error}
         </span>
       ) : null}
@@ -25,33 +25,33 @@ function Field({ children, error, label, name }) {
   );
 }
 
-export function ShiftCreateModal({
+export function ShiftEditModal({
+  assignment,
   context,
   onClose,
-  onCreated,
   onToast,
+  onUpdated,
   open,
 }) {
-  const [draft, setDraft] = useState(() => initialCreateDraft());
+  const initialDraft = useMemo(() => initialEditDraft(assignment), [assignment]);
+  const [draft, setDraft] = useState(initialDraft);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const firstFieldRef = useRef(null);
   const modalRef = useRef(null);
-  const initialDraft = useMemo(() => initialCreateDraft(), [open]);
   const dirty = JSON.stringify(draft) !== JSON.stringify(initialDraft);
   const filters = context?.filters ?? {};
   const csrf = context?.csrf ?? {};
 
   useEffect(() => {
     if (!open) {
-      return undefined;
+      return;
     }
     setDraft(initialDraft);
     setErrors({});
     setSaving(false);
     window.setTimeout(() => firstFieldRef.current?.focus(), 0);
-    return undefined;
-  }, [open, initialDraft]);
+  }, [initialDraft, open]);
 
   useEffect(() => {
     if (!open) {
@@ -65,44 +65,43 @@ export function ShiftCreateModal({
     }
     window.addEventListener('beforeunload', warnBeforeUnload);
     return () => window.removeEventListener('beforeunload', warnBeforeUnload);
-  }, [open, dirty]);
+  }, [dirty, open]);
 
   useEffect(() => {
     if (!open) {
       return undefined;
     }
     function closeOnEscape(event) {
-      if (event.key === 'Escape' && !saving) {
-        if (!dirty || window.confirm('Discard unsaved assignment changes?')) {
-          onClose();
-        }
+      if (event.key === 'Escape' && !saving
+          && (!dirty || window.confirm('Discard unsaved assignment changes?'))) {
+        onClose();
       }
     }
     window.addEventListener('keydown', closeOnEscape);
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [dirty, onClose, open, saving]);
 
-  if (!open) {
+  if (!open || !assignment) {
     return null;
   }
 
   function update(event) {
     const { name, value } = event.target;
     setDraft((current) => ({ ...current, [name]: value }));
-    setErrors((current) => ({ ...current, [name]: undefined }));
+    setErrors((current) => ({ ...current, [name]: undefined, form: undefined }));
   }
 
   function selectPreset(event) {
-    const value = event.target.value;
-    setDraft((current) => applyShiftPreset(
+    setDraft((current) => applyEditShiftPreset(
       current,
-      value,
+      event.target.value,
       context?.shift_definitions ?? [],
     ));
     setErrors((current) => ({
       ...current,
       start_time: undefined,
       end_time: undefined,
+      form: undefined,
     }));
   }
 
@@ -118,23 +117,25 @@ export function ShiftCreateModal({
       return;
     }
 
-    const result = validateCreateDraft(draft);
+    const result = validateEditDraft(draft, initialDraft);
     setErrors(result.errors);
     if (!result.payload) {
-      const firstInvalid = Object.keys(result.errors)[0];
-      modalRef.current?.querySelector(`[name="${firstInvalid}"]`)?.focus();
+      const firstInvalid = Object.keys(result.errors).find((key) => key !== 'form');
+      if (firstInvalid) {
+        modalRef.current?.querySelector(`[name="${firstInvalid}"]`)?.focus();
+      }
       onToast({
         type: 'error',
-        title: 'Create assignment failed',
-        message: 'Review the highlighted fields before saving.',
+        title: result.errors.form ? 'Update not sent' : 'Update failed',
+        message: result.errors.form || 'Review the highlighted fields before saving.',
       });
       return;
     }
 
     setSaving(true);
     try {
-      const response = await createShiftAssignment(result.payload, csrf);
-      await onCreated(response.data?.assignment, response.message);
+      const response = await updateShiftAssignment(draft.id, result.payload, csrf);
+      await onUpdated(response.data?.assignment, response.message);
       onClose();
     } catch (error) {
       const apiErrors = fieldErrorsFromApi(error?.errors);
@@ -147,13 +148,15 @@ export function ShiftCreateModal({
         );
       }
       const message = error?.status === 401
-        ? 'Your session expired. Sign in again before creating an assignment.'
+        ? 'Your session expired. Sign in again before editing an assignment.'
         : error?.status === 403
-          ? 'The create request was denied. Refresh permissions and try again.'
-          : error?.status === 409
-            ? 'This assignment conflicts with an existing schedule.'
-            : error?.message || 'The assignment could not be created.';
-      onToast({ type: 'error', title: 'Create assignment failed', message });
+          ? 'The update request was denied. Refresh permissions and try again.'
+          : error?.status === 404
+            ? 'This assignment no longer exists. Refresh the schedule.'
+            : error?.status === 409
+              ? 'This update conflicts with an existing schedule.'
+              : error?.message || 'The assignment could not be updated.';
+      onToast({ type: 'error', title: 'Update failed', message });
     } finally {
       setSaving(false);
     }
@@ -161,7 +164,7 @@ export function ShiftCreateModal({
 
   return (
     <div
-      aria-labelledby="shift-create-title"
+      aria-labelledby="shift-edit-title"
       aria-modal="true"
       className="shift-create-backdrop tr:fixed tr:inset-0 tr:z-[60] tr:flex tr:items-end tr:justify-center tr:bg-black/55 tr:p-0 tr:sm:items-center tr:sm:p-tracs-4"
       onMouseDown={(event) => {
@@ -180,15 +183,15 @@ export function ShiftCreateModal({
             <p className="tr:font-mono tr:text-[9px] tr:font-bold tr:uppercase tr:tracking-[.1em] tr:text-tracs-accent">
               Controlled Super Admin pilot
             </p>
-            <h2 className="tr:mt-1 tr:text-lg tr:font-semibold tr:text-tracs-primary" id="shift-create-title">
-              Add Assignment
+            <h2 className="tr:mt-1 tr:text-lg tr:font-semibold tr:text-tracs-primary" id="shift-edit-title">
+              Edit Assignment
             </h2>
             <p className="tr:mt-1 tr:text-xs tr:text-tracs-muted">
-              Backend validation, permissions, CSRF, overlap checks, and audit logging remain authoritative.
+              Assignment #{assignment.id}. Backend scope, CSRF, conflicts, and audit logging remain authoritative.
             </p>
           </div>
           <button
-            aria-label="Close create assignment"
+            aria-label="Close edit assignment"
             className="tr:rounded-tracs tr:px-2 tr:py-1 tr:text-sm tr:text-tracs-muted tr:hover:bg-tracs-card"
             disabled={saving}
             onClick={requestClose}
@@ -200,9 +203,14 @@ export function ShiftCreateModal({
 
         <form className="tr:min-h-0 tr:overflow-y-auto" onSubmit={submit}>
           <div className="tr:grid tr:grid-cols-1 tr:gap-tracs-4 tr:p-tracs-5 tr:sm:grid-cols-2">
+            {errors.form ? (
+              <p className="tr:rounded-tracs tr:border tr:border-tracs-warning/40 tr:bg-tracs-warning-soft tr:p-tracs-3 tr:text-xs tr:text-tracs-warning tr:sm:col-span-2">
+                {errors.form}
+              </p>
+            ) : null}
             <Field error={errors.agent_id} label="Agent" name="agent_id">
               <select
-                aria-describedby={errors.agent_id ? 'agent_id-error' : undefined}
+                aria-describedby={errors.agent_id ? 'edit-agent_id-error' : undefined}
                 aria-invalid={Boolean(errors.agent_id)}
                 className={fieldClass}
                 name="agent_id"
@@ -221,7 +229,7 @@ export function ShiftCreateModal({
 
             <Field error={errors.assignment_date} label="Assignment date" name="assignment_date">
               <input
-                aria-describedby={errors.assignment_date ? 'assignment_date-error' : undefined}
+                aria-describedby={errors.assignment_date ? 'edit-assignment_date-error' : undefined}
                 aria-invalid={Boolean(errors.assignment_date)}
                 autoComplete="off"
                 className={fieldClass}
@@ -234,14 +242,7 @@ export function ShiftCreateModal({
             </Field>
 
             <Field error={errors.shift_type} label="Assignment type" name="shift_type">
-              <select
-                aria-describedby={errors.shift_type ? 'shift_type-error' : undefined}
-                aria-invalid={Boolean(errors.shift_type)}
-                className={fieldClass}
-                name="shift_type"
-                onChange={update}
-                value={draft.shift_type}
-              >
+              <select className={fieldClass} name="shift_type" onChange={update} value={draft.shift_type}>
                 {(filters.assignment_types ?? []).map((type) => (
                   <option key={type.slug} value={type.slug}>{type.name}</option>
                 ))}
@@ -249,12 +250,7 @@ export function ShiftCreateModal({
             </Field>
 
             <Field label="Shift preset" name="shift_preset">
-              <select
-                className={fieldClass}
-                name="shift_preset"
-                onChange={selectPreset}
-                value={draft.shift_preset}
-              >
+              <select className={fieldClass} name="shift_preset" onChange={selectPreset} value={draft.shift_preset}>
                 <option value="">Custom time</option>
                 {(context?.shift_definitions ?? []).map((shift) => (
                   <option key={shift.key} value={shift.key}>
@@ -265,37 +261,16 @@ export function ShiftCreateModal({
             </Field>
 
             <Field error={errors.start_time} label="Start time" name="start_time">
-              <input
-                aria-describedby={errors.start_time ? 'start_time-error' : undefined}
-                aria-invalid={Boolean(errors.start_time)}
-                className={fieldClass}
-                name="start_time"
-                onChange={update}
-                placeholder="HH:MM"
-                value={draft.start_time}
-              />
+              <input className={fieldClass} name="start_time" onChange={update} value={draft.start_time} />
             </Field>
 
             <Field error={errors.end_time} label="End time" name="end_time">
-              <input
-                aria-describedby={errors.end_time ? 'end_time-error' : undefined}
-                aria-invalid={Boolean(errors.end_time)}
-                className={fieldClass}
-                name="end_time"
-                onChange={update}
-                placeholder="HH:MM or 24:00"
-                value={draft.end_time}
-              />
+              <input className={fieldClass} name="end_time" onChange={update} value={draft.end_time} />
             </Field>
 
             <Field label="Template (optional)" name="shift_template_id">
-              <select
-                className={fieldClass}
-                name="shift_template_id"
-                onChange={update}
-                value={draft.shift_template_id}
-              >
-                <option value="">No template</option>
+              <select className={fieldClass} name="shift_template_id" onChange={update} value={draft.shift_template_id}>
+                <option value="">Custom/no template</option>
                 {(filters.shift_templates ?? []).filter((item) => item.is_active).map((template) => (
                   <option key={template.id} value={template.id}>
                     {template.name} · {template.start_time}-{template.end_time}
@@ -306,15 +281,14 @@ export function ShiftCreateModal({
 
             <Field error={errors.status} label="Status" name="status">
               <select className={fieldClass} name="status" onChange={update} value={draft.status}>
-                <option value="assigned">Assigned</option>
-                <option value="confirmed">Confirmed</option>
+                {(filters.statuses ?? []).map((status) => (
+                  <option key={status} value={status}>{status.replaceAll('_', ' ')}</option>
+                ))}
               </select>
             </Field>
 
             <Field error={errors.break_minutes} label="Break minutes" name="break_minutes">
               <input
-                aria-describedby={errors.break_minutes ? 'break_minutes-error' : undefined}
-                aria-invalid={Boolean(errors.break_minutes)}
                 className={fieldClass}
                 inputMode="numeric"
                 name="break_minutes"
@@ -322,32 +296,18 @@ export function ShiftCreateModal({
                 value={draft.break_minutes}
               />
             </Field>
-
-            <div className="tr:sm:col-span-2">
-              <Field error={errors.notes} label="Notes (optional)" name="notes">
-                <textarea
-                  aria-describedby={errors.notes ? 'notes-error' : undefined}
-                  aria-invalid={Boolean(errors.notes)}
-                  className={`${fieldClass} tr:min-h-24 tr:resize-y tr:py-tracs-2`}
-                  maxLength={3000}
-                  name="notes"
-                  onChange={update}
-                  value={draft.notes}
-                />
-              </Field>
-            </div>
           </div>
 
           <footer className="tr:flex tr:flex-wrap tr:items-center tr:justify-between tr:gap-tracs-3 tr:border-t tr:border-tracs-border tr:bg-tracs-surface-2 tr:px-tracs-5 tr:py-tracs-3">
             <span className="tr:text-[10px] tr:text-tracs-muted">
-              Dates display as dd-mm-yyyy and are sent as ISO YYYY-MM-DD.
+              Only changed allowlisted fields are sent. Dates display as dd-mm-yyyy.
             </span>
             <div className="tr:flex tr:items-center tr:gap-tracs-2">
               <Button disabled={saving} onClick={requestClose} variant="quiet">
                 Cancel
               </Button>
               <Button disabled={saving} type="submit" variant="primary">
-                {saving ? 'Saving...' : 'Create Assignment'}
+                {saving ? 'Saving...' : 'Save Changes'}
               </Button>
             </div>
           </footer>

@@ -246,3 +246,14 @@ Phase 18 controlled-update notes:
 The PATCH route is server-side only. The isolated React preview remains
 create-only, and legacy Shift Assignment remains the production source of
 truth.
+
+Phase 19 controlled-edit notes:
+
+- `frontend/src/modules/shift-assignment/components/ShiftEditModal.jsx`
+- `frontend/src/modules/shift-assignment/utils/shiftEdit.js`
+- `frontend/tests/shift-edit-contract.mjs`
+- `tests/shift-assignment-edit-ui-pilot.php`
+
+The direct-URL pilot now supports controlled create and edit for exact Super
+Admin plus explicit `shifts.manage`. Delete, template/copy, broad navigation,
+and production replacement remain blocked.

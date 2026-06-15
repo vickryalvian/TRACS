@@ -44,8 +44,9 @@ create_ui_assert(
         && str_contains($api, "csrfToken: csrf.token")
         && str_contains($api, "csrfHeaderName: csrf.header")
         && substr_count($api, "method: 'POST'") === 1
-        && !preg_match('/\b(method\s*:\s*[\'"](PUT|PATCH|DELETE)|\.(put|patch|delete)\s*\()/i', $api),
-    'Frontend API must expose only the existing controlled create POST.'
+        && substr_count($api, "method: 'PATCH'") === 1
+        && !preg_match('/\b(method\s*:\s*[\'"](PUT|DELETE)|\.(put|delete)\s*\()/i', $api),
+    'Frontend API must preserve controlled create while allowing only the approved update PATCH.'
 );
 create_ui_assert(
     str_contains($client, 'requestCsrfToken ?? readCsrfToken')
@@ -61,7 +62,7 @@ create_ui_assert(
 create_ui_assert(
     str_contains($preview, "tracs_require_page_permission(\$conn, 'shifts.view')")
         && str_contains($preview, 'tracs_require_super_admin_page($conn)')
-        && str_contains($preview, 'Create action is enabled only for Super Admin')
+        && str_contains($preview, 'Create/Edit actions are enabled only for Super')
         && str_contains($preview, 'remains the production source of'),
     'Preview access or controlled pilot warning changed.'
 );

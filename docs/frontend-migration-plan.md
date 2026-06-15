@@ -231,3 +231,10 @@ Super Admin, explicit `shifts.manage`, session, and CSRF gates. It is not called
 by React. The preview remains create-only until a separate edit-UI phase adds
 capability metadata, modal behavior, frontend contracts, and disposable browser
 evidence. Legacy Shift Assignment and production navigation remain unchanged.
+
+Phase 19 activates that PATCH contract only in the direct-URL preview. Edit
+actions appear on desktop rows and mobile cards solely from the tightened
+server capability. The modal sends changed fields only, preserves current
+filters on refresh, and handles `401`, `403`, `404`, `409`, and `422`
+distinctly. Disposable browser evidence covers Create regression, successful
+Shift 3 update, unchanged-submit prevention, overlap rejection, and audits.

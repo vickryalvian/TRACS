@@ -38,3 +38,15 @@ export async function createShiftAssignment(payload, csrf = {}) {
     csrfHeaderName: csrf.header ?? 'X-CSRF-Token',
   });
 }
+
+export async function updateShiftAssignment(assignmentId, payload, csrf = {}) {
+  return apiClient.request(
+    `/api/v1/shift-assignment/assignment.php?id=${encodeURIComponent(assignmentId)}`,
+    {
+      method: 'PATCH',
+      body: payload,
+      csrfToken: csrf.token ?? '',
+      csrfHeaderName: csrf.header ?? 'X-CSRF-Token',
+    },
+  );
+}

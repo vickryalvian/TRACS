@@ -241,6 +241,18 @@ $assignmentAudit = $assignmentId > 0
          WHERE assignment_id={$assignmentId} AND action='created'"
     )
     : 0;
+$updateAssignmentAudit = $assignmentId > 0
+    ? (int)browser_env_scalar(
+        $conn,
+        "SELECT COUNT(*) FROM assignment_audit_logs
+         WHERE action='updated'
+           AND assignment_id IN (
+             SELECT id FROM shift_assignments
+             WHERE user_id=9733 AND assignment_date='2026-07-13'
+           )
+           AND before_snapshot IS NOT NULL AND after_snapshot IS NOT NULL"
+    )
+    : 0;
 $activityAudit = $assignmentId > 0
     ? (int)browser_env_scalar(
         $conn,
@@ -249,6 +261,26 @@ $activityAudit = $assignmentId > 0
            AND target_id={$assignmentId}"
     )
     : 0;
+$updateActivityAudit = $assignmentId > 0
+    ? (int)browser_env_scalar(
+        $conn,
+        "SELECT COUNT(*) FROM tracs_user_activity_logs
+         WHERE actor_user_id=9731 AND action='shift_assignment.update'
+           AND target_id IN (
+             SELECT id FROM shift_assignments
+             WHERE user_id=9733 AND assignment_date='2026-07-13'
+           )
+           AND before_data IS NOT NULL AND after_data IS NOT NULL"
+    )
+    : 0;
+$assignmentStatus = $assignmentId > 0
+    ? (string)browser_env_scalar(
+        $conn,
+        "SELECT status FROM shift_assignments
+         WHERE user_id=9733 AND assignment_date='2026-07-13'
+         ORDER BY status='confirmed' DESC, id DESC LIMIT 1"
+    )
+    : '';
 
 $result = [
     'database' => $database,
@@ -256,6 +288,9 @@ $result = [
     'assignment_id' => $assignmentId,
     'assignment_audit_count' => $assignmentAudit,
     'activity_audit_count' => $activityAudit,
+    'update_assignment_audit_count' => $updateAssignmentAudit,
+    'update_activity_audit_count' => $updateActivityAudit,
+    'assignment_status' => $assignmentStatus,
 ];
 $conn->close();
 $admin->close();

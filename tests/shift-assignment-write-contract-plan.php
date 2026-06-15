@@ -58,11 +58,12 @@ write_plan_assert(
 );
 write_plan_assert(
     substr_count($frontendApi, "method: 'POST'") === 1
-        && !preg_match('/\b(method\s*:\s*[\'"](PUT|PATCH|DELETE)|\.(put|patch|delete)\s*\()/i', $frontendApi),
-    'The React preview API client must contain only the controlled create POST.'
+        && substr_count($frontendApi, "method: 'PATCH'") === 1
+        && !preg_match('/\b(method\s*:\s*[\'"](PUT|DELETE)|\.(put|delete)\s*\()/i', $frontendApi),
+    'The React preview API client must contain only the controlled create and update mutations.'
 );
 write_plan_assert(
-    str_contains($preview, 'Create action is enabled only for Super Admin')
+    str_contains($preview, 'Create/Edit actions are enabled only for Super')
         && str_contains($preview, "tracs_require_page_permission(\$conn, 'shifts.view')")
         && str_contains($preview, 'tracs_require_super_admin_page($conn)'),
     'The controlled-create pilot banner or access restrictions changed.'

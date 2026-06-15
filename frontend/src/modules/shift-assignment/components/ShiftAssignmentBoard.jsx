@@ -1,7 +1,7 @@
 import { Badge } from '../../../components/ui/Badge';
 import { minutesLabel, statusTone } from '../utils/shiftFormatters';
 
-export function ShiftAssignmentBoard({ assignments }) {
+export function ShiftAssignmentBoard({ assignments, canEdit = false, onEdit }) {
   return (
     <div className="tr:grid tr:grid-cols-1 tr:gap-tracs-2 tr:md:hidden">
       {assignments.map((assignment) => (
@@ -40,6 +40,15 @@ export function ShiftAssignmentBoard({ assignments }) {
               {assignment.division.name}
             </span>
           </div>
+          {canEdit ? (
+            <button
+              className="tr:mt-tracs-3 tr:w-full tr:rounded-tracs tr:border tr:border-tracs-border tr:bg-tracs-card tr:px-tracs-3 tr:py-tracs-2 tr:text-xs tr:font-semibold tr:text-tracs-accent"
+              onClick={() => onEdit?.(assignment)}
+              type="button"
+            >
+              Edit Assignment
+            </button>
+          ) : null}
         </article>
       ))}
     </div>

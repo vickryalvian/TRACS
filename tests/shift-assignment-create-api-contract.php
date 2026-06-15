@@ -225,8 +225,9 @@ create_contract_assert(
 );
 create_contract_assert(
     substr_count($frontendApi, "method: 'POST'") === 1
-        && !preg_match('/\b(method\s*:\s*[\'"](PUT|PATCH|DELETE)|\.(put|patch|delete)\s*\()/i', $frontendApi),
-    'React preview API client must contain only the controlled create POST.'
+        && substr_count($frontendApi, "method: 'PATCH'") === 1
+        && !preg_match('/\b(method\s*:\s*[\'"](PUT|DELETE)|\.(put|delete)\s*\()/i', $frontendApi),
+    'React preview API client must preserve controlled create and approved update only.'
 );
 
 foreach ([

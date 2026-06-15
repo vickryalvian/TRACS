@@ -56,16 +56,20 @@ function update_assignment_input(array $input, array $existing): array
 
     $startTime = substr((string)($existing['start_datetime'] ?? ''), 11, 5);
     $endTime = substr((string)($existing['end_datetime'] ?? ''), 11, 5);
+    $templateValue = array_key_exists('shift_template_id', $input)
+        ? $input['shift_template_id']
+        : (array_key_exists('template_id', $input)
+            ? $input['template_id']
+            : ((int)($existing['shift_template_id'] ?? 0) > 0
+                ? (int)$existing['shift_template_id']
+                : null));
     $merged = [
         'agent_id' => $input['agent_id'] ?? $existing['user_id'] ?? '',
         'assignment_date' => $input['assignment_date'] ?? $existing['assignment_date'] ?? '',
         'shift_type' => $input['shift_type'] ?? $existing['assignment_type'] ?? '',
         'start_time' => $input['start_time'] ?? $startTime,
         'end_time' => $input['end_time'] ?? $endTime,
-        'shift_template_id' => $input['shift_template_id']
-            ?? $input['template_id']
-            ?? $existing['shift_template_id']
-            ?? null,
+        'shift_template_id' => $templateValue,
         'break_minutes' => $input['break_minutes'] ?? $existing['break_minutes'] ?? 0,
         'status' => $input['status'] ?? $existing['status'] ?? 'assigned',
         'notes' => $input['notes'] ?? $existing['notes'] ?? '',

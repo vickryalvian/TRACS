@@ -581,6 +581,46 @@ The React preview remains create-only. Edit controls must not be enabled until
 a later approved phase adds frontend contracts and disposable browser
 validation.
 
+## Phase 19 Controlled React Edit Pilot
+
+The direct-URL preview now shows Edit actions only when the Shift Assignment
+context returns `allowed_actions.update_assignment=true`. That capability
+requires the exact `super_admin` role plus explicit `shifts.manage`; the page
+still requires `shifts.view`. React sends only changed allowlisted fields to:
+
+```text
+PATCH /api/v1/shift-assignment/assignment.php?id=<id>
+```
+
+The modal is prefilled from the safe assignments response, displays dates as
+`dd-mm-yyyy`, sends the context CSRF token in memory, prevents duplicate
+submits, blocks unchanged submissions, preserves Shift 3 `24:00`, keeps dirty
+forms open on failure, and refreshes the current filters after success.
+
+Authenticated browser validation completed on June 15, 2026:
+
+- environment: local disposable Docker application;
+- database: `tracs_phase19_test`;
+- identity: `phase17-super`, exact `super_admin`, `shifts.view`, and explicit
+  `shifts.manage`;
+- created two disposable assignments for agent `9733` on July 13, 2026;
+- Create remained functional;
+- Edit changed the Shift 3 assignment from `assigned` to `confirmed`;
+- refreshed UI retained `16:00-24:00`;
+- unchanged submit was blocked without an API request;
+- overlap update returned a safe conflict and kept the modal open;
+- assignment and API activity before/after audit rows were verified;
+- `tracs_phase19_app` and `tracs_phase19_test` were removed; final database
+  existence count was zero.
+
+Browser validation found and fixed two pilot defects: closed-modal
+initialization now accepts a null assignment, and inherited custom-template
+ID `0` is normalized to no template rather than rejected. The shared toast now
+uses action-aware Create/Edit titles.
+
+Delete, template, copy, overtime, navigation exposure, legacy replacement, and
+production mutation remain blocked.
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:

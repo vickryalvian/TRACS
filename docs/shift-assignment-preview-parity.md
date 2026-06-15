@@ -237,7 +237,17 @@ Phase 16 manual QA:
 - [ ] Confirm success refreshes the current view and shows a success toast.
 - [ ] Confirm `401`, `403`, `409`, and `422` keep the modal safe and actionable.
 - [ ] Confirm dirty close and page navigation prompt before discarding input.
-- [ ] Confirm no edit/delete/template/copy control or request exists.
+- [ ] Confirm Edit appears only for the exact Super Admin pilot capability.
+- [ ] Confirm no delete/template/copy control or request exists.
+
+## Phase 19 Edit Pilot Evidence
+
+The disposable browser pass used `tracs_phase19_test` and the existing real
+login/2FA flow. Create remained functional. The Shift 3 row was edited from
+`assigned` to `confirmed`, refreshed with `16:00-24:00`, and produced
+before/after assignment and API activity audits. An unchanged form was blocked,
+and an overlapping preset returned safe conflict feedback without closing the
+modal or mutating the assignment.
 
 ## Phase 17 Completed Browser Matrix
 
