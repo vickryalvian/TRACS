@@ -103,11 +103,8 @@ scoped records being compared.
 ## Known Preview Differences To Record
 
 - The v1 assignments API supports an allowlisted role query after applying
-  server scope, and the React preview exposes it. The legacy page does not have
-  a role query filter.
-- The context payload currently reports `role_filter_supported: false` despite
-  the preview role control. This is a contract/UI consistency risk, not
-  permission expansion, and should be resolved before production replacement.
+  server scope, but the React candidate does not expose it because the context
+  reports `role_filter_supported: false` and the legacy page has no role filter.
 - The preview summary cards are a smaller read-only subset of the legacy
   insights. Compare source counts and minutes, not card labels or card count.
 - Audit, configuration, write actions, free-text search, holiday-only filters,
@@ -213,3 +210,45 @@ Pilot manual QA:
 
 Any expansion to Admin, Supervisor, or named users requires a separately
 approved server-side allowlist or feature-flag change and another access review.
+
+## Phase 12 Read-Only Production Candidate Checklist
+
+The preview is a candidate only; the legacy page remains production.
+
+- [ ] Visual parity: spacing, density, typography, cards, tables, and hierarchy
+      are reviewed against `calendar.php`.
+- [ ] Role access: exact `super_admin` plus `shifts.view` remains enforced.
+- [ ] Read-only guarantee: no mutation controls or write API methods exist.
+- [ ] API stability: only the three approved GET contracts are consumed.
+- [ ] Date contract: inputs display `dd-mm-yyyy`; API queries remain ISO.
+- [ ] Filter behavior: changes are staged and applied once, avoiding request
+      churn while editing.
+- [ ] Responsive layout: desktop table is table-scoped scroll; mobile cards,
+      tablet filters, warnings, and notices do not clip.
+- [ ] Dark mode: text, borders, focus, warning, error, and pilot surfaces remain
+      readable.
+- [ ] States: loading does not flash false zero/clear data; empty, `401`, `403`,
+      `422`, network, and unexpected-response states are distinguishable.
+- [ ] Operational context: overtime, holiday assignments, holiday notices, and
+      warnings are visible when returned.
+- [ ] Performance: preview remains one Vite entry, no new dependency is added,
+      JavaScript is at most 300 KB, and CSS is at most 50 KB uncompressed.
+- [ ] Security: no sensitive fields, stack traces, SQL, paths, logs, or server
+      details are exposed.
+- [ ] Rollback: `git revert <phase-12-commit-sha>` restores Phase 11.
+- [ ] Approval: production navigation or replacement requires a separate phase
+      and explicit approval after authenticated browser evidence.
+
+Phase 12 automated execution on June 15, 2026:
+
+- PASS: frontend contracts, regular build, preview build, and bundle budget;
+- PASS: all Phase 5-12 PHP/API/preview/parity/pilot/candidate checks;
+- PASS: PHP syntax, clean diff, unauthenticated login redirect, and no forbidden
+  runtime-scope changes;
+- PASS: one preview entry, 220,550-byte JavaScript, and 16,470-byte CSS;
+- BLOCKED: authenticated visual, responsive, dark-mode, and console evidence
+  because no approved fixture session was available and the in-app browser
+  policy blocked the localhost redirect path.
+
+The candidate must not replace the legacy page while that browser evidence is
+blocked.

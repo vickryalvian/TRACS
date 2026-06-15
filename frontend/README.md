@@ -67,3 +67,12 @@ It writes only the `shiftAssignment` entry and manifest to
 `public/assets/react-dist/`. The unlinked authenticated preview page resolves
 that manifest at `/shift-assignment-react-preview.php`. The regular
 `npm run build` output remains isolated under ignored `frontend/dist/`.
+
+Validate the Phase 12 production-candidate budget after building:
+
+```bash
+npm run test:preview-bundle
+```
+
+The check requires exactly one `shiftAssignment` entry and caps uncompressed
+preview output at 300 KB JavaScript and 50 KB CSS.

@@ -8,23 +8,28 @@ export function useShiftAssignments(filters, enabled = true) {
     error: null,
   });
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal) => {
     if (!enabled) {
       return;
     }
 
     setState((current) => ({ ...current, loading: true, error: null }));
     try {
-      const response = await loadShiftAssignments(filters);
+      const response = await loadShiftAssignments(filters, { signal });
       setState({ data: response.data, loading: false, error: null });
     } catch (error) {
+      if (error?.name === 'AbortError') {
+        return;
+      }
       setState({ data: null, loading: false, error });
     }
   }, [enabled, filters]);
 
   useEffect(() => {
-    load();
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
   }, [load]);
 
-  return { ...state, retry: load };
+  return { ...state, retry: () => load() };
 }

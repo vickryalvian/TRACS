@@ -3,7 +3,12 @@ import { minutesLabel, statusTone } from '../utils/shiftFormatters';
 
 export function ShiftAssignmentTable({ assignments }) {
   return (
-    <div className="tr:hidden tr:overflow-x-auto tr:md:block">
+    <div
+      aria-label="Shift assignments table"
+      className="shift-assignment-table-scroll tr:hidden tr:max-w-full tr:overflow-x-auto tr:md:block"
+      role="region"
+      tabIndex="0"
+    >
       <table className="tr:w-full tr:min-w-[900px] tr:border-collapse tr:text-left">
         <thead className="tr:bg-tracs-surface-2">
           <tr className="tr:border-b tr:border-tracs-border">
@@ -50,6 +55,12 @@ export function ShiftAssignmentTable({ assignments }) {
                 <Badge variant={statusTone(assignment.status)}>
                   {assignment.status.replaceAll('_', ' ')}
                 </Badge>
+                {assignment.is_overtime ? (
+                  <Badge className="tr:ml-1" variant="warning">Overtime</Badge>
+                ) : null}
+                {assignment.is_holiday ? (
+                  <Badge className="tr:ml-1" variant="info">Holiday</Badge>
+                ) : null}
               </td>
             </tr>
           ))}

@@ -451,3 +451,34 @@ git branch -D refactor/phase-11-shift-preview-internal-pilot
 
 No database restore, asset rebuild, navigation rollback, or legacy-page
 fallback is required.
+
+## Phase 12 Read-Only Production Candidate Rollback
+
+Phase 12 changes only the isolated read-only React candidate, generated preview
+assets, frontend/tests, and documentation. It does not change legacy Shift
+Assignment, navigation, APIs, business logic, schema, data, or Calendar.
+
+Before commit:
+
+```bash
+git restore --staged .
+git restore .
+rm frontend/tests/preview-bundle-contract.mjs
+rm tests/shift-assignment-readonly-candidate.php
+cd frontend && npm run build:preview
+```
+
+After commit:
+
+```bash
+git revert <phase-12-commit-sha>
+```
+
+To abandon the unmerged branch:
+
+```bash
+git switch refactor/phase-11-shift-preview-internal-pilot
+git branch -D refactor/phase-12-shift-readonly-production-candidate
+```
+
+No database restore, navigation rollback, or legacy-page fallback is required.

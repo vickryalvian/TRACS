@@ -184,3 +184,8 @@ Phase 11 limits that direct-URL preview to the exact `super_admin` role in
 addition to `shifts.view`. The implementation reuses the existing audited,
 safe-denial page guard; it does not introduce a general feature-flag system or
 add a navigation link. Expansion beyond Super Admin requires explicit approval.
+
+Phase 12 hardens the same isolated page as a read-only production candidate:
+compact Calendar-aligned density, staged filters, `dd-mm-yyyy` inputs with ISO
+API conversion, stale-request cancellation, responsive table/cards, clearer
+error states, and holiday/overtime notices. It remains unlinked and restricted.

@@ -28,9 +28,9 @@ Viewer is supported by the service and migration but is outside the required
 Phase 10 role set. If tested, it is view-only by default and is not included in
 the agent filter because `getAgents()` excludes viewer accounts.
 
-The preview currently shows an API-supported role filter while the context
-contract reports `role_filter_supported: false`; record this discrepancy for
-every role and confirm it never expands the service-enforced scope.
+Phase 12 removes the preview role control because the context contract reports
+`role_filter_supported: false` and the legacy page has no role query filter.
+Server-side role and division scope remains unchanged.
 
 ## Permission Variants
 

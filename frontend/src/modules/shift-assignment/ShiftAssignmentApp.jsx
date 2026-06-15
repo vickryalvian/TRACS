@@ -6,6 +6,7 @@ import { ShiftEmptyState } from './components/ShiftEmptyState';
 import { ShiftErrorState } from './components/ShiftErrorState';
 import { ShiftFilterBar } from './components/ShiftFilterBar';
 import { ShiftLoadingState } from './components/ShiftLoadingState';
+import { ShiftOperationalNotices } from './components/ShiftOperationalNotices';
 import { ShiftSummaryCards } from './components/ShiftSummaryCards';
 import { ShiftToolbar } from './components/ShiftToolbar';
 import { ShiftWarnings } from './components/ShiftWarnings';
@@ -19,7 +20,6 @@ const initialFilters = {
   view: 'weekly',
   ...initialRange,
   agent_id: '',
-  role: '',
   division: '',
   shift_type: '',
   status: '',
@@ -31,9 +31,8 @@ export function ShiftAssignmentApp() {
   const requestFilters = useMemo(() => filters, [filters]);
   const assignments = useShiftAssignments(requestFilters, Boolean(context.shift));
 
-  function updateFilter(event) {
-    const { name, value } = event.target;
-    setFilters((current) => ({ ...current, [name]: value }));
+  function applyFilters(nextFilters) {
+    setFilters(nextFilters);
   }
 
   function changeView(view) {
@@ -87,15 +86,15 @@ export function ShiftAssignmentApp() {
           <ShiftErrorState error={context.error} onRetry={context.retry} />
         ) : (
           <>
-            <ShiftSummaryCards summary={assignments.data?.summary} />
+            <ShiftSummaryCards loading={assignments.loading} summary={assignments.data?.summary} />
             <ShiftFilterBar
               context={context.shift}
               filters={filters}
-              onChange={updateFilter}
+              onApply={applyFilters}
               onReset={resetFilters}
             />
 
-            <div className="tr:grid tr:grid-cols-1 tr:gap-tracs-4 tr:xl:grid-cols-[minmax(0,1fr)_340px]">
+            <div className="tr:grid tr:min-w-0 tr:grid-cols-1 tr:gap-tracs-4 tr:xl:grid-cols-[minmax(0,1fr)_320px]">
               <Card className="tr:min-w-0 tr:p-0">
                 <div className="tr:flex tr:items-center tr:justify-between tr:border-b tr:border-tracs-border tr:bg-tracs-surface-2 tr:px-tracs-4 tr:py-tracs-3">
                   <div>
@@ -131,7 +130,28 @@ export function ShiftAssignmentApp() {
                 )}
               </Card>
 
-              <ShiftWarnings warnings={assignments.data?.warnings ?? []} />
+              <div className="tr:flex tr:min-w-0 tr:flex-col tr:gap-tracs-4">
+                {assignments.loading ? (
+                  <Card className="tr:p-tracs-3">
+                    <ShiftLoadingState label="Loading warnings and operational notices" />
+                  </Card>
+                ) : assignments.error ? (
+                  <Card className="tr:p-tracs-4">
+                    <p className="tr:text-xs tr:leading-5 tr:text-tracs-muted">
+                      Warnings and holiday notices are unavailable until the read-only
+                      schedule request succeeds.
+                    </p>
+                  </Card>
+                ) : (
+                  <>
+                    <ShiftWarnings warnings={assignments.data?.warnings ?? []} />
+                    <ShiftOperationalNotices
+                      assignments={assignments.data?.assignments ?? []}
+                      holidays={assignments.data?.holidays ?? []}
+                    />
+                  </>
+                )}
+              </div>
             </div>
           </>
         )}

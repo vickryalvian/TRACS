@@ -1,5 +1,7 @@
 .shift-assignment-react-shell {
   isolation: isolate;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .shift-assignment-react-shell :where(table) {
@@ -17,4 +19,39 @@
 .shift-assignment-react-shell :where(option) {
   background: var(--s2);
   color: var(--tx1);
+}
+
+.shift-assignment-react-shell :where(button, input, select, a) {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.shift-assignment-react-shell :where(input[aria-invalid="true"]) {
+  border-color: var(--red);
+  box-shadow: 0 0 0 2px var(--red-lt);
+}
+
+.shift-assignment-table-scroll {
+  scrollbar-color: var(--bd3) var(--s2);
+  scrollbar-width: thin;
+}
+
+.shift-loading-skeleton {
+  animation: shift-loading-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes shift-loading-pulse {
+  0%, 100% { opacity: .45; }
+  50% { opacity: 1; }
+}
+
+@media (max-width: 479px) {
+  .shift-assignment-react-shell {
+    font-size: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shift-loading-skeleton {
+    animation: none;
+  }
 }

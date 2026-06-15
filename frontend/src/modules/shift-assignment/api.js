@@ -22,9 +22,10 @@ export async function loadShiftContext() {
   return apiClient.request('/api/v1/shift-assignment/context.php');
 }
 
-export async function loadShiftAssignments(filters) {
+export async function loadShiftAssignments(filters, options = {}) {
   const query = queryString(filters);
   return apiClient.request(
     `/api/v1/shift-assignment/assignments.php${query ? `?${query}` : ''}`,
+    options,
   );
 }

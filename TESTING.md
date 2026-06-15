@@ -298,6 +298,30 @@ With disposable accounts, confirm a Super Admin with `shifts.view` can render
 the page while Admin, Supervisor, Agent, Intern, and users without `shifts.view`
 receive safe denial. No credentials or sessions belong in test artifacts.
 
+## Phase 12 Read-Only Production Candidate
+
+From `frontend/`:
+
+```bash
+npm run test:contracts
+npm run build
+npm run build:preview
+npm run test:preview-bundle
+```
+
+From the repository root:
+
+```bash
+php tests/shift-assignment-readonly-candidate.php
+php tests/shift-assignment-internal-pilot.php
+php tests/shift-assignment-preview-parity.php
+```
+
+The candidate checks cover display/ISO date conversion, staged filters, `401`
+and `403` client handling, request cancellation, responsive read surfaces,
+approved GET-only resources, access restrictions, navigation isolation, and
+bundle entry/size budgets.
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:

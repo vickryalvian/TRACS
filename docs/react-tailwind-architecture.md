@@ -340,6 +340,11 @@ Phase 11 adds an exact-role Super Admin pilot gate after authentication and
 authenticated, permission-protected GET APIs, and no frontend visibility rule
 is treated as authorization.
 
+Phase 12 preserves one module-specific Vite entry and isolated prefixed CSS.
+The build contract caps uncompressed preview JavaScript at 300 KB and CSS at
+50 KB, rejects extra entries, and adds no dependency. Filter edits are applied
+explicitly and stale assignment reads are aborted.
+
 ## React Mount Contract
 
 Each PHP page supplies only non-sensitive bootstrap data required before the

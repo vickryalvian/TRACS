@@ -335,6 +335,14 @@ characterization. The direct URL remains absent from production navigation.
 This page gate does not replace API authentication or permission enforcement.
 The React pilot remains read-only and uses only the approved GET contracts.
 
+## Phase 12 Read-Only Candidate
+
+The candidate keeps the API unchanged. Display-date inputs use `dd-mm-yyyy` and
+are validated and converted to ISO before the GET request. Filter edits are
+staged until Apply, obsolete reads are aborted, and the unsupported role
+control is removed. Holiday, overtime, summary, and warning presentation uses
+only fields already returned by the assignments contract.
+
 Future writes are not approved in this phase:
 
 ```text

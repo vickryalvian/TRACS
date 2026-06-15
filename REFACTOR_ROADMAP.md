@@ -85,17 +85,18 @@ their frontend migration remains late because of the system-wide risk.
 
 ## Current Phase
 
-Phase 11 limits the authenticated, unlinked React preview to a controlled
-internal pilot:
+Phase 12 hardens the authenticated, unlinked React preview as a read-only
+production candidate:
 
 ```text
 /shifting-assignment.php
 /shift-assignment-react-preview.php
 ```
 
-The page requires authentication, `shifts.view`, and the exact `super_admin`
-role. It remains direct-URL only and read-only. Existing API authentication,
-permission, and role/division scope remain authoritative.
+It adds Calendar-aligned density, staged `dd-mm-yyyy` filters, responsive
+table/cards, operational notices, clearer state handling, stale-request
+cancellation, and bundle budgets. Access remains exact `super_admin` plus
+`shifts.view`; APIs and business rules are unchanged.
 
 The existing PHP page, legacy API, CSV export, service, Calendar reference,
 database schema, data, production navigation, and Calendar remain unchanged.
@@ -178,4 +179,11 @@ Phase 11 internal pilot notes:
 
 - `public/shift-assignment-react-preview.php`
 - `tests/shift-assignment-internal-pilot.php`
+- `docs/shift-assignment-preview-parity.md`
+
+Phase 12 candidate notes:
+
+- `frontend/src/modules/shift-assignment/`
+- `frontend/tests/preview-bundle-contract.mjs`
+- `tests/shift-assignment-readonly-candidate.php`
 - `docs/shift-assignment-preview-parity.md`

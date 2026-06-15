@@ -16,6 +16,56 @@ function toIsoDate(date) {
   return date.toISOString().slice(0, 10);
 }
 
+function validIsoDate(value) {
+  const date = parseIsoDate(value);
+  return date && toIsoDate(date) === value ? value : '';
+}
+
+export function displayDateInput(isoDate) {
+  return formatDisplayDate(isoDate);
+}
+
+export function isoDateInput(displayDate) {
+  const match = /^(\d{2})-(\d{2})-(\d{4})$/.exec(displayDate ?? '');
+  if (!match) {
+    return '';
+  }
+  const [, day, month, year] = match;
+  return validIsoDate(`${year}-${month}-${day}`);
+}
+
+export function filterDraft(filters) {
+  return {
+    ...filters,
+    start_date: displayDateInput(filters.start_date),
+    end_date: displayDateInput(filters.end_date),
+  };
+}
+
+export function filterQuery(draft) {
+  const startDate = isoDateInput(draft.start_date);
+  const endDate = isoDateInput(draft.end_date);
+  const errors = {};
+
+  if (!startDate) {
+    errors.start_date = 'Use dd-mm-yyyy.';
+  }
+  if (!endDate) {
+    errors.end_date = 'Use dd-mm-yyyy.';
+  }
+
+  return {
+    errors,
+    filters: errors.start_date || errors.end_date
+      ? null
+      : {
+          ...draft,
+          start_date: startDate,
+          end_date: endDate,
+        },
+  };
+}
+
 export function todayIso() {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Jakarta',
