@@ -62,7 +62,7 @@ Review date: 2026-06-15. All `public/api/` routes require a fully authenticated,
 | `api/server-health.php` | Fixed server metrics and sanitized logs | GET | Exact `super_admin` role | No | Critical; no parameters, rate limited, fixed paths only |
 | `api/v1/context.php` | Safe authenticated frontend context | GET | Any fully authenticated active user | No | Medium; allowlisted identity, permissions, CSRF handoff |
 | `api/v1/shift-assignment/context.php` | Safe Shift Assignment bootstrap context | GET | `shifts.view` plus role/division scope | No | High; no assignments or sensitive fields |
-| `api/v1/shift-assignment/assignments.php` | Scoped read and controlled single create | GET / POST | GET: `shifts.view`; POST: exact `super_admin` plus `shifts.manage` until `shifts.create` migration | POST required | Critical; strict JSON, existing service rules, allowlisted output, no React caller |
+| `api/v1/shift-assignment/assignments.php` | Scoped read and controlled single create | GET / POST | GET: `shifts.view`; POST: exact `super_admin` plus explicit role assignment for `shifts.manage` until `shifts.create` migration | POST required | Critical; Phase 15 disposable integration passed, no React caller |
 | Future Shift Assignment v1 mutations | Planned update/template/overtime/warning contracts | POST/PATCH; DELETE blocked | Exact operation permission plus object/division scope | Required | Critical; no additional public route exists |
 | `api/export-activity.php` | Activity CSV | GET | `reports.export` and `users.view_activity` | No | High; authenticated export |
 | `api/export-cases.php` | Cases CSV | GET | `reports.export` and `cases.view` | No | High; user-scoped export |

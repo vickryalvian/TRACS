@@ -200,3 +200,8 @@ Phase 14 implements the controlled create backend contract only. The React
 preview API client remains GET-only, no Add button or modal is activated, and
 the pilot banner remains read-only. UI activation requires staging database
 evidence and a separately approved branch.
+
+Phase 15 supplies disposable-database integration evidence but does not change
+that UI gate. React create still requires approved staging browser evidence,
+form accessibility, unsaved-change, duplicate-submit, modal/toast, and rollback
+review.

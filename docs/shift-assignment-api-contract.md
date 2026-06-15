@@ -382,8 +382,8 @@ POST /api/v1/shift-assignment/assignments.php
 
 GET retains `shifts.view`, query validation, role/division scope, and the Phase
 7 response. POST requires authentication, automatic mutation CSRF validation,
-existing `shifts.manage`, and exact `super_admin` because `shifts.create` has
-not been seeded.
+an explicit role assignment for `shifts.manage`, and exact `super_admin`
+because `shifts.create` has not been seeded.
 
 POST accepts one strict JSON assignment, forces `source=manual`, maps
 `agent_id` to the service's `user_id`, accepts ISO dates, and normalizes Shift
@@ -399,6 +399,16 @@ retain `401`/`403`; unsupported methods return `405`.
 No React write call or control is added. The preview remains read-only and
 exact `super_admin` plus `shifts.view`. No update, delete, template, copy,
 overtime, warning, or bulk endpoint exists.
+
+## Phase 15 Create Integration Validation
+
+The guarded disposable integration test passed authentication, CSRF, exact
+role, explicit permission, validation, authenticated create, Shift 3
+cross-day persistence, read-after-write, overlap rejection, assignment/activity
+audits, security audits, and unconditional database teardown.
+
+The temporary target was `tracs_phase15_test`; it was dropped after the run.
+React remains read-only.
 
 ## Visible Risks To Protect
 

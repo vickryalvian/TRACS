@@ -191,12 +191,14 @@ create_contract_assert(
     'Assignments route does not preserve GET while adding POST.'
 );
 create_contract_assert(
-    str_contains($route, "require_permission(\$conn, 'shifts.manage'")
+    str_contains($route, 'require_explicit_role_permission(')
+        && str_contains($route, "'shifts.manage'")
         && str_contains($route, "require_exact_role(\$conn, 'super_admin'"),
     'Temporary create authorization is no longer shifts.manage plus exact Super Admin.'
 );
 create_contract_assert(
     str_contains($permissions, 'function require_exact_role(')
+        && str_contains($permissions, 'function require_explicit_role_permission(')
         && str_contains($permissions, "json_error('Forbidden.', 403"),
     'Exact-role API denial contract changed.'
 );
@@ -206,7 +208,7 @@ create_contract_assert(
     'Invalid mutation CSRF attempts are no longer security-audited.'
 );
 create_contract_assert(
-    str_contains($contextResource, "\$controlledCreate = \$manage")
+    str_contains($contextResource, "\$controlledCreate = (bool)(\$capabilities['create']")
         && str_contains($contextResource, "'create_assignment' => \$controlledCreate"),
     'Context no longer reflects the controlled create authorization gate.'
 );

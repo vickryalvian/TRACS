@@ -545,3 +545,40 @@ Code rollback does not delete assignments already created through an approved
 staging or production pilot. If the endpoint was exercised, restore the
 recorded database backup or follow an explicitly approved, audited data
 correction procedure. Never delete real schedules ad hoc.
+
+## Phase 15 Disposable Integration Testing Rollback
+
+Phase 15 adds test-only CLI files, a narrow explicit role-permission helper for
+the controlled create gate, contract updates, and documentation. It adds no
+schema migration, React UI, navigation, Calendar, or legacy-page change.
+
+Before commit:
+
+```bash
+git restore --staged .
+git restore .
+rm tests/shift-assignment-create-api-integration.php
+rm tests/fixtures/shift-assignment-api-request.php
+```
+
+After commit:
+
+```bash
+git revert <phase-15-commit-sha>
+```
+
+To abandon the unmerged branch:
+
+```bash
+git switch refactor/phase-14-shift-create-assignment-api
+git branch -D refactor/phase-15-shift-create-api-integration-testing
+```
+
+The runner drops its target automatically. If interrupted, verify and remove
+only the safely marked disposable database:
+
+```sql
+DROP DATABASE IF EXISTS tracs_phase15_test;
+```
+
+Never run cleanup against an unmarked database.

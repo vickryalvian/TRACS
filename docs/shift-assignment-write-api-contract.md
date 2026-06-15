@@ -95,7 +95,7 @@ controlled pilot therefore requires all of:
 
 1. fully authenticated active session;
 2. valid `X-CSRF-Token`;
-3. existing `shifts.manage`;
+3. an explicit `shifts.manage` assignment on the user's role;
 4. exact `super_admin` role.
 
 The future `shifts.create` migration remains required before broader role
@@ -124,6 +124,37 @@ helper. It excludes notes and sensitive identity fields. Authentication,
 permission, exact-role, and invalid-CSRF denials use the existing security
 audit path. Audit storage remains best-effort where an optional legacy audit
 table is unavailable; no schema is added.
+
+## Phase 15 Disposable Integration Evidence
+
+Run the guarded integration workflow with:
+
+```bash
+TRACS_ENV=test \
+TRACS_ALLOW_MUTATION_TESTS=1 \
+TRACS_TEST_DB_NAME=tracs_phase15_test \
+php tests/shift-assignment-create-api-integration.php
+```
+
+The runner refuses to start unless the environment is exactly `test`, mutation
+tests are explicitly enabled, and the target database name contains `test`,
+`local`, `dev`, or `disposable`.
+
+It creates a temporary database, clones schema only from local Compose MySQL,
+seeds dedicated fixtures, invokes the real v1 route with isolated session and
+CSRF state, verifies create/read/overlap/audits, and drops the database in a
+`finally` block.
+
+The authenticated success path was genuinely exercised against MySQL. No
+production database or existing assignment row was used or modified.
+
+The test exposed that normal `tracs_user_can()` gives Super Admin implicit
+catalog-wide access. The controlled endpoint now additionally checks an
+explicit role-permission assignment for `shifts.manage`. Normal TRACS
+permission semantics elsewhere are unchanged.
+
+React create UI remains blocked until approved staging browser evidence and a
+separate UI activation review.
 
 ## Common Security Contract
 

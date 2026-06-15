@@ -392,6 +392,57 @@ disposable database.
    without notes, tokens, credentials, or raw errors.
 9. Restore the disposable snapshot. Do not run this procedure on production.
 
+## Phase 15 Disposable Create Integration
+
+Prerequisites:
+
+- local Docker Compose `tracs_db` is running;
+- source `tracs_db` is used for schema only;
+- host MySQL is reachable on `127.0.0.1:3307`;
+- Docker CLI can run `mysqldump` and `mysql` inside `tracs_db`.
+
+Run:
+
+```bash
+TRACS_ENV=test \
+TRACS_ALLOW_MUTATION_TESTS=1 \
+TRACS_TEST_DB_NAME=tracs_phase15_test \
+php tests/shift-assignment-create-api-integration.php
+```
+
+Optional local overrides:
+
+```text
+TRACS_TEST_DB_HOST
+TRACS_TEST_DB_PORT
+TRACS_TEST_DB_USER
+TRACS_TEST_DB_PASS
+TRACS_TEST_DB_CONTAINER
+TRACS_TEST_SCHEMA_SOURCE
+```
+
+The runner skips without the two explicit safety variables, refuses a target
+name without `test`, `local`, `dev`, or `disposable`, refuses matching
+source/target names and production labels, and drops the target in `finally`.
+
+The child request harness lives outside the web root. It creates session/CSRF
+state and redirects `php://input` only inside its short-lived CLI process. It
+does not add a production authentication bypass.
+
+Validated on June 15, 2026:
+
+- authenticated create succeeded;
+- the row appeared through GET;
+- Shift 3 persisted cross-day and displayed `16:00-24:00`;
+- overlap created no second row;
+- unauthenticated, CSRF, role, and explicit-permission denials passed;
+- invalid date returned a field error;
+- assignment, activity, and security audit rows were present;
+- `tracs_phase15_test` was dropped.
+
+React create UI remains disabled. Disposable CLI evidence is necessary but not
+sufficient for UI activation.
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:

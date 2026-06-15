@@ -15,8 +15,12 @@ $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
 
 try {
     if ($method === 'POST') {
-        \TRACS\Api\require_permission($conn, 'shifts.manage', $context['user']);
         \TRACS\Api\require_exact_role($conn, 'super_admin', $context['user']);
+        \TRACS\Api\require_explicit_role_permission(
+            $conn,
+            'shifts.manage',
+            $context['user']
+        );
 
         $service = new \ShiftingAssignmentService($conn, $context['user_id']);
         $rawInput = \TRACS\Api\get_request_json();

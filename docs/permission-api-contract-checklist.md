@@ -72,8 +72,8 @@ endpoint solely to make it match the target during baseline creation.
 - [ ] `GET /api/v1/shift-assignment/assignments.php` requires `shifts.view`
       and retains the Phase 7 standard response.
 - [ ] `POST /api/v1/shift-assignment/assignments.php` requires authentication,
-      CSRF, `shifts.manage`, and exact `super_admin` until `shifts.create` is
-      seeded through a paired migration.
+      CSRF, exact `super_admin`, and an explicit role assignment for
+      `shifts.manage` until `shifts.create` is seeded through a paired migration.
 - [ ] POST rejects unknown/server-owned fields, unsafe dates/times/statuses,
       invalid agents/templates, overlap, and out-of-scope records.
 - [ ] Assignment query filters cannot expand role/division/object scope.
@@ -97,6 +97,8 @@ endpoint solely to make it match the target during baseline creation.
       `up.sql` and `down.sql` permission seeding is approved and verified.
 - [ ] Assignment DELETE remains unavailable until retention, soft-delete,
       restoration, template-link, and audit behavior receive separate approval.
+- [ ] Disposable integration refuses production-like targets, uses dedicated
+      fixtures, and verifies that its temporary database is dropped.
 
 ### Authentication And Administration
 

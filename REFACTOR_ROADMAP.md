@@ -85,10 +85,10 @@ their frontend migration remains late because of the system-wide risk.
 
 ## Current Phase
 
-Phase 14 implements only the controlled Shift Assignment create API while
-preserving the existing assignments GET contract. POST requires CSRF, existing
-`shifts.manage`, and exact `super_admin` until a future `shifts.create`
-permission migration is approved.
+Phase 15 validates the controlled Shift Assignment create API against a
+guarded disposable MySQL database. Authenticated create, read-after-write,
+Shift 3, overlap, CSRF, exact role, explicit `shifts.manage`, audits, and
+database teardown have passed.
 
 Delete remains blocked pending an approved retention or soft-delete design.
 No active React action, update/delete/template/copy endpoint, permission seed,
@@ -211,3 +211,10 @@ Phase 14 controlled-create notes:
 - `api/v1/shift-assignment/assignments.php`
 - `tests/shift-assignment-create-api-contract.php`
 - `docs/shift-assignment-write-api-contract.md`
+
+Phase 15 disposable-integration notes:
+
+- `tests/shift-assignment-create-api-integration.php`
+- `tests/fixtures/shift-assignment-api-request.php`
+- `TESTING.md`
+- `ROLLBACK.md`

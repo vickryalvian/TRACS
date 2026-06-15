@@ -27,7 +27,7 @@ function context_data(
     };
 
     $manage = (bool)($capabilities['manage'] ?? false);
-    $controlledCreate = $manage && (string)($user['role_slug'] ?? '') === 'super_admin';
+    $controlledCreate = (bool)($capabilities['create'] ?? false);
     $manageSettings = (bool)($capabilities['settings'] ?? false);
     $manageMonthlyTemplates = (bool)($capabilities['monthly_templates'] ?? false);
     $export = (bool)($capabilities['export'] ?? false);

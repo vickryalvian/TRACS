@@ -326,7 +326,7 @@ The existing assignments route branches by method:
 
 ```text
 GET  -> shifts.view -> existing scoped read pipeline
-POST -> CSRF -> shifts.manage -> exact super_admin -> saveAssignment()
+POST -> CSRF -> exact super_admin -> explicit shifts.manage -> saveAssignment()
 ```
 
 The internal v1 resource owns strict JSON-to-service normalization and safe
@@ -338,6 +338,10 @@ audit behavior.
 Because `shifts.create` is not seeded, Phase 14 uses the documented temporary
 exact-role gate. Broader access requires a later paired permission migration
 and role tests. The React client does not call POST in this phase.
+
+Phase 15 validates the route against disposable MySQL using a schema-only
+clone, dedicated fixtures, real session/CSRF state, and guaranteed teardown.
+The request harness is test-only and adds no production authentication bypass.
 
 Automated checks:
 

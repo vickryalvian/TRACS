@@ -24,6 +24,7 @@ $data = \TRACS\Api\V1\ShiftAssignment\context_data(
     ],
     [
         'manage' => true,
+        'create' => false,
         'settings' => false,
         'monthly_templates' => true,
         'export' => true,
