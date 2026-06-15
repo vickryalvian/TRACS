@@ -336,3 +336,16 @@ Phase 25 controlled-delete UI notes:
 
 Template/copy work, production navigation, legacy replacement, and production
 hard-delete rollout remain separate approval gates.
+
+Phase 26 delete-hardening notes:
+
+- assignment ID and all safe identity fields are reviewed before delete;
+- restoration is described as controlled manual recovery, not instant undo;
+- confirmation rejects case changes and surrounding whitespace;
+- Shift 1 to Shift 2 to Shift 3, overlap rejection, delete, restore,
+  template-link `409`, and post-delete Create/Edit passed;
+- permission removal hid all write actions;
+- disposable databases and browser resources were removed.
+
+Template generation, copy/paste, production navigation, and legacy replacement
+still require separate explicit approval.

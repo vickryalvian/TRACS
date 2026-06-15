@@ -955,3 +955,33 @@ php tests/shift-assignment-delete-ui-browser-environment.php cleanup
 
 Reverting code cannot restore a deleted assignment. Any approved data recovery
 must use the audited assignment and dependent snapshots.
+
+## Phase 26 Delete Pilot Hardening Rollback
+
+Phase 26 changes only the isolated Delete modal, regression harnesses, built
+preview asset, and canonical documentation. It adds no endpoint, schema,
+navigation, Calendar, or legacy-page change.
+
+After commit:
+
+```bash
+git revert <phase-26-commit-sha>
+```
+
+To abandon the branch:
+
+```bash
+git switch refactor/phase-25-shift-delete-ui-pilot
+git branch -D refactor/phase-26-shift-delete-hardening
+```
+
+Emergency disposable cleanup:
+
+```bash
+docker rm -f tracs_phase26_app
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 \
+php tests/shift-assignment-delete-hardening-browser-environment.php cleanup
+```
+
+Code rollback cannot restore a deleted production record. Approved recovery
+must still use the reviewed assignment and dependent snapshots.

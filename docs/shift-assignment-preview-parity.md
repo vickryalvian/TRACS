@@ -306,7 +306,13 @@ Phase 23 result:
 - [x] Authenticated disposable-browser evidence completed in
       `tracs_phase25_test`; template-link `409`, permission hiding, audits,
       dependent snapshot, and cleanup were verified.
-- [ ] Production navigation and legacy replacement remain unapproved.
+- [x] Phase 26 repeated Create/Edit/Delete through Shift 1, Shift 2, Shift 3,
+      overlap rejection, exact confirmation, protected `409`, post-delete
+      Create/Edit, permission hiding, and a clean browser console.
+- [x] Phase 26 exact assignment/dependent restoration and duplicate prevention
+      passed in the guarded API matrix.
+- [ ] Template generation, copy/paste, production navigation, and legacy
+      replacement remain unapproved.
 
 ## Phase 17 Completed Browser Matrix
 

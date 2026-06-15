@@ -64,6 +64,7 @@ $user = browser_env_value('TRACS_TEST_DB_USER', 'root');
 $pass = browser_env_value('TRACS_TEST_DB_PASS', 'root_secret');
 $container = browser_env_value('TRACS_TEST_DB_CONTAINER', 'tracs_db');
 $expectDelete = browser_env_value('TRACS_TEST_EXPECT_DELETE') === '1';
+$expectHardening = browser_env_value('TRACS_TEST_EXPECT_HARDENING') === '1';
 
 if (!in_array($action, ['setup', 'verify', 'cleanup'], true)) {
     browser_env_fail('Usage: php tests/shift-assignment-create-ui-browser-environment.php setup|verify|cleanup', 2);
@@ -344,6 +345,46 @@ $protectedDeleteConflictAudit = $expectDelete
            AND target_id=9751 AND reason='Controlled v1 delete conflict.'"
     )
     : 0;
+$overlapConflictAudit = $expectHardening
+    ? (int)browser_env_scalar(
+        $conn,
+        "SELECT COUNT(*) FROM tracs_user_activity_logs
+         WHERE actor_user_id=9731 AND action='shift_assignment.update_failed'
+           AND target_id={$deletedAssignmentId}
+           AND reason='Controlled v1 update conflict.'"
+    )
+    : 0;
+$postDeleteAssignmentCount = $expectHardening
+    ? (int)browser_env_scalar(
+        $conn,
+        "SELECT COUNT(*) FROM shift_assignments
+         WHERE user_id=9733 AND assignment_date='2026-07-16'
+           AND TIME(start_datetime)='08:00:00'
+           AND TIME(end_datetime)='16:00:00'
+           AND status='confirmed'"
+    )
+    : 0;
+$postDeleteAssignmentId = $expectHardening
+    ? (int)browser_env_scalar(
+        $conn,
+        "SELECT COALESCE(MAX(id),0) FROM shift_assignments
+         WHERE user_id=9733 AND assignment_date='2026-07-16'"
+    )
+    : 0;
+$postDeleteCreateAudit = $postDeleteAssignmentId > 0
+    ? (int)browser_env_scalar(
+        $conn,
+        "SELECT COUNT(*) FROM assignment_audit_logs
+         WHERE assignment_id={$postDeleteAssignmentId} AND action='created'"
+    )
+    : 0;
+$postDeleteUpdateAudit = $postDeleteAssignmentId > 0
+    ? (int)browser_env_scalar(
+        $conn,
+        "SELECT COUNT(*) FROM assignment_audit_logs
+         WHERE assignment_id={$postDeleteAssignmentId} AND action='updated'"
+    )
+    : 0;
 
 if ($expectDelete) {
     foreach ([
@@ -351,16 +392,30 @@ if ($expectDelete) {
         'delete audit present' => $deleteAuditId > 0,
         'deleted assignment identified' => $deletedAssignmentId > 0,
         'create assignment audit retained' => $deletedCreateAssignmentAudit === 1,
-        'update assignment audit retained' => $deletedUpdateAssignmentAudit === 1,
+        'update assignment audit retained' => $deletedUpdateAssignmentAudit >= 1,
         'create activity audit retained' => $deletedCreateActivityAudit === 1,
-        'update activity audit retained' => $deletedUpdateActivityAudit === 1,
+        'update activity audit retained' => $deletedUpdateActivityAudit >= 1,
         'delete activity audit present' => $deleteActivityAudit === 1,
         'dependent snapshot complete' => $dependentSnapshotComplete === 1,
         'protected assignment retained' => $protectedAssignmentCount === 1,
         'protected conflict audited' => $protectedDeleteConflictAudit >= 1,
     ] as $check => $passed) {
         if (!$passed) {
-            browser_env_fail("Phase 25 browser verification failed: {$check}.");
+            browser_env_fail("Controlled delete browser verification failed: {$check}.");
+        }
+    }
+}
+if ($expectHardening) {
+    foreach ([
+        'Shift 1 to Shift 2 to Shift 3 updates audited' => $deletedUpdateAssignmentAudit >= 2
+            && $deletedUpdateActivityAudit >= 2,
+        'overlap conflict audited' => $overlapConflictAudit >= 1,
+        'post-delete Create/Edit persisted' => $postDeleteAssignmentCount === 1,
+        'post-delete create audit present' => $postDeleteCreateAudit >= 1,
+        'post-delete update audit present' => $postDeleteUpdateAudit >= 1,
+    ] as $check => $passed) {
+        if (!$passed) {
+            browser_env_fail("Phase 26 browser verification failed: {$check}.");
         }
     }
 }
@@ -436,6 +491,11 @@ $result = [
     'dependent_snapshot_complete' => $dependentSnapshotComplete,
     'protected_assignment_count' => $protectedAssignmentCount,
     'protected_delete_conflict_audit_count' => $protectedDeleteConflictAudit,
+    'overlap_conflict_audit_count' => $overlapConflictAudit,
+    'post_delete_assignment_count' => $postDeleteAssignmentCount,
+    'post_delete_assignment_id' => $postDeleteAssignmentId,
+    'post_delete_create_audit_count' => $postDeleteCreateAudit,
+    'post_delete_update_audit_count' => $postDeleteUpdateAudit,
 ];
 $conn->close();
 $admin->close();

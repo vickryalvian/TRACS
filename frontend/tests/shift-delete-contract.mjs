@@ -16,6 +16,9 @@ function jsonResponse(payload, status = 200) {
 }
 
 assert.equal(DELETE_CONFIRMATION, 'DELETE');
+assert.match(validateDeleteConfirmation(' DELETE'), /Type DELETE exactly/);
+assert.match(validateDeleteConfirmation('DELETE '), /Type DELETE exactly/);
+assert.match(validateDeleteConfirmation('Delete'), /Type DELETE exactly/);
 assert.match(validateDeleteConfirmation('delete'), /Type DELETE exactly/);
 assert.equal(validateDeleteConfirmation('DELETE'), '');
 assert.equal(isTemplateProtected({ source: 'monthly_template' }), true);

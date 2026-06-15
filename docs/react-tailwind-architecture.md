@@ -475,3 +475,10 @@ React root. Visibility is server-capability driven, Tailwind utilities remain
 prefixed and isolated, and no legacy page loads the module stylesheet. The
 hard-delete modal uses the existing TRACS danger, warning, surface, spacing,
 focus, responsive, and dark-mode tokens.
+
+## Phase 26 Danger-State Hardening
+
+The Delete modal adds assignment identity, clearer recovery-risk language, and
+an accessible live confirmation status without changing Tailwind isolation.
+Exact confirmation, saving locks, safe errors, and refresh behavior remain
+module-local; legacy PHP pages receive no React or Tailwind asset.

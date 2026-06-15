@@ -806,6 +806,35 @@ Authenticated browser validation completed on June 16, 2026 using
 Cleanup removed the temporary app and database. Final database existence count
 was zero. Production data was not used.
 
+## Phase 26 Delete Pilot Hardening
+
+```bash
+cd frontend && npm run test:contracts
+cd frontend && npm run build
+php tests/shift-assignment-delete-hardening.php
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 \
+php tests/shift-assignment-delete-hardening-integration.php
+```
+
+Authenticated browser regression completed on June 16, 2026 using
+`tracs_phase26_test` and temporary `tracs_phase26_app`:
+
+- Create Shift 1 `00:00-08:00` succeeded.
+- Edit to Shift 2 `08:00-16:00`, then Shift 3 `16:00-24:00`, succeeded.
+- An overlapping edit returned safe `409` without mutation.
+- Leading-space and lowercase confirmations stayed disabled.
+- Exact `DELETE` deleted and refreshed the list to zero records.
+- The delete snapshot retained warning and holiday-coverage dependency keys.
+- A live template-item link returned safe `409` and retained the assignment.
+- Create and Edit still succeeded after the delete flow.
+- Removing `shifts.manage` hid Add, Edit, and Delete.
+- Browser console contained no warnings or errors.
+
+The Phase 26 API matrix also performed exact assignment/dependent restoration,
+verified restored GET visibility and duplicate prevention, and removed its
+disposable database. The browser database and app were also removed.
+Production data was not used.
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:

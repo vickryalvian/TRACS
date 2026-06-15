@@ -669,6 +669,20 @@ This permits only the controlled direct-URL pilot. Production navigation,
 legacy replacement, template/copy actions, and production hard deletion remain
 unapproved.
 
+### Phase 26 Delete Pilot Hardening Result
+
+The pilot now states that audit-backed restoration is a controlled manual
+recovery procedure rather than an instant undo. The modal includes assignment
+ID and all safe identity fields available from the read contract, announces
+confirmation state accessibly, and requires byte-exact `DELETE` without
+trimming or case normalization.
+
+Disposable API and browser gates passed Shift 1 to Shift 2 to Shift 3,
+overlap rejection, hard delete, exact dependent restoration, protected
+template-link `409`, post-delete Create/Edit, permission hiding, audit
+retention, GET visibility, and duplicate prevention. This does not approve
+template generation, copy/paste, production navigation, or replacement.
+
 ## Data And Rollback Safety
 
 - No write test may run against production data.

@@ -265,6 +265,178 @@ function integration_restore_dependent_rows(mysqli $conn, array $snapshot): void
     }
 }
 
+function integration_run_phase26_matrix(mysqli $conn): void
+{
+    $created = integration_request('POST', 9301, 'valid', [], [
+        'agent_id' => 9303,
+        'assignment_date' => '2026-07-12',
+        'shift_type' => 'regular_shift',
+        'start_time' => '00:00',
+        'end_time' => '08:00',
+        'status' => 'assigned',
+        'notes' => 'Phase 26 Shift 1 regression fixture',
+    ]);
+    integration_assert(
+        ($created['success'] ?? null) === true && $created['_test_status'] === 201,
+        'Phase 26 Shift 1 create failed.'
+    );
+    $assignmentId = (int)($created['data']['assignment']['id'] ?? 0);
+    integration_assert(
+        ($created['data']['assignment']['display_range'] ?? '') === '00:00-08:00',
+        'Phase 26 Shift 1 range changed.'
+    );
+
+    $shift2 = integration_request(
+        'PATCH',
+        9301,
+        'valid',
+        ['id' => (string)$assignmentId],
+        ['start_time' => '08:00', 'end_time' => '16:00'],
+        'assignment'
+    );
+    integration_assert(
+        ($shift2['success'] ?? null) === true
+            && ($shift2['data']['assignment']['display_range'] ?? '') === '08:00-16:00',
+        'Phase 26 Shift 1 to Shift 2 edit failed.'
+    );
+
+    $shift3 = integration_request(
+        'PATCH',
+        9301,
+        'valid',
+        ['id' => (string)$assignmentId],
+        ['start_time' => '16:00', 'end_time' => '24:00', 'status' => 'confirmed'],
+        'assignment'
+    );
+    integration_assert(
+        ($shift3['success'] ?? null) === true
+            && ($shift3['data']['assignment']['display_range'] ?? '') === '16:00-24:00'
+            && ($shift3['data']['assignment']['is_cross_day'] ?? null) === true,
+        'Phase 26 Shift 2 to Shift 3 edit failed.'
+    );
+
+    $blocking = integration_request('POST', 9301, 'valid', [], [
+        'agent_id' => 9303,
+        'assignment_date' => '2026-07-13',
+        'shift_type' => 'regular_shift',
+        'start_time' => '08:00',
+        'end_time' => '16:00',
+        'status' => 'assigned',
+        'notes' => 'Phase 26 overlap fixture',
+    ]);
+    integration_assert(($blocking['success'] ?? null) === true, 'Phase 26 overlap fixture failed.');
+
+    $overlap = integration_request(
+        'PATCH',
+        9301,
+        'valid',
+        ['id' => (string)$assignmentId],
+        [
+            'assignment_date' => '2026-07-13',
+            'start_time' => '08:00',
+            'end_time' => '16:00',
+        ],
+        'assignment'
+    );
+    integration_assert(
+        ($overlap['success'] ?? null) === false && $overlap['_test_status'] === 409,
+        'Phase 26 overlapping edit was not rejected.'
+    );
+
+    $deleted = integration_request(
+        'DELETE',
+        9301,
+        'valid',
+        ['id' => (string)$assignmentId],
+        [],
+        'assignment'
+    );
+    integration_assert(
+        ($deleted['success'] ?? null) === true && $deleted['_test_status'] === 200,
+        'Phase 26 delete failed.'
+    );
+    integration_assert(
+        integration_scalar($conn, "SELECT COUNT(*) FROM shift_assignments WHERE id={$assignmentId}") === '0',
+        'Phase 26 deleted assignment remains persisted.'
+    );
+
+    $auditResult = $conn->query(
+        "SELECT id,before_snapshot FROM assignment_audit_logs
+         WHERE assignment_id IS NULL AND action='deleted'
+           AND JSON_EXTRACT(before_snapshot,'$.id')={$assignmentId}
+         ORDER BY id DESC LIMIT 1"
+    );
+    integration_assert(
+        $auditResult instanceof mysqli_result && $auditResult->num_rows === 1,
+        'Phase 26 delete snapshot is missing.'
+    );
+    $auditRow = $auditResult->fetch_assoc();
+    $auditResult->free();
+    $snapshot = json_decode(
+        (string)($auditRow['before_snapshot'] ?? ''),
+        true,
+        512,
+        JSON_THROW_ON_ERROR
+    );
+    integration_assert(
+        is_array($snapshot)
+            && is_array($snapshot['_dependents']['shift_warnings'] ?? null)
+            && is_array($snapshot['_dependents']['holiday_coverage_assignments'] ?? null),
+        'Phase 26 dependent snapshot is incomplete.'
+    );
+    integration_restore_assignment(
+        $conn,
+        $snapshot,
+        9301,
+        (int)($auditRow['id'] ?? 0),
+        true
+    );
+    integration_assert(
+        integration_scalar($conn, "SELECT COUNT(*) FROM shift_assignments WHERE id={$assignmentId}") === '1',
+        'Phase 26 exact restore failed or duplicated.'
+    );
+
+    $restoredRead = integration_request('GET', 9301, 'valid', [
+        'view' => 'daily',
+        'start_date' => '2026-07-12',
+        'end_date' => '2026-07-12',
+        'agent_id' => '9303',
+    ]);
+    $restoredIds = array_map(
+        static fn(array $row): int => (int)($row['id'] ?? 0),
+        $restoredRead['data']['assignments'] ?? []
+    );
+    integration_assert(
+        in_array($assignmentId, $restoredIds, true),
+        'Phase 26 restored assignment is missing from GET.'
+    );
+
+    $postDelete = integration_request('POST', 9301, 'valid', [], [
+        'agent_id' => 9303,
+        'assignment_date' => '2026-07-15',
+        'shift_type' => 'regular_shift',
+        'start_time' => '00:00',
+        'end_time' => '08:00',
+        'status' => 'assigned',
+        'notes' => 'Phase 26 post-delete create fixture',
+    ]);
+    integration_assert(($postDelete['success'] ?? null) === true, 'Create failed after Phase 26 delete.');
+    $postDeleteId = (int)($postDelete['data']['assignment']['id'] ?? 0);
+    $postDeleteEdit = integration_request(
+        'PATCH',
+        9301,
+        'valid',
+        ['id' => (string)$postDeleteId],
+        ['start_time' => '08:00', 'end_time' => '16:00', 'status' => 'confirmed'],
+        'assignment'
+    );
+    integration_assert(
+        ($postDeleteEdit['success'] ?? null) === true
+            && ($postDeleteEdit['data']['assignment']['display_range'] ?? '') === '08:00-16:00',
+        'Edit failed after Phase 26 delete.'
+    );
+}
+
 $environment = strtolower(integration_env('TRACS_ENV'));
 $allowMutations = integration_env('TRACS_ALLOW_MUTATION_TESTS');
 $database = integration_env('TRACS_TEST_DB_NAME', 'tracs_phase15_test');
@@ -277,6 +449,7 @@ $container = integration_env('TRACS_TEST_DB_CONTAINER', 'tracs_db');
 $includeDelete = integration_env('TRACS_TEST_INCLUDE_DELETE') === '1';
 $includeRestore = integration_env('TRACS_TEST_INCLUDE_RESTORE') === '1';
 $includeDependents = integration_env('TRACS_TEST_INCLUDE_DEPENDENTS') === '1';
+$includePhase26Matrix = integration_env('TRACS_TEST_PHASE26_MATRIX') === '1';
 
 if ($environment !== 'test') {
     fwrite(STDERR, "SKIPPED: TRACS_ENV must be exactly test.\n");
@@ -1213,6 +1386,10 @@ try {
                     'Dependent restoration created missing or duplicate records.'
                 );
             }
+        }
+
+        if ($includePhase26Matrix) {
+            integration_run_phase26_matrix($conn);
         }
 
         $auditFailureFixture = integration_request('POST', 9301, 'valid', [], [

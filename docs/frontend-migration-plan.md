@@ -276,3 +276,11 @@ unchanged filter/range query after success.
 
 The legacy page remains authoritative, no navigation link was added, and
 template/copy controls remain absent.
+
+## Phase 26 Delete Regression Gate
+
+The isolated preview passes a combined Create/Edit/Delete regression gate.
+Delete confirmation remains exact and case-sensitive, recovery is described
+as manual rather than undo, protected template links fail closed, and write
+actions disappear when `shifts.manage` is removed. The legacy page remains
+authoritative and preview access remains direct URL only.

@@ -22,6 +22,14 @@ function Detail({ label, value }) {
   );
 }
 
+function assignmentRole(assignment) {
+  return assignment.agent?.role_name
+    || assignment.agent?.role
+    || assignment.role?.name
+    || assignment.role
+    || '';
+}
+
 export function ShiftDeleteModal({
   assignment,
   context,
@@ -102,7 +110,8 @@ export function ShiftDeleteModal({
             </h2>
             <p className="tr:mt-1 tr:text-xs tr:leading-5 tr:text-tracs-secondary">
               This action hard-deletes the assignment. Audit-backed restoration has been validated,
-              but this action should only be used during controlled pilot validation.
+              but restoration is a controlled manual recovery procedure, not an instant undo.
+              Use this action only during controlled pilot validation.
             </p>
           </div>
           <button
@@ -119,11 +128,13 @@ export function ShiftDeleteModal({
         <form aria-busy={deleting} className="tr:min-h-0 tr:overflow-y-auto" onSubmit={submit}>
           <fieldset className="tr:m-0 tr:border-0 tr:p-tracs-5" disabled={deleting}>
             <dl className="tr:grid tr:grid-cols-1 tr:gap-tracs-2 tr:sm:grid-cols-2">
+              <Detail label="Assignment ID" value={`#${assignment.id}`} />
               <Detail label="Agent" value={assignment.agent?.name} />
               <Detail label="Date" value={assignment.assignment_date_display} />
               <Detail label="Shift" value={`${assignment.shift?.name || 'Custom Shift'} · ${assignment.shift?.display_range || ''}`} />
               <Detail label="Type" value={(assignment.type_name || assignment.type || '').replaceAll('_', ' ')} />
               <Detail label="Division" value={assignment.division?.name} />
+              <Detail label="Role" value={assignmentRole(assignment)} />
               <Detail label="Status" value={(assignment.status || '').replaceAll('_', ' ')} />
             </dl>
 
@@ -155,10 +166,20 @@ export function ShiftDeleteModal({
                 value={confirmation}
               />
               {error ? (
-                <span className="tr:text-[10px] tr:leading-4 tr:text-tracs-danger" id="delete-confirmation-error">
+                <span
+                  aria-live="polite"
+                  className="tr:text-[10px] tr:leading-4 tr:text-tracs-danger"
+                  id="delete-confirmation-error"
+                >
                   {error}
                 </span>
-              ) : null}
+              ) : (
+                <span aria-live="polite" className="tr:text-[10px] tr:leading-4 tr:text-tracs-muted">
+                  {confirmation === DELETE_CONFIRMATION
+                    ? 'Confirmation accepted. Review the assignment details once more before deleting.'
+                    : 'Confirmation is case-sensitive and does not ignore spaces.'}
+                </span>
+              )}
             </label>
           </fieldset>
 
