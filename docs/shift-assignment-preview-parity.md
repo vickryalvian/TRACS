@@ -290,8 +290,17 @@ Readiness remains conditional:
 - [ ] Template-owned `409` is understandable and exposes no internal detail.
 - [ ] Success refreshes existing filters and removes only the target row.
 - [ ] Full before snapshot and separate restore audit are verified.
-- [ ] Exact restore is exercised in a disposable database and cleanup is
+- [x] Exact restore is exercised in a disposable database and cleanup is
       confirmed.
+
+Phase 23 result:
+
+- [x] Exact assignment-row restore exercised in `tracs_phase23_test`.
+- [x] Original ID, all current columns, GET visibility, key fields, duplicate
+      count, and restore activity audit verified.
+- [x] Disposable database removed.
+- [ ] Linked warning/dependent-record restoration is not yet proven.
+- [ ] Active Delete UI remains blocked.
 
 ## Phase 17 Completed Browser Matrix
 

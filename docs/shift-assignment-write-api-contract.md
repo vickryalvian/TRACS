@@ -438,6 +438,26 @@ restore.
 If the full before snapshot is unavailable, malformed, or references missing
 records, restoration is blocked and active Delete UI must remain disabled.
 
+### Phase 23 Restoration Drill Result
+
+`tracs_phase23_test` proved exact assignment-row restoration. The drill reused
+the original ID, mapped every current `shift_assignments` column from the full
+before snapshot, verified scoped GET visibility and key-field equality,
+prevented duplicates, and wrote a separate `shift_assignment.restore` activity
+audit tied to the delete audit.
+
+The snapshot is sufficient for the assignment row itself. It does not contain
+linked `shift_warnings` rows removed by the delete transaction, nor dependent
+rows removed by foreign-key cascade such as holiday coverage links. Exact
+assignment restoration therefore does not yet equal complete operational-state
+restoration.
+
+**Delete UI remains blocked.** Before activation, preserve dependent rows,
+capture and restore their snapshots transactionally, or prove they can be
+safely regenerated with explicit audit and no lost operator state. Fresh
+authenticated disposable-browser evidence is also required after the UI
+exists.
+
 ### Future Soft Delete Proposal
 
 A later migration may propose nullable `deleted_at`, nullable `deleted_by`,

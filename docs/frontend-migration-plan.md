@@ -261,3 +261,8 @@ the assignment identity, warn that deletion is hard, require exact typed
 `DELETE`, avoid optimistic removal, and preserve the row on every failure.
 Restoration is manual and audited from the full assignment before snapshot;
 the current create API is only a logical replacement path, not exact undo.
+
+Phase 23 proves that exact assignment-row restore procedure in
+`tracs_phase23_test`, including original ID, all current columns, scoped GET
+visibility, duplicate prevention, and restore audit. It does not restore linked
+warnings or cascaded dependent rows, so React Delete UI remains blocked.

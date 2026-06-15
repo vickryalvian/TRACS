@@ -852,3 +852,39 @@ This code rollback has no database effect. For an assignment already deleted
 through Phase 21, use the reviewed manual restoration procedure in
 `docs/shift-assignment-write-api-contract.md`; never assume `git revert`
 restores data.
+
+## Phase 23 Restoration Drill Rollback
+
+Phase 23 adds a disposable-only restoration drill and documentation. It adds no
+production endpoint, React UI, schema, navigation, Calendar, or legacy-page
+change.
+
+Before commit:
+
+```bash
+git restore --staged .
+git restore .
+rm tests/shift-assignment-delete-restore-drill.php
+```
+
+After commit:
+
+```bash
+git revert <phase-23-commit-sha>
+```
+
+To abandon the unmerged branch:
+
+```bash
+git switch refactor/phase-22-shift-delete-safeguards
+git branch -D refactor/phase-23-shift-delete-restore-drill
+```
+
+Emergency disposable cleanup:
+
+```sql
+DROP DATABASE IF EXISTS tracs_phase23_test;
+```
+
+The drill restores only inside its disposable database, which is dropped in a
+`finally` cleanup. It creates no production restore command or endpoint.

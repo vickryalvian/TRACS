@@ -98,6 +98,108 @@ function integration_scalar(mysqli $conn, string $sql): mixed
     return $row[0] ?? null;
 }
 
+function integration_restore_assignment(
+    mysqli $conn,
+    array $snapshot,
+    int $actorId,
+    int $deleteAuditId
+): void {
+    $columns = [
+        'id',
+        'user_id',
+        'division_id',
+        'shift_template_id',
+        'assignment_date',
+        'start_datetime',
+        'end_datetime',
+        'is_cross_day',
+        'break_minutes',
+        'calculated_duration_minutes',
+        'assignment_type',
+        'status',
+        'is_overtime',
+        'is_holiday_assignment',
+        'is_manual_duration_override',
+        'approval_status',
+        'source',
+        'monthly_template_id',
+        'approved_by',
+        'approved_at',
+        'notes',
+        'created_by',
+        'updated_by',
+        'created_at',
+        'updated_at',
+    ];
+    foreach ($columns as $column) {
+        integration_assert(
+            array_key_exists($column, $snapshot),
+            "Before-delete snapshot is missing {$column}."
+        );
+    }
+
+    $conn->begin_transaction();
+    try {
+        $placeholders = implode(',', array_fill(0, count($columns), '?'));
+        $stmt = $conn->prepare(
+            'INSERT INTO shift_assignments (`'
+            . implode('`,`', $columns)
+            . "`) VALUES ({$placeholders})"
+        );
+        integration_assert($stmt instanceof mysqli_stmt, 'Unable to prepare exact restore.');
+
+        $types = str_repeat('s', count($columns));
+        $values = array_map(
+            static fn(string $column): mixed => $snapshot[$column],
+            $columns
+        );
+        $params = [$types];
+        foreach ($values as &$value) {
+            $params[] = &$value;
+        }
+        integration_assert(
+            call_user_func_array([$stmt, 'bind_param'], $params),
+            'Unable to bind exact restore values.'
+        );
+        integration_assert($stmt->execute(), 'Exact restore INSERT failed.');
+        $stmt->close();
+
+        $afterJson = json_encode(
+            $snapshot,
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
+        );
+        $reason = "Restored from delete audit {$deleteAuditId} in disposable drill.";
+        $restoredId = (int)$snapshot['id'];
+        $activity = $conn->prepare("
+            INSERT INTO tracs_user_activity_logs
+              (actor_user_id,target_type,target_id,action,before_data,after_data,
+               reason,ip_address,user_agent,created_at)
+            VALUES
+              (?,'shift_assignment',?,'shift_assignment.restore',NULL,?,?,?,
+               'TRACS Phase 23 Restoration Drill',NOW())
+        ");
+        integration_assert(
+            $activity instanceof mysqli_stmt,
+            'Unable to prepare restoration audit.'
+        );
+        $ip = '127.0.0.1';
+        $activity->bind_param(
+            'iisss',
+            $actorId,
+            $restoredId,
+            $afterJson,
+            $reason,
+            $ip
+        );
+        integration_assert($activity->execute(), 'Unable to write restoration audit.');
+        $activity->close();
+        $conn->commit();
+    } catch (Throwable $error) {
+        $conn->rollback();
+        throw $error;
+    }
+}
+
 $environment = strtolower(integration_env('TRACS_ENV'));
 $allowMutations = integration_env('TRACS_ALLOW_MUTATION_TESTS');
 $database = integration_env('TRACS_TEST_DB_NAME', 'tracs_phase15_test');
@@ -108,6 +210,7 @@ $user = integration_env('TRACS_TEST_DB_USER', 'root');
 $pass = integration_env('TRACS_TEST_DB_PASS', 'root_secret');
 $container = integration_env('TRACS_TEST_DB_CONTAINER', 'tracs_db');
 $includeDelete = integration_env('TRACS_TEST_INCLUDE_DELETE') === '1';
+$includeRestore = integration_env('TRACS_TEST_INCLUDE_RESTORE') === '1';
 
 if ($environment !== 'test') {
     fwrite(STDERR, "SKIPPED: TRACS_ENV must be exactly test.\n");
@@ -770,6 +873,113 @@ try {
             ) >= 1,
             'Controlled delete activity audit is missing.'
         );
+
+        if ($includeRestore) {
+            $auditResult = $conn->query(
+                "SELECT id,before_snapshot
+                 FROM assignment_audit_logs
+                 WHERE assignment_id IS NULL AND action='deleted'
+                   AND JSON_EXTRACT(before_snapshot,'$.id')={$assignmentId}
+                 ORDER BY id DESC LIMIT 1"
+            );
+            integration_assert(
+                $auditResult instanceof mysqli_result && $auditResult->num_rows === 1,
+                'Delete audit snapshot could not be loaded for restoration.'
+            );
+            $auditRow = $auditResult->fetch_assoc();
+            $auditResult->free();
+            $deleteAuditId = (int)($auditRow['id'] ?? 0);
+            $snapshot = json_decode(
+                (string)($auditRow['before_snapshot'] ?? ''),
+                true,
+                512,
+                JSON_THROW_ON_ERROR
+            );
+            integration_assert(
+                $deleteAuditId > 0 && is_array($snapshot),
+                'Delete audit snapshot is invalid.'
+            );
+
+            integration_restore_assignment($conn, $snapshot, 9301, $deleteAuditId);
+
+            $restoredRead = integration_request('GET', 9301, 'valid', [
+                'view' => 'daily',
+                'start_date' => '2026-07-07',
+                'end_date' => '2026-07-07',
+                'agent_id' => '9303',
+            ]);
+            $restoredRows = array_values(array_filter(
+                $restoredRead['data']['assignments'] ?? [],
+                static fn(array $row): bool => (int)($row['id'] ?? 0) === $assignmentId
+            ));
+            integration_assert(
+                ($restoredRead['success'] ?? null) === true
+                    && count($restoredRows) === 1,
+                'Exactly restored assignment is missing or duplicated in GET.'
+            );
+
+            $restoredResult = $conn->query(
+                "SELECT * FROM shift_assignments WHERE id={$assignmentId} LIMIT 1"
+            );
+            integration_assert(
+                $restoredResult instanceof mysqli_result
+                    && $restoredResult->num_rows === 1,
+                'Restored assignment row is missing.'
+            );
+            $restored = $restoredResult->fetch_assoc();
+            $restoredResult->free();
+            foreach ([
+                'id',
+                'user_id',
+                'division_id',
+                'shift_template_id',
+                'assignment_date',
+                'start_datetime',
+                'end_datetime',
+                'is_cross_day',
+                'break_minutes',
+                'calculated_duration_minutes',
+                'assignment_type',
+                'status',
+                'is_overtime',
+                'is_holiday_assignment',
+                'is_manual_duration_override',
+                'approval_status',
+                'source',
+                'monthly_template_id',
+                'approved_by',
+                'approved_at',
+                'notes',
+                'created_by',
+                'updated_by',
+                'created_at',
+                'updated_at',
+            ] as $field) {
+                integration_assert(
+                    (string)($restored[$field] ?? '') === (string)($snapshot[$field] ?? ''),
+                    "Restored assignment field {$field} does not match the snapshot."
+                );
+            }
+            integration_assert(
+                integration_scalar(
+                    $conn,
+                    "SELECT COUNT(*) FROM shift_assignments WHERE id={$assignmentId}"
+                ) === '1',
+                'Exact restoration created an unintended duplicate.'
+            );
+            integration_assert(
+                (int)integration_scalar(
+                    $conn,
+                    "SELECT COUNT(*) FROM tracs_user_activity_logs
+                     WHERE actor_user_id=9301
+                       AND action='shift_assignment.restore'
+                       AND target_id={$assignmentId}
+                       AND after_data IS NOT NULL
+                       AND reason LIKE '%{$deleteAuditId}%'"
+                ) === 1,
+                'Exact restoration audit is missing or duplicated.'
+            );
+        }
 
         $auditFailureFixture = integration_request('POST', 9301, 'valid', [], [
             'agent_id' => 9303,

@@ -739,6 +739,30 @@ php tests/shift-assignment-delete-safety-gate.php
 Approval for active Delete UI requires this checklist, a reviewed restoration
 exercise, and fresh authenticated disposable-browser evidence.
 
+## Phase 23 Disposable Restoration Drill
+
+Run only with explicit disposable mutation consent:
+
+```bash
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 \
+php tests/shift-assignment-delete-restore-drill.php
+```
+
+On June 15, 2026, the drill used `tracs_phase23_test` to create, update, delete,
+and exactly restore a manual Shift 3 assignment. It loaded the full
+`assignment_audit_logs.before_snapshot`, verified every current
+`shift_assignments` column, restored the original primary key in a transaction,
+wrote one `shift_assignment.restore` activity audit referencing the delete
+audit, verified the row through scoped GET, compared key fields, and confirmed
+there was no duplicate.
+
+The before snapshot is sufficient for exact restoration of the assignment row.
+It is not sufficient for complete operational-state restoration: warning rows
+removed by delete and foreign-key-cascaded dependent records are not stored in
+that snapshot. React Delete UI remains blocked until dependent-record
+retention/restoration is explicitly designed and tested. The disposable
+database was removed after the drill.
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:

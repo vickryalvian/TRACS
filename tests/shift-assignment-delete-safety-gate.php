@@ -31,6 +31,7 @@ $moduleSources = implode("\n", array_map(
 $context = delete_gate_source('api/v1/shift-assignment/context.php');
 $route = delete_gate_source('public/api/v1/shift-assignment/assignment.php');
 $service = delete_gate_source('modules/shifting-assignment/ShiftingAssignmentService.php');
+$restoreDrill = delete_gate_source('tests/shift-assignment-delete-restore-drill.php');
 
 foreach ([
     '## Delete UI Safety Gate',
@@ -79,6 +80,13 @@ delete_gate_assert(
         && str_contains($service, 'Assignment audit storage is unavailable.')
         && str_contains($service, 'rollback()'),
     'Required before-delete audit or fail-closed behavior changed.'
+);
+delete_gate_assert(
+    str_contains($restoreDrill, 'TRACS_TEST_INCLUDE_RESTORE=1')
+        && str_contains($testing, '## Phase 23 Disposable Restoration Drill')
+        && str_contains($contract, '### Phase 23 Restoration Drill Result')
+        && str_contains($contract, '**Delete UI remains blocked.**'),
+    'Restoration drill result or dependent-record blocker is missing.'
 );
 
 echo "TRACS Shift Assignment Delete UI safety gate checks passed.\n";

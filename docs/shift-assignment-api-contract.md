@@ -357,6 +357,11 @@ Phase 22 requires exact typed `DELETE`, full assignment detail confirmation,
 manual restoration from the required before snapshot, and fresh disposable
 browser evidence before any React Delete UI can be approved.
 
+Phase 23 proves the full assignment-row snapshot can restore the original ID
+and all current columns in a disposable database. It does not prove restoration
+of warnings or foreign-key-cascaded dependent rows, so the active Delete UI
+gate remains closed.
+
 ## Phase 13 Write Contract Plan
 
 The canonical future mutation plan is:

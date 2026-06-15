@@ -296,3 +296,15 @@ Phase 22 delete-safety notes:
 No React Delete UI or caller is added. Activation requires a separately
 approved phase, a reviewed restore exercise, and authenticated disposable
 browser evidence.
+
+Phase 23 restoration-drill notes:
+
+- `tests/shift-assignment-delete-restore-drill.php`
+- exact original-ID restore from the full assignment before snapshot;
+- all current assignment columns and scoped GET visibility verified;
+- separate `shift_assignment.restore` activity audit verified;
+- `tracs_phase23_test` removed after success.
+
+The snapshot restores the assignment row but not deleted warnings or
+foreign-key-cascaded dependent records. React Delete UI remains blocked pending
+dependent-state retention/restoration design.
