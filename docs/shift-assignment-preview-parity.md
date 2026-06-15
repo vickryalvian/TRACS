@@ -249,6 +249,31 @@ before/after assignment and API activity audits. An unchanged form was blocked,
 and an overlapping preset returned safe conflict feedback without closing the
 modal or mutating the assignment.
 
+## Phase 20 Create/Edit Readiness
+
+The combined pilot regression gate now checks both modals, shared status/error
+mapping, first-invalid-field focus, saving-state fieldset disabling, required
+field semantics, dirty close protection, post-save refresh fallback, exact
+pilot capabilities, and the absence of destructive or bulk controls.
+
+Disposable create/update API integration passed again against
+`tracs_phase20_test`, including Shift 3 `16:00-24:00`, overlap rejection, GET
+visibility, and create/update audits.
+Phase 20 attempted a fresh authenticated browser pass with
+`tracs_phase20_test`, but the in-app browser blocked the localhost login
+redirect. Phase 19 therefore remains the current authenticated browser
+evidence; Phase 20 does not overstate the blocked browser run as a pass.
+
+Readiness remains conditional:
+
+- [x] Create/Edit contracts and production builds pass.
+- [x] Disposable create/update integrations and audit checks pass.
+- [x] Unauthorized capabilities remain hidden and server-enforced.
+- [x] No delete/template/copy endpoint or UI exists.
+- [x] Legacy Shift Assignment, Calendar, and navigation remain unchanged.
+- [ ] Repeat the combined authenticated browser matrix when localhost access is
+      available before approving a destructive or bulk action.
+
 ## Phase 17 Completed Browser Matrix
 
 | Check | Disposable browser result |

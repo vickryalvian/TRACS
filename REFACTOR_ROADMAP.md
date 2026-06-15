@@ -257,3 +257,16 @@ Phase 19 controlled-edit notes:
 The direct-URL pilot now supports controlled create and edit for exact Super
 Admin plus explicit `shifts.manage`. Delete, template/copy, broad navigation,
 and production replacement remain blocked.
+
+Phase 20 create/edit hardening notes:
+
+- `frontend/src/modules/shift-assignment/utils/shiftMutation.js`
+- `frontend/tests/shift-mutation-contract.mjs`
+- `tests/shift-assignment-create-edit-hardening.php`
+
+The combined pilot now has shared safe error handling, invalid-field focus,
+accessible required markers, save-state disabling, and explicit refresh
+fallback. Disposable create/update integration passed again. The Phase 20
+browser attempt was blocked at the localhost login redirect, so Phase 19
+remains the latest authenticated browser evidence. Delete, template/copy,
+navigation exposure, and production replacement remain blocked.

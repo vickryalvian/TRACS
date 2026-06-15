@@ -488,6 +488,12 @@ Future forms must:
 - refresh the read assignments contract after success;
 - handle `401`, `403`, `409`, and `422` distinctly.
 
+Phase 20 consolidates that handling in a shared frontend mutation utility. Both
+Create and Edit retain backend authority, keep failed forms open, focus the
+first invalid control, disable the full form during save, and distinguish a
+successful mutation followed by a failed refresh. No endpoint or permission
+contract changes in this phase.
+
 ## Implementation Order And Gates
 
 Recommended future batches:
@@ -506,6 +512,11 @@ Recommended future batches:
 Each endpoint is implemented and reviewed alone. It needs unit/contract,
 integration, role/scope, CSRF, audit, idempotency, rollback, and manual browser
 evidence before its React control becomes active.
+
+Delete, template generation, and copy/paste remain blocked after Phase 20. A
+new authenticated combined browser pass is still required because the Phase 20
+localhost login redirect was blocked; Phase 19 is the latest valid UI mutation
+evidence.
 
 ## Data And Rollback Safety
 

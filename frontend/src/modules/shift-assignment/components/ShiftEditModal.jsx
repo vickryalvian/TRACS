@@ -7,14 +7,21 @@ import {
   initialEditDraft,
   validateEditDraft,
 } from '../utils/shiftEdit';
+import {
+  focusInvalidField,
+  mutationErrorMessage,
+} from '../utils/shiftMutation';
 
 const fieldClass =
   'tr:min-h-9 tr:w-full tr:rounded-tracs tr:border tr:border-tracs-border tr:bg-tracs-card tr:px-tracs-3 tr:text-xs tr:text-tracs-primary tr:outline-none tr:focus:border-tracs-accent tr:focus:ring-2 tr:focus:ring-tracs-accent-soft';
 
-function Field({ children, error, label, name }) {
+function Field({ children, error, label, name, required = false }) {
   return (
     <label className="tr:flex tr:min-w-0 tr:flex-col tr:gap-1">
-      <span className="tr:text-xs tr:font-semibold tr:text-tracs-secondary">{label}</span>
+      <span className="tr:text-xs tr:font-semibold tr:text-tracs-secondary">
+        {label}
+        {required ? <span aria-hidden="true" className="shift-required-mark">*</span> : null}
+      </span>
       {children}
       {error ? (
         <span className="tr:text-[10px] tr:leading-4 tr:text-tracs-danger" id={`edit-${name}-error`}>
@@ -120,10 +127,7 @@ export function ShiftEditModal({
     const result = validateEditDraft(draft, initialDraft);
     setErrors(result.errors);
     if (!result.payload) {
-      const firstInvalid = Object.keys(result.errors).find((key) => key !== 'form');
-      if (firstInvalid) {
-        modalRef.current?.querySelector(`[name="${firstInvalid}"]`)?.focus();
-      }
+      focusInvalidField(modalRef.current, result.errors);
       onToast({
         type: 'error',
         title: result.errors.form ? 'Update not sent' : 'Update failed',
@@ -140,22 +144,10 @@ export function ShiftEditModal({
     } catch (error) {
       const apiErrors = fieldErrorsFromApi(error?.errors);
       setErrors(apiErrors);
-      const firstInvalid = Object.keys(apiErrors)[0];
-      if (firstInvalid) {
-        window.setTimeout(
-          () => modalRef.current?.querySelector(`[name="${firstInvalid}"]`)?.focus(),
-          0,
-        );
+      if (Object.keys(apiErrors).length) {
+        window.setTimeout(() => focusInvalidField(modalRef.current, apiErrors), 0);
       }
-      const message = error?.status === 401
-        ? 'Your session expired. Sign in again before editing an assignment.'
-        : error?.status === 403
-          ? 'The update request was denied. Refresh permissions and try again.'
-          : error?.status === 404
-            ? 'This assignment no longer exists. Refresh the schedule.'
-            : error?.status === 409
-              ? 'This update conflicts with an existing schedule.'
-              : error?.message || 'The assignment could not be updated.';
+      const message = mutationErrorMessage(error, 'edit');
       onToast({ type: 'error', title: 'Update failed', message });
     } finally {
       setSaving(false);
@@ -201,17 +193,26 @@ export function ShiftEditModal({
           </button>
         </header>
 
-        <form className="tr:min-h-0 tr:overflow-y-auto" onSubmit={submit}>
-          <div className="tr:grid tr:grid-cols-1 tr:gap-tracs-4 tr:p-tracs-5 tr:sm:grid-cols-2">
+        <form
+          aria-busy={saving}
+          className="tr:min-h-0 tr:overflow-y-auto"
+          noValidate
+          onSubmit={submit}
+        >
+          <fieldset
+            className="tr:m-0 tr:grid tr:min-w-0 tr:grid-cols-1 tr:gap-tracs-4 tr:border-0 tr:p-tracs-5 tr:sm:grid-cols-2"
+            disabled={saving}
+          >
             {errors.form ? (
               <p className="tr:rounded-tracs tr:border tr:border-tracs-warning/40 tr:bg-tracs-warning-soft tr:p-tracs-3 tr:text-xs tr:text-tracs-warning tr:sm:col-span-2">
                 {errors.form}
               </p>
             ) : null}
-            <Field error={errors.agent_id} label="Agent" name="agent_id">
+            <Field error={errors.agent_id} label="Agent" name="agent_id" required>
               <select
                 aria-describedby={errors.agent_id ? 'edit-agent_id-error' : undefined}
                 aria-invalid={Boolean(errors.agent_id)}
+                aria-required="true"
                 className={fieldClass}
                 name="agent_id"
                 onChange={update}
@@ -227,10 +228,11 @@ export function ShiftEditModal({
               </select>
             </Field>
 
-            <Field error={errors.assignment_date} label="Assignment date" name="assignment_date">
+            <Field error={errors.assignment_date} label="Assignment date" name="assignment_date" required>
               <input
                 aria-describedby={errors.assignment_date ? 'edit-assignment_date-error' : undefined}
                 aria-invalid={Boolean(errors.assignment_date)}
+                aria-required="true"
                 autoComplete="off"
                 className={fieldClass}
                 inputMode="numeric"
@@ -241,8 +243,16 @@ export function ShiftEditModal({
               />
             </Field>
 
-            <Field error={errors.shift_type} label="Assignment type" name="shift_type">
-              <select className={fieldClass} name="shift_type" onChange={update} value={draft.shift_type}>
+            <Field error={errors.shift_type} label="Assignment type" name="shift_type" required>
+              <select
+                aria-describedby={errors.shift_type ? 'edit-shift_type-error' : undefined}
+                aria-invalid={Boolean(errors.shift_type)}
+                aria-required="true"
+                className={fieldClass}
+                name="shift_type"
+                onChange={update}
+                value={draft.shift_type}
+              >
                 {(filters.assignment_types ?? []).map((type) => (
                   <option key={type.slug} value={type.slug}>{type.name}</option>
                 ))}
@@ -260,12 +270,28 @@ export function ShiftEditModal({
               </select>
             </Field>
 
-            <Field error={errors.start_time} label="Start time" name="start_time">
-              <input className={fieldClass} name="start_time" onChange={update} value={draft.start_time} />
+            <Field error={errors.start_time} label="Start time" name="start_time" required>
+              <input
+                aria-describedby={errors.start_time ? 'edit-start_time-error' : undefined}
+                aria-invalid={Boolean(errors.start_time)}
+                aria-required="true"
+                className={fieldClass}
+                name="start_time"
+                onChange={update}
+                value={draft.start_time}
+              />
             </Field>
 
-            <Field error={errors.end_time} label="End time" name="end_time">
-              <input className={fieldClass} name="end_time" onChange={update} value={draft.end_time} />
+            <Field error={errors.end_time} label="End time" name="end_time" required>
+              <input
+                aria-describedby={errors.end_time ? 'edit-end_time-error' : undefined}
+                aria-invalid={Boolean(errors.end_time)}
+                aria-required="true"
+                className={fieldClass}
+                name="end_time"
+                onChange={update}
+                value={draft.end_time}
+              />
             </Field>
 
             <Field label="Template (optional)" name="shift_template_id">
@@ -279,8 +305,16 @@ export function ShiftEditModal({
               </select>
             </Field>
 
-            <Field error={errors.status} label="Status" name="status">
-              <select className={fieldClass} name="status" onChange={update} value={draft.status}>
+            <Field error={errors.status} label="Status" name="status" required>
+              <select
+                aria-describedby={errors.status ? 'edit-status-error' : undefined}
+                aria-invalid={Boolean(errors.status)}
+                aria-required="true"
+                className={fieldClass}
+                name="status"
+                onChange={update}
+                value={draft.status}
+              >
                 {(filters.statuses ?? []).map((status) => (
                   <option key={status} value={status}>{status.replaceAll('_', ' ')}</option>
                 ))}
@@ -289,6 +323,8 @@ export function ShiftEditModal({
 
             <Field error={errors.break_minutes} label="Break minutes" name="break_minutes">
               <input
+                aria-describedby={errors.break_minutes ? 'edit-break_minutes-error' : undefined}
+                aria-invalid={Boolean(errors.break_minutes)}
                 className={fieldClass}
                 inputMode="numeric"
                 name="break_minutes"
@@ -296,7 +332,7 @@ export function ShiftEditModal({
                 value={draft.break_minutes}
               />
             </Field>
-          </div>
+          </fieldset>
 
           <footer className="tr:flex tr:flex-wrap tr:items-center tr:justify-between tr:gap-tracs-3 tr:border-t tr:border-tracs-border tr:bg-tracs-surface-2 tr:px-tracs-5 tr:py-tracs-3">
             <span className="tr:text-[10px] tr:text-tracs-muted">

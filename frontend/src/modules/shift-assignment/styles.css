@@ -25,7 +25,7 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-.shift-assignment-react-shell :where(input[aria-invalid="true"]) {
+.shift-assignment-react-shell :where(input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="true"]) {
   border-color: var(--red);
   box-shadow: 0 0 0 2px var(--red-lt);
 }
@@ -49,6 +49,11 @@
 
 .shift-create-toast {
   width: min(420px, calc(100vw - 2rem));
+}
+
+.shift-required-mark {
+  color: var(--red);
+  margin-left: .2rem;
 }
 
 @keyframes shift-loading-pulse {

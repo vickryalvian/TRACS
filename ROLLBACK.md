@@ -742,3 +742,44 @@ php tests/shift-assignment-create-ui-browser-environment.php cleanup
 Code rollback does not reverse a real assignment update. Use an approved,
 audited correction or restore the recorded backup; never mutate production
 schedules through test cleanup.
+
+## Phase 20 Create/Edit Hardening Rollback
+
+Phase 20 changes only the isolated React preview, frontend/PHP regression
+contracts, rebuilt preview assets, and canonical documentation. It adds no
+endpoint, schema, navigation, Calendar, or legacy-page change.
+
+Before commit:
+
+```bash
+git restore --staged .
+git restore .
+rm frontend/src/modules/shift-assignment/utils/shiftMutation.js
+rm frontend/tests/shift-mutation-contract.mjs
+rm tests/shift-assignment-create-edit-hardening.php
+```
+
+After commit:
+
+```bash
+git revert <phase-20-commit-sha>
+```
+
+To abandon the unmerged branch:
+
+```bash
+git switch refactor/phase-19-shift-edit-ui-pilot
+git branch -D refactor/phase-20-shift-create-edit-hardening
+```
+
+Emergency disposable cleanup:
+
+```bash
+docker rm -f tracs_phase20_app
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 \
+TRACS_TEST_DB_NAME=tracs_phase20_test \
+php tests/shift-assignment-create-ui-browser-environment.php cleanup
+```
+
+The Phase 20 mutation integrations use disposable databases and remove them
+automatically. Code rollback never reverses a real assignment mutation.

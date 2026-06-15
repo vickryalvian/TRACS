@@ -238,3 +238,12 @@ server capability. The modal sends changed fields only, preserves current
 filters on refresh, and handles `401`, `403`, `404`, `409`, and `422`
 distinctly. Disposable browser evidence covers Create regression, successful
 Shift 3 update, unchanged-submit prevention, overlap rejection, and audits.
+
+Phase 20 hardens the combined Create/Edit pilot without adding an endpoint or
+expanding access. Shared safe mutation errors, invalid-field focus, accessible
+required markers, save-time form disabling, and refresh-failure feedback are
+covered by frontend and PHP source contracts. Disposable create/update
+integration passed again. A fresh browser run was attempted against
+`tracs_phase20_test`, but localhost navigation was blocked; Phase 19 remains
+the latest authenticated browser evidence. Delete/template/copy and production
+cutover remain gated.

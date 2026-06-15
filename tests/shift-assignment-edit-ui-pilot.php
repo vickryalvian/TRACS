@@ -20,6 +20,7 @@ $app = edit_ui_source('frontend/src/modules/shift-assignment/ShiftAssignmentApp.
 $table = edit_ui_source('frontend/src/modules/shift-assignment/components/ShiftAssignmentTable.jsx');
 $board = edit_ui_source('frontend/src/modules/shift-assignment/components/ShiftAssignmentBoard.jsx');
 $modal = edit_ui_source('frontend/src/modules/shift-assignment/components/ShiftEditModal.jsx');
+$mutation = edit_ui_source('frontend/src/modules/shift-assignment/utils/shiftMutation.js');
 $api = edit_ui_source('frontend/src/modules/shift-assignment/api.js');
 $preview = edit_ui_source('public/shift-assignment-react-preview.php');
 $header = edit_ui_source('public/includes/header.php');
@@ -41,8 +42,9 @@ edit_ui_assert(
         && str_contains($modal, 'Change at least one field before saving.')
         === false
         && str_contains($modal, "window.confirm('Discard unsaved assignment changes?')")
-        && str_contains($modal, 'error?.status === 404')
-        && str_contains($modal, 'error?.status === 409')
+        && str_contains($modal, "mutationErrorMessage(error, 'edit')")
+        && str_contains($mutation, 'case 404:')
+        && str_contains($mutation, 'case 409:')
         && str_contains($modal, 'aria-modal="true"'),
     'Controlled edit modal safety behavior changed.'
 );

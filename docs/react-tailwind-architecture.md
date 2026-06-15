@@ -446,6 +446,11 @@ The initial shared state should be limited to:
 Permissions returned by an API may control presentation, but they never replace
 server enforcement.
 
+The Phase 20 Create/Edit hardening keeps that boundary unchanged. Shared modal
+validation/error utilities are frontend presentation only; exact role,
+permission, CSRF, overlap, persistence, and audit decisions remain in PHP.
+No Tailwind output is loaded outside the isolated preview bundle.
+
 ## Acceptance Criteria
 
 A React module is ready for cutover only when:

@@ -76,24 +76,28 @@ export function ShiftAssignmentApp() {
   }
 
   async function handleCreated(assignment, message) {
-    await assignments.refresh();
+    const refreshed = await assignments.refresh();
     const visible = createdAssignmentMatchesFilters(assignment, filters);
     setToast({
       type: 'success',
       title: 'Assignment created',
-      message: visible
+      message: !refreshed
+        ? `${message || 'Shift assignment created.'} Refresh the schedule to load the latest data.`
+        : visible
         ? message || 'The assignment is now visible in the current schedule.'
         : `${message || 'Shift assignment created.'} It may be outside the current filters or date range.`,
     });
   }
 
   async function handleUpdated(assignment, message) {
-    await assignments.refresh();
+    const refreshed = await assignments.refresh();
     const visible = updatedAssignmentMatchesFilters(assignment, filters);
     setToast({
       type: 'success',
       title: 'Assignment updated',
-      message: visible
+      message: !refreshed
+        ? `${message || 'Shift assignment updated.'} Refresh the schedule to load the latest data.`
+        : visible
         ? message || 'The updated assignment is visible in the current schedule.'
         : `${message || 'Shift assignment updated.'} It may now be outside the current filters or date range.`,
     });

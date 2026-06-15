@@ -10,18 +10,20 @@ export function useShiftAssignments(filters, enabled = true) {
 
   const load = useCallback(async (signal) => {
     if (!enabled) {
-      return;
+      return false;
     }
 
     setState((current) => ({ ...current, loading: true, error: null }));
     try {
       const response = await loadShiftAssignments(filters, { signal });
       setState({ data: response.data, loading: false, error: null });
+      return true;
     } catch (error) {
       if (error?.name === 'AbortError') {
-        return;
+        return false;
       }
       setState({ data: null, loading: false, error });
+      return false;
     }
   }, [enabled, filters]);
 

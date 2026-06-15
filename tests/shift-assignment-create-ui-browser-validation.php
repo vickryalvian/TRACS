@@ -25,6 +25,9 @@ $frontendApi = browser_validation_source('frontend/src/modules/shift-assignment/
 $modal = browser_validation_source(
     'frontend/src/modules/shift-assignment/components/ShiftCreateModal.jsx'
 );
+$mutation = browser_validation_source(
+    'frontend/src/modules/shift-assignment/utils/shiftMutation.js'
+);
 
 foreach ([
     "TRACS_ENV must be exactly test",
@@ -63,7 +66,8 @@ browser_validation_assert(
 browser_validation_assert(
     str_contains($modal, "saving ? 'Saving...'")
         && str_contains($modal, 'createShiftAssignment(result.payload, csrf)')
-        && str_contains($modal, "error?.status === 409"),
+        && str_contains($modal, "mutationErrorMessage(error, 'create')")
+        && str_contains($mutation, 'case 409:'),
     'Create modal validation/error behavior changed.'
 );
 

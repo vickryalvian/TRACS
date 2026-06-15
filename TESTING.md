@@ -621,6 +621,46 @@ uses action-aware Create/Edit titles.
 Delete, template, copy, overtime, navigation exposure, legacy replacement, and
 production mutation remain blocked.
 
+## Phase 20 Create/Edit Hardening Gate
+
+Phase 20 keeps the direct-URL pilot and existing POST/PATCH contracts only. The
+Create and Edit modals now share safe `401`, `403`, `404`, `405`, `409`, `422`,
+and network-error messaging; focus and scroll to the first invalid control;
+mark required fields accessibly; disable the complete fieldset while saving;
+and report when a successful mutation cannot be refreshed immediately.
+
+Automated regression covers:
+
+- Create/Edit validation, presets, `24:00`, dirty-form, saving, CSRF, and
+  capability gates;
+- one approved POST and one approved PATCH, with no delete/template/copy route;
+- overlap and validation failure contracts;
+- post-save refresh success/failure behavior;
+- exact `super_admin`, `shifts.view`, and `shifts.manage` policy;
+- preview/navigation/legacy/Calendar isolation.
+
+Disposable mutation validation on June 15, 2026 reran both the create and
+update integration suites against `tracs_phase20_test`. They verified
+authenticated success, read-API
+visibility, Shift 3 cross-day persistence, overlap rejection, and create/update
+audits; their temporary databases were dropped by the test runners.
+
+The schema-only clone was recreated with `tracs_phase20_app` for browser
+regression. The in-app
+browser blocked the localhost login redirect before rendering the page, so no
+new Phase 20 authenticated browser mutation is claimed. Phase 19 remains the
+latest genuine authenticated Create/Edit browser evidence. The Phase 20 clone
+and container were removed after the blocked attempt.
+
+Run the Phase 20 source gate:
+
+```bash
+php tests/shift-assignment-create-edit-hardening.php
+```
+
+Delete, template generation, copy/paste, production navigation, and legacy
+replacement require separate explicit approval.
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:
