@@ -308,3 +308,17 @@ Phase 23 restoration-drill notes:
 The snapshot restores the assignment row but not deleted warnings or
 foreign-key-cascaded dependent records. React Delete UI remains blocked pending
 dependent-state retention/restoration design.
+
+Phase 24 dependent-restoration notes:
+
+- required delete audit includes warning and holiday-coverage snapshots;
+- exact dependent IDs, timestamps, status, text, and warning resolution state
+  restored in `tracs_phase24_test`;
+- notifications and audit records verified retained;
+- template-item links fail closed before hard delete;
+- task-management assignment references confirmed unrelated;
+- disposable database removed after success.
+
+The backend restoration gate is complete. A controlled React Delete UI pilot
+may be planned next; production navigation/replacement and production data
+mutation remain prohibited.

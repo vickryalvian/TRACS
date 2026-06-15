@@ -362,6 +362,15 @@ and all current columns in a disposable database. It does not prove restoration
 of warnings or foreign-key-cascaded dependent rows, so the active Delete UI
 gate remains closed.
 
+Phase 24 adds `_dependents.shift_warnings` and
+`_dependents.holiday_coverage_assignments` to the required before-delete audit
+without changing the top-level assignment contract. Disposable validation
+restored both child rows exactly, retained notifications and audits, and
+returned the restored assignment through GET. A live
+`shift_monthly_template_items.generated_assignment_id` link now blocks delete
+even when source flags are inconsistent. The backend dependency gate passes;
+active React Delete UI remains absent pending its own approved pilot.
+
 ## Phase 13 Write Contract Plan
 
 The canonical future mutation plan is:

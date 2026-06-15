@@ -607,6 +607,46 @@ ID. The delete fails closed and rolls back if required assignment-audit storage
 is unavailable. Template/monthly-template assignments are protected with
 `409`, and linked warning rows are cleaned up. React Delete UI remains blocked.
 
+## Dependent Record Delete/Restore Safety Matrix
+
+Phase 24 extends the required delete audit's top-level assignment snapshot with
+a reserved `_dependents` object. Existing assignment fields remain unchanged,
+so the Phase 23 exact-restore mapping stays compatible.
+
+| Dependency | Delete behavior | Class | Evidence and recommendation |
+| --- | --- | --- | --- |
+| `shift_warnings` | Explicitly deleted by service | B. Safe restorable | Full rows, including resolution state and IDs, restored in `tracs_phase24_test` |
+| `holiday_coverage_assignments` | FK `ON DELETE CASCADE` | B. Safe restorable | Full row captured before cascade and restored after assignment |
+| `assignment_audit_logs` | FK `ON DELETE SET NULL` | A. Safe retained | Delete snapshot survives with assignment ID in JSON |
+| `tracs_user_activity_logs` | Logical target ID | A. Safe retained | Delete/restore events remain queryable |
+| Notifications, triggers, logs | Logical module/entity ID | A. Safe retained | Disposable drill verified notification count unchanged |
+| `shift_monthly_template_items` | FK `ON DELETE SET NULL` | D. Must block | Service rejects any live template-item link, including inconsistent source flags |
+| Assignment notes, overtime/holiday flags, approval/source data | Assignment columns | B. Safe restorable | Phase 23 restores every assignment column |
+| Workload, holiday, jumpshift, weekly outputs | Computed | C. Safe to regenerate | Scoped GET recomputes after restoration |
+| Holidays, availability, workload settings | No assignment child relation | A. Safe retained | No assignment FK or delete query |
+| Reminder/task tables with `assignment_id` | Task Management assignment IDs | E. Not applicable | Model creates and consumes `tracs_task_assignments.id` |
+| Shift reports, attachments/comments, Dashboard/Ops/Calendar reads | No child record found | E / C | No persisted dependency; reads recompute |
+
+The DELETE transaction still fails before mutation when required audit storage
+is unavailable. No schema change or production restore endpoint is introduced.
+
+### Phase 24 Drill Result
+
+```bash
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 \
+php tests/shift-assignment-dependent-restore-drill.php
+```
+
+The drill exactly restored a resolved warning and cascaded holiday coverage
+row, including IDs, timestamps, text, and status. Notifications and audit rows
+were retained, scoped GET returned one restored assignment, no duplicate child
+rows remained, and `tracs_phase24_test` was dropped.
+
+The backend dependency gate now permits a separately approved controlled React
+Delete UI pilot. Delete UI remains absent and still requires typed confirmation,
+server capability gating, hard-delete disclosure, and fresh disposable-browser
+evidence before activation.
+
 ## Data And Rollback Safety
 
 - No write test may run against production data.

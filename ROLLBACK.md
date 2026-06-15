@@ -888,3 +888,39 @@ DROP DATABASE IF EXISTS tracs_phase23_test;
 
 The drill restores only inside its disposable database, which is dropped in a
 `finally` cleanup. It creates no production restore command or endpoint.
+
+## Phase 24 Dependent Restoration Rollback
+
+Phase 24 adds dependent snapshots, a template-link fail-closed guard,
+disposable tests, and documentation. It adds no schema, React Delete UI,
+navigation, Calendar, or legacy-page change.
+
+Before commit:
+
+```bash
+git restore --staged .
+git restore .
+rm tests/shift-assignment-dependent-restore-drill.php
+```
+
+After commit:
+
+```bash
+git revert <phase-24-commit-sha>
+```
+
+To abandon the branch:
+
+```bash
+git switch refactor/phase-23-shift-delete-restore-drill
+git branch -D refactor/phase-24-shift-dependent-restore-drill
+```
+
+Emergency disposable cleanup:
+
+```sql
+DROP DATABASE IF EXISTS tracs_phase24_test;
+```
+
+A code revert does not restore production data. Use the reviewed assignment
+plus dependent snapshot procedure for any approved hard-delete recovery.

@@ -763,6 +763,23 @@ that snapshot. React Delete UI remains blocked until dependent-record
 retention/restoration is explicitly designed and tested. The disposable
 database was removed after the drill.
 
+## Phase 24 Dependent Restoration Drill
+
+```bash
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 \
+php tests/shift-assignment-dependent-restore-drill.php
+```
+
+The guarded test creates `tracs_phase24_test`, exercises protected
+create/update/delete, loads `_dependents`, exactly restores the assignment,
+warning resolution state, and holiday coverage row, verifies retained
+notifications/audits and GET visibility, checks duplicate counts, and drops
+the database in `finally`.
+
+Phase 24 passed on June 15, 2026. This clears the backend dependent-record gate
+for a separately approved Delete UI pilot. It does not activate Delete UI or
+authorize production mutation.
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:

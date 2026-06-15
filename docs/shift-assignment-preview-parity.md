@@ -299,8 +299,10 @@ Phase 23 result:
 - [x] Original ID, all current columns, GET visibility, key fields, duplicate
       count, and restore activity audit verified.
 - [x] Disposable database removed.
-- [ ] Linked warning/dependent-record restoration is not yet proven.
-- [ ] Active Delete UI remains blocked.
+- [x] Phase 24 exactly restores warning resolution state and cascaded holiday
+      coverage, retains notifications/audits, and blocks template-item links.
+- [ ] Active Delete UI remains absent pending a separately approved controlled
+      pilot and fresh disposable-browser evidence.
 
 ## Phase 17 Completed Browser Matrix
 

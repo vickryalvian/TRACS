@@ -261,13 +261,20 @@ final class ShiftingAssignmentService {
         $this->requireManage();
         $existing = $this->getScopedAssignmentRecord($id);
         if (!$existing) return false;
+        if ($this->hasMonthlyTemplateItemLink($id)) {
+            throw new DomainException(
+                'Template-generated assignments cannot be deleted through this pilot endpoint.'
+            );
+        }
 
         $this->conn->begin_transaction();
         try {
+            $auditBefore = $existing;
+            $auditBefore['_dependents'] = $this->getDeleteDependentSnapshot($id);
             $this->writeRequiredAssignmentAudit(
                 $id,
                 'deleted',
-                $existing,
+                $auditBefore,
                 null,
                 'Deleted through controlled v1 API.'
             );
@@ -305,6 +312,37 @@ final class ShiftingAssignmentService {
             $this->conn->rollback();
             throw $error;
         }
+    }
+
+    private function hasMonthlyTemplateItemLink(int $assignmentId): bool {
+        if (!$this->tableExists('shift_monthly_template_items')) return false;
+        return $this->fetchOne(
+            'SELECT id FROM shift_monthly_template_items WHERE generated_assignment_id=? LIMIT 1',
+            'i',
+            [$assignmentId]
+        ) !== null;
+    }
+
+    private function getDeleteDependentSnapshot(int $assignmentId): array {
+        $snapshot = [
+            'shift_warnings' => [],
+            'holiday_coverage_assignments' => [],
+        ];
+        if ($this->tableExists('shift_warnings')) {
+            $snapshot['shift_warnings'] = $this->fetchAll(
+                'SELECT * FROM shift_warnings WHERE shift_assignment_id=? ORDER BY id',
+                'i',
+                [$assignmentId]
+            );
+        }
+        if ($this->tableExists('holiday_coverage_assignments')) {
+            $snapshot['holiday_coverage_assignments'] = $this->fetchAll(
+                'SELECT * FROM holiday_coverage_assignments WHERE shift_assignment_id=? ORDER BY id',
+                'i',
+                [$assignmentId]
+            );
+        }
+        return $snapshot;
     }
 
     public function saveAssignment(array $input): array {

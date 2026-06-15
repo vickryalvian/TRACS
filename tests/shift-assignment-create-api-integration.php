@@ -102,7 +102,8 @@ function integration_restore_assignment(
     mysqli $conn,
     array $snapshot,
     int $actorId,
-    int $deleteAuditId
+    int $deleteAuditId,
+    bool $restoreDependents = false
 ): void {
     $columns = [
         'id',
@@ -164,6 +165,10 @@ function integration_restore_assignment(
         integration_assert($stmt->execute(), 'Exact restore INSERT failed.');
         $stmt->close();
 
+        if ($restoreDependents) {
+            integration_restore_dependent_rows($conn, $snapshot);
+        }
+
         $afterJson = json_encode(
             $snapshot,
             JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
@@ -200,6 +205,66 @@ function integration_restore_assignment(
     }
 }
 
+function integration_restore_dependent_rows(mysqli $conn, array $snapshot): void
+{
+    $dependents = $snapshot['_dependents'] ?? null;
+    integration_assert(is_array($dependents), 'Dependent snapshot is missing.');
+
+    $tables = [
+        'shift_warnings' => [
+            'id', 'warning_key', 'shift_assignment_id', 'user_id', 'affected_date',
+            'warning_type', 'warning_message', 'severity', 'is_resolved',
+            'resolved_by', 'resolved_at', 'resolution_note', 'created_at', 'updated_at',
+        ],
+        'holiday_coverage_assignments' => [
+            'id', 'holiday_id', 'user_id', 'shift_assignment_id', 'assignment_type',
+            'start_time', 'end_time', 'notes', 'status', 'created_at', 'updated_at',
+        ],
+    ];
+
+    foreach ($tables as $table => $columns) {
+        $rows = $dependents[$table] ?? null;
+        integration_assert(is_array($rows), "Dependent snapshot is missing {$table}.");
+        foreach ($rows as $row) {
+            integration_assert(is_array($row), "Dependent snapshot row for {$table} is invalid.");
+            foreach ($columns as $column) {
+                integration_assert(
+                    array_key_exists($column, $row),
+                    "Dependent snapshot for {$table} is missing {$column}."
+                );
+            }
+            $placeholders = implode(',', array_fill(0, count($columns), '?'));
+            $stmt = $conn->prepare(
+                'INSERT INTO `' . $table . '` (`'
+                . implode('`,`', $columns)
+                . "`) VALUES ({$placeholders})"
+            );
+            integration_assert(
+                $stmt instanceof mysqli_stmt,
+                "Unable to prepare {$table} restoration."
+            );
+            $types = str_repeat('s', count($columns));
+            $values = array_map(
+                static fn(string $column): mixed => $row[$column],
+                $columns
+            );
+            $params = [$types];
+            foreach ($values as &$value) {
+                $params[] = &$value;
+            }
+            integration_assert(
+                call_user_func_array([$stmt, 'bind_param'], $params),
+                "Unable to bind {$table} restoration values."
+            );
+            integration_assert(
+                $stmt->execute(),
+                "Unable to restore {$table} row."
+            );
+            $stmt->close();
+        }
+    }
+}
+
 $environment = strtolower(integration_env('TRACS_ENV'));
 $allowMutations = integration_env('TRACS_ALLOW_MUTATION_TESTS');
 $database = integration_env('TRACS_TEST_DB_NAME', 'tracs_phase15_test');
@@ -211,6 +276,7 @@ $pass = integration_env('TRACS_TEST_DB_PASS', 'root_secret');
 $container = integration_env('TRACS_TEST_DB_CONTAINER', 'tracs_db');
 $includeDelete = integration_env('TRACS_TEST_INCLUDE_DELETE') === '1';
 $includeRestore = integration_env('TRACS_TEST_INCLUDE_RESTORE') === '1';
+$includeDependents = integration_env('TRACS_TEST_INCLUDE_DEPENDENTS') === '1';
 
 if ($environment !== 'test') {
     fwrite(STDERR, "SKIPPED: TRACS_ENV must be exactly test.\n");
@@ -810,12 +876,101 @@ try {
             'Protected assignment was deleted.'
         );
 
+        if ($includeDependents) {
+            $linked = integration_request('POST', 9301, 'valid', [], [
+                'agent_id' => 9303,
+                'assignment_date' => '2026-07-11',
+                'shift_type' => 'regular_shift',
+                'start_time' => '00:00',
+                'end_time' => '08:00',
+                'status' => 'assigned',
+            ]);
+            integration_assert(
+                ($linked['success'] ?? null) === true,
+                'Unable to create template-link guard fixture.'
+            );
+            $linkedId = (int)($linked['data']['assignment']['id'] ?? 0);
+            $conn->query("
+                INSERT INTO shift_monthly_templates
+                  (id,name,division_id,target_month,status,settings_json,created_by,
+                   updated_by,created_at,updated_at)
+                VALUES
+                  (9801,'Phase 24 Link Guard',9201,'2026-07-01','draft','{}',9301,
+                   9301,'2026-07-01 00:00:00','2026-07-01 00:00:00')
+            ");
+            $conn->query("
+                INSERT INTO shift_monthly_template_items
+                  (id,template_id,agent_id,shift_template_id,assignment_date,start_time,
+                   end_time,break_minutes,assignment_type,notes,generated_assignment_id,
+                   created_at)
+                VALUES
+                  (9802,9801,9303,9401,'2026-07-11','00:00:00','08:00:00',0,
+                   'regular_shift','Inconsistent source guard fixture',{$linkedId},
+                   '2026-07-01 00:00:00')
+            ");
+            $linkedDelete = integration_request(
+                'DELETE',
+                9301,
+                'valid',
+                ['id' => (string)$linkedId],
+                [],
+                'assignment'
+            );
+            integration_assert(
+                ($linkedDelete['success'] ?? null) === false
+                    && $linkedDelete['_test_status'] === 409,
+                'Live monthly-template item link did not block delete.'
+            );
+            integration_assert(
+                integration_scalar(
+                    $conn,
+                    "SELECT COUNT(*) FROM shift_assignments WHERE id={$linkedId}"
+                ) === '1',
+                'Template-linked guard fixture was deleted.'
+            );
+        }
+
         $conn->query("
             INSERT INTO shift_warnings
-              (shift_assignment_id,user_id,affected_date,warning_type,warning_message,severity)
+              (id,warning_key,shift_assignment_id,user_id,affected_date,warning_type,
+               warning_message,severity,is_resolved,resolved_by,resolved_at,resolution_note,
+               created_at,updated_at)
             VALUES
-              ({$assignmentId},9303,'2026-07-07','jumpshift','Disposable delete warning','warning')
+              (9501,'phase24-warning-{$assignmentId}',{$assignmentId},9303,'2026-07-07',
+               'jumpshift','Disposable delete warning','warning',1,9301,
+               '2026-07-07 12:00:00','Reviewed in disposable drill',
+               '2026-07-07 11:00:00','2026-07-07 12:00:00')
         ");
+        if ($includeDependents) {
+            $conn->query("
+                INSERT INTO public_holidays
+                  (id,holiday_date,holiday_name,holiday_type,is_active,notes,created_at,updated_at)
+                VALUES
+                  (9601,'2026-07-07','Phase 24 Disposable Holiday','custom',1,
+                   'Dependent restoration fixture','2026-07-01 00:00:00','2026-07-01 00:00:00')
+            ");
+            $conn->query("
+                INSERT INTO holiday_coverage_assignments
+                  (id,holiday_id,user_id,shift_assignment_id,assignment_type,start_time,
+                   end_time,notes,status,created_at,updated_at)
+                VALUES
+                  (9701,9601,9303,{$assignmentId},'holiday_coverage','16:00:00',
+                   '00:00:00','Dependent restoration fixture','confirmed',
+                   '2026-07-07 10:00:00','2026-07-07 10:30:00')
+            ");
+        }
+        $notificationCountBeforeDelete = (int)integration_scalar(
+            $conn,
+            "SELECT COUNT(*) FROM tracs_notifications
+             WHERE related_module='shifting-assignment'
+               AND related_entity_id={$assignmentId}"
+        );
+        if ($includeDependents) {
+            integration_assert(
+                $notificationCountBeforeDelete > 0,
+                'Shift Assignment notification fixture was not created.'
+            );
+        }
         $deleted = integration_request(
             'DELETE',
             9301,
@@ -838,6 +993,25 @@ try {
             integration_scalar($conn, "SELECT COUNT(*) FROM shift_warnings WHERE shift_assignment_id={$assignmentId}") === '0',
             'Deleted assignment warning was not cleaned up.'
         );
+        if ($includeDependents) {
+            integration_assert(
+                integration_scalar(
+                    $conn,
+                    "SELECT COUNT(*) FROM holiday_coverage_assignments
+                     WHERE shift_assignment_id={$assignmentId}"
+                ) === '0',
+                'Holiday coverage dependency was not cascaded.'
+            );
+            integration_assert(
+                (int)integration_scalar(
+                    $conn,
+                    "SELECT COUNT(*) FROM tracs_notifications
+                     WHERE related_module='shifting-assignment'
+                       AND related_entity_id={$assignmentId}"
+                ) === $notificationCountBeforeDelete,
+                'Shift Assignment notifications were not safely retained.'
+            );
+        }
 
         $deletedRead = integration_request('GET', 9301, 'valid', [
             'view' => 'daily',
@@ -900,7 +1074,24 @@ try {
                 'Delete audit snapshot is invalid.'
             );
 
-            integration_restore_assignment($conn, $snapshot, 9301, $deleteAuditId);
+            if ($includeDependents) {
+                integration_assert(
+                    count($snapshot['_dependents']['shift_warnings'] ?? []) === 1,
+                    'Before-delete snapshot did not preserve warning state.'
+                );
+                integration_assert(
+                    count($snapshot['_dependents']['holiday_coverage_assignments'] ?? []) === 1,
+                    'Before-delete snapshot did not preserve holiday coverage.'
+                );
+            }
+
+            integration_restore_assignment(
+                $conn,
+                $snapshot,
+                9301,
+                $deleteAuditId,
+                $includeDependents
+            );
 
             $restoredRead = integration_request('GET', 9301, 'valid', [
                 'view' => 'daily',
@@ -979,6 +1170,49 @@ try {
                 ) === 1,
                 'Exact restoration audit is missing or duplicated.'
             );
+            if ($includeDependents) {
+                integration_assert(
+                    integration_scalar(
+                        $conn,
+                        "SELECT CONCAT_WS('|',id,warning_key,shift_assignment_id,user_id,
+                         affected_date,warning_type,warning_message,severity,is_resolved,
+                         resolved_by,resolved_at,resolution_note,created_at,updated_at)
+                         FROM shift_warnings WHERE id=9501"
+                    ) ===
+                    '9501|phase24-warning-' . $assignmentId
+                    . '|'. $assignmentId
+                    . '|9303|2026-07-07|jumpshift|Disposable delete warning|warning|1|9301'
+                    . '|2026-07-07 12:00:00|Reviewed in disposable drill'
+                    . '|2026-07-07 11:00:00|2026-07-07 12:00:00',
+                    'Warning dependency was not restored exactly.'
+                );
+                integration_assert(
+                    integration_scalar(
+                        $conn,
+                        "SELECT CONCAT_WS('|',id,holiday_id,user_id,shift_assignment_id,
+                         assignment_type,start_time,end_time,notes,status,created_at,updated_at)
+                         FROM holiday_coverage_assignments WHERE id=9701"
+                    ) ===
+                    '9701|9601|9303|' . $assignmentId
+                    . '|holiday_coverage|16:00:00|00:00:00'
+                    . '|Dependent restoration fixture|confirmed'
+                    . '|2026-07-07 10:00:00|2026-07-07 10:30:00',
+                    'Holiday coverage dependency was not restored exactly.'
+                );
+                integration_assert(
+                    integration_scalar(
+                        $conn,
+                        "SELECT COUNT(*) FROM shift_warnings
+                         WHERE shift_assignment_id={$assignmentId}"
+                    ) === '1'
+                    && integration_scalar(
+                        $conn,
+                        "SELECT COUNT(*) FROM holiday_coverage_assignments
+                         WHERE shift_assignment_id={$assignmentId}"
+                    ) === '1',
+                    'Dependent restoration created missing or duplicate records.'
+                );
+            }
         }
 
         $auditFailureFixture = integration_request('POST', 9301, 'valid', [], [
