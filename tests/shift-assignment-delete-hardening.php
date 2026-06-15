@@ -65,7 +65,7 @@ delete_hardening_assert(
     'Delete API, CSRF, or capability gating changed.'
 );
 delete_hardening_assert(
-    str_contains($preview, 'Create/Edit/Delete actions are enabled only for Super')
+    str_contains($preview, 'Create/Edit/Delete and Template Preview actions are')
         && str_contains($preview, 'hard-delete pilot')
         && !str_contains($header, 'shift-assignment-react-preview.php'),
     'Pilot isolation or warning changed.'

@@ -918,6 +918,41 @@ unchanged after a valid preview:
 The disposable database is removed after the test. Commit/copy work and React
 template UI require separate approval.
 
+## Phase 29 Template Preview UI Pilot
+
+Phase 29 adds the controlled React Template Preview UI inside the isolated
+Shift Assignment preview only. It calls the existing non-mutating endpoint:
+
+```text
+POST /api/v1/shift-assignment/templates/preview.php
+```
+
+Access remains capability gated by the backend context: exact Super Admin plus
+`shifts.view`, `shifts.manage`, and a valid CSRF token. The UI must remain
+preview-only:
+
+- no commit button;
+- no apply/generate-save button;
+- no copy-to-month action;
+- no assignment list refresh from template preview alone;
+- no template/copy endpoint beyond the Phase 28 preview route.
+
+Phase 29 validation commands:
+
+```bash
+cd frontend && npm run test:contracts
+cd frontend && npm run build
+php tests/shift-assignment-template-preview-ui-pilot.php
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 \
+php tests/shift-assignment-template-preview-ui-integration.php
+```
+
+The disposable preview validation uses `tracs_phase29_test` and must prove the
+same persisted counts remain unchanged after preview: assignments, warnings,
+holiday coverage, monthly templates, monthly template items, and assignment
+audits. Browser click validation should be repeated on a disposable/staging
+app before template commit work begins.
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:

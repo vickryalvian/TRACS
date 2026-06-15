@@ -383,3 +383,19 @@ Phase 28 template-preview notes:
   `tracs_phase28_test`;
 - commit, copy-preview, copy-commit, React template UI, navigation, schema,
   Calendar, and legacy-page changes remain blocked.
+
+Phase 29 template-preview UI notes:
+
+- the isolated Shift Assignment React preview now includes a controlled
+  "Preview Template" entry point;
+- visibility is driven by server-issued `preview_template` capability for
+  exact Super Admin plus explicit `shifts.manage`;
+- the UI sends CSRF to the Phase 28 preview endpoint and renders summary,
+  items, warnings, conflicts, and blocked items;
+- the modal clearly states preview-only behavior and does not render commit,
+  apply, save, copy, or bulk-write controls;
+- Create/Edit/Delete pilot behavior remains unchanged;
+- no new backend endpoint, schema, Calendar, legacy-page, or navigation change
+  is included;
+- disposable no-mutation validation uses `tracs_phase29_test` and must confirm
+  persisted counts remain unchanged.

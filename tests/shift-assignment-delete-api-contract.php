@@ -113,13 +113,14 @@ delete_contract_assert(
     'Delete service transaction or before-delete audit changed.'
 );
 delete_contract_assert(
-    substr_count($frontendApi, "method: 'POST'") === 1
+    substr_count($frontendApi, "method: 'POST'") === 2
         && substr_count($frontendApi, "method: 'PATCH'") === 1
         && substr_count($frontendApi, "method: 'DELETE'") === 1,
     'React preview delete API caller changed.'
 );
 delete_contract_assert(
-    str_contains($preview, 'no template, copy, overtime')
+    str_contains($preview, 'Template Preview is non-mutating')
+        && str_contains($preview, 'template commit, copy, overtime')
         && !str_contains($header, 'shift-assignment-react-preview.php'),
     'Preview warning or navigation isolation changed.'
 );

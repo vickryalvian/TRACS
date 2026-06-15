@@ -43,7 +43,7 @@ pilot_assert(
     'Super Admin pilot denials are no longer audit-characterized.'
 );
 pilot_assert(
-    str_contains($preview, 'React Preview Pilot — Create/Edit/Delete actions are enabled only for Super'),
+    str_contains($preview, 'React Preview Pilot — Create/Edit/Delete and Template Preview actions are'),
     'Pilot controlled-create banner changed.'
 );
 pilot_assert(
@@ -82,7 +82,7 @@ pilot_assert(
 );
 
 pilot_assert(
-    substr_count($frontendApi, "method: 'POST'") === 1
+    substr_count($frontendApi, "method: 'POST'") === 2
         && substr_count($frontendApi, "method: 'PATCH'") === 1
         && substr_count($frontendApi, "method: 'DELETE'") === 1
         && !preg_match('/\b(method\s*:\s*[\'"]PUT|\.(put)\s*\()/i', $frontendApi),

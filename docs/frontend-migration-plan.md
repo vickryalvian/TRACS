@@ -285,11 +285,12 @@ as manual rather than undo, protected template links fail closed, and write
 actions disappear when `shifts.manage` is removed. The legacy page remains
 authoritative and preview access remains direct URL only.
 
-## Phase 27 Template UI Planning Boundary
+## Phase 27-29 Template UI Planning Boundary
 
 No template generation or copy/paste UI is added in Phase 27 or Phase 28.
-Future React work must wait for backend contracts that split every bulk
-operation into preview and commit:
+Phase 29 adds only the first non-mutating Template Preview UI. Future React
+write work must wait for backend contracts that split every bulk operation into
+preview and commit:
 
 - Template Generator preview: non-mutating.
 - Template Generator commit: confirmed mutation.
@@ -302,9 +303,10 @@ previewed assignments, show conflicts, warnings, weekly-hour results, holiday
 and overtime advisories, then require explicit confirmation before commit.
 
 Phase 28 implements the backend-only Template Generator preview API. The React
-preview still has no template button, modal, wizard, or API caller. UI work
-remains blocked until the commit/copy contracts are designed and preview
-browser behavior is approved.
+preview has no template button, modal, wizard, or API caller before Phase 29.
+Phase 29 adds a "Preview Template" modal that calls only the Phase 28 endpoint,
+renders preview items, warnings, conflicts, blocked items, and summary counts,
+and does not render commit, apply, save, copy, or bulk-write controls.
 
 The UI must never call a bulk mutation directly from the first form step, must
 not optimistically write rows, and must keep Create/Edit/Delete pilot behavior

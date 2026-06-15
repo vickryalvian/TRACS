@@ -336,6 +336,30 @@ conflict output, warning output, and no persisted table-count changes across:
 
 The disposable database is dropped after the run.
 
+## Phase 29 React Preview UI Pilot
+
+Phase 29 adds the first React UI surface for template generation, limited to
+preview only. The Shift Assignment preview exposes "Preview Template" only when
+the backend context grants `allowed_actions.preview_template` for exact Super
+Admin plus `shifts.manage`.
+
+The UI contract is:
+
+- collect a bounded date range and simple supported weekly-rotation pattern;
+- display dates as `dd-mm-yyyy` and submit backend-safe ISO dates;
+- support Shift 1 `00:00-08:00`, Shift 2 `08:00-16:00`, and Shift 3
+  `16:00-24:00`;
+- send the existing CSRF token in the configured header;
+- render returned preview items, summary, warnings, conflicts, and
+  `blocked_items`;
+- keep the modal open for validation, network, permission, and conflict
+  errors;
+- never show commit/apply/save/copy controls in this phase.
+
+This UI is not evidence that commit is safe. Commit implementation still
+requires a separate API contract, confirmation token/freshness decision,
+rollback evidence, audit design, and disposable database validation.
+
 ## Implementation Gate
 
 Before any commit or copy endpoint is implemented:

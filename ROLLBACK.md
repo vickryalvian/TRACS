@@ -1036,3 +1036,32 @@ DROP DATABASE IF EXISTS tracs_phase28_test;
 
 No production data restore is needed because preview must not mutate data.
 Future commit/copy phases need their own rollback plan before implementation.
+
+## Phase 29 Template Preview UI Rollback
+
+Phase 29 adds only the isolated React Template Preview UI, capability handoff,
+frontend tests, source guards, and documentation. It calls the existing Phase
+28 non-mutating preview endpoint and adds no commit/copy route, schema,
+navigation, Calendar, legacy-page, or production data change.
+
+After commit:
+
+```bash
+git revert <phase-29-commit-sha>
+```
+
+To abandon the branch before commit:
+
+```bash
+git switch refactor/phase-28-shift-template-preview-api
+git branch -D refactor/phase-29-shift-template-preview-ui
+```
+
+Emergency disposable cleanup:
+
+```sql
+DROP DATABASE IF EXISTS tracs_phase29_test;
+```
+
+No production data restore is needed because the UI must never call commit,
+copy, create, update, or delete as part of template preview.

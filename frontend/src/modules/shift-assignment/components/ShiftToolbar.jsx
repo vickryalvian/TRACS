@@ -2,13 +2,22 @@ import { Button } from '../../../components/ui/Button';
 import { displayRange } from '../utils/shiftDates';
 import { ShiftViewTabs } from './ShiftViewTabs';
 
-export function ShiftToolbar({ canCreate, filters, onCreate, onMove, onToday, onViewChange }) {
+export function ShiftToolbar({
+  canCreate,
+  canTemplatePreview,
+  filters,
+  onCreate,
+  onMove,
+  onTemplatePreview,
+  onToday,
+  onViewChange,
+}) {
   return (
     <header className="tr:overflow-hidden tr:rounded-tracs-lg tr:border tr:border-tracs-border tr:bg-tracs-card tr:shadow-tracs-card">
       <div className="tr:flex tr:flex-col tr:gap-tracs-3 tr:p-tracs-4 tr:xl:flex-row tr:xl:items-center tr:xl:justify-between">
         <div>
           <p className="tr:font-mono tr:text-[9px] tr:font-bold tr:uppercase tr:tracking-[.1em] tr:text-tracs-accent">
-            React pilot · controlled create/edit/delete
+            React pilot · create/edit/delete + template preview
           </p>
           <h1 className="tr:mt-tracs-1 tr:text-xl tr:font-semibold tr:tracking-[-.02em] tr:text-tracs-primary">
             Shift Assignment
@@ -22,6 +31,11 @@ export function ShiftToolbar({ canCreate, filters, onCreate, onMove, onToday, on
           {canCreate ? (
             <Button onClick={onCreate} size="compact" variant="primary">
               Add Assignment
+            </Button>
+          ) : null}
+          {canTemplatePreview ? (
+            <Button onClick={onTemplatePreview} size="compact" variant="secondary">
+              Preview Template
             </Button>
           ) : null}
           <ShiftViewTabs onChange={onViewChange} value={filters.view} />

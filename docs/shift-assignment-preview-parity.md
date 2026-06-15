@@ -314,7 +314,9 @@ Phase 23 result:
 - [x] Phase 27 documents template generation and copy/paste as future
       preview-before-commit contracts only.
 - [x] Phase 28 implements only the non-mutating template preview endpoint.
-- [ ] Template commit endpoints, copy/paste endpoints, React template UI,
+- [x] Phase 29 adds React Template Preview UI only; no commit, apply, save, or
+      copy control is rendered.
+- [ ] Template commit endpoints, copy/paste endpoints, React template commit UI,
       production navigation, and legacy replacement remain unapproved.
 
 ## Phase 27 Template Contract Gate
@@ -335,7 +337,8 @@ Before any template or copy/paste UI appears in the preview, verify:
 - [ ] Granular template permissions are either migrated with `up.sql` and
       `down.sql` or the implementation remains exact Super Admin plus
       `shifts.manage`.
-- [x] React still has no active template generator or copy/paste control.
+- [x] React has only an active template preview control; it has no active
+      commit, apply, save, or copy/paste control.
 
 ## Phase 17 Completed Browser Matrix
 

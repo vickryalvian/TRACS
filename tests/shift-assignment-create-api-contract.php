@@ -224,7 +224,7 @@ create_contract_assert(
     'Create success status or message changed.'
 );
 create_contract_assert(
-    substr_count($frontendApi, "method: 'POST'") === 1
+    substr_count($frontendApi, "method: 'POST'") === 2
         && substr_count($frontendApi, "method: 'PATCH'") === 1
         && substr_count($frontendApi, "method: 'DELETE'") === 1
         && !preg_match('/\b(method\s*:\s*[\'"]PUT|\.(put)\s*\()/i', $frontendApi),

@@ -30,6 +30,7 @@ function context_data(
     $controlledCreate = (bool)($capabilities['create'] ?? false);
     $controlledUpdate = (bool)($capabilities['update'] ?? false);
     $controlledDelete = (bool)($capabilities['delete'] ?? false);
+    $controlledTemplatePreview = (bool)($capabilities['template_preview'] ?? false);
     $manageSettings = (bool)($capabilities['settings'] ?? false);
     $manageMonthlyTemplates = (bool)($capabilities['monthly_templates'] ?? false);
     $export = (bool)($capabilities['export'] ?? false);
@@ -65,6 +66,7 @@ function context_data(
             'copy_last_week' => $manage,
             'replace_agent' => $manage,
             'delete_assignment' => $controlledDelete,
+            'preview_template' => $controlledTemplatePreview,
             'manage_shift_templates' => $manageSettings,
             'manage_holidays' => $manageSettings,
             'manage_coverage_rules' => $manageSettings,

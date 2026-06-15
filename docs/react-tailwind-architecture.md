@@ -482,3 +482,12 @@ The Delete modal adds assignment identity, clearer recovery-risk language, and
 an accessible live confirmation status without changing Tailwind isolation.
 Exact confirmation, saving locks, safe errors, and refresh behavior remain
 module-local; legacy PHP pages receive no React or Tailwind asset.
+
+## Phase 29 Template Preview UI
+
+The Template Preview UI remains inside the authenticated Shift Assignment
+React root and uses the same isolated Tailwind bundle. The entry point is
+server-capability driven, the modal uses existing TRACS compact form and card
+density, and preview result sections render as read-only data. No legacy PHP
+page loads the React bundle or Tailwind output, and no template commit/copy
+control is exposed in this phase.

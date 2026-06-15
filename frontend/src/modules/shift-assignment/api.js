@@ -61,3 +61,12 @@ export async function deleteShiftAssignment(assignmentId, csrf = {}) {
     },
   );
 }
+
+export async function previewShiftTemplate(payload, csrf = {}) {
+  return apiClient.request('/api/v1/shift-assignment/templates/preview.php', {
+    method: 'POST',
+    body: payload,
+    csrfToken: csrf.token ?? '',
+    csrfHeaderName: csrf.header ?? 'X-CSRF-Token',
+  });
+}

@@ -69,7 +69,7 @@ foreach ([
     );
 }
 parity_assert(
-    substr_count($frontendApi, "method: 'POST'") === 1
+    substr_count($frontendApi, "method: 'POST'") === 2
         && substr_count($frontendApi, "method: 'PATCH'") === 1
         && substr_count($frontendApi, "method: 'DELETE'") === 1
         && !preg_match('/\b(method\s*:\s*[\'"]PUT|\.(put)\s*\()/i', $frontendApi),

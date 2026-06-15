@@ -517,6 +517,13 @@ assignments, templates, warnings, dependents, or assignment audits. Disposable
 validation in `tracs_phase28_test` proved table counts did not change after a
 valid preview.
 
+Phase 29 exposes that preview through the isolated React pilot only. The UI is
+capability gated, sends CSRF, and renders preview output without a commit,
+apply, save, copy, or bulk-write control. It must not refresh the assignment
+list as if preview rows were real assignments. The no-mutation evidence remains
+the backend/disposable preview validation, repeated with the Phase 29 UI guard
+against `tracs_phase29_test`.
+
 The detailed canonical contract is:
 
 - `docs/shift-assignment-template-api-contract.md`

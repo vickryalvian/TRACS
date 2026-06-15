@@ -11,6 +11,7 @@ import { ShiftFilterBar } from './components/ShiftFilterBar';
 import { ShiftLoadingState } from './components/ShiftLoadingState';
 import { ShiftOperationalNotices } from './components/ShiftOperationalNotices';
 import { ShiftSummaryCards } from './components/ShiftSummaryCards';
+import { ShiftTemplatePreviewModal } from './components/ShiftTemplatePreviewModal';
 import { ShiftToolbar } from './components/ShiftToolbar';
 import { ShiftToast } from './components/ShiftToast';
 import { ShiftWarnings } from './components/ShiftWarnings';
@@ -34,6 +35,7 @@ const initialFilters = {
 export function ShiftAssignmentApp() {
   const [filters, setFilters] = useState(initialFilters);
   const [createOpen, setCreateOpen] = useState(false);
+  const [templatePreviewOpen, setTemplatePreviewOpen] = useState(false);
   const [editingAssignment, setEditingAssignment] = useState(null);
   const [deletingAssignment, setDeletingAssignment] = useState(null);
   const [toast, setToast] = useState(null);
@@ -43,6 +45,7 @@ export function ShiftAssignmentApp() {
   const canCreate = Boolean(context.shift?.allowed_actions?.create_assignment);
   const canEdit = Boolean(context.shift?.allowed_actions?.update_assignment);
   const canDelete = Boolean(context.shift?.allowed_actions?.delete_assignment);
+  const canTemplatePreview = Boolean(context.shift?.allowed_actions?.preview_template);
 
   function applyFilters(nextFilters) {
     setFilters(nextFilters);
@@ -127,9 +130,11 @@ export function ShiftAssignmentApp() {
       <div className="tr:flex tr:flex-col tr:gap-tracs-4 tr:pb-tracs-6">
         <ShiftToolbar
           canCreate={canCreate}
+          canTemplatePreview={canTemplatePreview}
           filters={filters}
           onCreate={() => setCreateOpen(true)}
           onMove={moveRange}
+          onTemplatePreview={() => setTemplatePreviewOpen(true)}
           onToday={useToday}
           onViewChange={changeView}
         />
@@ -156,7 +161,7 @@ export function ShiftAssignmentApp() {
                       {filters.view[0].toUpperCase() + filters.view.slice(1)} assignments
                     </h2>
                     <p className="tr:mt-1 tr:text-xs tr:text-tracs-muted">
-                      Controlled create/edit/delete pilot · {context.global?.user?.name || 'Authenticated user'}
+                      Controlled create/edit/delete plus preview-only template pilot · {context.global?.user?.name || 'Authenticated user'}
                     </p>
                   </div>
                   <span className="tr:font-mono tr:text-[9px] tr:text-tracs-muted">
@@ -228,6 +233,12 @@ export function ShiftAssignmentApp() {
         onCreated={handleCreated}
         onToast={setToast}
         open={createOpen && canCreate}
+      />
+      <ShiftTemplatePreviewModal
+        context={context.shift}
+        onClose={() => setTemplatePreviewOpen(false)}
+        onToast={setToast}
+        open={templatePreviewOpen && canTemplatePreview}
       />
       <ShiftEditModal
         assignment={editingAssignment}
