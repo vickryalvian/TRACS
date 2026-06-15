@@ -368,17 +368,83 @@ and audit rules.
 DELETE /api/v1/shift-assignment/assignment.php?id=<id>
 ```
 
-This contract is not approved for implementation. The legacy module has no
-assignment-delete action. Before approval, decide:
+Phase 21 implements this backend-only contract for exact `super_admin` plus
+explicit `shifts.manage`. It requires CSRF, scoped record access, and a required
+before-delete assignment audit. The current schema has no soft-delete columns,
+so the endpoint performs a transaction-protected hard delete. Template-owned
+assignments return `409`.
 
-- whether cancellation is sufficient;
-- whether the schema supports a safe soft delete;
-- retention requirements for generated assignments and holiday coverage;
-- behavior for monthly-template links, notifications, warnings, and history;
-- who may delete and whether exact Super Admin approval is required.
+## Delete UI Safety Gate
 
-No hard delete may be added merely to satisfy REST naming. A later proposal
-must preserve a before snapshot and audit trail and include restoration tests.
+React Delete UI remains blocked. A later approved UI must satisfy every item:
+
+1. Render Delete only when the server capability confirms exact `super_admin`,
+   `shifts.view`, and explicit `shifts.manage`. Frontend visibility never
+   replaces backend enforcement.
+2. Show agent name, `dd-mm-yyyy` assignment date, shift type, start/end time,
+   status, and available role/division context in the confirmation.
+3. State plainly that the action is a hard delete because no soft-delete
+   schema exists.
+4. Require the operator to type exactly `DELETE`. Pasting or typing the agent
+   name/date alone is not sufficient for the first destructive pilot.
+5. Keep the destructive submit disabled until the typed value matches and
+   disable the complete dialog while the request is pending.
+6. Prevent duplicate submission, keep the dialog open on failure, refresh the
+   current assignment query after success, and show success only after the API
+   confirms deletion.
+7. Handle `401`, `403`, `404`, `405`, `409`, `422`, network, and unexpected
+   errors with safe messages. A `409` must explain that template-owned records
+   require the template/copy workflow.
+8. Do not optimistically remove the row. If the request fails, the assignment
+   remains visible.
+9. Require fresh authenticated browser evidence against a disposable database
+   before UI activation.
+
+### Manual Restoration
+
+There is no restore endpoint. Restoration is an audited administrative
+procedure, never an automatic UI undo.
+
+The authoritative restore source is the `before_snapshot` from the
+`assignment_audit_logs` row where `action='deleted'`. It contains the full
+pre-delete `shift_assignments` row. The API activity audit is intentionally a
+safer summary and is not sufficient for exact restoration.
+
+Before restoring:
+
+1. Work only in an approved staging/admin database session.
+2. Record the delete request/audit IDs and export the snapshot.
+3. Verify the user, division, template, monthly-template, and approver IDs still
+   exist.
+4. Check that the original assignment ID is unused and that restoring the time
+   range will not create an overlap.
+5. Back up `shift_assignments`, `assignment_audit_logs`, and affected warning,
+   holiday, notification, and template-link tables.
+
+Exact restoration uses a reviewed transaction and an explicit INSERT mapping
+all current `shift_assignments` columns from the snapshot. Reusing the original
+ID is allowed only when it remains unused and dependent references have been
+reviewed. The restoration must add a separate audited
+`shift_assignment.restore` event with the delete audit ID and reason. Commit
+only after the restored row appears through the scoped GET API and all
+constraints are valid; otherwise roll back.
+
+The existing POST create API may be used only for a logical replacement of a
+simple manual assignment. It creates a new ID and cannot faithfully restore all
+source, approval, creator/updater, monthly-template, or historical metadata.
+The operator must label and audit that result as a replacement, not an exact
+restore.
+
+If the full before snapshot is unavailable, malformed, or references missing
+records, restoration is blocked and active Delete UI must remain disabled.
+
+### Future Soft Delete Proposal
+
+A later migration may propose nullable `deleted_at`, nullable `deleted_by`,
+optional `delete_reason`, GET filtering, restore behavior, indexes, and audit
+integration. It must include reviewed `up.sql` and `down.sql`, legacy-page
+compatibility, performance checks, and tested restoration. Phase 22 creates no
+migration or schema change.
 
 ## Templates And Copy
 

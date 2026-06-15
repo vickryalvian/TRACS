@@ -283,3 +283,16 @@ soft-delete field, the pilot uses a transaction-protected hard delete with a
 preserved before snapshot. Template-owned assignments return `409`. React
 Delete UI, template/copy, navigation exposure, and production replacement
 remain blocked.
+
+Phase 22 delete-safety notes:
+
+- typed confirmation must be exactly `DELETE`;
+- the dialog must show the complete human-readable assignment identity;
+- hard-delete risk and template-owned `409` behavior must be explicit;
+- the required full before snapshot is the authoritative restore source;
+- exact SQL restoration and logical create-API replacement are distinct;
+- a future soft-delete migration remains documentation-only.
+
+No React Delete UI or caller is added. Activation requires a separately
+approved phase, a reviewed restore exercise, and authenticated disposable
+browser evidence.

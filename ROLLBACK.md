@@ -821,3 +821,34 @@ DROP DATABASE IF EXISTS tracs_phase21_test;
 A code revert cannot restore a deleted production assignment. React Delete UI
 must remain disabled. Any future production pilot requires a database backup
 and an approved restoration procedure using the preserved before snapshot.
+
+## Phase 22 Delete Safety Gate Rollback
+
+Phase 22 changes documentation and non-mutating checks only. It adds no React
+Delete UI, endpoint, schema, navigation, Calendar, or legacy-page change.
+
+Before commit:
+
+```bash
+git restore --staged .
+git restore .
+rm tests/shift-assignment-delete-safety-gate.php
+```
+
+After commit:
+
+```bash
+git revert <phase-22-commit-sha>
+```
+
+To abandon the unmerged branch:
+
+```bash
+git switch refactor/phase-21-shift-delete-assignment-api
+git branch -D refactor/phase-22-shift-delete-safeguards
+```
+
+This code rollback has no database effect. For an assignment already deleted
+through Phase 21, use the reviewed manual restoration procedure in
+`docs/shift-assignment-write-api-contract.md`; never assume `git revert`
+restores data.

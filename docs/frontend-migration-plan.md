@@ -255,3 +255,9 @@ Because the current schema lacks soft-delete support, the service preserves a
 before snapshot and performs a scoped hard delete in one transaction. A
 separate approved phase must design confirmation, stale-row handling, post-
 delete refresh, and browser evidence before React Delete UI can exist.
+
+Phase 22 defines that gate without implementing it. The future dialog must show
+the assignment identity, warn that deletion is hard, require exact typed
+`DELETE`, avoid optimistic removal, and preserve the row on every failure.
+Restoration is manual and audited from the full assignment before snapshot;
+the current create API is only a logical replacement path, not exact undo.

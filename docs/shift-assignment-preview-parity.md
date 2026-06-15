@@ -274,6 +274,25 @@ Readiness remains conditional:
 - [ ] Repeat the combined authenticated browser matrix when localhost access is
       available before approving a destructive or bulk action.
 
+## Delete UI Manual QA Gate
+
+- [ ] No Delete action, modal, API client function, or server capability is
+      present in the React preview.
+- [ ] Future visibility is exact Super Admin plus `shifts.view` and explicit
+      `shifts.manage`.
+- [ ] Confirmation shows agent, date, shift type, time range, status, and
+      available role/division context.
+- [ ] Hard-delete warning explains that no soft-delete schema exists.
+- [ ] Exact typed `DELETE` is required before submission.
+- [ ] Pending state disables the full dialog and blocks duplicate requests.
+- [ ] `401`, `403`, `404`, `405`, `409`, `422`, network, and unexpected
+      failures keep the dialog open and assignment visible.
+- [ ] Template-owned `409` is understandable and exposes no internal detail.
+- [ ] Success refreshes existing filters and removes only the target row.
+- [ ] Full before snapshot and separate restore audit are verified.
+- [ ] Exact restore is exercised in a disposable database and cleanup is
+      confirmed.
+
 ## Phase 17 Completed Browser Matrix
 
 | Check | Disposable browser result |

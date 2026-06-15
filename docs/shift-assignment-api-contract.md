@@ -348,11 +348,14 @@ The current versioned mutation routes are:
 ```text
 POST   /api/v1/shift-assignment/assignments.php
 PATCH  /api/v1/shift-assignment/assignment.php?id=<id>
+DELETE /api/v1/shift-assignment/assignment.php?id=<id>
 ```
 
-Both are controlled exact-Super-Admin pilots with explicit `shifts.manage` and
-CSRF. Phase 21 adds a backend-only DELETE contract after an explicit
-hard-delete retention decision; React Delete UI remains separately blocked.
+All mutations require exact Super Admin, explicit `shifts.manage`, and CSRF.
+DELETE remains backend-only after the Phase 21 hard-delete retention decision.
+Phase 22 requires exact typed `DELETE`, full assignment detail confirmation,
+manual restoration from the required before snapshot, and fresh disposable
+browser evidence before any React Delete UI can be approved.
 
 ## Phase 13 Write Contract Plan
 

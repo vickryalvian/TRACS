@@ -707,6 +707,38 @@ php tests/shift-assignment-delete-api-integration.php
 React Delete UI remains blocked pending a separate confirmation/UX phase and
 fresh authenticated browser validation.
 
+## Delete UI Safety Gate
+
+Phase 22 is planning and non-mutating validation only. Active React Delete UI
+remains prohibited.
+
+Required future browser matrix:
+
+- Delete is absent for unauthenticated, non-Super-Admin, and missing-permission
+  users.
+- The dialog shows agent, date, shift type, time range, status, and available
+  role/division context.
+- The hard-delete warning is visible and readable in light/dark mode.
+- The destructive button remains disabled until the operator types `DELETE`.
+- Double submit is impossible and the dialog is disabled while deleting.
+- `401`, `403`, `404`, `405`, `409`, `422`, network, and unexpected failures
+  keep the assignment visible and the dialog open.
+- Template-owned `409` explains that deletion must occur through the future
+  template/copy workflow.
+- Success refreshes the current view and removes only the confirmed assignment.
+- Before-delete audit and manual restoration evidence are verified in the
+  disposable database.
+- The disposable database/container is removed after testing.
+
+Non-mutating Phase 22 check:
+
+```bash
+php tests/shift-assignment-delete-safety-gate.php
+```
+
+Approval for active Delete UI requires this checklist, a reviewed restoration
+exercise, and fresh authenticated disposable-browser evidence.
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:
