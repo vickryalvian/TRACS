@@ -43,7 +43,7 @@ pilot_assert(
     'Super Admin pilot denials are no longer audit-characterized.'
 );
 pilot_assert(
-    str_contains($preview, 'React Preview Pilot — Create/Edit actions are enabled only for Super'),
+    str_contains($preview, 'React Preview Pilot — Create/Edit/Delete actions are enabled only for Super'),
     'Pilot controlled-create banner changed.'
 );
 pilot_assert(
@@ -84,8 +84,9 @@ pilot_assert(
 pilot_assert(
     substr_count($frontendApi, "method: 'POST'") === 1
         && substr_count($frontendApi, "method: 'PATCH'") === 1
-        && !preg_match('/\b(method\s*:\s*[\'"](PUT|DELETE)|\.(put|delete)\s*\()/i', $frontendApi),
-    'Pilot React client must contain only approved create/update mutations.'
+        && substr_count($frontendApi, "method: 'DELETE'") === 1
+        && !preg_match('/\b(method\s*:\s*[\'"]PUT|\.(put)\s*\()/i', $frontendApi),
+    'Pilot React client mutation allowlist changed.'
 );
 foreach (['PATCH', 'DELETE'] as $method) {
     pilot_assert(

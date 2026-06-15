@@ -19,8 +19,14 @@ export function focusInvalidField(modal, errors) {
 }
 
 export function mutationErrorMessage(error, action) {
-  const verb = action === 'edit' ? 'updating' : 'creating';
-  const fallback = action === 'edit'
+  const verb = action === 'delete'
+    ? 'deleting'
+    : action === 'edit'
+    ? 'updating'
+    : 'creating';
+  const fallback = action === 'delete'
+    ? 'The assignment could not be deleted.'
+    : action === 'edit'
     ? 'The assignment could not be updated.'
     : 'The assignment could not be created.';
 
@@ -34,15 +40,17 @@ export function mutationErrorMessage(error, action) {
     case 401:
       return `Your session expired. Sign in again before ${verb} an assignment.`;
     case 403:
-      return `The ${action === 'edit' ? 'update' : 'create'} request was denied. Refresh permissions and try again.`;
+      return `The ${action === 'delete' ? 'delete' : action === 'edit' ? 'update' : 'create'} request was denied. Refresh permissions and try again.`;
     case 404:
-      return action === 'edit'
+      return ['edit', 'delete'].includes(action)
         ? 'This assignment no longer exists. Refresh the schedule.'
         : fallback;
     case 405:
       return 'This assignment action is not available. Refresh the preview and try again.';
     case 409:
-      return action === 'edit'
+      return action === 'delete'
+        ? 'This assignment is protected by a monthly template and cannot be deleted here.'
+        : action === 'edit'
         ? 'This update conflicts with an existing schedule.'
         : 'This assignment conflicts with an existing schedule.';
     case 422:

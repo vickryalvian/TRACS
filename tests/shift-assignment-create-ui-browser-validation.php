@@ -47,7 +47,7 @@ browser_validation_assert(
     'Browser environment no longer clones schema only.'
 );
 browser_validation_assert(
-    str_contains($preview, 'Create/Edit actions are enabled only for Super')
+    str_contains($preview, 'Create/Edit/Delete actions are enabled only for Super')
         && str_contains($preview, "tracs_require_page_permission(\$conn, 'shifts.view')")
         && str_contains($preview, 'tracs_require_super_admin_page($conn)')
         && str_contains($preview, "require_once __DIR__ . '/includes/page_helpers.php'"),
@@ -60,8 +60,9 @@ browser_validation_assert(
 browser_validation_assert(
     substr_count($frontendApi, "method: 'POST'") === 1
         && substr_count($frontendApi, "method: 'PATCH'") === 1
-        && !preg_match('/\b(method\s*:\s*[\'"](PUT|DELETE)|\.(put|delete)\s*\()/i', $frontendApi),
-    'Browser pilot frontend contains an unapproved mutation.'
+        && substr_count($frontendApi, "method: 'DELETE'") === 1
+        && !preg_match('/\b(method\s*:\s*[\'"]PUT|\.(put)\s*\()/i', $frontendApi),
+    'Browser pilot frontend mutation allowlist changed.'
 );
 browser_validation_assert(
     str_contains($modal, "saving ? 'Saving...'")

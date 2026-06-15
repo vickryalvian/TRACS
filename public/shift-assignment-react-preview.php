@@ -34,16 +34,17 @@ include __DIR__ . '/includes/header.php';
       <div class="panel-head">
         <div>
           <span class="panel-title">React Preview Pilot</span>
-          <span class="panel-meta">Limited internal controlled create/edit access</span>
+          <span class="panel-meta">Limited internal controlled create/edit/delete access</span>
         </div>
         <span class="badge b-pending">Super Admin Pilot</span>
       </div>
       <div class="panel-body" style="padding: var(--space-3) var(--space-4);">
         <p style="margin:0;color:var(--tx2);font-size:12px;">
-          React Preview Pilot — Create/Edit actions are enabled only for Super
+          React Preview Pilot — Create/Edit/Delete actions are enabled only for Super
           Admin validation. Legacy
           <code>shifting-assignment.php</code> remains the production source of
-          truth. This pilot provides no delete, template, copy, overtime, or
+          truth. Delete is a hard-delete pilot with validated audit-backed
+          restoration. This pilot provides no template, copy, overtime, or
           holiday write action.
         </p>
       </div>

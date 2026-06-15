@@ -924,3 +924,34 @@ DROP DATABASE IF EXISTS tracs_phase24_test;
 
 A code revert does not restore production data. Use the reviewed assignment
 plus dependent snapshot procedure for any approved hard-delete recovery.
+
+## Phase 25 Controlled Delete UI Rollback
+
+Phase 25 adds Delete UI only to the isolated authenticated React preview,
+enables the existing server-issued delete capability, updates the preview
+bundle, and adds guarded tests/documentation. It adds no endpoint, schema,
+navigation, Calendar, or legacy-page change.
+
+After commit:
+
+```bash
+git revert <phase-25-commit-sha>
+```
+
+To abandon the branch:
+
+```bash
+git switch refactor/phase-24-shift-dependent-restore-drill
+git branch -D refactor/phase-25-shift-delete-ui-pilot
+```
+
+Emergency disposable cleanup:
+
+```bash
+docker rm -f tracs_phase25_app
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 \
+php tests/shift-assignment-delete-ui-browser-environment.php cleanup
+```
+
+Reverting code cannot restore a deleted assignment. Any approved data recovery
+must use the audited assignment and dependent snapshots.

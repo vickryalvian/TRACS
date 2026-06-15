@@ -301,8 +301,12 @@ Phase 23 result:
 - [x] Disposable database removed.
 - [x] Phase 24 exactly restores warning resolution state and cascaded holiday
       coverage, retains notifications/audits, and blocks template-item links.
-- [ ] Active Delete UI remains absent pending a separately approved controlled
-      pilot and fresh disposable-browser evidence.
+- [x] Phase 25 Delete UI requires typed `DELETE`, shows assignment details,
+      preserves the row on cancel/error, and refreshes after success.
+- [x] Authenticated disposable-browser evidence completed in
+      `tracs_phase25_test`; template-link `409`, permission hiding, audits,
+      dependent snapshot, and cleanup were verified.
+- [ ] Production navigation and legacy replacement remain unapproved.
 
 ## Phase 17 Completed Browser Matrix
 

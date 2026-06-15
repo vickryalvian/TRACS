@@ -1,7 +1,13 @@
 import { Badge } from '../../../components/ui/Badge';
 import { minutesLabel, statusTone } from '../utils/shiftFormatters';
 
-export function ShiftAssignmentTable({ assignments, canEdit = false, onEdit }) {
+export function ShiftAssignmentTable({
+  assignments,
+  canDelete = false,
+  canEdit = false,
+  onDelete,
+  onEdit,
+}) {
   return (
     <div
       aria-label="Shift assignments table"
@@ -20,7 +26,7 @@ export function ShiftAssignmentTable({ assignments, canEdit = false, onEdit }) {
                 {label}
               </th>
             ))}
-            {canEdit ? (
+            {canEdit || canDelete ? (
               <th className="tr:px-tracs-3 tr:py-tracs-2 tr:text-right tr:font-mono tr:text-[8px] tr:font-bold tr:uppercase tr:tracking-[.08em] tr:text-tracs-muted">
                 Action
               </th>
@@ -67,16 +73,30 @@ export function ShiftAssignmentTable({ assignments, canEdit = false, onEdit }) {
                   <Badge className="tr:ml-1" variant="info">Holiday</Badge>
                 ) : null}
               </td>
-              {canEdit ? (
+              {canEdit || canDelete ? (
                 <td className="tr:px-tracs-3 tr:py-tracs-3 tr:text-right">
-                  <button
-                    aria-label={`Edit assignment for ${assignment.agent.name} on ${assignment.assignment_date_display}`}
-                    className="tr:rounded-tracs tr:border tr:border-tracs-border tr:bg-tracs-card tr:px-tracs-2 tr:py-1 tr:text-[10px] tr:font-semibold tr:text-tracs-accent tr:hover:border-tracs-accent"
-                    onClick={() => onEdit?.(assignment)}
-                    type="button"
-                  >
-                    Edit
-                  </button>
+                  <div className="tr:flex tr:justify-end tr:gap-1">
+                    {canEdit ? (
+                      <button
+                        aria-label={`Edit assignment for ${assignment.agent.name} on ${assignment.assignment_date_display}`}
+                        className="tr:rounded-tracs tr:border tr:border-tracs-border tr:bg-tracs-card tr:px-tracs-2 tr:py-1 tr:text-[10px] tr:font-semibold tr:text-tracs-accent tr:hover:border-tracs-accent"
+                        onClick={() => onEdit?.(assignment)}
+                        type="button"
+                      >
+                        Edit
+                      </button>
+                    ) : null}
+                    {canDelete ? (
+                      <button
+                        aria-label={`Delete assignment for ${assignment.agent.name} on ${assignment.assignment_date_display}`}
+                        className="tr:rounded-tracs tr:border tr:border-tracs-danger/50 tr:bg-tracs-card tr:px-tracs-2 tr:py-1 tr:text-[10px] tr:font-semibold tr:text-tracs-danger tr:hover:bg-tracs-danger-soft"
+                        onClick={() => onDelete?.(assignment)}
+                        type="button"
+                      >
+                        Delete
+                      </button>
+                    ) : null}
+                  </div>
                 </td>
               ) : null}
             </tr>

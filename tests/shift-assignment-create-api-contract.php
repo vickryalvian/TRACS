@@ -226,8 +226,9 @@ create_contract_assert(
 create_contract_assert(
     substr_count($frontendApi, "method: 'POST'") === 1
         && substr_count($frontendApi, "method: 'PATCH'") === 1
-        && !preg_match('/\b(method\s*:\s*[\'"](PUT|DELETE)|\.(put|delete)\s*\()/i', $frontendApi),
-    'React preview API client must preserve controlled create and approved update only.'
+        && substr_count($frontendApi, "method: 'DELETE'") === 1
+        && !preg_match('/\b(method\s*:\s*[\'"]PUT|\.(put)\s*\()/i', $frontendApi),
+    'React preview API client mutation allowlist changed.'
 );
 
 foreach ([

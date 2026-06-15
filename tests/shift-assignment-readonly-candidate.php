@@ -58,8 +58,9 @@ candidate_assert(
 candidate_assert(
     substr_count($frontendApi, "method: 'POST'") === 1
         && substr_count($frontendApi, "method: 'PATCH'") === 1
-        && !preg_match('/\b(method\s*:\s*[\'"](PUT|DELETE)|\.(put|delete)\s*\()/i', $frontendApi),
-    'Production candidate frontend API must contain only approved create/update mutations.'
+        && substr_count($frontendApi, "method: 'DELETE'") === 1
+        && !preg_match('/\b(method\s*:\s*[\'"]PUT|\.(put)\s*\()/i', $frontendApi),
+    'Production candidate frontend API mutation allowlist changed.'
 );
 foreach ([
     '/api/v1/context.php',

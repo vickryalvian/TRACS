@@ -115,11 +115,11 @@ delete_contract_assert(
 delete_contract_assert(
     substr_count($frontendApi, "method: 'POST'") === 1
         && substr_count($frontendApi, "method: 'PATCH'") === 1
-        && !preg_match('/\b(method\s*:\s*[\'"]DELETE|\.delete\s*\()/i', $frontendApi),
-    'React preview must not expose Delete UI or API calls.'
+        && substr_count($frontendApi, "method: 'DELETE'") === 1,
+    'React preview delete API caller changed.'
 );
 delete_contract_assert(
-    str_contains($preview, 'no delete, template, copy, overtime')
+    str_contains($preview, 'no template, copy, overtime')
         && !str_contains($header, 'shift-assignment-react-preview.php'),
     'Preview warning or navigation isolation changed.'
 );

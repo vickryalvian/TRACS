@@ -30,10 +30,10 @@ $updateRoute = edit_ui_source('public/api/v1/shift-assignment/assignment.php');
 
 edit_ui_assert(
     str_contains($app, "context.shift?.allowed_actions?.update_assignment")
-        && str_contains($table, 'canEdit ? (')
-        && str_contains($board, 'canEdit ? (')
+        && str_contains($table, '{canEdit ? (')
+        && str_contains($board, '{canEdit ? (')
         && str_contains($table, 'Edit')
-        && str_contains($board, 'Edit Assignment'),
+        && str_contains($board, 'Edit'),
     'Edit entry points are not gated by the backend context capability.'
 );
 edit_ui_assert(
@@ -51,10 +51,11 @@ edit_ui_assert(
 edit_ui_assert(
     substr_count($api, "method: 'POST'") === 1
         && substr_count($api, "method: 'PATCH'") === 1
+        && substr_count($api, "method: 'DELETE'") === 1
         && str_contains($api, '/api/v1/shift-assignment/assignment.php?id=')
         && str_contains($api, 'csrfToken: csrf.token')
         && str_contains($api, 'csrfHeaderName: csrf.header')
-        && !preg_match('/\b(method\s*:\s*[\'"](PUT|DELETE)|\.(put|delete)\s*\()/i', $api),
+        && !preg_match('/\b(method\s*:\s*[\'"]PUT|\.(put)\s*\()/i', $api),
     'Frontend API mutation allowlist changed.'
 );
 edit_ui_assert(
@@ -66,10 +67,10 @@ edit_ui_assert(
     'Backend edit capability or exact pilot authorization changed.'
 );
 edit_ui_assert(
-    str_contains($preview, 'Create/Edit actions are enabled only for Super')
+    str_contains($preview, 'Create/Edit/Delete actions are enabled only for Super')
         && str_contains($preview, "tracs_require_page_permission(\$conn, 'shifts.view')")
         && str_contains($preview, 'tracs_require_super_admin_page($conn)')
-        && str_contains($preview, 'no delete, template, copy, overtime'),
+        && str_contains($preview, 'no template, copy, overtime'),
     'Preview access or controlled edit warning changed.'
 );
 edit_ui_assert(

@@ -266,3 +266,13 @@ Phase 23 proves that exact assignment-row restore procedure in
 `tracs_phase23_test`, including original ID, all current columns, scoped GET
 visibility, duplicate prevention, and restore audit. It does not restore linked
 warnings or cascaded dependent rows, so React Delete UI remains blocked.
+## Phase 25 Controlled Delete Pilot
+
+The isolated Shift Assignment preview now exposes Delete only from the
+server-issued exact-Super-Admin plus `shifts.manage` capability. The modal
+requires typed `DELETE`, displays safe assignment details, sends CSRF to the
+existing DELETE contract, handles protected-template `409`, and refreshes the
+unchanged filter/range query after success.
+
+The legacy page remains authoritative, no navigation link was added, and
+template/copy controls remain absent.

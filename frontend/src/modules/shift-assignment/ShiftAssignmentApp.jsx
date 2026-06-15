@@ -3,6 +3,7 @@ import { Card } from '../../components/ui/Card';
 import { ShiftAssignmentBoard } from './components/ShiftAssignmentBoard';
 import { ShiftAssignmentTable } from './components/ShiftAssignmentTable';
 import { ShiftCreateModal } from './components/ShiftCreateModal';
+import { ShiftDeleteModal } from './components/ShiftDeleteModal';
 import { ShiftEditModal } from './components/ShiftEditModal';
 import { ShiftEmptyState } from './components/ShiftEmptyState';
 import { ShiftErrorState } from './components/ShiftErrorState';
@@ -34,12 +35,14 @@ export function ShiftAssignmentApp() {
   const [filters, setFilters] = useState(initialFilters);
   const [createOpen, setCreateOpen] = useState(false);
   const [editingAssignment, setEditingAssignment] = useState(null);
+  const [deletingAssignment, setDeletingAssignment] = useState(null);
   const [toast, setToast] = useState(null);
   const context = useShiftAssignmentContext();
   const requestFilters = useMemo(() => filters, [filters]);
   const assignments = useShiftAssignments(requestFilters, Boolean(context.shift));
   const canCreate = Boolean(context.shift?.allowed_actions?.create_assignment);
   const canEdit = Boolean(context.shift?.allowed_actions?.update_assignment);
+  const canDelete = Boolean(context.shift?.allowed_actions?.delete_assignment);
 
   function applyFilters(nextFilters) {
     setFilters(nextFilters);
@@ -103,6 +106,17 @@ export function ShiftAssignmentApp() {
     });
   }
 
+  async function handleDeleted(assignmentId, message) {
+    const refreshed = await assignments.refresh();
+    setToast({
+      type: refreshed ? 'success' : 'error',
+      title: refreshed ? 'Assignment deleted' : 'Assignment deleted; refresh needed',
+      message: refreshed
+        ? message || `Assignment #${assignmentId} was removed from the current schedule.`
+        : `${message || 'Shift assignment deleted.'} Refresh the schedule manually to verify the latest data.`,
+    });
+  }
+
   const theme = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
 
   return (
@@ -142,7 +156,7 @@ export function ShiftAssignmentApp() {
                       {filters.view[0].toUpperCase() + filters.view.slice(1)} assignments
                     </h2>
                     <p className="tr:mt-1 tr:text-xs tr:text-tracs-muted">
-                      Controlled create/edit pilot · {context.global?.user?.name || 'Authenticated user'}
+                      Controlled create/edit/delete pilot · {context.global?.user?.name || 'Authenticated user'}
                     </p>
                   </div>
                   <span className="tr:font-mono tr:text-[9px] tr:text-tracs-muted">
@@ -160,13 +174,17 @@ export function ShiftAssignmentApp() {
                   <>
                     <ShiftAssignmentTable
                       assignments={assignments.data.assignments}
+                      canDelete={canDelete}
                       canEdit={canEdit}
+                      onDelete={setDeletingAssignment}
                       onEdit={setEditingAssignment}
                     />
                     <div className="tr:p-tracs-3 tr:md:hidden">
                       <ShiftAssignmentBoard
                         assignments={assignments.data.assignments}
+                        canDelete={canDelete}
                         canEdit={canEdit}
+                        onDelete={setDeletingAssignment}
                         onEdit={setEditingAssignment}
                       />
                     </div>
@@ -218,6 +236,14 @@ export function ShiftAssignmentApp() {
         onToast={setToast}
         onUpdated={handleUpdated}
         open={Boolean(editingAssignment) && canEdit}
+      />
+      <ShiftDeleteModal
+        assignment={deletingAssignment}
+        context={context.shift}
+        onClose={() => setDeletingAssignment(null)}
+        onDeleted={handleDeleted}
+        onToast={setToast}
+        open={Boolean(deletingAssignment) && canDelete}
       />
       <ShiftToast onDismiss={() => setToast(null)} toast={toast} />
     </main>

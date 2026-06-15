@@ -61,13 +61,13 @@ delete_gate_assert(
     'Testing or rollback safety gate documentation is incomplete.'
 );
 delete_gate_assert(
-    !preg_match('/\b(method\s*:\s*[\'"]DELETE|deleteShiftAssignment|Delete Assignment)\b/i', $frontendApi)
-        && !preg_match('/\b(Delete Assignment|deleteShiftAssignment)\b/i', $moduleSources),
-    'React Delete UI or API caller was activated.'
+    substr_count($frontendApi, "method: 'DELETE'") === 1
+        && preg_match('/\b(Delete Assignment|deleteShiftAssignment)\b/i', $moduleSources),
+    'Controlled React Delete UI or API caller is missing.'
 );
 delete_gate_assert(
-    str_contains($context, "'delete_assignment' => false"),
-    'Delete capability is exposed to React.'
+    str_contains($context, "'delete_assignment' => \$controlledDelete"),
+    'Delete capability is not controlled by backend context.'
 );
 delete_gate_assert(
     str_contains($route, "methods: ['PATCH', 'DELETE']")
@@ -85,8 +85,8 @@ delete_gate_assert(
     str_contains($restoreDrill, 'TRACS_TEST_INCLUDE_RESTORE=1')
         && str_contains($testing, '## Phase 23 Disposable Restoration Drill')
         && str_contains($contract, '### Phase 23 Restoration Drill Result')
-        && str_contains($contract, '**Delete UI remains blocked.**'),
-    'Restoration drill result or dependent-record blocker is missing.'
+        && str_contains($contract, 'Dependent Record Delete/Restore Safety Matrix'),
+    'Restoration drill result or dependent-record evidence is missing.'
 );
 
 echo "TRACS Shift Assignment Delete UI safety gate checks passed.\n";

@@ -376,7 +376,8 @@ assignments return `409`.
 
 ## Delete UI Safety Gate
 
-React Delete UI remains blocked. A later approved UI must satisfy every item:
+Phase 25 activates Delete only inside the direct-URL controlled React preview.
+The pilot must continue to satisfy every item:
 
 1. Render Delete only when the server capability confirms exact `super_admin`,
    `shifts.view`, and explicit `shifts.manage`. Frontend visibility never
@@ -642,10 +643,31 @@ row, including IDs, timestamps, text, and status. Notifications and audit rows
 were retained, scoped GET returned one restored assignment, no duplicate child
 rows remained, and `tracs_phase24_test` was dropped.
 
-The backend dependency gate now permits a separately approved controlled React
-Delete UI pilot. Delete UI remains absent and still requires typed confirmation,
-server capability gating, hard-delete disclosure, and fresh disposable-browser
-evidence before activation.
+The backend dependency gate permitted the separately approved Phase 25
+controlled React Delete UI pilot.
+
+### Phase 25 Controlled Delete UI Result
+
+Delete is visible only when the context returns
+`allowed_actions.delete_assignment=true`, requiring exact `super_admin` plus
+explicit `shifts.manage`; the page still requires `shifts.view`. React sends
+the in-memory CSRF token to the existing DELETE endpoint.
+
+The modal shows agent, date, shift/time, type, division, status, and dependency
+context. Submit stays disabled until exact `DELETE`. It discloses hard-delete
+risk, does not optimistically remove the row, remains open on failure, handles
+template-link `409`, and refreshes the current query after success.
+
+Authenticated disposable-browser validation on June 16, 2026 used
+`tracs_phase25_test`. Create/Edit remained functional; cancel retained the
+assignment; exact confirmation deleted it and refreshed to zero records. A
+manual-source assignment with a live template-item link returned safe `409`
+and remained present. Audits and dependent snapshot keys were verified, no
+console errors appeared, and the temporary app/database were removed.
+
+This permits only the controlled direct-URL pilot. Production navigation,
+legacy replacement, template/copy actions, and production hard deletion remain
+unapproved.
 
 ## Data And Rollback Safety
 

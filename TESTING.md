@@ -780,6 +780,32 @@ Phase 24 passed on June 15, 2026. This clears the backend dependent-record gate
 for a separately approved Delete UI pilot. It does not activate Delete UI or
 authorize production mutation.
 
+## Phase 25 Controlled Delete UI Pilot
+
+```bash
+cd frontend && npm run test:contracts
+cd frontend && npm run build
+php tests/shift-assignment-delete-ui-pilot.php
+php tests/shift-assignment-delete-safety-gate.php
+```
+
+Authenticated browser validation completed on June 16, 2026 using
+`tracs_phase25_test` and temporary `tracs_phase25_app`:
+
+- exact Super Admin with `shifts.view` and `shifts.manage`;
+- Create produced Shift 3 `16:00-24:00`; Edit changed it to `confirmed`;
+- Delete showed full details and the hard-delete warning;
+- blank/lowercase confirmation stayed disabled and cancel retained the row;
+- exact `DELETE` removed the assignment and refreshed to zero records;
+- removing `shifts.manage` hid Add/Edit/Delete after reload;
+- a live template-item link returned safe `409` and remained visible;
+- create/update/delete assignment and activity audits survived;
+- warning and holiday-coverage dependent snapshot keys existed;
+- browser console contained no errors or warnings.
+
+Cleanup removed the temporary app and database. Final database existence count
+was zero. Production data was not used.
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:

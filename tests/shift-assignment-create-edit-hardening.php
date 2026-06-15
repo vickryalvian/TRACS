@@ -52,21 +52,22 @@ hardening_assert(
 hardening_assert(
     str_contains($hook, 'return true;')
         && substr_count($hook, 'return false;') >= 3
-        && substr_count($app, 'const refreshed = await assignments.refresh();') === 2
+        && substr_count($app, 'const refreshed = await assignments.refresh();') === 3
         && str_contains($app, 'Refresh the schedule to load the latest data.'),
     'Post-create/edit refresh result handling changed.'
 );
 hardening_assert(
     substr_count($api, "method: 'POST'") === 1
         && substr_count($api, "method: 'PATCH'") === 1
-        && !preg_match('/\b(method\s*:\s*[\'"](PUT|DELETE)|\.(put|delete)\s*\()/i', $api),
-    'An unapproved frontend mutation was added.'
+        && substr_count($api, "method: 'DELETE'") === 1
+        && !preg_match('/\b(method\s*:\s*[\'"]PUT|\.(put)\s*\()/i', $api),
+    'Frontend mutation allowlist changed.'
 );
 hardening_assert(
     str_contains($context, "'role_slug'] ?? '') === 'super_admin'")
         && str_contains($context, "'shifts.manage'")
-        && str_contains($preview, 'Create/Edit actions are enabled only for Super')
-        && str_contains($preview, 'no delete, template, copy, overtime')
+        && str_contains($preview, 'Create/Edit/Delete actions are enabled only for Super')
+        && str_contains($preview, 'no template, copy, overtime')
         && !str_contains($header, 'shift-assignment-react-preview.php'),
     'Pilot authorization, warning, or navigation isolation changed.'
 );

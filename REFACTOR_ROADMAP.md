@@ -322,3 +322,17 @@ Phase 24 dependent-restoration notes:
 The backend restoration gate is complete. A controlled React Delete UI pilot
 may be planned next; production navigation/replacement and production data
 mutation remain prohibited.
+
+Phase 25 controlled-delete UI notes:
+
+- Delete is capability-gated to exact Super Admin plus `shifts.manage`;
+- confirmation shows assignment details and requires exact typed `DELETE`;
+- the context CSRF token is sent to the existing DELETE endpoint;
+- success refreshes the current range and filters;
+- protected template links show safe `409` without removing data;
+- authenticated Create/Edit/Delete browser validation passed in
+  `tracs_phase25_test`;
+- audits, dependent snapshots, permission hiding, and cleanup were verified.
+
+Template/copy work, production navigation, legacy replacement, and production
+hard-delete rollout remain separate approval gates.

@@ -468,3 +468,10 @@ The canonical token and component contracts are maintained in:
 
 - `docs/tailwind-design-system-plan.md`
 - `docs/design-token-map.md`
+## Phase 25 Isolated Danger Action
+
+The controlled Delete action remains inside the authenticated Shift Assignment
+React root. Visibility is server-capability driven, Tailwind utilities remain
+prefixed and isolated, and no legacy page loads the module stylesheet. The
+hard-delete modal uses the existing TRACS danger, warning, surface, spacing,
+focus, responsive, and dark-mode tokens.

@@ -50,3 +50,14 @@ export async function updateShiftAssignment(assignmentId, payload, csrf = {}) {
     },
   );
 }
+
+export async function deleteShiftAssignment(assignmentId, csrf = {}) {
+  return apiClient.request(
+    `/api/v1/shift-assignment/assignment.php?id=${encodeURIComponent(assignmentId)}`,
+    {
+      method: 'DELETE',
+      csrfToken: csrf.token ?? '',
+      csrfHeaderName: csrf.header ?? 'X-CSRF-Token',
+    },
+  );
+}

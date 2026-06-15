@@ -114,7 +114,7 @@ shift_contract_assert(
 );
 shift_contract_assert(
     $decoded['data']['allowed_actions']['delete_assignment'] === false,
-    'The context must not invent an unsupported assignment-delete action.'
+    'Delete action must follow the controlled capability.'
 );
 shift_contract_assert(
     $decoded['data']['allowed_actions']['manage_workload_settings'] === false
