@@ -281,6 +281,23 @@ Authenticated role evidence still requires disposable fixture accounts and a
 browser environment. Record each role result in the matrix without passwords,
 2FA secrets, session IDs, or production user data.
 
+## Phase 11 Limited Internal Pilot
+
+Run:
+
+```bash
+php tests/shift-assignment-internal-pilot.php
+php -l public/shift-assignment-react-preview.php
+```
+
+The pilot test verifies authentication, `shifts.view`, exact Super Admin
+server-side access, safe-denial guard characterization, the read-only banner,
+navigation isolation, approved GET resources, and absence of frontend writes.
+
+With disposable accounts, confirm a Super Admin with `shifts.view` can render
+the page while Admin, Supervisor, Agent, Intern, and users without `shifts.view`
+receive safe denial. No credentials or sessions belong in test artifacts.
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:

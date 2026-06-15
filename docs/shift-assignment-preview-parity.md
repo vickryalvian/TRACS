@@ -184,3 +184,32 @@ Run on June 15, 2026 from Phase 9 commit `6d543df`:
 
 The blocked manual evidence is a release gate, not an automated pass. It must
 be completed before production replacement.
+
+## Phase 11 Limited Internal Pilot
+
+Pilot objective: collect controlled read-only feedback without replacing the
+legacy page or exposing the preview broadly.
+
+- Allowed role: exact `super_admin` only.
+- Required permission: `shifts.view`.
+- Access: direct URL `/shift-assignment-react-preview.php`; no navigation link.
+- Denial: non-Super Admin users receive the existing safe generic page denial.
+- APIs: remain independently authenticated, `shifts.view` protected, and
+  server-scoped. The page gate does not weaken API rules.
+- Limitations: no writes, audit view, configuration, export, free-text search,
+  production navigation, or replacement approval.
+
+Pilot manual QA:
+
+- [ ] Confirm unauthenticated access redirects to `/login.php`.
+- [ ] Confirm Super Admin with `shifts.view` can render the preview.
+- [ ] Confirm Admin, Supervisor, Agent, and Intern cannot render the preview.
+- [ ] Confirm removing `shifts.view` also denies a Super Admin fixture.
+- [ ] Confirm the banner identifies a read-only pilot and legacy source of truth.
+- [ ] Confirm only the three approved GET APIs are requested.
+- [ ] Confirm no write control or mutation request appears.
+- [ ] Confirm data, warning, dark mode, responsive, and console checks from the
+      Phase 10 guide remain satisfactory.
+
+Any expansion to Admin, Supervisor, or named users requires a separately
+approved server-side allowlist or feature-flag change and another access review.

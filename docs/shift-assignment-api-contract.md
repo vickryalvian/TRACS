@@ -322,6 +322,19 @@ GET resources, v1 route permissions, default role grants, and server-side
 self/division scope. Live record and visual parity still require authenticated
 disposable fixtures and recorded browser evidence.
 
+## Phase 11 Internal Pilot Access
+
+The preview page now requires all of:
+
+1. a fully authenticated active session;
+2. `shifts.view`;
+3. the exact `super_admin` role.
+
+The existing Super Admin page guard performs server-side safe denial and audit
+characterization. The direct URL remains absent from production navigation.
+This page gate does not replace API authentication or permission enforcement.
+The React pilot remains read-only and uses only the approved GET contracts.
+
 Future writes are not approved in this phase:
 
 ```text

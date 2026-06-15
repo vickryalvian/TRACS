@@ -179,3 +179,8 @@ The page requires the normal full session and `shifts.view`, uses the existing
 TRACS shell, loads only the allowlisted Shift Assignment manifest entry, and
 shows a safe build-required state when assets are missing. Production
 navigation and `public/shifting-assignment.php` remain unchanged.
+
+Phase 11 limits that direct-URL preview to the exact `super_admin` role in
+addition to `shifts.view`. The implementation reuses the existing audited,
+safe-denial page guard; it does not introduce a general feature-flag system or
+add a navigation link. Expansion beyond Super Admin requires explicit approval.

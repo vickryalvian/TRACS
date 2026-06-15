@@ -12,6 +12,7 @@ require_once __DIR__ . '/../modules/alert-ticker/controller.php';
 require_once __DIR__ . '/includes/react_manifest.php';
 
 tracs_require_page_permission($conn, 'shifts.view');
+tracs_require_super_admin_page($conn);
 
 $uid = (int)($_SESSION['user_id'] ?? 0);
 $user_email = $_SESSION['user_email'] ?? 'operator@tracs.local';
@@ -31,16 +32,17 @@ include __DIR__ . '/includes/header.php';
     <section class="panel" style="margin-bottom: var(--space-4);">
       <div class="panel-head">
         <div>
-          <span class="panel-title">React Preview / Pilot</span>
-          <span class="panel-meta">Read-only Shift Assignment validation surface</span>
+          <span class="panel-title">React Preview Pilot</span>
+          <span class="panel-meta">Limited internal read-only access</span>
         </div>
-        <span class="badge b-pending">Not Production Navigation</span>
+        <span class="badge b-pending">Super Admin Pilot</span>
       </div>
       <div class="panel-body" style="padding: var(--space-3) var(--space-4);">
         <p style="margin:0;color:var(--tx2);font-size:12px;">
-          This authenticated preview does not replace
-          <code>shifting-assignment.php</code> and provides no create, edit, delete,
-          template, copy, overtime, or holiday write action.
+          React Preview Pilot — Read-only. Legacy
+          <code>shifting-assignment.php</code> remains the production source of
+          truth. This pilot provides no create, edit, delete, template, copy,
+          overtime, or holiday write action.
         </p>
       </div>
     </section>

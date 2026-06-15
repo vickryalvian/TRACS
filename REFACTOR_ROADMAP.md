@@ -85,18 +85,17 @@ their frontend migration remains late because of the system-wide risk.
 
 ## Current Phase
 
-Phase 10 validates role, permission, data, security, and visual parity between
-the legacy Shift Assignment page and the authenticated, unlinked React preview:
+Phase 11 limits the authenticated, unlinked React preview to a controlled
+internal pilot:
 
 ```text
 /shifting-assignment.php
 /shift-assignment-react-preview.php
 ```
 
-The source-level parity gate protects shared authentication and `shifts.view`
-requirements, server-side self/division scope, GET-only API use, and navigation
-isolation. The manual guide requires role evidence for Super Admin, Admin,
-Supervisor, Agent, and Intern before any replacement decision.
+The page requires authentication, `shifts.view`, and the exact `super_admin`
+role. It remains direct-URL only and read-only. Existing API authentication,
+permission, and role/division scope remain authoritative.
 
 The existing PHP page, legacy API, CSV export, service, Calendar reference,
 database schema, data, production navigation, and Calendar remain unchanged.
@@ -174,3 +173,9 @@ Phase 10 parity notes:
 - `docs/shift-assignment-preview-parity.md`
 - `docs/shift-assignment-role-test-matrix.md`
 - `tests/shift-assignment-preview-parity.php`
+
+Phase 11 internal pilot notes:
+
+- `public/shift-assignment-react-preview.php`
+- `tests/shift-assignment-internal-pilot.php`
+- `docs/shift-assignment-preview-parity.md`

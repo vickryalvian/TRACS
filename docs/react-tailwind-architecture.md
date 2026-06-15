@@ -335,6 +335,11 @@ not-ready result for missing or malformed manifests. The preview reuses the
 existing header/footer shell and its module-script hook; its CSS is linked only
 on the preview request, so Tailwind remains isolated from legacy pages.
 
+Phase 11 adds an exact-role Super Admin pilot gate after authentication and
+`shifts.view`. This is a page-access control only: React still calls the same
+authenticated, permission-protected GET APIs, and no frontend visibility rule
+is treated as authorization.
+
 ## React Mount Contract
 
 Each PHP page supplies only non-sensitive bootstrap data required before the

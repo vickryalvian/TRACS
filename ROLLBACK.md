@@ -421,3 +421,33 @@ git branch -D refactor/phase-10-shift-preview-parity-testing
 
 No database restore, frontend rebuild, navigation rollback, or legacy page
 fallback is required.
+
+## Phase 11 Internal Pilot Access Rollback
+
+Phase 11 adds an exact-role Super Admin guard and clarifies the existing pilot
+banner, plus tests and documentation. It does not change navigation, APIs,
+schema, data, Calendar, or the legacy Shift Assignment page.
+
+Before commit:
+
+```bash
+git restore --staged .
+git restore .
+rm tests/shift-assignment-internal-pilot.php
+```
+
+After commit:
+
+```bash
+git revert <phase-11-commit-sha>
+```
+
+To abandon the unmerged branch:
+
+```bash
+git switch refactor/phase-10-shift-preview-parity-testing
+git branch -D refactor/phase-11-shift-preview-internal-pilot
+```
+
+No database restore, asset rebuild, navigation rollback, or legacy-page
+fallback is required.
