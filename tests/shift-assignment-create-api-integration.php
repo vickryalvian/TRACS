@@ -22,7 +22,7 @@ function integration_env(string $key, string $default = ''): string
 function integration_safe_database_name(string $database): bool
 {
     return preg_match('/^[A-Za-z0-9_]+$/', $database) === 1
-        && preg_match('/(?:test|local|dev|disposable)/i', $database) === 1;
+        && preg_match('/(?:test|local|dev|disposable|staging)/i', $database) === 1;
 }
 
 function integration_run(array $command, string $input = ''): array
@@ -57,7 +57,8 @@ function integration_request(
     int $userId,
     string $csrfMode,
     array $query = [],
-    array $body = []
+    array $body = [],
+    string $resource = 'assignments'
 ): array {
     $command = [
         PHP_BINARY,
@@ -67,6 +68,7 @@ function integration_request(
         $csrfMode,
         json_encode($query, JSON_THROW_ON_ERROR),
         base64_encode($body === [] ? '' : json_encode($body, JSON_THROW_ON_ERROR)),
+        $resource,
     ];
     $result = integration_run($command);
     integration_assert(
@@ -333,6 +335,201 @@ try {
         'Overlap attempt created a second assignment.'
     );
 
+    $updatePayload = [
+        'assignment_date' => '2026-07-07',
+        'start_time' => '16:00',
+        'end_time' => '24:00',
+        'status' => 'confirmed',
+    ];
+    $updateQuery = ['id' => (string)$assignmentId];
+
+    $updateUnauthenticated = integration_request(
+        'PATCH',
+        0,
+        'missing',
+        $updateQuery,
+        $updatePayload,
+        'assignment'
+    );
+    integration_assert(
+        ($updateUnauthenticated['success'] ?? null) === false
+            && $updateUnauthenticated['_test_status'] === 401,
+        'Unauthenticated update did not return 401.'
+    );
+    $updateMissingCsrf = integration_request(
+        'PATCH',
+        9301,
+        'missing',
+        $updateQuery,
+        $updatePayload,
+        'assignment'
+    );
+    integration_assert(
+        ($updateMissingCsrf['success'] ?? null) === false
+            && $updateMissingCsrf['_test_status'] === 403,
+        'Missing update CSRF did not return 403.'
+    );
+    $updateInvalidCsrf = integration_request(
+        'PATCH',
+        9301,
+        'invalid',
+        $updateQuery,
+        $updatePayload,
+        'assignment'
+    );
+    integration_assert(
+        ($updateInvalidCsrf['success'] ?? null) === false
+            && $updateInvalidCsrf['_test_status'] === 403,
+        'Invalid update CSRF did not return 403.'
+    );
+    $updateWrongRole = integration_request(
+        'PATCH',
+        9302,
+        'valid',
+        $updateQuery,
+        $updatePayload,
+        'assignment'
+    );
+    integration_assert(
+        ($updateWrongRole['success'] ?? null) === false
+            && $updateWrongRole['_test_status'] === 403,
+        'Non-Super Admin update did not return 403.'
+    );
+
+    $conn->query("DELETE FROM tracs_role_permissions WHERE role_id=9001 AND permission_id=9102");
+    $updateMissingPermission = integration_request(
+        'PATCH',
+        9301,
+        'valid',
+        $updateQuery,
+        $updatePayload,
+        'assignment'
+    );
+    integration_assert(
+        ($updateMissingPermission['success'] ?? null) === false
+            && $updateMissingPermission['_test_status'] === 403,
+        'Update without shifts.manage did not return 403.'
+    );
+    $conn->query("INSERT INTO tracs_role_permissions (role_id,permission_id) VALUES (9001,9102)");
+
+    $updateMissingId = integration_request(
+        'PATCH',
+        9301,
+        'valid',
+        [],
+        $updatePayload,
+        'assignment'
+    );
+    integration_assert(
+        ($updateMissingId['success'] ?? null) === false
+            && $updateMissingId['_test_status'] === 422,
+        'Update without an assignment ID did not return 422.'
+    );
+    $updateNotFound = integration_request(
+        'PATCH',
+        9301,
+        'valid',
+        ['id' => '99999999'],
+        $updatePayload,
+        'assignment'
+    );
+    integration_assert(
+        ($updateNotFound['success'] ?? null) === false
+            && $updateNotFound['_test_status'] === 404,
+        'Missing assignment update did not return 404.'
+    );
+    $updateInvalidPayload = integration_request(
+        'PATCH',
+        9301,
+        'valid',
+        $updateQuery,
+        ['assignment_date' => '07-07-2026', 'source' => 'fixture'],
+        'assignment'
+    );
+    integration_assert(
+        ($updateInvalidPayload['success'] ?? null) === false
+            && $updateInvalidPayload['_test_status'] === 422,
+        'Invalid update payload did not return 422.'
+    );
+
+    $updated = integration_request(
+        'PATCH',
+        9301,
+        'valid',
+        $updateQuery,
+        $updatePayload,
+        'assignment'
+    );
+    integration_assert(
+        ($updated['success'] ?? null) === true && $updated['_test_status'] === 200,
+        'Valid update did not succeed: ' . json_encode($updated, JSON_UNESCAPED_SLASHES)
+    );
+    integration_assert(
+        ($updated['data']['assignment']['id'] ?? 0) === $assignmentId
+            && ($updated['data']['assignment']['assignment_date'] ?? '') === '2026-07-07'
+            && ($updated['data']['assignment']['display_range'] ?? '') === '16:00-24:00'
+            && ($updated['data']['assignment']['status'] ?? '') === 'confirmed',
+        'Valid update response changed the Shift 3 or assignment contract.'
+    );
+    integration_assert(
+        integration_scalar(
+            $conn,
+            "SELECT DATE_FORMAT(assignment_date,'%Y-%m-%d')
+             FROM shift_assignments WHERE id={$assignmentId}"
+        ) === '2026-07-07',
+        'Valid update was not persisted.'
+    );
+
+    $updatedRead = integration_request('GET', 9301, 'valid', [
+        'view' => 'daily',
+        'start_date' => '2026-07-07',
+        'end_date' => '2026-07-07',
+        'agent_id' => '9303',
+    ]);
+    $updatedReadIds = array_map(
+        static fn(array $row): int => (int)($row['id'] ?? 0),
+        $updatedRead['data']['assignments'] ?? []
+    );
+    integration_assert(
+        ($updatedRead['success'] ?? null) === true
+            && in_array($assignmentId, $updatedReadIds, true),
+        'Updated assignment is missing from GET.'
+    );
+
+    $blocking = integration_request('POST', 9301, 'valid', [], [
+        'agent_id' => 9303,
+        'assignment_date' => '2026-07-08',
+        'shift_type' => 'regular_shift',
+        'start_time' => '08:00',
+        'end_time' => '16:00',
+        'status' => 'assigned',
+    ]);
+    integration_assert(($blocking['success'] ?? null) === true, 'Unable to create overlap fixture.');
+    $conflict = integration_request(
+        'PATCH',
+        9301,
+        'valid',
+        $updateQuery,
+        [
+            'assignment_date' => '2026-07-08',
+            'start_time' => '08:00',
+            'end_time' => '16:00',
+        ],
+        'assignment'
+    );
+    integration_assert(
+        ($conflict['success'] ?? null) === false && $conflict['_test_status'] === 409,
+        'Overlapping update did not return 409.'
+    );
+    integration_assert(
+        integration_scalar(
+            $conn,
+            "SELECT DATE_FORMAT(assignment_date,'%Y-%m-%d')
+             FROM shift_assignments WHERE id={$assignmentId}"
+        ) === '2026-07-07',
+        'Conflict attempt mutated the assignment.'
+    );
+
     integration_assert(
         (int)integration_scalar(
             $conn,
@@ -349,6 +546,25 @@ try {
                AND target_id={$assignmentId}"
         ) >= 1,
         'Phase 5 create activity audit record is missing.'
+    );
+    integration_assert(
+        (int)integration_scalar(
+            $conn,
+            "SELECT COUNT(*) FROM assignment_audit_logs
+             WHERE assignment_id={$assignmentId} AND action='updated'
+               AND before_snapshot IS NOT NULL AND after_snapshot IS NOT NULL"
+        ) >= 1,
+        'Assignment update before/after audit record is missing.'
+    );
+    integration_assert(
+        (int)integration_scalar(
+            $conn,
+            "SELECT COUNT(*) FROM tracs_user_activity_logs
+             WHERE actor_user_id=9301 AND action='shift_assignment.update'
+               AND target_id={$assignmentId}
+               AND before_data IS NOT NULL AND after_data IS NOT NULL"
+        ) >= 1,
+        'Controlled update activity audit record is missing.'
     );
     integration_assert(
         (int)integration_scalar(

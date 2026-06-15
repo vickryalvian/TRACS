@@ -24,7 +24,7 @@ $readRoute = write_plan_source('public/api/v1/shift-assignment/assignments.php')
 
 foreach ([
     'POST /api/v1/shift-assignment/assignments.php',
-    'PATCH /api/v1/shift-assignment/assignments/{id}.php',
+    'PATCH /api/v1/shift-assignment/assignment.php?id=<id>',
     'DELETE /api/v1/shift-assignment/assignments/{id}.php',
     'X-CSRF-Token',
     'shifts.create',
@@ -89,8 +89,8 @@ write_plan_assert(
 );
 
 $routeAllowlists = [
-    'public/api/v1/shift-assignment' => ['assignments.php', 'context.php'],
-    'api/v1/shift-assignment' => ['assignments.php', 'context.php'],
+    'public/api/v1/shift-assignment' => ['assignment.php', 'assignments.php', 'context.php'],
+    'api/v1/shift-assignment' => ['assignment.php', 'assignments.php', 'context.php'],
 ];
 foreach ($routeAllowlists as $directory => $expectedFiles) {
     $files = array_values(array_filter(
@@ -100,7 +100,7 @@ foreach ($routeAllowlists as $directory => $expectedFiles) {
     sort($files);
     write_plan_assert(
         $files === $expectedFiles,
-        "Planning phase changed the approved PHP route allowlist under {$directory}."
+        "Approved Shift Assignment PHP route allowlist changed under {$directory}."
     );
 }
 

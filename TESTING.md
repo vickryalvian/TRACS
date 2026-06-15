@@ -543,6 +543,44 @@ php tests/shift-assignment-create-ui-browser-environment.php cleanup
 
 Final database existence count was zero. No fixture or assignment remains.
 
+## Phase 18 Controlled Update API
+
+The controlled update route is:
+
+```text
+PATCH /api/v1/shift-assignment/assignment.php?id=<assignment_id>
+```
+
+It requires a fully authenticated session, valid mutation CSRF, the exact
+`super_admin` role, and explicit `shifts.manage`. The endpoint accepts a
+non-empty partial JSON body, merges allowed fields with the scoped current
+record, and delegates overlap, duration, holiday, overtime, warning,
+notification, and persistence behavior to `ShiftingAssignmentService`.
+
+Run the non-mutating contract:
+
+```bash
+php tests/shift-assignment-update-api-contract.php
+```
+
+Run the mutation integration only against a safely marked disposable database:
+
+```bash
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 \
+php tests/shift-assignment-update-api-integration.php
+```
+
+On June 15, 2026, this created `tracs_phase18_test`, cloned schema only, and
+verified `401`, `403`, `404`, `409`, and `422` paths plus authenticated update
+success. A Shift 3 update persisted as a cross-day record, appeared through
+GET, and produced assignment and API activity before/after audits. The
+conflict test left the prior row unchanged. The disposable database was
+removed and its absence confirmed.
+
+The React preview remains create-only. Edit controls must not be enabled until
+a later approved phase adds frontend contracts and disposable browser
+validation.
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:

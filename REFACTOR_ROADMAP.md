@@ -228,3 +228,21 @@ Phase 15 disposable-integration notes:
 - `tests/fixtures/shift-assignment-api-request.php`
 - `TESTING.md`
 - `ROLLBACK.md`
+
+Phase 16-17 controlled create UI notes:
+
+- `frontend/src/modules/shift-assignment/`
+- `tests/shift-assignment-create-ui-pilot.php`
+- `tests/shift-assignment-create-ui-browser-environment.php`
+- `tests/shift-assignment-create-ui-browser-validation.php`
+
+Phase 18 controlled-update notes:
+
+- `public/api/v1/shift-assignment/assignment.php`
+- `api/v1/shift-assignment/assignment.php`
+- `tests/shift-assignment-update-api-contract.php`
+- `tests/shift-assignment-update-api-integration.php`
+
+The PATCH route is server-side only. The isolated React preview remains
+create-only, and legacy Shift Assignment remains the production source of
+truth.

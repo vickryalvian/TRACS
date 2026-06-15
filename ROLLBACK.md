@@ -657,3 +657,44 @@ php tests/shift-assignment-create-ui-browser-environment.php cleanup
 ```
 
 Never substitute an unmarked database name in the cleanup command.
+
+## Phase 18 Controlled Update API Rollback
+
+Phase 18 adds the isolated PATCH route, pure validation/response helpers,
+contract and disposable integration tests, and documentation. It does not add
+React edit UI, navigation, schema, Calendar, or legacy-page changes.
+
+Before commit:
+
+```bash
+git restore --staged .
+git restore .
+rm api/v1/shift-assignment/assignment.php
+rm public/api/v1/shift-assignment/assignment.php
+rm tests/shift-assignment-update-api-contract.php
+rm tests/shift-assignment-update-api-integration.php
+```
+
+After commit:
+
+```bash
+git revert <phase-18-commit-sha>
+```
+
+To abandon the unmerged branch:
+
+```bash
+git switch refactor/phase-17-shift-create-ui-staging-validation
+git branch -D refactor/phase-18-shift-update-assignment-api
+```
+
+The integration runner drops its target automatically. If interrupted, remove
+only the safely marked disposable database:
+
+```sql
+DROP DATABASE IF EXISTS tracs_phase18_test;
+```
+
+Code rollback does not reverse an update made through an approved non-test
+environment. Restore the recorded database backup or use an explicitly
+approved, audited correction; never overwrite real schedules ad hoc.

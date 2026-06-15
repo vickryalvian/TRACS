@@ -324,29 +324,37 @@ activation so a retry cannot create duplicate real assignments.
 ## Assignment Update
 
 ```text
-PATCH /api/v1/shift-assignment/assignments/{id}.php
+PATCH /api/v1/shift-assignment/assignment.php?id=<id>
 ```
 
 Required permission: future `shifts.update`; current gate `shifts.manage`.
 
-The request uses the same field rules as create and must include a concurrency
-token such as the last observed `updated_at` or an opaque version:
+Phase 18 implements this route under the temporary pilot gate: exact
+`super_admin`, explicit role assignment for `shifts.manage`, authenticated
+session, and mutation CSRF. It accepts at least one allowlisted field and
+merges omitted fields with the scoped current record before invoking the
+existing service. Unsupported source, creator, approver, division override,
+audit, and overtime flag fields are rejected.
+
+The current pilot request uses the same field rules as create:
 
 ```json
 {
   "agent_id": 21,
-  "date": "2026-07-01",
+  "assignment_date": "2026-07-01",
   "shift_type": "regular_shift",
   "start_time": "08:00",
   "end_time": "16:00",
   "status": "confirmed",
-  "version": "..."
+  "status": "confirmed"
 }
 ```
 
-PHP must load the scoped record, capture the before snapshot, reject stale
-versions with `409`, validate the complete resulting resource, and update
-holiday coverage and notifications consistently. PATCH must not permit
+PHP loads the scoped record, captures the before snapshot, validates the
+complete resulting resource, and updates holiday coverage and notifications
+consistently. A future production-replacement phase must add an explicit
+concurrency/version contract; Phase 18 does not claim stale-write protection.
+PATCH must not permit
 unlisted fields such as creator IDs, approver IDs, source, audit fields, or
 division overrides.
 
@@ -456,8 +464,9 @@ without the required audit.
 ## React Write Behavior
 
 Only the implemented and tested create contract is active in the controlled
-preview. Edit/Delete/Template/Copy controls remain absent or disabled, and the
-pilot banner continues to identify the legacy page as production authority.
+preview. The update API is server-side only; Edit/Delete/Template/Copy controls
+remain absent or disabled, and the pilot banner continues to identify the
+legacy page as production authority.
 
 Future forms must:
 

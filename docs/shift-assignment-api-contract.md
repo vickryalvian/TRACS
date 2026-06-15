@@ -343,18 +343,16 @@ staged until Apply, obsolete reads are aborted, and the unsupported role
 control is removed. Holiday, overtime, summary, and warning presentation uses
 only fields already returned by the assignments contract.
 
-Future writes are not approved in this phase:
+The current versioned mutation routes are:
 
 ```text
 POST   /api/v1/shift-assignment/assignments.php
-PATCH  /api/v1/shift-assignment/assignments/{id}.php
-DELETE /api/v1/shift-assignment/assignments/{id}.php
+PATCH  /api/v1/shift-assignment/assignment.php?id=<id>
 ```
 
-Before a write endpoint is added, define its exact permission, object scope,
-CSRF, validation, transaction, conflict, audit, notification, and rollback
-contract. DELETE needs separate approval because the current module has no
-assignment-delete action.
+Both are controlled exact-Super-Admin pilots with explicit `shifts.manage` and
+CSRF. DELETE remains blocked and needs separate approval because the current
+module has no assignment-delete action.
 
 ## Phase 13 Write Contract Plan
 
@@ -410,6 +408,25 @@ audits, security audits, and unconditional database teardown.
 The temporary target was `tracs_phase15_test`; it was dropped after the run.
 React remains read-only.
 
+## Phase 18 Controlled Update Contract
+
+The additive update route is:
+
+```text
+PATCH /api/v1/shift-assignment/assignment.php?id=<id>
+```
+
+It loads the assignment through existing scope rules, requires a non-empty
+allowlisted partial payload, merges omitted values from the current row, and
+delegates validation and persistence to the existing service. It returns
+`404` for a missing scoped record, `409` for overlap/availability conflict,
+`422` for field validation, and the standard five-key success envelope with
+safe assignment fields and warnings.
+
+The service and API activity logs both retain before/after evidence. The
+disposable integration verified Shift 3 `24:00`, GET visibility, conflict
+non-mutation, and database teardown. No React PATCH call or edit control exists.
+
 ## Visible Risks To Protect
 
 1. The legacy aggregate payload includes agent email and mixed concerns; future
@@ -452,7 +469,9 @@ React remains read-only.
 - [ ] GET remains read-only and compatible.
 - [ ] POST requires exact Super Admin, `shifts.manage`, and CSRF and creates
       only one validated manual assignment in a disposable/staging database.
-- [ ] PATCH and DELETE remain rejected.
+- [ ] PATCH requires exact Super Admin, explicit `shifts.manage`, CSRF, scoped
+      record access, and a disposable/staging validation environment.
+- [ ] DELETE remains rejected.
 
 ## Validation
 
@@ -462,6 +481,7 @@ php tests/php-api-contract.php
 php tests/shift-assignment-api-contract.php
 php tests/shift-assignment-assignments-api-contract.php
 php tests/shift-assignment-create-api-contract.php
+php tests/shift-assignment-update-api-contract.php
 find api tests public/api/v1 -name '*.php' -exec php -l {} \;
 ```
 

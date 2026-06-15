@@ -11,10 +11,12 @@ $userId = (int)($argv[2] ?? 0);
 $csrfMode = (string)($argv[3] ?? 'valid');
 $query = json_decode((string)($argv[4] ?? '{}'), true);
 $requestBody = base64_decode((string)($argv[5] ?? ''), true);
+$resource = (string)($argv[6] ?? 'assignments');
 
 if (getenv('TRACS_ENV') !== 'test'
     || getenv('TRACS_ALLOW_MUTATION_TESTS') !== '1'
-    || !preg_match('/(?:test|local|dev|disposable)/i', $database)) {
+    || !preg_match('/(?:test|local|dev|disposable|staging)/i', $database)
+    || !in_array($resource, ['assignments', 'assignment'], true)) {
     fwrite(STDERR, "Unsafe integration request harness environment.\n");
     exit(2);
 }
@@ -68,7 +70,7 @@ $_ENV['DB_USER'] = $databaseUser;
 $_ENV['DB_PASS'] = $databasePass;
 $_ENV['DB_NAME'] = $database;
 $_SERVER['REQUEST_METHOD'] = $method;
-$_SERVER['REQUEST_URI'] = '/api/v1/shift-assignment/assignments.php';
+$_SERVER['REQUEST_URI'] = '/api/v1/shift-assignment/' . $resource . '.php';
 $_SERVER['REMOTE_ADDR'] = '127.0.0.1';
 $_SERVER['HTTP_USER_AGENT'] = 'TRACS Phase 15 Integration Test';
 $_GET = is_array($query) ? $query : [];
@@ -91,4 +93,4 @@ if ($userId > 0) {
     }
 }
 
-require __DIR__ . '/../../public/api/v1/shift-assignment/assignments.php';
+require __DIR__ . '/../../public/api/v1/shift-assignment/' . $resource . '.php';

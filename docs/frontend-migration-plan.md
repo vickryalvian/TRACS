@@ -225,3 +225,9 @@ before the container and database were destroyed.
 No browser authentication bypass or public test route was added. The
 environment helper is CLI-only under `tests/`, requires explicit mutation
 consent, and refuses unsafe database names.
+
+Phase 18 adds the controlled assignment PATCH contract behind the same exact
+Super Admin, explicit `shifts.manage`, session, and CSRF gates. It is not called
+by React. The preview remains create-only until a separate edit-UI phase adds
+capability metadata, modal behavior, frontend contracts, and disposable browser
+evidence. Legacy Shift Assignment and production navigation remain unchanged.
