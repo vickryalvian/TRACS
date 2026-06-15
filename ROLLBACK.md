@@ -355,3 +355,38 @@ git branch -D refactor/phase-8-shift-assignment-react-shell
 
 No database restore, asset deployment rollback, PHP fallback switch, or
 production navigation change is required because the entry is not mounted.
+
+## Phase 9 Authenticated React Preview Rollback
+
+Phase 9 adds an unlinked authenticated preview page, a manifest resolver, a
+preview-only build target, generated preview assets, tests, and documentation.
+It does not replace the legacy page or alter navigation, APIs, schema, or data.
+
+Before commit:
+
+```bash
+git restore --staged .
+git restore .
+rm public/shift-assignment-react-preview.php
+rm public/includes/react_manifest.php
+rm tests/shift-assignment-react-preview.php
+rm frontend/vite.preview.config.js
+rm -rf public/assets/react-dist
+```
+
+After commit:
+
+```bash
+git revert <phase-9-commit-sha>
+```
+
+To abandon the unmerged branch:
+
+```bash
+git switch refactor/phase-8-shift-assignment-react-shell
+git branch -D refactor/phase-9-shift-assignment-react-preview
+```
+
+No database restore or legacy UI fallback operation is required. Removing the
+preview page or assets returns its URL to unavailable while
+`public/shifting-assignment.php` continues normally.

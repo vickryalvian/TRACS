@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
+    "build:preview": "vite build --config vite.preview.config.js",
     "preview": "vite preview --host 127.0.0.1",
     "test:contracts": "node tests/apiClient-contract.mjs"
   },

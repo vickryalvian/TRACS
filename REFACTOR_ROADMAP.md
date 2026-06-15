@@ -85,23 +85,21 @@ their frontend migration remains late because of the system-wide risk.
 
 ## Current Phase
 
-Phase 8 adds an isolated read-only Shift Assignment React/Tailwind entry that
-consumes:
+Phase 9 mounts the read-only Shift Assignment React/Tailwind entry at the
+authenticated, unlinked preview:
 
 ```text
-GET /api/v1/context.php
-GET /api/v1/shift-assignment/context.php
-GET /api/v1/shift-assignment/assignments.php
+/shift-assignment-react-preview.php
 ```
 
-It includes read-only view/range/filter controls, summary cards, responsive
-assignments, warnings, and loading/empty/error states using isolated `tr:`
-Tailwind utilities with no Preflight.
+The page requires `shifts.view`, resolves a fixed allowlisted Vite manifest
+entry, and safely explains when preview assets need building. React continues
+to use only the three protected GET contracts.
 
 The existing PHP page, legacy API, CSV export, service, Calendar reference,
-database schema, data, production layout, and navigation remain unchanged. The
-entry is not mounted by PHP, so `public/shifting-assignment.php` remains the
-only production Shift Assignment UI.
+database schema, data, production navigation, and Calendar remain unchanged.
+`public/shifting-assignment.php` remains the production Shift Assignment UI and
+fallback.
 
 Canonical Phase 2 plans:
 
@@ -160,3 +158,11 @@ Phase 8 read-only frontend notes:
 - `frontend/vite.config.js`
 - `frontend/tests/apiClient-contract.mjs`
 - `docs/frontend-migration-plan.md`
+
+Phase 9 authenticated preview notes:
+
+- `public/shift-assignment-react-preview.php`
+- `public/includes/react_manifest.php`
+- `public/assets/react-dist/`
+- `frontend/vite.preview.config.js`
+- `tests/shift-assignment-react-preview.php`

@@ -236,6 +236,30 @@ write only ignored files under `frontend/dist/`. No PHP page currently mounts
 the Shift Assignment bundle, so browser auth/permission/render checks remain a
 later authenticated pilot-mount task.
 
+## Phase 9 Authenticated React Preview
+
+Run:
+
+```bash
+cd frontend
+npm run test:contracts
+npm run build
+npm run build:preview
+cd ..
+php tests/shift-assignment-react-preview.php
+php -l public/shift-assignment-react-preview.php
+php -l public/includes/react_manifest.php
+```
+
+The preview test verifies the allowlisted manifest entry, imported CSS
+collection, safe missing-manifest behavior, authentication and `shifts.view`
+source guards, dedicated React root, and absence of write methods.
+
+Unauthenticated browser or curl access must redirect through the normal login
+flow. With an authenticated fixture account, verify the preview renders without
+console errors, the three GET APIs remain scoped, filters load data, and the
+legacy page and sidebar remain unchanged.
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:

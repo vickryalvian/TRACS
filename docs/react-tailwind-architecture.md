@@ -322,6 +322,19 @@ approved authenticated pilot mount must provide the existing TRACS shell and
 load only this manifest entry. That mount must preserve
 `public/shifting-assignment.php` as the fallback until parity is verified.
 
+Phase 9 supplies that pilot mount without changing navigation:
+
+```text
+public/shift-assignment-react-preview.php
+public/assets/react-dist/.vite/manifest.json
+```
+
+`public/includes/react_manifest.php` accepts only allowlisted entry names,
+rejects unsafe asset paths, collects entry/import CSS, and returns a safe
+not-ready result for missing or malformed manifests. The preview reuses the
+existing header/footer shell and its module-script hook; its CSS is linked only
+on the preview request, so Tailwind remains isolated from legacy pages.
+
 ## React Mount Contract
 
 Each PHP page supplies only non-sensitive bootstrap data required before the

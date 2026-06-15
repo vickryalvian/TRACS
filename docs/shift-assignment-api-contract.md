@@ -286,6 +286,29 @@ HTTP failures remain distinct: `401` session expired, `403` permission denied,
 empty data. Messages are rendered from sanitized API responses without raw
 stack traces.
 
+## Phase 9 Authenticated Preview
+
+The read-only React consumer is mounted at:
+
+```text
+/shift-assignment-react-preview.php
+```
+
+The PHP page requires the normal authenticated session and `shifts.view`
+before rendering. It injects no user/session payload; React obtains only the
+allowlisted context and assignment contracts through authenticated GET calls.
+The preview is not in sidebar/navigation and does not replace the legacy page.
+
+Assets are built with:
+
+```bash
+cd frontend
+npm run build:preview
+```
+
+Missing or malformed assets produce a safe build-required panel instead of a
+fatal PHP error or filesystem detail.
+
 Future writes are not approved in this phase:
 
 ```text

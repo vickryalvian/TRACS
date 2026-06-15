@@ -54,3 +54,16 @@ Phase 8 adds the named `shiftAssignment` Vite entry under
 No PHP page or navigation item loads this entry yet. Local Vite output alone
 does not provide an authenticated TRACS session, so authenticated browser
 preview remains deferred until an approved PHP pilot mount is added.
+
+## Authenticated preview build
+
+Phase 9 adds a dedicated build:
+
+```bash
+npm run build:preview
+```
+
+It writes only the `shiftAssignment` entry and manifest to
+`public/assets/react-dist/`. The unlinked authenticated preview page resolves
+that manifest at `/shift-assignment-react-preview.php`. The regular
+`npm run build` output remains isolated under ignored `frontend/dist/`.

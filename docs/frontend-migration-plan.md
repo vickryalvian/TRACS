@@ -168,3 +168,14 @@ The entry is build-only and is not mounted by a PHP page or linked from
 navigation. The existing `public/shifting-assignment.php` remains the production
 UI and rollback path. No create, update, delete, template, copy, overtime, or
 holiday mutation is present in the React shell.
+
+Phase 9 mounts that same read-only entry at the unlinked authenticated preview:
+
+```text
+/shift-assignment-react-preview.php
+```
+
+The page requires the normal full session and `shifts.view`, uses the existing
+TRACS shell, loads only the allowlisted Shift Assignment manifest entry, and
+shows a safe build-required state when assets are missing. Production
+navigation and `public/shifting-assignment.php` remain unchanged.
