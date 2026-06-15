@@ -20,6 +20,36 @@ function update_assignment_id(array $query): int
     return (int)$value;
 }
 
+function delete_assignment_id(array $query): int
+{
+    return update_assignment_id($query);
+}
+
+function delete_assignment_safe_summary(array $assignment): array
+{
+    return update_assignment_safe_summary($assignment);
+}
+
+function delete_assignment_data(
+    array $existing,
+    callable $delete
+): array {
+    $source = (string)($existing['source'] ?? 'manual');
+    $monthlyTemplateId = (int)($existing['monthly_template_id'] ?? 0);
+    if ($source === 'monthly_template' || $monthlyTemplateId > 0) {
+        throw new \DomainException(
+            'Template-generated assignments cannot be deleted through this pilot endpoint.'
+        );
+    }
+
+    $assignmentId = (int)($existing['id'] ?? 0);
+    if ($assignmentId < 1 || !$delete($assignmentId)) {
+        throw new \RuntimeException('Assignment not found.');
+    }
+
+    return ['assignment_id' => $assignmentId];
+}
+
 function update_assignment_input(array $input, array $existing): array
 {
     $allowedFields = [

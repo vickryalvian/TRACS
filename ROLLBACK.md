@@ -783,3 +783,41 @@ php tests/shift-assignment-create-ui-browser-environment.php cleanup
 
 The Phase 20 mutation integrations use disposable databases and remove them
 automatically. Code rollback never reverses a real assignment mutation.
+
+## Phase 21 Controlled Delete API Rollback
+
+Phase 21 extends the existing assignment endpoint and service with a
+backend-only, transaction-protected hard delete. It adds no schema, React UI,
+navigation, Calendar, or legacy-page change.
+
+Before commit:
+
+```bash
+git restore --staged .
+git restore .
+rm tests/shift-assignment-delete-api-contract.php
+rm tests/shift-assignment-delete-api-integration.php
+```
+
+After commit:
+
+```bash
+git revert <phase-21-commit-sha>
+```
+
+To abandon the unmerged branch:
+
+```bash
+git switch refactor/phase-20-shift-create-edit-hardening
+git branch -D refactor/phase-21-shift-delete-assignment-api
+```
+
+Emergency disposable cleanup:
+
+```sql
+DROP DATABASE IF EXISTS tracs_phase21_test;
+```
+
+A code revert cannot restore a deleted production assignment. React Delete UI
+must remain disabled. Any future production pilot requires a database backup
+and an approved restoration procedure using the preserved before snapshot.

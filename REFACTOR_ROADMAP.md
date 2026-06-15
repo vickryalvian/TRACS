@@ -270,3 +270,16 @@ fallback. Disposable create/update integration passed again. The Phase 20
 browser attempt was blocked at the localhost login redirect, so Phase 19
 remains the latest authenticated browser evidence. Delete, template/copy,
 navigation exposure, and production replacement remain blocked.
+
+Phase 21 controlled-delete notes:
+
+- `DELETE /api/v1/shift-assignment/assignment.php?id=<id>`
+- `tests/shift-assignment-delete-api-contract.php`
+- `tests/shift-assignment-delete-api-integration.php`
+
+The backend-only route requires exact Super Admin, explicit `shifts.manage`,
+session, CSRF, and scoped assignment access. Because the current schema has no
+soft-delete field, the pilot uses a transaction-protected hard delete with a
+preserved before snapshot. Template-owned assignments return `409`. React
+Delete UI, template/copy, navigation exposure, and production replacement
+remain blocked.

@@ -156,12 +156,12 @@ update_contract_assert(
     'Update contract source is unreadable.'
 );
 update_contract_assert(
-    str_contains($route, "methods: ['PATCH']")
+    str_contains($route, "methods: ['PATCH', 'DELETE']")
         && str_contains($route, "require_exact_role(\$conn, 'super_admin'")
         && str_contains($route, "'shifts.manage'")
         && str_contains($route, '\\TRACS\\Api\\get_request_json()')
         && str_contains($route, "'shift_assignment.update'"),
-    'Update route lost method, authorization, validation, or audit enforcement.'
+    'Assignment route lost method, authorization, validation, or audit enforcement.'
 );
 update_contract_assert(
     str_contains($route, "'Shift assignment updated.'")

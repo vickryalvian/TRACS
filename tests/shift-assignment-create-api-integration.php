@@ -107,6 +107,7 @@ $port = (int)integration_env('TRACS_TEST_DB_PORT', '3307');
 $user = integration_env('TRACS_TEST_DB_USER', 'root');
 $pass = integration_env('TRACS_TEST_DB_PASS', 'root_secret');
 $container = integration_env('TRACS_TEST_DB_CONTAINER', 'tracs_db');
+$includeDelete = integration_env('TRACS_TEST_INCLUDE_DELETE') === '1';
 
 if ($environment !== 'test') {
     fwrite(STDERR, "SKIPPED: TRACS_ENV must be exactly test.\n");
@@ -574,6 +575,237 @@ try {
         ) >= 3,
         'Security denials were not audit logged.'
     );
+
+    if ($includeDelete) {
+        $deleteQuery = ['id' => (string)$assignmentId];
+        $deleteUnauthenticated = integration_request(
+            'DELETE',
+            0,
+            'missing',
+            $deleteQuery,
+            [],
+            'assignment'
+        );
+        integration_assert(
+            ($deleteUnauthenticated['success'] ?? null) === false
+                && $deleteUnauthenticated['_test_status'] === 401,
+            'Unauthenticated delete did not return 401.'
+        );
+        $deleteMissingCsrf = integration_request(
+            'DELETE',
+            9301,
+            'missing',
+            $deleteQuery,
+            [],
+            'assignment'
+        );
+        integration_assert(
+            ($deleteMissingCsrf['success'] ?? null) === false
+                && $deleteMissingCsrf['_test_status'] === 403,
+            'Missing delete CSRF did not return 403.'
+        );
+        $deleteInvalidCsrf = integration_request(
+            'DELETE',
+            9301,
+            'invalid',
+            $deleteQuery,
+            [],
+            'assignment'
+        );
+        integration_assert(
+            ($deleteInvalidCsrf['success'] ?? null) === false
+                && $deleteInvalidCsrf['_test_status'] === 403,
+            'Invalid delete CSRF did not return 403.'
+        );
+        $deleteWrongRole = integration_request(
+            'DELETE',
+            9302,
+            'valid',
+            $deleteQuery,
+            [],
+            'assignment'
+        );
+        integration_assert(
+            ($deleteWrongRole['success'] ?? null) === false
+                && $deleteWrongRole['_test_status'] === 403,
+            'Non-Super Admin delete did not return 403.'
+        );
+
+        $conn->query("DELETE FROM tracs_role_permissions WHERE role_id=9001 AND permission_id=9102");
+        $deleteMissingPermission = integration_request(
+            'DELETE',
+            9301,
+            'valid',
+            $deleteQuery,
+            [],
+            'assignment'
+        );
+        integration_assert(
+            ($deleteMissingPermission['success'] ?? null) === false
+                && $deleteMissingPermission['_test_status'] === 403,
+            'Delete without shifts.manage did not return 403.'
+        );
+        $conn->query("INSERT INTO tracs_role_permissions (role_id,permission_id) VALUES (9001,9102)");
+
+        $deleteMissingId = integration_request(
+            'DELETE',
+            9301,
+            'valid',
+            [],
+            [],
+            'assignment'
+        );
+        integration_assert(
+            ($deleteMissingId['success'] ?? null) === false
+                && $deleteMissingId['_test_status'] === 422,
+            'Delete without an assignment ID did not return 422.'
+        );
+        $deleteNotFound = integration_request(
+            'DELETE',
+            9301,
+            'valid',
+            ['id' => '99999999'],
+            [],
+            'assignment'
+        );
+        integration_assert(
+            ($deleteNotFound['success'] ?? null) === false
+                && $deleteNotFound['_test_status'] === 404,
+            'Missing assignment delete did not return 404.'
+        );
+
+        $protected = integration_request('POST', 9301, 'valid', [], [
+            'agent_id' => 9303,
+            'assignment_date' => '2026-07-09',
+            'shift_type' => 'regular_shift',
+            'start_time' => '00:00',
+            'end_time' => '08:00',
+            'status' => 'assigned',
+        ]);
+        integration_assert(($protected['success'] ?? null) === true, 'Unable to create protected delete fixture.');
+        $protectedId = (int)($protected['data']['assignment']['id'] ?? 0);
+        $conn->query(
+            "UPDATE shift_assignments
+             SET source='monthly_template',monthly_template_id=88001
+             WHERE id={$protectedId}"
+        );
+        $protectedDelete = integration_request(
+            'DELETE',
+            9301,
+            'valid',
+            ['id' => (string)$protectedId],
+            [],
+            'assignment'
+        );
+        integration_assert(
+            ($protectedDelete['success'] ?? null) === false
+                && $protectedDelete['_test_status'] === 409,
+            'Template-owned assignment delete was not blocked.'
+        );
+        integration_assert(
+            integration_scalar($conn, "SELECT COUNT(*) FROM shift_assignments WHERE id={$protectedId}") === '1',
+            'Protected assignment was deleted.'
+        );
+
+        $conn->query("
+            INSERT INTO shift_warnings
+              (shift_assignment_id,user_id,affected_date,warning_type,warning_message,severity)
+            VALUES
+              ({$assignmentId},9303,'2026-07-07','jumpshift','Disposable delete warning','warning')
+        ");
+        $deleted = integration_request(
+            'DELETE',
+            9301,
+            'valid',
+            $deleteQuery,
+            [],
+            'assignment'
+        );
+        integration_assert(
+            ($deleted['success'] ?? null) === true
+                && $deleted['_test_status'] === 200
+                && (int)($deleted['data']['assignment_id'] ?? 0) === $assignmentId,
+            'Valid delete did not succeed: ' . json_encode($deleted, JSON_UNESCAPED_SLASHES)
+        );
+        integration_assert(
+            integration_scalar($conn, "SELECT COUNT(*) FROM shift_assignments WHERE id={$assignmentId}") === '0',
+            'Deleted assignment still exists.'
+        );
+        integration_assert(
+            integration_scalar($conn, "SELECT COUNT(*) FROM shift_warnings WHERE shift_assignment_id={$assignmentId}") === '0',
+            'Deleted assignment warning was not cleaned up.'
+        );
+
+        $deletedRead = integration_request('GET', 9301, 'valid', [
+            'view' => 'daily',
+            'start_date' => '2026-07-07',
+            'end_date' => '2026-07-07',
+            'agent_id' => '9303',
+        ]);
+        $deletedReadIds = array_map(
+            static fn(array $row): int => (int)($row['id'] ?? 0),
+            $deletedRead['data']['assignments'] ?? []
+        );
+        integration_assert(
+            ($deletedRead['success'] ?? null) === true
+                && !in_array($assignmentId, $deletedReadIds, true),
+            'Deleted assignment remains visible through GET.'
+        );
+        integration_assert(
+            (int)integration_scalar(
+                $conn,
+                "SELECT COUNT(*) FROM assignment_audit_logs
+                 WHERE assignment_id IS NULL AND action='deleted'
+                   AND JSON_EXTRACT(before_snapshot,'$.id')={$assignmentId}"
+            ) >= 1,
+            'Before-delete assignment audit snapshot is missing.'
+        );
+        integration_assert(
+            (int)integration_scalar(
+                $conn,
+                "SELECT COUNT(*) FROM tracs_user_activity_logs
+                 WHERE actor_user_id=9301 AND action='shift_assignment.delete'
+                   AND target_id={$assignmentId}
+                   AND before_data IS NOT NULL"
+            ) >= 1,
+            'Controlled delete activity audit is missing.'
+        );
+
+        $auditFailureFixture = integration_request('POST', 9301, 'valid', [], [
+            'agent_id' => 9303,
+            'assignment_date' => '2026-07-10',
+            'shift_type' => 'regular_shift',
+            'start_time' => '08:00',
+            'end_time' => '16:00',
+            'status' => 'assigned',
+        ]);
+        integration_assert(
+            ($auditFailureFixture['success'] ?? null) === true,
+            'Unable to create audit-failure delete fixture.'
+        );
+        $auditFailureId = (int)($auditFailureFixture['data']['assignment']['id'] ?? 0);
+        $conn->query('DROP TABLE assignment_audit_logs');
+        $auditFailureDelete = integration_request(
+            'DELETE',
+            9301,
+            'valid',
+            ['id' => (string)$auditFailureId],
+            [],
+            'assignment'
+        );
+        integration_assert(
+            ($auditFailureDelete['success'] ?? null) === false
+                && $auditFailureDelete['_test_status'] === 500,
+            'Delete did not fail closed when assignment audit storage was unavailable.'
+        );
+        integration_assert(
+            integration_scalar(
+                $conn,
+                "SELECT COUNT(*) FROM shift_assignments WHERE id={$auditFailureId}"
+            ) === '1',
+            'Assignment was deleted without its required before-delete audit.'
+        );
+    }
 
     $conn->close();
     echo "TRACS Shift Assignment disposable DB integration checks passed.\n";

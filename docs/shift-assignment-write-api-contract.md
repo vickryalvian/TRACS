@@ -22,8 +22,8 @@ pilot. `public/calendar.php` remains the zero-mistake visual reference.
 | Contract | Proposed method and path | Status |
 | --- | --- | --- |
 | Create assignment | `POST /api/v1/shift-assignment/assignments.php` | Implemented in Phase 14 under controlled pilot gate |
-| Update assignment | `PATCH /api/v1/shift-assignment/assignments/{id}.php` | Planned after create |
-| Delete assignment | `DELETE /api/v1/shift-assignment/assignments/{id}.php` | Blocked pending delete/soft-delete decision |
+| Update assignment | `PATCH /api/v1/shift-assignment/assignment.php?id=<id>` | Implemented; controlled React pilot |
+| Delete assignment | `DELETE /api/v1/shift-assignment/assignment.php?id=<id>` | Implemented backend-only in Phase 21; React UI blocked |
 | Generate monthly template preview | `POST /api/v1/shift-assignment/templates/generate.php` | Planned mutation because legacy preview may update state |
 | Copy schedule | `POST /api/v1/shift-assignment/templates/copy.php` | Planned preview/confirm bulk workflow |
 | Apply monthly template | `POST /api/v1/shift-assignment/templates/{id}/apply.php` | Planned separately from generation |
@@ -365,7 +365,7 @@ and audit rules.
 ## Assignment Delete
 
 ```text
-DELETE /api/v1/shift-assignment/assignments/{id}.php
+DELETE /api/v1/shift-assignment/assignment.php?id=<id>
 ```
 
 This contract is not approved for implementation. The legacy module has no
@@ -513,10 +513,13 @@ Each endpoint is implemented and reviewed alone. It needs unit/contract,
 integration, role/scope, CSRF, audit, idempotency, rollback, and manual browser
 evidence before its React control becomes active.
 
-Delete, template generation, and copy/paste remain blocked after Phase 20. A
-new authenticated combined browser pass is still required because the Phase 20
-localhost login redirect was blocked; Phase 19 is the latest valid UI mutation
-evidence.
+Phase 21 implements DELETE on the existing single-assignment route. The schema
+has no soft-delete field, so it uses a hard delete inside a transaction after
+writing a before snapshot. The assignment audit foreign key becomes `NULL` on
+delete while retaining the snapshot; the API activity audit retains the target
+ID. The delete fails closed and rolls back if required assignment-audit storage
+is unavailable. Template/monthly-template assignments are protected with
+`409`, and linked warning rows are cleaned up. React Delete UI remains blocked.
 
 ## Data And Rollback Safety
 

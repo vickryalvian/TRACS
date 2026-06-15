@@ -25,7 +25,7 @@ $readRoute = write_plan_source('public/api/v1/shift-assignment/assignments.php')
 foreach ([
     'POST /api/v1/shift-assignment/assignments.php',
     'PATCH /api/v1/shift-assignment/assignment.php?id=<id>',
-    'DELETE /api/v1/shift-assignment/assignments/{id}.php',
+    'DELETE /api/v1/shift-assignment/assignment.php?id=<id>',
     'X-CSRF-Token',
     'shifts.create',
     'shifts.update',
@@ -45,8 +45,9 @@ foreach ([
 }
 
 write_plan_assert(
-    str_contains($contract, 'Blocked pending delete/soft-delete decision'),
-    'Assignment deletion is no longer explicitly blocked.'
+    str_contains($contract, 'Implemented backend-only in Phase 21; React UI blocked')
+        && str_contains($contract, 'fails closed and rolls back'),
+    'Assignment delete decision or audit rollback requirement is missing.'
 );
 write_plan_assert(
     str_contains($contract, 'No write test may run against production data.'),

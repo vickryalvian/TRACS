@@ -194,7 +194,8 @@ Phase 13 plans mutations without activating them. The preview retains its
 read-only banner and GET-only API client. Future forms remain absent or disabled
 until one backend endpoint has passed CSRF, permission/scope, transaction,
 audit, idempotency, rollback, and disposable-database tests. Create and update
-are planned first; delete remains blocked pending a retention decision.
+are planned first; Phase 21 resolves the backend retention decision while
+keeping React Delete UI blocked.
 
 Phase 14 implements the controlled create backend contract only. The React
 preview API client remains GET-only, no Add button or modal is activated, and
@@ -247,3 +248,10 @@ integration passed again. A fresh browser run was attempted against
 `tracs_phase20_test`, but localhost navigation was blocked; Phase 19 remains
 the latest authenticated browser evidence. Delete/template/copy and production
 cutover remain gated.
+
+Phase 21 adds only the controlled backend DELETE contract on the existing
+single-assignment route. It does not expose a React control or capability.
+Because the current schema lacks soft-delete support, the service preserves a
+before snapshot and performs a scoped hard delete in one transaction. A
+separate approved phase must design confirmation, stale-row handling, post-
+delete refresh, and browser evidence before React Delete UI can exist.

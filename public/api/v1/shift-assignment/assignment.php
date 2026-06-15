@@ -11,7 +11,7 @@ require_once __DIR__ . '/../../../../api/v1/shift-assignment/assignments.php';
 require_once __DIR__ . '/../../../../api/v1/shift-assignment/assignment.php';
 require_once __DIR__ . '/../../../../modules/shifting-assignment/ShiftingAssignmentService.php';
 
-$context = \TRACS\Api\bootstrap($conn, methods: ['PATCH']);
+$context = \TRACS\Api\bootstrap($conn, methods: ['PATCH', 'DELETE']);
 
 try {
     \TRACS\Api\require_exact_role($conn, 'super_admin', $context['user']);
@@ -21,14 +21,18 @@ try {
         $context['user']
     );
 
-    $assignmentId = \TRACS\Api\V1\ShiftAssignment\update_assignment_id($_GET);
+    $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+    $assignmentId = $method === 'DELETE'
+        ? \TRACS\Api\V1\ShiftAssignment\delete_assignment_id($_GET)
+        : \TRACS\Api\V1\ShiftAssignment\update_assignment_id($_GET);
     $service = new \ShiftingAssignmentService($conn, $context['user_id']);
     $existing = $service->getAssignment($assignmentId);
     if (!$existing) {
+        $action = $method === 'DELETE' ? 'delete' : 'update';
         \TRACS\Api\write_audit_log(
             $conn,
             $context['user_id'],
-            'shift_assignment.update_failed',
+            "shift_assignment.{$action}_failed",
             'shift_assignment',
             $assignmentId,
             null,
@@ -36,12 +40,38 @@ try {
                 'request_id' => $context['request_id'],
                 'result' => 'not_found',
             ],
-            'Controlled v1 update target was not found.'
+            "Controlled v1 {$action} target was not found."
         );
         \TRACS\Api\json_error(
             'Shift assignment not found.',
             404,
             [],
+            ['request_id' => $context['request_id']]
+        );
+    }
+
+    if ($method === 'DELETE') {
+        $before = \TRACS\Api\V1\ShiftAssignment\delete_assignment_safe_summary($existing);
+        $data = \TRACS\Api\V1\ShiftAssignment\delete_assignment_data(
+            $existing,
+            static fn(int $id): bool => $service->deleteAssignment($id)
+        );
+        \TRACS\Api\write_audit_log(
+            $conn,
+            $context['user_id'],
+            'shift_assignment.delete',
+            'shift_assignment',
+            $assignmentId,
+            $before,
+            [
+                'request_id' => $context['request_id'],
+                'result' => 'success',
+            ],
+            'Deleted through controlled v1 API.'
+        );
+        \TRACS\Api\json_success(
+            $data,
+            'Shift assignment deleted.',
             ['request_id' => $context['request_id']]
         );
     }
@@ -82,10 +112,11 @@ try {
         ['request_id' => $context['request_id']]
     );
 } catch (\TRACS\Api\RequestValidationException $error) {
+    $action = ($method ?? '') === 'DELETE' ? 'delete' : 'update';
     \TRACS\Api\write_audit_log(
         $conn,
         $context['user_id'],
-        'shift_assignment.update_failed',
+        "shift_assignment.{$action}_failed",
         'shift_assignment',
         $assignmentId ?? null,
         $before ?? null,
@@ -95,7 +126,7 @@ try {
             'result' => 'validation_failed',
             'fields' => array_keys($error->errors),
         ],
-        'Controlled v1 update validation failed.'
+        "Controlled v1 {$action} validation failed."
     );
     \TRACS\Api\send_json(
         \TRACS\Api\response_payload(
@@ -155,10 +186,11 @@ try {
         ['request_id' => $context['request_id']]
     );
 } catch (\DomainException $error) {
+    $action = ($method ?? '') === 'DELETE' ? 'delete' : 'update';
     \TRACS\Api\write_audit_log(
         $conn,
         $context['user_id'],
-        'shift_assignment.update_failed',
+        "shift_assignment.{$action}_failed",
         'shift_assignment',
         $assignmentId ?? null,
         $before ?? null,
@@ -167,7 +199,7 @@ try {
             'request_id' => $context['request_id'],
             'result' => 'conflict',
         ],
-        'Controlled v1 update conflict.'
+        "Controlled v1 {$action} conflict."
     );
     \TRACS\Api\json_error(
         \tracs_public_error_message($error->getMessage(), 'Assignment conflict.'),
@@ -178,15 +210,16 @@ try {
 } catch (\Throwable $error) {
     $notFound = $error instanceof \RuntimeException
         && $error->getMessage() === 'Assignment not found.';
+    $action = ($method ?? '') === 'DELETE' ? 'delete' : 'update';
     \TRACS\Api\write_error_log(
-        'Shift Assignment update endpoint failed.',
+        "Shift Assignment {$action} endpoint failed.",
         $error,
         ['user_id' => $context['user_id'], 'assignment_id' => $assignmentId ?? null]
     );
     \TRACS\Api\write_audit_log(
         $conn,
         $context['user_id'],
-        'shift_assignment.update_failed',
+        "shift_assignment.{$action}_failed",
         'shift_assignment',
         $assignmentId ?? null,
         $before ?? null,
@@ -195,10 +228,12 @@ try {
             'request_id' => $context['request_id'],
             'result' => $notFound ? 'not_found' : 'server_error',
         ],
-        'Controlled v1 update failed.'
+        "Controlled v1 {$action} failed."
     );
     \TRACS\Api\json_error(
-        $notFound ? 'Shift assignment not found.' : 'The shift assignment could not be updated.',
+        $notFound
+            ? 'Shift assignment not found.'
+            : "The shift assignment could not be {$action}d.",
         $notFound ? 404 : 500,
         [],
         ['request_id' => $context['request_id']]

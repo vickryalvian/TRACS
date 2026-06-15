@@ -351,8 +351,8 @@ PATCH  /api/v1/shift-assignment/assignment.php?id=<id>
 ```
 
 Both are controlled exact-Super-Admin pilots with explicit `shifts.manage` and
-CSRF. DELETE remains blocked and needs separate approval because the current
-module has no assignment-delete action.
+CSRF. Phase 21 adds a backend-only DELETE contract after an explicit
+hard-delete retention decision; React Delete UI remains separately blocked.
 
 ## Phase 13 Write Contract Plan
 
@@ -471,7 +471,8 @@ non-mutation, and database teardown. No React PATCH call or edit control exists.
       only one validated manual assignment in a disposable/staging database.
 - [ ] PATCH requires exact Super Admin, explicit `shifts.manage`, CSRF, scoped
       record access, and a disposable/staging validation environment.
-- [ ] DELETE remains rejected.
+- [x] DELETE requires exact Super Admin, explicit `shifts.manage`, CSRF, scoped
+      access, and disposable-database validation; React has no delete caller.
 
 ## Validation
 
@@ -482,6 +483,7 @@ php tests/shift-assignment-api-contract.php
 php tests/shift-assignment-assignments-api-contract.php
 php tests/shift-assignment-create-api-contract.php
 php tests/shift-assignment-update-api-contract.php
+php tests/shift-assignment-delete-api-contract.php
 find api tests public/api/v1 -name '*.php' -exec php -l {} \;
 ```
 

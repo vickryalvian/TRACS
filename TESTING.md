@@ -661,6 +661,52 @@ php tests/shift-assignment-create-edit-hardening.php
 Delete, template generation, copy/paste, production navigation, and legacy
 replacement require separate explicit approval.
 
+## Phase 21 Controlled Delete API
+
+The backend-only delete contract is:
+
+```text
+DELETE /api/v1/shift-assignment/assignment.php?id=<id>
+```
+
+It requires an authenticated session, valid CSRF, exact `super_admin`, and the
+explicit `shifts.manage` role permission. The React preview contains no DELETE
+caller or control.
+
+The current `shift_assignments` schema has no `deleted_at` or `is_deleted`
+column. Phase 21 therefore uses a transaction-protected hard delete, matching
+the only schema-compatible behavior without a migration. Before deletion the
+service writes the complete assignment snapshot to `assignment_audit_logs`;
+the existing foreign key sets that audit's `assignment_id` to `NULL` while
+preserving the JSON snapshot. The API activity audit retains the original
+target ID and safe before data. Delete fails closed if the required assignment
+audit cannot be written. Linked `shift_warnings` rows are removed.
+
+Template-generated or monthly-template-owned assignments return `409` and are
+not deleted. Template/copy cleanup must be designed with those workflows.
+
+Disposable validation on June 15, 2026 used `tracs_phase21_test` and verified:
+
+- `401`, `403`, `404`, `409`, and `422` delete paths;
+- exact-role, explicit-permission, and CSRF enforcement;
+- GET, POST, and PATCH regression behavior;
+- successful deletion and removal from GET;
+- unrelated assignments remain intact;
+- linked warning cleanup;
+- preserved before-delete assignment and activity audits;
+- automatic disposable database removal.
+
+Run:
+
+```bash
+php tests/shift-assignment-delete-api-contract.php
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 \
+php tests/shift-assignment-delete-api-integration.php
+```
+
+React Delete UI remains blocked pending a separate confirmation/UX phase and
+fresh authenticated browser validation.
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:
