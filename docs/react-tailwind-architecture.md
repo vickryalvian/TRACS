@@ -522,3 +522,16 @@ The Apply Template pilot keeps all styling inside the isolated Shift Assignment
 bundle. Phase 36 adds clearer accessible alert/description wiring for stale
 preview and disabled confirmation states without adding rollback UI, copy UI,
 global Tailwind, or navigation exposure.
+
+## Phase 37 Authenticated Browser Validation
+
+The Apply Template pilot now has a repeatable dev-only Playwright/Chrome
+browser validation path. The in-app browser remains blocked by missing
+`sandboxPolicy` metadata, so Phase 37 uses the isolated preview bundle, the
+guarded test session endpoint, and `tracs_phase37_test` to validate the real
+React modal in Chrome. The browser pass verifies Template Preview, exact
+`APPLY TEMPLATE`, Apply Template success, refresh, rollback evidence, conflict
+blocking, no copy/paste UI, no rollback UI, and clean console/network output.
+The template preview form is marked with `data-unsaved-ignore` so the legacy
+page-level unsaved-change guard does not intercept the React-owned dirty-form
+flow.

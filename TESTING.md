@@ -1141,6 +1141,42 @@ with a missing browser tool metadata field, and standalone Playwright was not
 installed. Record this as blocked rather than successful browser evidence.
 Phase 36 is blocked by browser tooling for live authenticated click-through.
 
+## Phase 37 Authenticated Browser Validation Gate
+
+Phase 37 restores the live authenticated browser path without weakening
+production auth. The in-app browser remains blocked in this environment by a
+missing `sandboxPolicy` metadata field, so the repeatable path is a dev-only
+Playwright/Chrome run against a guarded disposable database and a test-only
+session endpoint.
+
+Run:
+
+```bash
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 TRACS_TEST_DB_NAME=tracs_phase37_test php tests/disposable-db-preflight.php
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 TRACS_TEST_DB_NAME=tracs_phase37_test npm run test:e2e:shift-template-apply --prefix frontend
+php tests/shift-assignment-auth-browser-validation.php
+```
+
+The session harness is `public/__test/shift-assignment-auth-session.php`. It
+returns not-found outside `TRACS_ENV=test`, requires
+`TRACS_ALLOW_MUTATION_TESTS=1`, and refuses database names that do not look
+disposable. The browser validation signs in as the seeded exact Super Admin
+pilot user, opens `shift-assignment-react-preview.php`, confirms the pilot
+banner, generates a Shift 1 template preview, rejects invalid `APPLY TEMPLATE`
+confirmation variants, applies the template, verifies created count, request
+id, rollback ids/reference, assignment refresh, commit audit evidence, and
+rollback targeting. It also proves the unrelated baseline assignment remains,
+the conflict preview keeps Apply disabled, no copy endpoints are called, no
+copy/paste or rollback UI appears, and the browser console/network capture is
+clean.
+
+Phase 37 found one live-browser UI issue: the legacy unsaved-change overlay
+could intercept the Apply Template flow. The template preview form now opts out
+with `data-unsaved-ignore` because the React modal owns its own dirty-form
+guard. With the Phase 37 browser command passing against `tracs_phase37_test`
+and cleanup confirmed, Phase 38 copy-preview may proceed from the authenticated
+browser-validation gate, subject to its own explicit approval and safeguards.
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:

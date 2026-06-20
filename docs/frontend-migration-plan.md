@@ -371,3 +371,16 @@ blocked. Live authenticated browser click-through is still required; the Codex
 browser tool failed before navigation in this environment, so Phase 37 cannot
 proceed from this evidence alone.
 Phase 36 is blocked by browser tooling for live authenticated click-through.
+
+Phase 37 restores authenticated browser evidence through a guarded dev-only
+Playwright/Chrome path while the in-app browser remains blocked by missing
+`sandboxPolicy` metadata. The test session endpoint only works under
+`TRACS_ENV=test`, `TRACS_ALLOW_MUTATION_TESTS=1`, and a disposable-safe
+database name. The browser run against `tracs_phase37_test` validates the
+pilot banner, Template Preview, exact `APPLY TEMPLATE` confirmation behavior,
+Apply Template success, assignment refresh, audit/rollback ids, rollback
+targeting, conflict-disabled Apply behavior, and absence of copy/paste or
+rollback UI. It also found and fixed a legacy unsaved-change overlay intercept
+by marking the React-owned template preview form with `data-unsaved-ignore`.
+Phase 38 copy-preview may proceed from this browser-validation gate only as a
+separately approved copy-specific phase.

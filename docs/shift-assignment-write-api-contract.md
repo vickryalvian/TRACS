@@ -804,3 +804,19 @@ the backend contract is unchanged. Browser validation remains a hard gate:
 copy-preview and copy-commit must not start until an authenticated disposable
 browser click-through has actually exercised Apply Template, conflict/stale
 handling, refresh, and rollback evidence.
+
+### Phase 37 Authenticated Browser Validation Gate
+
+The authenticated browser gate is restored through the guarded dev-only
+Playwright/Chrome command:
+
+```bash
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 TRACS_TEST_DB_NAME=tracs_phase37_test npm run test:e2e:shift-template-apply --prefix frontend
+```
+
+The in-app browser path remains blocked by missing `sandboxPolicy` metadata,
+but the Chrome run validates the actual React preview session, Template
+Preview, exact `APPLY TEMPLATE`, commit success, assignment refresh, audit and
+rollback ids, rollback targeting, conflict-disabled Apply behavior, and absence
+of copy/paste or rollback UI. Phase 38 copy-preview may proceed from this
+browser-validation gate only as a separately approved copy-specific phase.

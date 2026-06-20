@@ -355,9 +355,25 @@ Before any template or copy/paste UI appears in the preview, verify:
 - [x] Phase 35 adds controlled Apply Template UI only inside the React preview,
       with exact confirmation, conflict blocking, stale-preview handling, and
       rollback evidence display.
-- [ ] Phase 36 authenticated browser click-through is complete. Currently
-      blocked by browser tooling in this environment.
+- [x] Phase 37 authenticated browser click-through is complete through the
+      guarded Playwright/Chrome path against `tracs_phase37_test`.
 - [x] Copy/paste UI and copy endpoints remain absent.
+
+Phase 37 browser validation notes:
+
+- The in-app browser path still fails before navigation with missing
+  `sandboxPolicy` metadata.
+- The restored browser command is
+  `TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 TRACS_TEST_DB_NAME=tracs_phase37_test npm run test:e2e:shift-template-apply --prefix frontend`.
+- The click-through verified pilot banner visibility, Template Preview,
+  exact `APPLY TEMPLATE` behavior, Apply Template success, assignment refresh,
+  commit audit/rollback ids, rollback targeting, conflict-disabled Apply,
+  clean console/network state, and no copy/paste or rollback UI.
+- The live browser pass found the legacy unsaved-change overlay could intercept
+  the template modal; `data-unsaved-ignore` now keeps that legacy guard away
+  from the React-owned dirty-form flow.
+- Phase 38 copy-preview may proceed from this browser gate with a separate
+  approved copy-specific plan.
 
 ## Phase 17 Completed Browser Matrix
 

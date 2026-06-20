@@ -493,3 +493,23 @@ Phase 36 Apply Template UI hardening notes:
 - live authenticated browser click-through remains blocked by browser tooling,
   so copy-preview and copy-commit work must not proceed yet.
 - Phase 36 is blocked by browser tooling for live authenticated click-through.
+
+Phase 37 Authenticated Browser Validation Gate notes:
+
+- the in-app browser path is still blocked by missing `sandboxPolicy`
+  metadata, but a repeatable dev-only Playwright/Chrome path now validates the
+  real React preview in a browser;
+- `public/__test/shift-assignment-auth-session.php` creates a test-only full
+  session only when `TRACS_ENV=test`, `TRACS_ALLOW_MUTATION_TESTS=1`, and the
+  database name is disposable-safe;
+- `TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 TRACS_TEST_DB_NAME=tracs_phase37_test npm run test:e2e:shift-template-apply --prefix frontend`
+  passed against `tracs_phase37_test`;
+- the browser flow verifies pilot banner, Template Preview, exact
+  `APPLY TEMPLATE` rejection/acceptance, Apply Template success, assignment
+  refresh, commit audit ids, rollback targeting, conflict-disabled Apply, no
+  copy/paste UI, no rollback UI, and clean console/network capture;
+- live browser testing found and fixed the legacy unsaved-change overlay
+  intercept by adding `data-unsaved-ignore` to the React-owned template
+  preview form;
+- Phase 38 copy-preview may proceed from the authenticated browser-validation
+  gate, but only as a separately approved phase with copy-specific safeguards.

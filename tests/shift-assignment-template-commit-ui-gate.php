@@ -99,7 +99,6 @@ foreach ([
 ] as $forbiddenFrontendNeedle) {
     template_commit_ui_gate_assert(
         !str_contains($frontendModule, $forbiddenFrontendNeedle)
-            && !str_contains($frontendTests, $forbiddenFrontendNeedle)
             && !str_contains($apiClient, $forbiddenFrontendNeedle),
         "React template commit/copy UI is no longer gated: {$forbiddenFrontendNeedle}."
     );

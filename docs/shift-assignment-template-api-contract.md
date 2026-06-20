@@ -642,3 +642,33 @@ browser control failed before page navigation with a tool metadata error and
 standalone Playwright is not installed. This is a blocker for copy-preview and
 copy-commit phases; do not proceed until authenticated browser evidence exists.
 Phase 36 is blocked by browser tooling for live authenticated click-through.
+
+## Phase 37 Authenticated Browser Validation Gate
+
+Phase 37 restores live browser evidence using a dev-only Playwright/Chrome
+path because the in-app browser still fails before navigation with missing
+`sandboxPolicy` metadata. The browser command is:
+
+```bash
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 TRACS_TEST_DB_NAME=tracs_phase37_test npm run test:e2e:shift-template-apply --prefix frontend
+```
+
+The command uses `public/__test/shift-assignment-auth-session.php`, which only
+establishes a session under `TRACS_ENV=test`,
+`TRACS_ALLOW_MUTATION_TESTS=1`, and a disposable-safe database name. It does
+not weaken production authentication.
+
+The authenticated browser click-through against `tracs_phase37_test` validates
+Template Preview, exact `APPLY TEMPLATE` confirmation, commit success,
+created count, request id, rollback ids/reference, assignment refresh,
+`shift_assignment.template.commit` audit evidence, rollback targeting,
+unrelated-assignment retention, conflict-disabled Apply behavior, no copy
+endpoint calls, no copy/paste UI, no rollback UI, and clean console/network
+capture. The live browser pass also found a legacy unsaved-change overlay
+intercept; the Template Preview form now uses `data-unsaved-ignore` because
+the React modal owns dirty-form protection.
+
+With Phase 37 passing, Phase 38 copy-preview may proceed from the
+authenticated browser-validation gate, but copy-preview and copy-commit still
+require their own explicit phase approval, contracts, disposable evidence, and
+no production navigation exposure.

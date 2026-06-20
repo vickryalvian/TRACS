@@ -298,7 +298,7 @@ export function ShiftTemplatePreviewModal({ context, onApplied, onClose, onToast
           </button>
         </header>
 
-        <form aria-busy={generating || applying} className="tr:min-h-0 tr:overflow-y-auto" noValidate onSubmit={submit}>
+        <form aria-busy={generating || applying} className="tr:min-h-0 tr:overflow-y-auto" data-unsaved-ignore noValidate onSubmit={submit}>
           <div className="tr:grid tr:min-w-0 tr:grid-cols-1 tr:gap-tracs-4 tr:p-tracs-5 tr:lg:grid-cols-[360px_minmax(0,1fr)]">
             <fieldset className="tr:m-0 tr:flex tr:min-w-0 tr:flex-col tr:gap-tracs-4 tr:border-0 tr:p-0" disabled={generating || applying}>
               <div className="tr:rounded-tracs-lg tr:border tr:border-tracs-warning/30 tr:bg-tracs-warning/5 tr:p-tracs-3 tr:text-xs tr:leading-5 tr:text-tracs-secondary">

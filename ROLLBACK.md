@@ -1227,3 +1227,25 @@ Emergency disposable cleanup:
 ```sql
 DROP DATABASE IF EXISTS tracs_phase36_test;
 ```
+
+## Phase 37 Authenticated Browser Validation Gate Rollback
+
+Phase 37 adds dev/test-only authenticated browser validation infrastructure,
+the guarded test session endpoint, Playwright dev dependency, and documentation.
+It also keeps the Template Preview modal out of the legacy unsaved-change
+overlay so the React-owned dirty-form guard can control the Apply Template
+flow. It adds no copy endpoint, no copy/paste UI, no rollback UI, no schema
+change, no Calendar change, no navigation change, and no legacy-page
+replacement.
+
+After commit:
+
+```bash
+git revert <phase-37-commit-sha>
+```
+
+Emergency disposable cleanup:
+
+```sql
+DROP DATABASE IF EXISTS tracs_phase37_test;
+```
