@@ -444,6 +444,15 @@ notifying, changing warnings, or changing holiday coverage. Future copy-commit
 is separate and must require exact `APPLY COPY`, server-side source/target
 revalidation, conflict re-check, audit created IDs, and rollback targeting.
 
+Phase 39 implements that copy-preview route as a protected, side-effect-free
+API. It requires POST, CSRF, exact `super_admin`, and `shifts.manage`; future
+`shifts.template.copy_preview` is required if seeded. It transforms existing
+source assignments into negative-ID target preview rows, preserves Shift 1/2/3
+timing including `16:00-24:00`, returns target conflicts/warnings/blocked
+items, and proved no mutation of assignment, warning, holiday coverage,
+monthly template, monthly item, assignment audit, or activity-log counts in
+`tracs_phase39_test`. Copy-commit and React copy/paste UI remain absent.
+
 Phase 28 disposable validation proved Shift 1/2/3 preview output, overlap
 conflict output, warnings, and no persisted count changes for assignments,
 warnings, holiday coverage, monthly templates, monthly template items, and

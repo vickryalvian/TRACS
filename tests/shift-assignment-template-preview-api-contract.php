@@ -88,14 +88,22 @@ template_preview_contract_assert(
 );
 
 foreach ([
-    'public/api/v1/shift-assignment/templates/copy-preview.php',
     'public/api/v1/shift-assignment/templates/copy-commit.php',
-    'api/v1/shift-assignment/templates/copy-preview.php',
     'api/v1/shift-assignment/templates/copy-commit.php',
 ] as $forbiddenRoute) {
     template_preview_contract_assert(
         !is_file(__DIR__ . '/../' . $forbiddenRoute),
         "Unexpected template/copy route exists: {$forbiddenRoute}"
+    );
+}
+
+foreach ([
+    'public/api/v1/shift-assignment/templates/copy-preview.php',
+    'api/v1/shift-assignment/templates/copy-preview.php',
+] as $implementedCopyPreviewRoute) {
+    template_preview_contract_assert(
+        is_file(__DIR__ . '/../' . $implementedCopyPreviewRoute),
+        "Expected copy-preview route is missing: {$implementedCopyPreviewRoute}"
     );
 }
 

@@ -398,3 +398,10 @@ schema change is added. Future copy-commit must be a separate phase with exact
 `APPLY COPY`, server-side source/target revalidation, conflict re-check, audit
 created IDs, rollback targeting, disposable DB evidence, and authenticated
 browser evidence.
+
+Phase 39 implements the backend copy-preview route only. React still has no
+`Copy Schedule Preview` button, no copy/paste modal, no copy API caller, and no
+rollback UI. The existing Template Preview/Apply pilot remains unchanged. A
+future React copy-preview phase must render preview-only results from
+`copy-preview.php` and must not include copy-commit behavior until the separate
+`APPLY COPY` commit phase is approved.

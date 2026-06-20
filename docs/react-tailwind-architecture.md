@@ -545,3 +545,11 @@ spacing and modal patterns, and remain preview-only with the text
 step must not share the preview button; copy-commit requires a separately
 approved route, exact `APPLY COPY`, rollback evidence, and authenticated
 browser validation before any active UI is rendered.
+
+## Phase 39 Copy Preview API
+
+The copy-preview API exists after Phase 39, but the React bundle remains
+unchanged: no `Copy Schedule Preview` button, no copy/paste modal, no
+copy-preview API caller, and no rollback UI. A later UI phase must keep copy
+preview visually separate from Template Preview/Apply and must remain
+preview-only until copy-commit is separately approved.

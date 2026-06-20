@@ -79,7 +79,6 @@ write_plan_assert(
 foreach ([
     'public/api/v1/shift-assignment/templates/generate.php',
     'public/api/v1/shift-assignment/templates/copy.php',
-    'public/api/v1/shift-assignment/templates/copy-preview.php',
     'public/api/v1/shift-assignment/templates/copy-commit.php',
     'public/api/v1/shift-assignment/overtime.php',
 ] as $plannedRoute) {
@@ -97,8 +96,8 @@ write_plan_assert(
 $routeAllowlists = [
     'public/api/v1/shift-assignment' => ['assignment.php', 'assignments.php', 'context.php'],
     'api/v1/shift-assignment' => ['assignment.php', 'assignments.php', 'context.php'],
-    'public/api/v1/shift-assignment/templates' => ['commit.php', 'preview.php'],
-    'api/v1/shift-assignment/templates' => ['commit.php', 'preview.php'],
+    'public/api/v1/shift-assignment/templates' => ['commit.php', 'copy-preview.php', 'preview.php'],
+    'api/v1/shift-assignment/templates' => ['commit.php', 'copy-preview.php', 'preview.php'],
 ];
 foreach ($routeAllowlists as $directory => $expectedFiles) {
     $files = array_values(array_filter(

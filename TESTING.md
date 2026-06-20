@@ -1206,6 +1206,28 @@ must be a separate phase with its own endpoint, exact confirmation phrase,
 server-side source/target revalidation, conflict re-check, audit created IDs,
 rollback targeting, disposable DB proof, and authenticated browser evidence.
 
+## Phase 39 Copy Schedule Preview API
+
+Phase 39 implements the non-mutating copy-preview route:
+
+```bash
+php tests/shift-assignment-copy-preview-api-contract.php
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 TRACS_TEST_DB_NAME=tracs_phase39_test php tests/disposable-db-preflight.php
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 TRACS_TEST_DB_NAME=tracs_phase39_test php tests/shift-assignment-copy-preview-integration.php
+```
+
+The integration seeds source Shift 1, Shift 2, and Shift 3 `16:00-24:00`
+assignments, previews them into a target range, verifies source assignment IDs
+are not reused as preview IDs, verifies target overlap conflicts and blocked
+items, and compares persisted counts before and after preview calls.
+
+No-mutation evidence covers `shift_assignments`, `shift_warnings`,
+`holiday_coverage_assignments`, `shift_monthly_templates`,
+`shift_monthly_template_items`, `assignment_audit_logs`, and
+`tracs_user_activity_logs`. Copy-commit, React copy/paste UI, rollback UI,
+schema changes, Calendar changes, legacy-page changes, and navigation changes
+remain absent.
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:

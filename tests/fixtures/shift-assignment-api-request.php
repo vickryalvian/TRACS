@@ -16,7 +16,7 @@ $resource = (string)($argv[6] ?? 'assignments');
 if (getenv('TRACS_ENV') !== 'test'
     || getenv('TRACS_ALLOW_MUTATION_TESTS') !== '1'
     || !preg_match('/(?:test|local|dev|disposable|staging)/i', $database)
-    || !in_array($resource, ['assignments', 'assignment', 'templates/preview', 'templates/commit'], true)) {
+    || !in_array($resource, ['assignments', 'assignment', 'templates/preview', 'templates/commit', 'templates/copy-preview'], true)) {
     fwrite(STDERR, "Unsafe integration request harness environment.\n");
     exit(2);
 }

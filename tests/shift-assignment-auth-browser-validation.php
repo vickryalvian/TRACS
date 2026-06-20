@@ -94,14 +94,22 @@ auth_browser_validation_assert(
 );
 
 foreach ([
-    'public/api/v1/shift-assignment/templates/copy-preview.php',
     'public/api/v1/shift-assignment/templates/copy-commit.php',
-    'api/v1/shift-assignment/templates/copy-preview.php',
     'api/v1/shift-assignment/templates/copy-commit.php',
 ] as $forbiddenRoute) {
     auth_browser_validation_assert(
         !is_file(__DIR__ . '/../' . $forbiddenRoute),
         "Phase 37 unexpectedly created {$forbiddenRoute}."
+    );
+}
+
+foreach ([
+    'public/api/v1/shift-assignment/templates/copy-preview.php',
+    'api/v1/shift-assignment/templates/copy-preview.php',
+] as $allowedPreviewRoute) {
+    auth_browser_validation_assert(
+        is_file(__DIR__ . '/../' . $allowedPreviewRoute),
+        "Phase 39 copy-preview route is missing: {$allowedPreviewRoute}."
     );
 }
 

@@ -93,7 +93,8 @@ foreach ([
 
 template_commit_gate_assert(
     str_contains($securityInventory, 'api/v1/shift-assignment/templates/commit.php')
-        && str_contains($securityInventory, 'Future Shift Assignment v1 copy contracts'),
+        && str_contains($securityInventory, 'api/v1/shift-assignment/templates/copy-preview.php')
+        && str_contains($securityInventory, 'Future Shift Assignment v1 copy commit'),
     'API security inventory no longer tracks implemented commit and future copy contracts.'
 );
 
@@ -115,14 +116,22 @@ template_commit_gate_assert(
 );
 
 foreach ([
-    'public/api/v1/shift-assignment/templates/copy-preview.php',
     'public/api/v1/shift-assignment/templates/copy-commit.php',
-    'api/v1/shift-assignment/templates/copy-preview.php',
     'api/v1/shift-assignment/templates/copy-commit.php',
 ] as $forbiddenRoute) {
     template_commit_gate_assert(
         !is_file(__DIR__ . '/../' . $forbiddenRoute),
         "Phase 30 unexpectedly created {$forbiddenRoute}."
+    );
+}
+
+foreach ([
+    'public/api/v1/shift-assignment/templates/copy-preview.php',
+    'api/v1/shift-assignment/templates/copy-preview.php',
+] as $allowedPreviewRoute) {
+    template_commit_gate_assert(
+        is_file(__DIR__ . '/../' . $allowedPreviewRoute),
+        "Phase 39 copy-preview route is missing: {$allowedPreviewRoute}."
     );
 }
 

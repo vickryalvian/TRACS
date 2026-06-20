@@ -102,20 +102,28 @@ foreach ([
 copy_preview_gate_assert(
     str_contains($reactArchitecture, 'Phase 38 Copy Preview Contract Gate')
         && str_contains($rollback, 'Phase 38 Copy Preview Contract Rollback')
-        && str_contains($securityInventory, 'Phase 38 contract-only')
+        && str_contains($securityInventory, 'Phase 39 side-effect-free source-to-target preview only')
         && str_contains($parity, 'Phase 38 copy-preview contract gate'),
     'Phase 38 architecture, rollback, security, or parity docs are incomplete.'
 );
 
 foreach ([
-    'public/api/v1/shift-assignment/templates/copy-preview.php',
     'public/api/v1/shift-assignment/templates/copy-commit.php',
-    'api/v1/shift-assignment/templates/copy-preview.php',
     'api/v1/shift-assignment/templates/copy-commit.php',
 ] as $forbiddenRoute) {
     copy_preview_gate_assert(
         !is_file(__DIR__ . '/../' . $forbiddenRoute),
         "Phase 38 unexpectedly created {$forbiddenRoute}."
+    );
+}
+
+foreach ([
+    'public/api/v1/shift-assignment/templates/copy-preview.php',
+    'api/v1/shift-assignment/templates/copy-preview.php',
+] as $implementedRoute) {
+    copy_preview_gate_assert(
+        is_file(__DIR__ . '/../' . $implementedRoute),
+        "Phase 39 copy-preview route is missing: {$implementedRoute}."
     );
 }
 

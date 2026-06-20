@@ -537,3 +537,19 @@ Phase 38 Copy Schedule Preview Contract Gate notes:
   `APPLY COPY`, server-side source/target revalidation, conflict re-check,
   audit created IDs, rollback targeting, disposable DB evidence, and
   authenticated browser evidence.
+
+Phase 39 Copy Schedule Preview API notes:
+
+- implements protected `POST /api/v1/shift-assignment/templates/copy-preview.php`
+  plus the public wrapper;
+- requires CSRF, exact `super_admin`, and `shifts.manage`; future
+  `shifts.template.copy_preview` is required if seeded;
+- transforms source assignments into in-memory target preview rows with
+  negative preview IDs and `source_assignment_id` references;
+- supports Shift 1, Shift 2, and Shift 3 `16:00-24:00`;
+- returns target conflicts, warnings, and blocked items without writing;
+- `tracs_phase39_test` proves no persisted counts change for assignments,
+  warnings, holiday coverage, monthly templates, monthly template items,
+  assignment audit logs, or activity logs;
+- copy-commit endpoint, copy/paste UI, rollback UI, schema changes, Calendar
+  changes, navigation changes, and legacy-page changes remain absent.

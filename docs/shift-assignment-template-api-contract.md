@@ -809,3 +809,70 @@ With Phase 37 passing, Phase 38 copy-preview may proceed from the
 authenticated browser-validation gate, but copy-preview and copy-commit still
 require their own explicit phase approval, contracts, disposable evidence, and
 no production navigation exposure.
+
+## Phase 39 Copy Schedule Preview API
+
+Phase 39 implements the non-mutating Copy Schedule Preview API:
+
+```text
+POST /api/v1/shift-assignment/templates/copy-preview.php
+```
+
+The public wrapper is:
+
+```text
+public/api/v1/shift-assignment/templates/copy-preview.php
+```
+
+Request and response schemas remain the Phase 38 contract. The endpoint
+requires an authenticated session, CSRF, exact `super_admin`, and
+`shifts.manage` during the pilot. If `shifts.template.copy_preview` is seeded
+later, the route also requires that permission. No migration is added in Phase
+39.
+
+Implementation behavior:
+
+- validates `source_start_date`, `source_end_date`, `target_start_date`, and
+  `target_end_date`;
+- rejects invalid dates, same source/target range, mismatched range lengths,
+  ranges above 35 days, unsupported `role_ids`, and invalid scope arrays;
+- copies source assignments into in-memory preview rows only;
+- preserves active agent, shift type, shift template, start/end time, Shift 3
+  `16:00-24:00`, division, break minutes, duration, and safe source
+  references;
+- computes target dates by offset from source start to target start;
+- recalculates target day-of-week labels, holiday/overtime advisories,
+  jumpshift/rest warnings, weekly-hour warnings, and target overlap conflicts;
+- returns `source_range`, `target_range`, `items`, `summary`, `warnings`,
+  `conflicts`, and `blocked_items`;
+- uses negative preview IDs and separate `source_assignment_id` references so
+  source assignment IDs are never reused as target IDs.
+
+The endpoint is side-effect free. Phase 39 tests prove the route does not
+change persisted counts for assignments, warnings, holiday coverage, monthly
+templates, monthly template items, assignment audit logs, or activity logs.
+It does not create commit-style audit rows.
+
+Still absent after Phase 39:
+
+- `templates/copy-commit.php`;
+- React copy/paste UI;
+- active Copy Schedule button;
+- rollback UI;
+- schema changes;
+- Calendar, legacy Shift Assignment, or production navigation changes.
+
+Criteria before React Copy Preview UI:
+
+- keep copy-preview response stable through another frontend contract pass;
+- add a controlled preview-only React modal with no copy-commit/apply button;
+- rerun authenticated browser validation and confirm no copy-commit calls.
+
+Criteria before copy-commit:
+
+- define exact `APPLY COPY` confirmation in an implementation phase;
+- revalidate source/target server-side at commit time;
+- re-check target conflicts immediately before writing;
+- audit created assignment IDs;
+- prove rollback targeting in disposable DB;
+- complete authenticated browser validation after UI activation.

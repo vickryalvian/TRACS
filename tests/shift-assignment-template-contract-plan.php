@@ -135,14 +135,22 @@ foreach ([
 }
 
 foreach ([
-    'public/api/v1/shift-assignment/templates/copy-preview.php',
     'public/api/v1/shift-assignment/templates/copy-commit.php',
-    'api/v1/shift-assignment/templates/copy-preview.php',
     'api/v1/shift-assignment/templates/copy-commit.php',
 ] as $plannedRoute) {
     template_contract_assert(
         !is_file(__DIR__ . '/../' . $plannedRoute),
         "Planning unexpectedly created {$plannedRoute}."
+    );
+}
+
+foreach ([
+    'public/api/v1/shift-assignment/templates/copy-preview.php',
+    'api/v1/shift-assignment/templates/copy-preview.php',
+] as $implementedCopyPreviewRoute) {
+    template_contract_assert(
+        is_file(__DIR__ . '/../' . $implementedCopyPreviewRoute),
+        "Phase 39 copy-preview route is missing: {$implementedCopyPreviewRoute}."
     );
 }
 

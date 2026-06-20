@@ -872,3 +872,28 @@ Future copy-commit must be a separate endpoint, require an exact phrase such
 as `APPLY COPY`, revalidate source/target server-side, re-check conflicts,
 audit created IDs, and support rollback targeting. It is not implemented in
 Phase 38.
+
+### Phase 39 Copy Schedule Preview API
+
+Phase 39 implements `POST /api/v1/shift-assignment/templates/copy-preview.php`
+as a non-mutating preview route. It keeps the Phase 38 request/response
+contract and returns `source_range`, `target_range`, preview items, summary,
+warnings, conflicts, and blocked items.
+
+The endpoint requires authenticated session, CSRF, exact `super_admin`, and
+`shifts.manage`; if `shifts.template.copy_preview` exists later, it is also
+required. It rejects invalid dates, same source/target range, mismatched range
+length, ranges longer than 35 days, unsupported role scope, invalid scope
+arrays, and inactive/out-of-scope agents.
+
+Copy transformation is in-memory only. Source rows are mapped by date offset
+into target preview rows, preserving Shift 1/2/3 timing including
+`16:00-24:00`, active agent, shift type, template, division, break minutes, and
+duration. Preview IDs are negative and original assignment IDs appear only as
+`source_assignment_id`.
+
+Disposable validation with `tracs_phase39_test` proves no persisted counts
+change for assignments, warnings, holiday coverage, monthly templates, monthly
+template items, assignment audit logs, or activity logs. Copy-commit, React
+copy/paste UI, rollback UI, schema changes, Calendar changes, legacy-page
+changes, and navigation changes remain absent.

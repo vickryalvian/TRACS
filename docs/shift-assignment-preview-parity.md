@@ -386,6 +386,19 @@ Phase 38 copy-preview contract gate:
 - Copy-preview and copy-commit endpoints remain absent.
 - Copy/paste UI and rollback UI remain absent.
 
+Phase 39 copy-preview API:
+
+- [x] `templates/copy-preview.php` exists as a protected non-mutating API.
+- [x] Source Shift 1/2/3 assignments preview into target rows without reusing
+      source assignment IDs.
+- [x] Target conflicts, warnings, and blocked items are returned.
+- [x] Disposable no-mutation counts are proven for assignments, warnings,
+      holiday coverage, monthly template rows, monthly item rows, assignment
+      audits, and activity logs.
+- [x] Copy-commit endpoint, copy/paste UI, rollback UI, Calendar changes,
+      legacy-page changes, schema changes, and navigation changes remain
+      absent.
+
 ## Phase 17 Completed Browser Matrix
 
 | Check | Disposable browser result |

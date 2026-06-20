@@ -1270,3 +1270,22 @@ database:
 ```sql
 DROP DATABASE IF EXISTS tracs_phase38_test;
 ```
+
+## Phase 39 Copy Preview API Rollback
+
+Phase 39 adds the non-mutating copy-preview API route, public wrapper,
+source-contract test, disposable integration test, and documentation. It adds
+no copy-commit endpoint, no copy/paste UI, no rollback UI, no schema change,
+no Calendar change, no navigation change, and no legacy-page replacement.
+
+After commit:
+
+```bash
+git revert <phase-39-commit-sha>
+```
+
+Emergency disposable cleanup:
+
+```sql
+DROP DATABASE IF EXISTS tracs_phase39_test;
+```
