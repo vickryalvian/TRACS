@@ -58,7 +58,6 @@ foreach ([
     'Save template',
     'Copy to month',
     'copy-commit.php',
-    'copy-preview.php',
 ] as $forbidden) {
     template_preview_ui_assert(
         !str_contains($modal, $forbidden)
@@ -92,8 +91,9 @@ template_preview_ui_assert(
     !str_contains($header, 'shift-assignment-react-preview.php')
         && str_contains($previewPage, 'Template Preview is non-mutating')
         && str_contains($previewPage, 'controlled backend commit')
-        && str_contains($previewPage, 'no copy, overtime'),
-    'Preview remains direct URL only and explicitly non-copy/commit.'
+        && str_contains($previewPage, 'Copy Schedule Preview is non-mutating')
+        && str_contains($previewPage, 'commit/apply behavior'),
+    'Preview remains direct URL only and explicitly non-copy-commit.'
 );
 
 echo "TRACS Shift Assignment template preview UI pilot checks passed.\n";

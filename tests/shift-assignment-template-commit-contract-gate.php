@@ -147,7 +147,6 @@ foreach ([
 
 foreach ([
     'copyShiftTemplate',
-    '/api/v1/shift-assignment/templates/copy-preview.php',
     '/api/v1/shift-assignment/templates/copy-commit.php',
     'Save Template',
     'Copy to month',
@@ -158,6 +157,12 @@ foreach ([
         "Phase 30 unexpectedly added frontend commit/copy behavior: {$forbiddenFrontendNeedle}."
     );
 }
+
+template_commit_gate_assert(
+    str_contains($frontendModule, 'Copy Schedule Preview')
+        && str_contains($apiClient, '/api/v1/shift-assignment/templates/copy-preview.php'),
+    'Phase 40 Copy Schedule Preview UI/caller is missing.'
+);
 
 template_commit_gate_assert(
     str_contains($frontendModule, 'Apply Template')

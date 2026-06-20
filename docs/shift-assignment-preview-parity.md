@@ -399,6 +399,20 @@ Phase 39 copy-preview API:
       legacy-page changes, schema changes, and navigation changes remain
       absent.
 
+Phase 40 copy-preview UI:
+
+- [x] React preview exposes `Copy Schedule Preview` only through the protected
+      `allowed_actions.copy_preview` capability.
+- [x] The modal calls `templates/copy-preview.php` with CSRF and displays
+      source range, target range, preview items, summary, warnings, conflicts,
+      and blocked items.
+- [x] The modal states `Preview only - this will not create or modify assignments.`
+- [x] Date validation rejects invalid, same, mismatched, and too-long
+      source/target ranges before submit where practical.
+- [x] No Apply Copy, Commit Copy, Paste Schedule, copy-commit endpoint, rollback
+      UI, schema change, Calendar change, legacy-page change, or production
+      navigation change is introduced.
+
 ## Phase 17 Completed Browser Matrix
 
 | Check | Disposable browser result |

@@ -258,11 +258,16 @@ try {
   }
 
   if (calledUrls.some((url) => url.includes('copy-preview.php') || url.includes('copy-commit.php'))) {
-    fail('Browser validation unexpectedly called a copy endpoint.');
+    fail('Apply Template browser validation unexpectedly called a copy endpoint.');
   }
   const html = await page.content();
-  if (html.includes('Copy schedule') || html.includes('Rollback Template') || html.includes('Undo Template')) {
-    fail('Browser validation found forbidden copy/paste or rollback UI.');
+  for (const forbiddenUi of ['Apply Copy', 'Commit Copy', 'Paste Schedule', 'Rollback Template', 'Undo Template']) {
+    if (html.includes(forbiddenUi)) {
+      fail(`Browser validation found forbidden copy-commit/paste or rollback UI: ${forbiddenUi}.`);
+    }
+  }
+  if (!html.includes('Copy Schedule Preview')) {
+    fail('Browser validation did not find the Phase 40 Copy Schedule Preview entry point.');
   }
 
   assertNoConsoleErrors(consoleErrors, failedRequests);
@@ -277,6 +282,7 @@ try {
     audit_count: auditCount,
     rollback_remaining: rollbackRemaining,
     baseline_remaining: baselineRemaining,
+    copy_preview_ui_present: true,
     copy_endpoints_called: false,
     console_errors: 0,
     request_failures: 0,

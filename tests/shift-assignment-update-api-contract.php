@@ -176,9 +176,14 @@ update_contract_assert(
     'Existing GET/POST assignments route changed.'
 );
 update_contract_assert(
-    substr_count($frontendApi, "method: 'POST'") === 3
+    substr_count($frontendApi, "method: 'POST'") === 4
         && substr_count($frontendApi, "method: 'PATCH'") === 1
         && substr_count($frontendApi, "method: 'DELETE'") === 1
+        && str_contains($frontendApi, '/api/v1/shift-assignment/assignments.php')
+        && str_contains($frontendApi, '/api/v1/shift-assignment/templates/preview.php')
+        && str_contains($frontendApi, '/api/v1/shift-assignment/templates/commit.php')
+        && str_contains($frontendApi, '/api/v1/shift-assignment/templates/copy-preview.php')
+        && !str_contains($frontendApi, '/api/v1/shift-assignment/templates/copy-commit.php')
         && !preg_match('/\b(method\s*:\s*[\'"]PUT|\.(put)\s*\()/i', $frontendApi),
     'React preview mutation allowlist changed.'
 );

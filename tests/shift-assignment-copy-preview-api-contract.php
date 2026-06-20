@@ -113,15 +113,27 @@ foreach ([
 }
 
 foreach ([
-    'Copy Schedule',
     'Copy Schedule Preview',
-    'APPLY COPY',
     'copy-preview.php',
+] as $requiredFrontend) {
+    copy_preview_contract_assert(
+        str_contains($frontend, $requiredFrontend),
+        "Phase 40 Copy Preview UI/caller is missing: {$requiredFrontend}"
+    );
+}
+
+foreach ([
+    'APPLY COPY',
+    'Apply Copy',
+    'Commit Copy',
+    'Paste Schedule',
+    'Save Copied Schedule',
+    'Generate Copied Schedule',
     'copy-commit.php',
 ] as $forbiddenFrontend) {
     copy_preview_contract_assert(
         !str_contains($frontend, $forbiddenFrontend),
-        "Unexpected React copy UI/caller exists: {$forbiddenFrontend}"
+        "Unexpected copy commit/apply UI exists: {$forbiddenFrontend}"
     );
 }
 

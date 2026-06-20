@@ -897,3 +897,27 @@ change for assignments, warnings, holiday coverage, monthly templates, monthly
 template items, assignment audit logs, or activity logs. Copy-commit, React
 copy/paste UI, rollback UI, schema changes, Calendar changes, legacy-page
 changes, and navigation changes remain absent.
+
+### Phase 40 Copy Schedule Preview UI
+
+Phase 40 wires the React preview to the non-mutating copy-preview API. The
+entry point is `Copy Schedule Preview`, visible only when the protected context
+returns `allowed_actions.copy_preview`.
+
+The modal sends CSRF to
+`POST /api/v1/shift-assignment/templates/copy-preview.php` and never calls a
+copy-commit route. It validates source/target dates in `dd-mm-yyyy`, converts
+payload dates to ISO, rejects same ranges, rejects mismatched range lengths,
+and blocks ranges above 35 days before submit where practical.
+
+The response is rendered as source range, target range, summary, preview
+items, warnings, conflicts, and blocked items. The modal states
+`Preview only - this will not create or modify assignments.` It does not
+refresh assignments, perform optimistic insertion, add rollback controls, or
+show Apply Copy/Commit Copy/Paste Schedule behavior.
+
+Phase 40 keeps the existing Create/Edit/Delete and Template Preview/Apply
+pilots unchanged. Copy-commit must remain a separate approved endpoint/UI phase
+with exact `APPLY COPY`, server-side source/target revalidation, final conflict
+re-check, audit created IDs, rollback targeting, disposable DB evidence, and
+authenticated browser validation.

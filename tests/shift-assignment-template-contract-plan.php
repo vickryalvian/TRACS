@@ -166,8 +166,6 @@ foreach ([
 
 foreach ([
     'Template Generator',
-    'Copy Schedule',
-    'copy-preview.php',
     'copy-commit.php',
 ] as $forbiddenFrontendNeedle) {
     template_contract_assert(
@@ -177,10 +175,18 @@ foreach ([
 }
 
 template_contract_assert(
-    str_contains($preview, 'Create/Edit/Delete and Template Preview/Apply')
+    str_contains($frontendModule, 'Copy Schedule Preview')
+        && str_contains($frontendModule, 'copy-preview.php'),
+    'Phase 40 Copy Schedule Preview UI/caller is missing.'
+);
+
+template_contract_assert(
+    str_contains($preview, 'Create/Edit/Delete, Template Preview/Apply, and')
+        && str_contains($preview, 'Copy Schedule Preview actions')
         && str_contains($preview, 'Template Preview is non-mutating')
         && str_contains($preview, 'controlled backend commit')
-        && str_contains($preview, 'no copy, overtime'),
+        && str_contains($preview, 'Copy Schedule Preview is non-mutating')
+        && str_contains($preview, 'commit/apply behavior'),
     'React preview pilot banner changed unexpectedly.'
 );
 

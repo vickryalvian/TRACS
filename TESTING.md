@@ -1228,6 +1228,47 @@ No-mutation evidence covers `shift_assignments`, `shift_warnings`,
 schema changes, Calendar changes, legacy-page changes, and navigation changes
 remain absent.
 
+## Phase 40 Copy Schedule Preview UI
+
+Phase 40 adds the preview-only React Copy Schedule Preview pilot. It uses the
+existing non-mutating API and adds no copy-commit endpoint or copy mutation UI.
+
+Required checks:
+
+```bash
+cd frontend && npm run test:contracts
+cd frontend && npm run build
+npm run test:e2e:shift-template-apply
+npm run test:e2e:shift-copy-preview
+php tests/shift-assignment-copy-preview-ui-contract.php
+php tests/shift-assignment-copy-preview-api-contract.php
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 TRACS_TEST_DB_NAME=tracs_phase40_test php tests/disposable-db-preflight.php
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 TRACS_TEST_DB_NAME=tracs_phase40_test php tests/shift-assignment-copy-preview-integration.php
+```
+
+The UI contract verifies `Copy Schedule Preview` is gated by
+`allowed_actions.copy_preview`, calls
+`/api/v1/shift-assignment/templates/copy-preview.php` with CSRF, validates
+source/target date rules, renders source range, target range, preview items,
+summary, warnings, conflicts, and blocked items, and keeps the copy workflow
+preview-only.
+
+Forbidden in Phase 40:
+
+- `templates/copy-commit.php`;
+- Apply Copy, Commit Copy, Paste Schedule, Save Copied Schedule, or Generate
+  Copied Schedule controls;
+- rollback UI;
+- schema, Calendar, legacy Shift Assignment, or production navigation changes.
+
+Use `tracs_phase40_test` for disposable checks and confirm cleanup with:
+
+```sql
+SELECT COUNT(*) AS tracs_phase40_test_count
+FROM information_schema.SCHEMATA
+WHERE SCHEMA_NAME = 'tracs_phase40_test';
+```
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:

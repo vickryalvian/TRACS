@@ -128,16 +128,29 @@ foreach ([
 }
 
 foreach ([
-    'Copy Schedule',
     'Copy Schedule Preview',
-    'APPLY COPY',
     'copy-preview.php',
+] as $requiredFrontendNeedle) {
+    copy_preview_gate_assert(
+        str_contains($frontendModule, $requiredFrontendNeedle)
+            || str_contains($apiClient, $requiredFrontendNeedle),
+        "Phase 40 Copy Preview UI/caller is missing {$requiredFrontendNeedle}."
+    );
+}
+
+foreach ([
+    'APPLY COPY',
+    'Apply Copy',
+    'Commit Copy',
+    'Paste Schedule',
+    'Save Copied Schedule',
+    'Generate Copied Schedule',
     'copy-commit.php',
 ] as $forbiddenFrontendNeedle) {
     copy_preview_gate_assert(
         !str_contains($frontendModule, $forbiddenFrontendNeedle)
             && !str_contains($apiClient, $forbiddenFrontendNeedle),
-        "Phase 38 unexpectedly added React copy UI/caller: {$forbiddenFrontendNeedle}."
+        "Phase 40 unexpectedly added copy commit/apply behavior: {$forbiddenFrontendNeedle}."
     );
 }
 

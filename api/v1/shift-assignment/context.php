@@ -32,6 +32,7 @@ function context_data(
     $controlledDelete = (bool)($capabilities['delete'] ?? false);
     $controlledTemplatePreview = (bool)($capabilities['template_preview'] ?? false);
     $controlledTemplateApply = (bool)($capabilities['template_apply'] ?? false);
+    $controlledCopyPreview = (bool)($capabilities['copy_preview'] ?? false);
     $manageSettings = (bool)($capabilities['settings'] ?? false);
     $manageMonthlyTemplates = (bool)($capabilities['monthly_templates'] ?? false);
     $export = (bool)($capabilities['export'] ?? false);
@@ -69,6 +70,7 @@ function context_data(
             'delete_assignment' => $controlledDelete,
             'preview_template' => $controlledTemplatePreview,
             'apply_template' => $controlledTemplateApply,
+            'copy_preview' => $controlledCopyPreview,
             'manage_shift_templates' => $manageSettings,
             'manage_holidays' => $manageSettings,
             'manage_coverage_rules' => $manageSettings,

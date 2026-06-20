@@ -876,3 +876,43 @@ Criteria before copy-commit:
 - audit created assignment IDs;
 - prove rollback targeting in disposable DB;
 - complete authenticated browser validation after UI activation.
+
+## Phase 40 Copy Schedule Preview UI
+
+Phase 40 adds the controlled React Copy Schedule Preview UI inside
+`shift-assignment-react-preview.php` only. It calls the existing non-mutating
+route:
+
+```text
+POST /api/v1/shift-assignment/templates/copy-preview.php
+```
+
+The UI is gated by the server-issued `allowed_actions.copy_preview` capability,
+which remains exact `super_admin` plus `shifts.manage` during the pilot. The
+request sends the documented CSRF header and uses `dd-mm-yyyy` display dates
+converted to ISO payload dates.
+
+The modal collects `source_start_date`, `source_end_date`,
+`target_start_date`, and `target_end_date`. Frontend validation blocks invalid
+dates, same source/target range, mismatched range length, and ranges above 35
+days before the API call where practical. Backend validation remains
+authoritative.
+
+The result view shows source range, target range, summary, preview items,
+warnings, conflicts, and blocked items. It repeats:
+`Preview only - this will not create or modify assignments.`
+
+Strict Phase 40 limits:
+
+- no `templates/copy-commit.php`;
+- no `APPLY COPY`, Apply Copy, Commit Copy, Paste Schedule, or copied-schedule
+  save/generate control;
+- no rollback UI;
+- no optimistic assignment insertion;
+- no assignment refresh caused by copy preview;
+- no schema, Calendar, legacy page, or production navigation change.
+
+Criteria before copy-commit remain unchanged: exact `APPLY COPY`,
+server-side source/target revalidation, final conflict re-check, audit of
+created assignment IDs, rollback targeting, disposable DB evidence, and
+authenticated browser evidence after any copy-apply UI activation.

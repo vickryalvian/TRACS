@@ -85,3 +85,12 @@ export async function applyShiftTemplatePreview(previewPayload, confirmation, cs
     csrfHeaderName: csrf.header ?? 'X-CSRF-Token',
   });
 }
+
+export async function previewCopySchedule(payload, csrf = {}) {
+  return apiClient.request('/api/v1/shift-assignment/templates/copy-preview.php', {
+    method: 'POST',
+    body: payload,
+    csrfToken: csrf.token ?? '',
+    csrfHeaderName: csrf.header ?? 'X-CSRF-Token',
+  });
+}

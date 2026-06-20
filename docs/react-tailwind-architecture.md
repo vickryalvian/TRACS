@@ -553,3 +553,16 @@ unchanged: no `Copy Schedule Preview` button, no copy/paste modal, no
 copy-preview API caller, and no rollback UI. A later UI phase must keep copy
 preview visually separate from Template Preview/Apply and must remain
 preview-only until copy-commit is separately approved.
+
+## Phase 40 Copy Preview UI
+
+Phase 40 adds the `Copy Schedule Preview` modal to the isolated Shift
+Assignment React bundle. It reuses the existing TRACS modal, compact form,
+toast, warning, and danger-state patterns. The modal is gated by
+`allowed_actions.copy_preview`, sends CSRF to the non-mutating copy-preview API,
+and uses `data-unsaved-ignore` so the React-owned dirty-form protection is not
+intercepted by the legacy page-level overlay.
+
+The modal remains preview-only: no Apply Copy, Commit Copy, Paste Schedule,
+copy-commit API caller, rollback UI, optimistic rows, global Tailwind, Calendar
+change, legacy-page replacement, or production navigation exposure is added.

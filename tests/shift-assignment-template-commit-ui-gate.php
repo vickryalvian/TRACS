@@ -92,15 +92,34 @@ template_commit_ui_gate_assert(
 );
 
 foreach ([
-    'Copy Schedule',
     'Copy to month',
-    'copy-preview.php',
     'copy-commit.php',
 ] as $forbiddenFrontendNeedle) {
     template_commit_ui_gate_assert(
         !str_contains($frontendModule, $forbiddenFrontendNeedle)
             && !str_contains($apiClient, $forbiddenFrontendNeedle),
         "React template commit/copy UI is no longer gated: {$forbiddenFrontendNeedle}."
+    );
+}
+
+template_commit_ui_gate_assert(
+    str_contains($frontendModule, 'Copy Schedule Preview')
+        && str_contains($apiClient, '/api/v1/shift-assignment/templates/copy-preview.php'),
+    'Phase 40 Copy Schedule Preview UI/caller is missing.'
+);
+
+foreach ([
+    'APPLY COPY',
+    'Apply Copy',
+    'Commit Copy',
+    'Paste Schedule',
+    'Save Copied Schedule',
+    'Generate Copied Schedule',
+] as $forbiddenCopyCommitUi) {
+    template_commit_ui_gate_assert(
+        !str_contains($frontendModule, $forbiddenCopyCommitUi)
+            && !str_contains($apiClient, $forbiddenCopyCommitUi),
+        "Phase 40 unexpectedly added copy commit/apply UI: {$forbiddenCopyCommitUi}."
     );
 }
 

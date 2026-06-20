@@ -1289,3 +1289,24 @@ Emergency disposable cleanup:
 ```sql
 DROP DATABASE IF EXISTS tracs_phase39_test;
 ```
+
+## Phase 40 Copy Preview UI Rollback
+
+Phase 40 adds the controlled React Copy Schedule Preview UI, frontend utility,
+frontend contract coverage, PHP UI guard coverage, context capability exposure,
+and documentation. It calls only the existing non-mutating copy-preview API and
+adds no copy-commit endpoint, Apply Copy/Commit Copy/Paste Schedule UI,
+rollback UI, schema change, Calendar change, navigation change, or legacy-page
+replacement.
+
+After commit:
+
+```bash
+git revert <phase-40-commit-sha>
+```
+
+Emergency disposable cleanup:
+
+```sql
+DROP DATABASE IF EXISTS tracs_phase40_test;
+```

@@ -553,3 +553,19 @@ Phase 39 Copy Schedule Preview API notes:
   assignment audit logs, or activity logs;
 - copy-commit endpoint, copy/paste UI, rollback UI, schema changes, Calendar
   changes, navigation changes, and legacy-page changes remain absent.
+
+Phase 40 Copy Schedule Preview UI notes:
+
+- adds `Copy Schedule Preview` inside the isolated React preview only;
+- gates the entry point through `allowed_actions.copy_preview`, exact
+  `super_admin`, and `shifts.manage`;
+- sends CSRF to the non-mutating `templates/copy-preview.php` route;
+- validates source/target dates, same range, mismatched range length, and
+  ranges above 35 days before submit where practical;
+- renders source range, target range, preview items, summary, warnings,
+  conflicts, and blocked items;
+- repeats `Preview only - this will not create or modify assignments.`;
+- preserves Create/Edit/Delete and Template Preview/Apply behavior;
+- no copy-commit endpoint, Apply Copy/Commit Copy/Paste Schedule UI, rollback
+  UI, schema change, Calendar change, navigation change, or legacy-page change
+  is introduced.

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Card } from '../../components/ui/Card';
 import { ShiftAssignmentBoard } from './components/ShiftAssignmentBoard';
 import { ShiftAssignmentTable } from './components/ShiftAssignmentTable';
+import { ShiftCopyPreviewModal } from './components/ShiftCopyPreviewModal';
 import { ShiftCreateModal } from './components/ShiftCreateModal';
 import { ShiftDeleteModal } from './components/ShiftDeleteModal';
 import { ShiftEditModal } from './components/ShiftEditModal';
@@ -34,6 +35,7 @@ const initialFilters = {
 
 export function ShiftAssignmentApp() {
   const [filters, setFilters] = useState(initialFilters);
+  const [copyPreviewOpen, setCopyPreviewOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [templatePreviewOpen, setTemplatePreviewOpen] = useState(false);
   const [editingAssignment, setEditingAssignment] = useState(null);
@@ -46,6 +48,7 @@ export function ShiftAssignmentApp() {
   const canEdit = Boolean(context.shift?.allowed_actions?.update_assignment);
   const canDelete = Boolean(context.shift?.allowed_actions?.delete_assignment);
   const canTemplatePreview = Boolean(context.shift?.allowed_actions?.preview_template);
+  const canCopyPreview = Boolean(context.shift?.allowed_actions?.copy_preview);
 
   function applyFilters(nextFilters) {
     setFilters(nextFilters);
@@ -133,9 +136,11 @@ export function ShiftAssignmentApp() {
     >
       <div className="tr:flex tr:flex-col tr:gap-tracs-4 tr:pb-tracs-6">
         <ShiftToolbar
+          canCopyPreview={canCopyPreview}
           canCreate={canCreate}
           canTemplatePreview={canTemplatePreview}
           filters={filters}
+          onCopyPreview={() => setCopyPreviewOpen(true)}
           onCreate={() => setCreateOpen(true)}
           onMove={moveRange}
           onTemplatePreview={() => setTemplatePreviewOpen(true)}
@@ -165,7 +170,7 @@ export function ShiftAssignmentApp() {
                       {filters.view[0].toUpperCase() + filters.view.slice(1)} assignments
                     </h2>
                     <p className="tr:mt-1 tr:text-xs tr:text-tracs-muted">
-                      Controlled create/edit/delete plus template preview/apply pilot · {context.global?.user?.name || 'Authenticated user'}
+                      Controlled create/edit/delete, template apply, and copy preview pilot · {context.global?.user?.name || 'Authenticated user'}
                     </p>
                   </div>
                   <span className="tr:font-mono tr:text-[9px] tr:text-tracs-muted">
@@ -244,6 +249,12 @@ export function ShiftAssignmentApp() {
         onClose={() => setTemplatePreviewOpen(false)}
         onToast={setToast}
         open={templatePreviewOpen && canTemplatePreview}
+      />
+      <ShiftCopyPreviewModal
+        context={context.shift}
+        onClose={() => setCopyPreviewOpen(false)}
+        onToast={setToast}
+        open={copyPreviewOpen && canCopyPreview}
       />
       <ShiftEditModal
         assignment={editingAssignment}

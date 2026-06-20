@@ -7,7 +7,8 @@
     "build": "vite build",
     "build:preview": "vite build --config vite.preview.config.js",
     "preview": "vite preview --host 127.0.0.1",
-    "test:contracts": "node tests/apiClient-contract.mjs && node tests/shift-create-contract.mjs && node tests/shift-edit-contract.mjs && node tests/shift-delete-contract.mjs && node tests/shift-template-preview-contract.mjs && node tests/shift-mutation-contract.mjs",
+    "test:contracts": "node tests/apiClient-contract.mjs && node tests/shift-create-contract.mjs && node tests/shift-edit-contract.mjs && node tests/shift-delete-contract.mjs && node tests/shift-template-preview-contract.mjs && node tests/shift-copy-preview-contract.mjs && node tests/shift-mutation-contract.mjs",
+    "test:e2e:shift-copy-preview": "npm run build:preview && node tests/shift-copy-preview-browser.mjs",
     "test:e2e:shift-template-apply": "npm run build:preview && node tests/shift-template-apply-browser.mjs",
     "test:preview-bundle": "node tests/preview-bundle-contract.mjs"
   },

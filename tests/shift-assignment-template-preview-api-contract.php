@@ -119,8 +119,6 @@ foreach ([
 
 foreach ([
     'Template Generator',
-    'Copy Schedule',
-    'copy-preview.php',
     'copy-commit.php',
 ] as $forbiddenFrontend) {
     template_preview_contract_assert(
@@ -128,6 +126,12 @@ foreach ([
         "Unexpected React template UI/caller exists: {$forbiddenFrontend}"
     );
 }
+
+template_preview_contract_assert(
+    str_contains($frontend, 'Copy Schedule Preview')
+        && str_contains($frontend, 'copy-preview.php'),
+    'Phase 40 Copy Schedule Preview UI/caller is missing.'
+);
 
 template_preview_contract_assert(
     str_contains($docs, 'POST /api/v1/shift-assignment/templates/preview.php')

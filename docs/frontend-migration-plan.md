@@ -405,3 +405,18 @@ rollback UI. The existing Template Preview/Apply pilot remains unchanged. A
 future React copy-preview phase must render preview-only results from
 `copy-preview.php` and must not include copy-commit behavior until the separate
 `APPLY COPY` commit phase is approved.
+
+Phase 40 adds that React copy-preview phase as a controlled pilot only. The
+toolbar exposes `Copy Schedule Preview` for exact Super Admin users with
+`shifts.manage` through `allowed_actions.copy_preview`. The modal collects
+source and target date ranges, sends CSRF to the non-mutating copy-preview API,
+and renders source range, target range, preview items, summary, warnings,
+conflicts, and blocked items. It clearly states `Preview only - this will not
+create or modify assignments.`
+
+Phase 40 does not add Apply Copy, Commit Copy, Paste Schedule, copy-commit
+endpoint calls, rollback UI, assignment-list mutation, production navigation,
+Calendar changes, schema changes, or legacy-page replacement. Copy-commit must
+remain a separate approved phase with exact `APPLY COPY`, final backend
+conflict re-check, audit created IDs, rollback targeting, and authenticated
+browser validation.
