@@ -513,3 +513,27 @@ Phase 37 Authenticated Browser Validation Gate notes:
   preview form;
 - Phase 38 copy-preview may proceed from the authenticated browser-validation
   gate, but only as a separately approved phase with copy-specific safeguards.
+
+Phase 38 Copy Schedule Preview Contract Gate notes:
+
+- documents future `POST /api/v1/shift-assignment/templates/copy-preview.php`
+  only; no copy-preview endpoint, copy-commit endpoint, copy/paste UI, rollback
+  UI, schema change, Calendar change, navigation change, or legacy-page change
+  is introduced;
+- defines `source_start_date`, `source_end_date`, `target_start_date`, and
+  `target_end_date`, matching source/target range length, safe maximum range,
+  ISO backend dates, and `dd-mm-yyyy` UI display;
+- source-to-target transformation preserves agent, shift type, time, and safe
+  scope fields while recalculating target date offset, day-of-week labels,
+  holiday/overtime advisories, jumpshift/rest warnings, and weekly hours;
+- future copy-preview returns `source_range`, `target_range`, preview items,
+  summary, warnings, conflicts, and blocked items without mutating
+  assignments, warnings, holiday coverage, template rows, notifications, or
+  audit state;
+- future UI copy must say `Preview only - this will not create or modify assignments.`;
+- future pilot access remains exact `super_admin` plus `shifts.manage` and
+  CSRF until a reviewed `shifts.template.copy_preview` migration exists;
+- future copy-commit remains a separate phase and must require exact
+  `APPLY COPY`, server-side source/target revalidation, conflict re-check,
+  audit created IDs, rollback targeting, disposable DB evidence, and
+  authenticated browser evidence.

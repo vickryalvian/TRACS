@@ -431,6 +431,19 @@ temporary gate. Commit routes require stronger confirmation, conflict
 re-checking, audit evidence, and disposable database validation before any
 React UI activation.
 
+Phase 38 hardens the future copy-preview contract only. The planned
+`POST /api/v1/shift-assignment/templates/copy-preview.php` route remains
+unimplemented, but its contract now requires `source_start_date`,
+`source_end_date`, `target_start_date`, `target_end_date`, matching
+source/target range lengths, a safe maximum range, non-identical source and
+target ranges, CSRF, exact `super_admin` plus `shifts.manage`, and future
+`shifts.template.copy_preview` after a reviewed migration. The preview must
+return `source_range`, `target_range`, items, summary, warnings, conflicts,
+and blocked items without inserting, updating, deleting, drafting, auditing,
+notifying, changing warnings, or changing holiday coverage. Future copy-commit
+is separate and must require exact `APPLY COPY`, server-side source/target
+revalidation, conflict re-check, audit created IDs, and rollback targeting.
+
 Phase 28 disposable validation proved Shift 1/2/3 preview output, overlap
 conflict output, warnings, and no persisted count changes for assignments,
 warnings, holiday coverage, monthly templates, monthly template items, and

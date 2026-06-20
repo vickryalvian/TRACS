@@ -323,28 +323,165 @@ that removed only committed assignment IDs.
 POST /api/v1/shift-assignment/templates/copy-preview.php
 ```
 
-Purpose: preview copying assignments from one date range to another.
+Purpose: generate a side-effect-free preview of copying existing assignments
+from a source date range to a target date range. This route is not implemented
+in Phase 38.
 
-Required request fields:
+Required future request shape:
 
-- `source_start_date`
-- `source_end_date`
-- `target_start_date`
-- `target_end_date`
-- selected agents, roles, or divisions if applicable.
+```json
+{
+  "source_start_date": "2026-07-01",
+  "source_end_date": "2026-07-07",
+  "target_start_date": "2026-08-01",
+  "target_end_date": "2026-08-07",
+  "scope": {
+    "agent_ids": [],
+    "role_ids": [],
+    "division_ids": []
+  },
+  "options": {
+    "include_holidays": true,
+    "include_warnings": true,
+    "strict_conflict_check": true
+  }
+}
+```
+
+Required response shape:
+
+```json
+{
+  "success": true,
+  "message": "Copy schedule preview generated.",
+  "data": {
+    "source_range": {},
+    "target_range": {},
+    "items": [],
+    "summary": {
+      "source_assignments": 0,
+      "preview_assignments": 0,
+      "agents": 0,
+      "warnings": 0,
+      "conflicts": 0,
+      "blocked_items": 0
+    },
+    "warnings": [],
+    "conflicts": [],
+    "blocked_items": []
+  },
+  "errors": [],
+  "meta": {
+    "request_id": "..."
+  }
+}
+```
 
 This endpoint must be non-mutating. The target range must match the source
 range length unless a future transform rule is explicitly approved and tested.
 
-Preview must identify:
+Date validation rules:
 
-- assignments that would be copied;
-- assignments that would be skipped;
-- existing target conflicts;
-- inactive or out-of-scope agents;
-- jumpshift/rest warnings;
-- weekly-hour warnings;
-- holiday and overtime advisories.
+- `source_start_date`, `source_end_date`, `target_start_date`, and
+  `target_end_date` are required.
+- Source and target ranges must be valid ISO `YYYY-MM-DD` dates internally.
+- UI display remains `dd-mm-yyyy`.
+- Source and target range lengths must match unless a later transform policy is
+  approved.
+- Safe maximum range is 31 days by default, or 35 days only with explicit
+  implementation evidence.
+- Source and target must not be the exact same range.
+- Source assignments must exist for the requested scope.
+- Target real schedules must never be overwritten silently.
+
+Source-to-target transformation rules:
+
+1. Preserve the agent when still active and in scope.
+2. Preserve shift type where the target shift definition is valid.
+3. Preserve start/end time, including Shift 3 `16:00-24:00`.
+4. Preserve role/division only when supported by the current schema and scope.
+5. Preserve notes only when intentionally approved because notes may be stale.
+6. Recalculate the assignment date by offset from `source_start_date` to
+   `target_start_date`.
+7. Recalculate day-of-week labels for the target date.
+8. Recalculate holiday and overtime advisories for the target date.
+9. Recalculate jumpshift/rest warnings against target-neighbor assignments.
+10. Recalculate weekly hours for the target week.
+11. Do not copy audit IDs.
+12. Do not copy old assignment IDs.
+13. Do not copy deleted/restored state.
+14. Do not copy template batch metadata unless future schema supports it.
+15. Do not mutate source assignments.
+
+Non-mutating preview guarantee:
+
+- no assignment inserts;
+- no assignment updates;
+- no assignment deletes;
+- no monthly template rows;
+- no monthly template item rows;
+- no draft rows or draft status changes;
+- no assignment audit state changes;
+- no warning row changes;
+- no holiday coverage row changes;
+- no notification row changes;
+- no source assignment mutation.
+
+Copy-preview conflicts:
+
+- target assignment overlap;
+- target existing real assignment conflict;
+- inactive or missing agent;
+- missing shift definition;
+- locked/protected target assignment;
+- invalid source assignment;
+- unsupported source/target range transform;
+- unsafe template-owned target conflict.
+
+Copy-preview warnings:
+
+- holiday assignment advisory;
+- overtime advisory;
+- weekly hours above/below target;
+- jumpshift/rest-time warning;
+- source assignment notes may be stale;
+- source assignment belongs to an old template batch if future schema supports
+  batch identity.
+
+Blocked items represent source assignments that cannot be safely transformed
+into target preview rows. They must include enough safe details for the user to
+understand the reason without exposing raw SQL, server paths, or stack traces.
+
+Permissions and CSRF:
+
+- requires an authenticated session;
+- requires `X-CSRF-Token` because preview is a POST;
+- requires exact `super_admin` during the pilot;
+- requires explicit `shifts.manage`;
+- should require future `shifts.template.copy_preview` after a reviewed
+  permission migration;
+- if `shifts.template.copy_preview` is not seeded, do not create it in
+  Phase 38. Future permission seeding must include `up.sql` and `down.sql`.
+
+Future React Copy Preview UI flow:
+
+1. Button label: `Copy Schedule Preview`.
+2. Visible only to exact `super_admin` plus `shifts.manage` during the pilot.
+3. Step 1 selects source range, target range, and optional scope/filter.
+4. Step 2 shows source summary, target preview rows, warnings, conflicts, and
+   blocked items.
+5. The modal must say: `Preview only - this will not create or modify assignments.`
+6. No commit/apply copy button is allowed until copy-commit exists and passes a
+   separate disposable/browser validation phase.
+
+Future copy-commit relationship:
+
+- copy-commit must be a separate endpoint;
+- it must require a later exact confirmation phrase such as `APPLY COPY`;
+- it must revalidate source and target server-side;
+- it must re-check conflicts immediately before writing;
+- it must audit created IDs and support rollback targeting;
+- it must not be implemented in Phase 38.
 
 ## Copy Schedule Commit
 

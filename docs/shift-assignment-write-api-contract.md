@@ -532,7 +532,8 @@ and perform a final conflict re-check immediately before any write. The exact
 typed confirmation is `APPLY TEMPLATE`, and the only supported policy is
 `conflict_policy = block`.
 
-bulk rollback must be designed before implementation. If commit uses
+Bulk rollback must be designed before implementation; bulk rollback remains a
+required gate. If commit uses
 `source=monthly_template`, `monthly_template_id`, and
 `generated_assignment_id`, rollback can target the generated records for that
 template. If a commit does not use a monthly template record, the audit must
@@ -820,3 +821,54 @@ Preview, exact `APPLY TEMPLATE`, commit success, assignment refresh, audit and
 rollback ids, rollback targeting, conflict-disabled Apply behavior, and absence
 of copy/paste or rollback UI. Phase 38 copy-preview may proceed from this
 browser-validation gate only as a separately approved copy-specific phase.
+
+### Phase 38 Copy Schedule Preview Contract Gate
+
+`POST /api/v1/shift-assignment/templates/copy-preview.php` is documented only;
+the route remains absent in Phase 38. The future route must be non-mutating
+and must preview copying existing source assignments into a target date range.
+
+The future request requires `source_start_date`, `source_end_date`,
+`target_start_date`, `target_end_date`, optional `scope.agent_ids`,
+`scope.role_ids`, `scope.division_ids`, and preview options for holidays,
+warnings, and strict conflict checks. Source and target ranges must be valid,
+must not be identical, must have matching lengths unless a later transform
+policy is approved, and must remain within a safe maximum range. Backend
+internal dates use ISO `YYYY-MM-DD`; UI display remains `dd-mm-yyyy`.
+
+Copy transformation preserves agent, shift type, start/end time, role/division
+where supported, and only intentionally safe notes. It recalculates target
+dates by source offset, target day-of-week labels, holiday/overtime advisories,
+jumpshift/rest warnings, and weekly hours. It must not copy audit IDs, old
+assignment IDs, deleted/restored state, or template batch metadata that the
+current schema cannot represent.
+
+The copy-preview response must include `source_range`, `target_range`,
+`items`, `summary.source_assignments`, `summary.preview_assignments`,
+`summary.agents`, `summary.warnings`, `summary.conflicts`,
+`summary.blocked_items`, plus `warnings`, `conflicts`, and `blocked_items`.
+Conflicts include target overlap, existing real target assignment conflicts,
+inactive/missing agents, invalid source assignments, missing shift
+definitions, locked/protected targets, unsupported range transforms, and unsafe
+template-owned target conflicts. Warnings include holiday/overtime advisories,
+weekly-hour warnings, jumpshift/rest warnings, stale-note warnings, and old
+template-batch advisories where applicable.
+
+The route must require authenticated session, CSRF, exact `super_admin`, and
+`shifts.manage` during the pilot. Future `shifts.template.copy_preview`
+requires a reviewed permission migration with `up.sql` and `down.sql`; Phase
+38 does not seed it. The backend remains authoritative and must not expose raw
+SQL, stack traces, server paths, credentials, or sensitive request payloads.
+
+Future React Copy Preview UI is also documented only. It may eventually expose
+`Copy Schedule Preview` for exact `super_admin` plus `shifts.manage`, collect
+source/target ranges and optional scope, then show source summary, target
+preview, warnings, conflicts, and blocked items with the text
+`Preview only - this will not create or modify assignments.` It must not show a
+copy commit/apply button until a separate copy-commit endpoint and browser
+validation phase are approved.
+
+Future copy-commit must be a separate endpoint, require an exact phrase such
+as `APPLY COPY`, revalidate source/target server-side, re-check conflicts,
+audit created IDs, and support rollback targeting. It is not implemented in
+Phase 38.

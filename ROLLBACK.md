@@ -1249,3 +1249,24 @@ Emergency disposable cleanup:
 ```sql
 DROP DATABASE IF EXISTS tracs_phase37_test;
 ```
+
+## Phase 38 Copy Preview Contract Rollback
+
+Phase 38 is documentation and non-mutating guard coverage for the future Copy
+Schedule Preview API. It adds no copy-preview endpoint, no copy-commit
+endpoint, no copy/paste UI, no rollback UI, no schema change, no Calendar
+change, no navigation change, and no legacy-page replacement.
+
+After commit:
+
+```bash
+git revert <phase-38-commit-sha>
+```
+
+No disposable database should be created by Phase 38 itself. If regression
+commands are run with a disposable preflight, clean only the disposable test
+database:
+
+```sql
+DROP DATABASE IF EXISTS tracs_phase38_test;
+```

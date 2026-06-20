@@ -1177,6 +1177,35 @@ guard. With the Phase 37 browser command passing against `tracs_phase37_test`
 and cleanup confirmed, Phase 38 copy-preview may proceed from the authenticated
 browser-validation gate, subject to its own explicit approval and safeguards.
 
+## Phase 38 Copy Schedule Preview Contract Gate
+
+Phase 38 is documentation and non-mutating guard coverage only. It documents
+the future `POST /api/v1/shift-assignment/templates/copy-preview.php` contract
+without creating the route, copy-commit route, copy/paste UI, rollback UI, or
+schema changes.
+
+Run:
+
+```bash
+php tests/shift-assignment-copy-preview-contract-gate.php
+```
+
+The guard verifies canonical docs include `source_start_date`,
+`source_end_date`, `target_start_date`, `target_end_date`, source-to-target
+transformation rules, `source_range`, `target_range`, non-mutating preview
+guarantees, conflict/warning/blocked item behavior, exact pilot permission
+policy, future `shifts.template.copy_preview`, and future `APPLY COPY`
+copy-commit relationship. It also verifies no `copy-preview.php` or
+`copy-commit.php` route exists and React does not contain Copy Schedule UI,
+`copy-preview.php`, `copy-commit.php`, or `APPLY COPY` callers.
+
+Future copy-preview must be POST plus CSRF even though it is non-mutating. It
+must return preview-only output with the message
+`Preview only - this will not create or modify assignments.` Future copy-commit
+must be a separate phase with its own endpoint, exact confirmation phrase,
+server-side source/target revalidation, conflict re-check, audit created IDs,
+rollback targeting, disposable DB proof, and authenticated browser evidence.
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:

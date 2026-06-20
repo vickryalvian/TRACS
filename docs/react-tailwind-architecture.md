@@ -535,3 +535,13 @@ blocking, no copy/paste UI, no rollback UI, and clean console/network output.
 The template preview form is marked with `data-unsaved-ignore` so the legacy
 page-level unsaved-change guard does not intercept the React-owned dirty-form
 flow.
+
+## Phase 38 Copy Preview Contract Gate
+
+Phase 38 adds no React copy UI. The future Copy Schedule Preview modal must
+stay inside the isolated Shift Assignment React bundle, follow the same TRACS
+spacing and modal patterns, and remain preview-only with the text
+`Preview only - this will not create or modify assignments.` A future commit
+step must not share the preview button; copy-commit requires a separately
+approved route, exact `APPLY COPY`, rollback evidence, and authenticated
+browser validation before any active UI is rendered.

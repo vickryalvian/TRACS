@@ -358,6 +358,8 @@ Before any template or copy/paste UI appears in the preview, verify:
 - [x] Phase 37 authenticated browser click-through is complete through the
       guarded Playwright/Chrome path against `tracs_phase37_test`.
 - [x] Copy/paste UI and copy endpoints remain absent.
+- [x] Phase 38 copy-preview contract gate documents future source/target copy
+      preview behavior while keeping copy endpoints and copy/paste UI absent.
 
 Phase 37 browser validation notes:
 
@@ -374,6 +376,15 @@ Phase 37 browser validation notes:
   from the React-owned dirty-form flow.
 - Phase 38 copy-preview may proceed from this browser gate with a separate
   approved copy-specific plan.
+
+Phase 38 copy-preview contract gate:
+
+- Future `Copy Schedule Preview` UI is documented only.
+- Future preview must show `source_range`, `target_range`, items, summary,
+  warnings, conflicts, and blocked items.
+- Future preview copy says `Preview only - this will not create or modify assignments.`
+- Copy-preview and copy-commit endpoints remain absent.
+- Copy/paste UI and rollback UI remain absent.
 
 ## Phase 17 Completed Browser Matrix
 

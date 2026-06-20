@@ -384,3 +384,17 @@ rollback UI. It also found and fixed a legacy unsaved-change overlay intercept
 by marking the React-owned template preview form with `data-unsaved-ignore`.
 Phase 38 copy-preview may proceed from this browser-validation gate only as a
 separately approved copy-specific phase.
+
+Phase 38 Copy Schedule Preview Contract Gate documents the future
+`POST /api/v1/shift-assignment/templates/copy-preview.php` UI flow only. The
+future button label is `Copy Schedule Preview`, visible only to exact
+`super_admin` plus `shifts.manage` during the pilot. The modal will collect
+source and target date ranges (`source_start_date`, `source_end_date`,
+`target_start_date`, `target_end_date`), optional scope, then render source
+summary, target preview, warnings, conflicts, and blocked items with the text
+`Preview only - this will not create or modify assignments.` No copy-preview
+endpoint, copy-commit endpoint, copy/paste UI, copy API caller, rollback UI, or
+schema change is added. Future copy-commit must be a separate phase with exact
+`APPLY COPY`, server-side source/target revalidation, conflict re-check, audit
+created IDs, rollback targeting, disposable DB evidence, and authenticated
+browser evidence.
