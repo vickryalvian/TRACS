@@ -766,3 +766,15 @@ template generation, copy/paste, production navigation, or replacement.
 - Every future migration includes `up.sql`, `down.sql`, verification queries,
   backup instructions, and tested rollback.
 - Rollout remains role-gated or feature-flagged with the legacy page available.
+
+### Phase 33 Template Commit Rollback Gate
+
+The template commit endpoint remains backend-only. The Phase 33 disposable
+drill proves that rollback uses returned `created_assignment_ids`, preserves
+unrelated assignments, and records test-only cleanup audit evidence. It also
+proves that a valid preview can become invalid when a conflicting assignment is
+created before commit, and the commit route then returns `409` without writing
+template rows.
+
+Because no `template_batch_id` exists yet, production rollback must continue to
+use response/audit ids and must never use a broad date-range delete.

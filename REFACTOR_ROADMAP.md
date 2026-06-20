@@ -439,3 +439,16 @@ Phase 32 template-commit API notes:
   GET visibility, audit IDs, and rollback cleanup;
 - no React commit UI, copy endpoints, schema, Calendar, navigation, or legacy
   page changes are included.
+
+Phase 33 template-commit hardening notes:
+
+- rollback targeting now has an explicit disposable drill that removes only
+  returned `created_assignment_ids` and preserves unrelated assignments;
+- a race drill confirms preview-to-commit revalidation catches conflicts added
+  after preview and before commit;
+- preview non-mutation remains covered after commit exists;
+- exact `APPLY TEMPLATE` rejects case, whitespace, double-space, and hyphen
+  variants;
+- commit audit contains created ids, generated count, and rollback ids;
+- React Apply Template UI, copy endpoints, schema changes, Calendar changes,
+  navigation changes, and legacy-page changes remain blocked.

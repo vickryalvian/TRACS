@@ -343,3 +343,9 @@ no commit/apply/generate-save button and no API caller for
 `templates/commit.php`. Future UI work must wait for authenticated disposable
 browser evidence against the committed backend route and must keep the exact
 `APPLY TEMPLATE` confirmation.
+
+Phase 33 hardens the backend route with disposable rollback and race-conflict
+drills. The React preview remains preview-only for templates: no Apply
+Template button, no commit caller, no copy controls, and no optimistic bulk
+write. A future Apply Template UI still needs a separate approval phase and
+authenticated disposable-browser validation.

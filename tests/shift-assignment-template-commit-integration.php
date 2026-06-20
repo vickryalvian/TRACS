@@ -319,7 +319,10 @@ try {
     foreach ([
         ['', 'Missing confirmation did not return 422.'],
         ['apply template', 'Lowercase confirmation did not return 422.'],
+        ['Apply Template', 'Case-variant confirmation did not return 422.'],
         [' APPLY TEMPLATE ', 'Whitespace confirmation did not return 422.'],
+        ['APPLY  TEMPLATE', 'Double-space confirmation did not return 422.'],
+        ['APPLY-TEMPLATE', 'Hyphenated confirmation did not return 422.'],
     ] as [$confirmation, $message]) {
         $body = $validBody;
         if ($confirmation === '') {
@@ -340,6 +343,14 @@ try {
     commit_integration_assert(
         ($invalid['success'] ?? null) === false && $invalid['_test_status'] === 422,
         'Invalid commit payload did not return 422.'
+    );
+
+    $overwriteBody = $validBody;
+    $overwriteBody['options']['conflict_policy'] = 'overwrite';
+    $overwrite = commit_integration_request('POST', 9301, 'valid', $overwriteBody);
+    commit_integration_assert(
+        ($overwrite['success'] ?? null) === false && $overwrite['_test_status'] === 422,
+        'Unsupported conflict policy did not return 422.'
     );
 
     $beforeConflictCount = (int)commit_integration_scalar($conn, 'SELECT COUNT(*) FROM shift_assignments');
@@ -368,6 +379,53 @@ try {
             && $previewResponse['_test_status'] === 200
             && $beforePreview === $afterPreview,
         'Preview API mutated data after commit endpoint addition.'
+    );
+
+    $raceBody = commit_integration_payload(['2026-08-10', '2026-08-11', '2026-08-12']);
+    $racePreviewCounts = commit_integration_counts($conn);
+    $racePreview = commit_integration_request(
+        'POST',
+        9301,
+        'valid',
+        $raceBody['preview_payload'],
+        'templates/preview'
+    );
+    commit_integration_assert(
+        ($racePreview['success'] ?? null) === true
+            && $racePreview['_test_status'] === 200
+            && commit_integration_counts($conn) === $racePreviewCounts,
+        'Race setup preview did not remain non-mutating.'
+    );
+    $conn->query("
+        INSERT INTO shift_assignments
+          (id,user_id,division_id,shift_template_id,assignment_date,start_datetime,
+           end_datetime,is_cross_day,break_minutes,calculated_duration_minutes,
+           assignment_type,status,is_overtime,is_holiday_assignment,approval_status,
+           source,created_by,updated_by)
+        VALUES
+          (9702,9303,9201,9401,'2026-08-10','2026-08-10 00:00:00',
+           '2026-08-10 08:00:00',0,0,480,'regular_shift','assigned',0,0,
+           'not_required','manual',9301,9301)
+    ");
+    $beforeRaceCommitCount = (int)commit_integration_scalar($conn, 'SELECT COUNT(*) FROM shift_assignments');
+    $raceConflict = commit_integration_request('POST', 9301, 'valid', $raceBody);
+    $afterRaceCommitCount = (int)commit_integration_scalar($conn, 'SELECT COUNT(*) FROM shift_assignments');
+    commit_integration_assert(
+        ($raceConflict['success'] ?? null) === false && $raceConflict['_test_status'] === 409,
+        'Race conflict commit did not return 409.'
+    );
+    commit_integration_assert(
+        $beforeRaceCommitCount === $afterRaceCommitCount,
+        'Race conflict commit created assignments.'
+    );
+    commit_integration_assert(
+        (int)commit_integration_scalar(
+            $conn,
+            "SELECT COUNT(*) FROM shift_assignments
+             WHERE assignment_date BETWEEN '2026-08-10' AND '2026-08-12'
+               AND source='monthly_template'"
+        ) === 0,
+        'Race conflict left template-created assignments behind.'
     );
 
     $commit = commit_integration_request('POST', 9301, 'valid', $validBody);
@@ -424,7 +482,29 @@ try {
             && array_values(array_map('intval', $auditData['created_assignment_ids'] ?? [])) === $ids,
         'Commit audit does not include created assignment ids.'
     );
+    commit_integration_assert(
+        (int)($auditData['generated_assignments_count'] ?? 0) === 3
+            && array_values(array_map('intval', $auditData['rollback']['ids'] ?? [])) === $ids,
+        'Commit audit does not include rollback targeting evidence.'
+    );
 
+    $rollbackAudit = $conn->prepare("
+        INSERT INTO tracs_user_activity_logs
+          (actor_user_id, target_type, target_id, action, before_data, after_data, reason, ip_address, user_agent, created_at)
+        VALUES (9301, 'shift_assignment_template', NULL, 'shift_assignment.template.rollback_cleanup',
+          NULL, ?, 'Disposable rollback targeting drill cleanup.', '127.0.0.1',
+          'TRACS Phase 33 Integration Test', NOW())
+    ");
+    commit_integration_assert($rollbackAudit instanceof mysqli_stmt, 'Unable to prepare rollback cleanup audit.');
+    $rollbackAuditJson = json_encode([
+        'created_assignment_ids' => $ids,
+        'unrelated_assignment_id' => 9701,
+        'cleanup_type' => 'created_assignment_ids',
+    ], JSON_UNESCAPED_SLASHES);
+    commit_integration_assert(is_string($rollbackAuditJson), 'Unable to serialize rollback cleanup audit.');
+    $rollbackAudit->bind_param('s', $rollbackAuditJson);
+    commit_integration_assert($rollbackAudit->execute(), 'Unable to write rollback cleanup audit.');
+    $rollbackAudit->close();
     $conn->query("DELETE FROM shift_assignments WHERE id IN ({$idList})");
     commit_integration_assert(
         (int)commit_integration_scalar($conn, "SELECT COUNT(*) FROM shift_assignments WHERE id IN ({$idList})") === 0,
@@ -433,6 +513,19 @@ try {
     commit_integration_assert(
         (int)commit_integration_scalar($conn, 'SELECT COUNT(*) FROM shift_assignments WHERE id=9701') === 1,
         'Rollback cleanup removed unrelated assignment.'
+    );
+    commit_integration_assert(
+        (int)commit_integration_scalar($conn, 'SELECT COUNT(*) FROM shift_assignments WHERE id=9702') === 1,
+        'Rollback cleanup removed race-conflict baseline assignment.'
+    );
+    commit_integration_assert(
+        (int)commit_integration_scalar(
+            $conn,
+            "SELECT COUNT(*) FROM tracs_user_activity_logs
+             WHERE action='shift_assignment.template.rollback_cleanup'
+               AND after_data LIKE '%created_assignment_ids%'"
+        ) === 1,
+        'Rollback cleanup audit was not written.'
     );
 
     echo "TRACS Shift Assignment template commit disposable integration checks passed.\n";

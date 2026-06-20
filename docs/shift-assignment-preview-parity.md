@@ -341,6 +341,10 @@ Before any template or copy/paste UI appears in the preview, verify:
       disposable database.
 - [x] Commit endpoint proves preview-to-commit integrity, final conflict
       re-check, and exact `APPLY TEMPLATE` confirmation in a disposable DB.
+- [x] Commit rollback targeting proves only returned `created_assignment_ids`
+      are removed and unrelated assignments remain.
+- [x] Race conflict drill proves data changed after preview is blocked with
+      safe `409` and no template rows are written.
 - [ ] Granular template permissions are either migrated with `up.sql` and
       `down.sql` or the implementation remains exact Super Admin plus
       `shifts.manage`.

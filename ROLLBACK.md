@@ -1146,3 +1146,28 @@ For data created by the Phase 32 endpoint in an approved non-production
 environment, use the response/audit `created_assignment_ids` rollback target
 and delete exactly those IDs after confirming they are template-created rows.
 Do not use broad date-range deletion.
+
+## Phase 33 Template Commit Hardening Rollback
+
+Phase 33 adds disposable hardening tests and documentation for the existing
+template commit endpoint. It adds no React commit UI, no copy endpoint, no
+schema change, no Calendar change, no navigation change, and no legacy-page
+replacement.
+
+After commit:
+
+```bash
+git revert <phase-33-commit-sha>
+```
+
+Emergency disposable cleanup:
+
+```sql
+DROP DATABASE IF EXISTS tracs_phase33_test;
+DROP DATABASE IF EXISTS tracs_phase33_rollback_test;
+DROP DATABASE IF EXISTS tracs_phase33_race_test;
+```
+
+For approved non-production template commits, rollback still targets exactly
+the response/audit `created_assignment_ids`. Phase 33 proves that cleanup path
+does not remove unrelated baseline assignments in the disposable drill.

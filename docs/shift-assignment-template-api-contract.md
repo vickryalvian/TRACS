@@ -509,3 +509,43 @@ Before any commit or copy endpoint is implemented:
 - decide audit storage for parent template actions;
 - confirm rollback evidence for generated assignments and dependents;
 - run disposable database integration before exposing any React UI.
+
+## Phase 32 Template Commit API
+
+`POST /api/v1/shift-assignment/templates/commit.php` is implemented as a
+backend-only controlled bulk-write endpoint. It requires authenticated session,
+CSRF, exact Super Admin, explicit `shifts.manage`, and exact
+`APPLY TEMPLATE`. If `shifts.template.commit` is seeded later, the route also
+requires that granular permission.
+
+The endpoint accepts `preview_payload`, not trusted preview rows. It recomputes
+the preview server-side, revalidates agents, dates, shifts, warnings, and
+conflicts, and supports only `conflict_policy=block`. Any blocking conflict
+returns `409` and writes no template assignments.
+
+Because the current schema has no `template_batch_id`, rollback targeting is
+based on the created assignment ids returned in the response and written to
+`tracs_user_activity_logs`. React commit UI remains blocked until those ids are
+also proven through authenticated disposable-browser validation.
+
+## Phase 33 Commit Hardening Evidence
+
+Phase 33 strengthens the disposable validation around `templates/commit.php`:
+
+- exact confirmation rejects lowercase, case variants, leading/trailing
+  spaces, double spaces, and `APPLY-TEMPLATE`;
+- unsupported conflict policies such as `overwrite` return `422`;
+- preview remains non-mutating after the commit endpoint exists;
+- a race drill previews a valid payload, inserts a conflicting assignment
+  before commit, then confirms commit returns `409` and creates no template
+  rows;
+- rollback targeting deletes only returned `created_assignment_ids` and keeps
+  unrelated baseline assignments intact;
+- commit audit includes generated count, created ids, and rollback ids;
+- test-only rollback cleanup audit records the ids used by the disposable
+  cleanup path.
+
+These checks do not add React commit UI, copy endpoints, schema changes,
+Calendar changes, navigation changes, or legacy Shift Assignment changes.
+The `template_batch_id` schema limitation remains documented for future bulk
+rollback ergonomics.

@@ -1059,6 +1059,23 @@ The test must prove the commit/copy route files do not exist and that the React
 module still has no commit/apply/save/copy caller. Commit implementation
 requires a later disposable DB mutation test plan.
 
+## Phase 33 Template Commit Hardening
+
+Run the full non-production disposable gate before any React Apply Template UI:
+
+```bash
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 TRACS_TEST_DB_NAME=tracs_phase33_test php tests/disposable-db-preflight.php
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 TRACS_TEST_DB_NAME=tracs_phase33_test php tests/shift-assignment-template-commit-integration.php
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 php tests/shift-assignment-template-commit-rollback-drill.php
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 php tests/shift-assignment-template-commit-race-conflict-drill.php
+```
+
+The hardened drill validates exact `APPLY TEMPLATE` confirmation, unsupported
+conflict-policy rejection, server-side race conflict re-check, preview
+non-mutation, created-id rollback targeting, unrelated assignment retention,
+and commit/rollback audit evidence. The drill refuses production-like database
+names and drops the disposable database after the run.
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:
