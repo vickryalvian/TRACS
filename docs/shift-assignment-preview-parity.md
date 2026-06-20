@@ -413,6 +413,20 @@ Phase 40 copy-preview UI:
       UI, schema change, Calendar change, legacy-page change, or production
       navigation change is introduced.
 
+Phase 41 copy-preview hardening:
+
+- [x] Date inputs expose accessible help/error wiring and inline alert
+      messages.
+- [x] Browser validation covers missing dates, same range, mismatched range
+      length, and ranges above 35 days.
+- [x] Changing date options after a successful preview marks the displayed
+      result stale.
+- [x] Browser regression confirms no persisted assignment, warning, or audit
+      count changes from copy preview.
+- [x] No copy-commit request, Apply Copy/Commit Copy/Paste Schedule UI,
+      rollback UI, schema change, Calendar change, legacy-page change, or
+      production navigation change is introduced.
+
 ## Phase 17 Completed Browser Matrix
 
 | Check | Disposable browser result |

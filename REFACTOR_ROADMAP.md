@@ -569,3 +569,16 @@ Phase 40 Copy Schedule Preview UI notes:
 - no copy-commit endpoint, Apply Copy/Commit Copy/Paste Schedule UI, rollback
   UI, schema change, Calendar change, navigation change, or legacy-page change
   is introduced.
+
+Phase 41 Copy Schedule Preview UI hardening notes:
+
+- improves accessible date help/error wiring and inline alert/status states;
+- adds stale-preview messaging when date options change after a successful
+  preview;
+- browser regression covers missing dates, same-range rejection, mismatched
+  range length, ranges above 35 days, valid copy preview, conflict/blocked
+  display, and no persisted assignment/warning/audit count mutation;
+- authenticated Apply Template e2e remains part of the regression gate;
+- copy-commit endpoint, Apply Copy/Commit Copy/Paste Schedule UI, rollback UI,
+  schema changes, Calendar changes, navigation changes, and legacy-page changes
+  remain absent.

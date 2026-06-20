@@ -916,3 +916,24 @@ Criteria before copy-commit remain unchanged: exact `APPLY COPY`,
 server-side source/target revalidation, final conflict re-check, audit of
 created assignment IDs, rollback targeting, disposable DB evidence, and
 authenticated browser evidence after any copy-apply UI activation.
+
+## Phase 41 Copy Preview UI Hardening
+
+Phase 41 keeps the copy workflow preview-only and hardens the React modal:
+
+- date inputs expose help/error wiring with `aria-invalid` and inline
+  `role="alert"` messages;
+- client-side validation covers missing dates, same source/target range,
+  mismatched range length, and ranges above 35 days;
+- changing date options after a successful preview marks the displayed result
+  stale and tells the user to generate a new copy preview;
+- API validation, authorization, session, method, and network errors remain
+  safe modal/toast messages;
+- browser regression validates source/target rendering, Shift 1/2/3 preview
+  including `16:00-24:00`, conflict/blocked display, no persisted count
+  changes, no `copy-commit.php` call, and no Apply Copy/Commit Copy/Paste
+  Schedule UI.
+
+Phase 41 adds no copy-commit endpoint, no copy mutation UI, no rollback UI, no
+schema change, no Calendar change, no legacy page replacement, and no
+production navigation exposure.

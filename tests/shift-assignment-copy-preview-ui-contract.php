@@ -51,6 +51,9 @@ foreach ([
     'Conflicts',
     'Blocked items',
     'Generating copy preview...',
+    'aria-invalid',
+    'role="alert"',
+    'Date options changed after the last preview.',
 ] as $requiredModalNeedle) {
     copy_preview_ui_assert(
         str_contains($modal, $requiredModalNeedle),

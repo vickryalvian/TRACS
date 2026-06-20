@@ -420,3 +420,12 @@ Calendar changes, schema changes, or legacy-page replacement. Copy-commit must
 remain a separate approved phase with exact `APPLY COPY`, final backend
 conflict re-check, audit created IDs, rollback targeting, and authenticated
 browser validation.
+
+Phase 41 hardens Copy Schedule Preview before any copy-commit planning. The
+modal keeps preview-only behavior, adds clearer accessible date validation and
+stale-result messaging, and the browser regression exercises missing dates,
+same-range rejection, range-length mismatch, ranges above 35 days, valid
+preview rendering, conflict rendering, and no-mutation count checks. Apply
+Template e2e remains passing. No Apply Copy, Commit Copy, Paste Schedule,
+rollback UI, schema change, Calendar change, legacy-page replacement, or
+production navigation exposure is added.

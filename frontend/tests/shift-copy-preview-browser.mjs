@@ -183,6 +183,30 @@ try {
   await dialog.waitFor();
   await page.getByText('Preview only - this will not create or modify assignments.').first().waitFor();
 
+  await dialog.locator('input[name="source_start_date"]').fill('');
+  await dialog.getByRole('button', { name: 'Generate Copy Preview' }).click();
+  await dialog.getByText('Use dd-mm-yyyy.').first().waitFor();
+  if ((await dialog.locator('input[name="source_start_date"]').getAttribute('aria-invalid')) !== 'true') {
+    fail('Missing source date did not mark the field invalid.');
+  }
+
+  await dialog.locator('input[name="source_start_date"]').fill('01-07-2026');
+  await dialog.locator('input[name="source_end_date"]').fill('03-07-2026');
+  await dialog.locator('input[name="target_start_date"]').fill('01-07-2026');
+  await dialog.locator('input[name="target_end_date"]').fill('03-07-2026');
+  await dialog.getByRole('button', { name: 'Generate Copy Preview' }).click();
+  await dialog.getByText('Source and target ranges must be different.').waitFor();
+
+  await dialog.locator('input[name="target_start_date"]').fill('01-08-2026');
+  await dialog.locator('input[name="target_end_date"]').fill('04-08-2026');
+  await dialog.getByRole('button', { name: 'Generate Copy Preview' }).click();
+  await dialog.getByText('Source and target ranges must have the same length.').waitFor();
+
+  await dialog.locator('input[name="source_end_date"]').fill('15-08-2026');
+  await dialog.locator('input[name="target_end_date"]').fill('15-09-2026');
+  await dialog.getByRole('button', { name: 'Generate Copy Preview' }).click();
+  await dialog.getByText('Source range cannot exceed 35 days.').waitFor();
+
   await dialog.locator('input[name="source_start_date"]').fill('01-07-2026');
   await dialog.locator('input[name="source_end_date"]').fill('03-07-2026');
   await dialog.locator('input[name="target_start_date"]').fill('01-08-2026');
@@ -191,6 +215,9 @@ try {
   await page.getByText('Copy preview generated').waitFor();
   await dialog.getByRole('heading', { name: 'Preview items' }).waitFor();
   await dialog.getByText('16:00-24:00').waitFor();
+  await dialog.locator('input[name="target_end_date"]').fill('04-08-2026');
+  await dialog.getByText('Date options changed after the last preview.').waitFor();
+  await dialog.locator('input[name="target_end_date"]').fill('03-08-2026');
 
   const afterPreviewCounts = {
     assignments: Number(mysql('SELECT COUNT(*) FROM shift_assignments')),

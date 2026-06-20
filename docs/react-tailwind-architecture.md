@@ -566,3 +566,11 @@ intercepted by the legacy page-level overlay.
 The modal remains preview-only: no Apply Copy, Commit Copy, Paste Schedule,
 copy-commit API caller, rollback UI, optimistic rows, global Tailwind, Calendar
 change, legacy-page replacement, or production navigation exposure is added.
+
+## Phase 41 Copy Preview Hardening
+
+Phase 41 keeps the same isolated modal but improves state clarity: accessible
+date help/error wiring, inline alert/status messages, disabled loading state,
+and stale-result messaging after edits. The layout remains within the prefixed
+TRACS utility surface and still renders no Apply Copy, Commit Copy, Paste
+Schedule, rollback UI, or global styles.

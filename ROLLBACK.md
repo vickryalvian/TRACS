@@ -1310,3 +1310,22 @@ Emergency disposable cleanup:
 ```sql
 DROP DATABASE IF EXISTS tracs_phase40_test;
 ```
+
+## Phase 41 Copy Preview UI Hardening Rollback
+
+Phase 41 hardens the existing Copy Schedule Preview UI, browser validation,
+contract checks, and documentation. It adds no copy-commit endpoint, Apply
+Copy/Commit Copy/Paste Schedule UI, rollback UI, schema change, Calendar
+change, navigation change, or legacy-page replacement.
+
+After commit:
+
+```bash
+git revert <phase-41-commit-sha>
+```
+
+Emergency disposable cleanup:
+
+```sql
+DROP DATABASE IF EXISTS tracs_phase41_test;
+```

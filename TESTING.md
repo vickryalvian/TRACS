@@ -1269,6 +1269,27 @@ FROM information_schema.SCHEMATA
 WHERE SCHEMA_NAME = 'tracs_phase40_test';
 ```
 
+## Phase 41 Copy Preview UI Hardening
+
+Phase 41 keeps copy preview non-mutating and strengthens the UI/browser gate.
+Run the Phase 40 commands plus:
+
+```bash
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 TRACS_TEST_DB_NAME=tracs_phase41_test php tests/disposable-db-preflight.php
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 TRACS_TEST_DB_NAME=tracs_phase41_test php tests/shift-assignment-copy-preview-integration.php
+cd frontend && TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 TRACS_TEST_DB_NAME=tracs_phase41_test npm run test:e2e:shift-copy-preview
+```
+
+The browser regression now verifies missing source/target date validation,
+same-range rejection, range-length mismatch, ranges above 35 days, stale-result
+messaging after editing a successful preview, valid Shift 1/2/3 copy preview,
+target conflict/blocked rendering, no assignment/warning/audit count mutation,
+no `copy-commit.php` call, and no Apply Copy/Commit Copy/Paste Schedule or
+rollback UI.
+
+Phase 42 copy-commit contract work may proceed only after this hardening gate
+passes and must remain contract-only unless separately approved.
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:

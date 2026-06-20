@@ -921,3 +921,17 @@ pilots unchanged. Copy-commit must remain a separate approved endpoint/UI phase
 with exact `APPLY COPY`, server-side source/target revalidation, final conflict
 re-check, audit created IDs, rollback targeting, disposable DB evidence, and
 authenticated browser validation.
+
+### Phase 41 Copy Schedule Preview UI Hardening
+
+Phase 41 hardens the preview-only copy modal without adding a mutation path.
+The date fields now expose accessible help/error wiring, inline alert messages,
+and stale-preview messaging when the form changes after a successful preview.
+Browser validation covers missing dates, same source/target range, mismatched
+range length, ranges above 35 days, valid source-to-target preview, conflict
+rendering, no persisted assignment/warning/audit count changes from preview,
+and no `copy-commit.php` request.
+
+Copy-commit remains blocked until a separate contract phase defines exact
+`APPLY COPY`, final server-side revalidation, rollback targeting, audit
+coverage, disposable DB proof, and authenticated browser evidence.

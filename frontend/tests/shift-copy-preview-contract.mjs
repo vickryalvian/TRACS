@@ -30,6 +30,8 @@ assert.deepEqual(valid.payload.scope, { agent_ids: [], role_ids: [], division_id
 assert.equal(valid.payload.options.strict_conflict_check, true);
 
 assert.equal(validateCopyPreviewDraft({ ...validDraft, source_start_date: '2026/07/01' }).errors.source_start_date, 'Use dd-mm-yyyy.');
+assert.equal(validateCopyPreviewDraft({ ...validDraft, source_start_date: '' }).errors.source_start_date, 'Use dd-mm-yyyy.');
+assert.equal(validateCopyPreviewDraft({ ...validDraft, target_start_date: '' }).errors.target_start_date, 'Use dd-mm-yyyy.');
 assert.equal(validateCopyPreviewDraft({ ...validDraft, target_start_date: '01-07-2026', target_end_date: '03-07-2026' }).errors.target_start_date, 'Source and target ranges must be different.');
 assert.equal(validateCopyPreviewDraft({ ...validDraft, target_end_date: '04-08-2026' }).errors.target_end_date, 'Source and target ranges must have the same length.');
 assert.equal(validateCopyPreviewDraft({ ...validDraft, source_end_date: '15-08-2026', target_end_date: '15-09-2026' }).errors.source_end_date, 'Source range cannot exceed 35 days.');
@@ -114,5 +116,8 @@ for (const forbidden of ['templates/copy-commit.php', 'APPLY COPY', 'Apply Copy'
   assert.equal(moduleSource.includes(forbidden), false, `${forbidden} must not exist in copy preview UI.`);
 }
 assert.match(moduleSource, /Preview only - this will not create or modify assignments\./);
+assert.match(moduleSource, /aria-invalid/);
+assert.match(moduleSource, /Date options changed after the last preview/);
+assert.match(moduleSource, /role="alert"/);
 
 console.log('TRACS Shift Assignment copy preview frontend contracts passed.');

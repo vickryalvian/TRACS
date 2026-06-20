@@ -12,7 +12,7 @@ import { focusInvalidField } from '../utils/shiftMutation';
 const fieldClass =
   'tr:min-h-9 tr:w-full tr:rounded-tracs tr:border tr:border-tracs-border tr:bg-tracs-card tr:px-tracs-3 tr:text-xs tr:text-tracs-primary tr:outline-none tr:focus:border-tracs-accent tr:focus:ring-2 tr:focus:ring-tracs-accent-soft';
 
-function Field({ children, error, label, name, required = false }) {
+function Field({ children, error, help, label, name, required = false }) {
   return (
     <label className="tr:flex tr:min-w-0 tr:flex-col tr:gap-1">
       <span className="tr:text-xs tr:font-semibold tr:text-tracs-secondary">
@@ -20,13 +20,22 @@ function Field({ children, error, label, name, required = false }) {
         {required ? <span aria-hidden="true" className="shift-required-mark">*</span> : null}
       </span>
       {children}
+      {help ? (
+        <span className="tr:text-[10px] tr:leading-4 tr:text-tracs-muted" id={`${name}-help`}>
+          {help}
+        </span>
+      ) : null}
       {error ? (
-        <span className="tr:text-[10px] tr:leading-4 tr:text-tracs-danger" id={`${name}-error`}>
+        <span className="tr:text-[10px] tr:leading-4 tr:text-tracs-danger" id={`${name}-error`} role="alert">
           {error}
         </span>
       ) : null}
     </label>
   );
+}
+
+function describedBy(name, error) {
+  return error ? `${name}-help ${name}-error` : `${name}-help`;
 }
 
 function ResultList({ empty, items, title, tone = 'neutral' }) {
@@ -64,8 +73,10 @@ function ResultList({ empty, items, title, tone = 'neutral' }) {
 export function ShiftCopyPreviewModal({ context, onClose, onToast, open }) {
   const [draft, setDraft] = useState(() => initialCopyPreviewDraft());
   const [errors, setErrors] = useState({});
+  const [formMessage, setFormMessage] = useState(null);
   const [generating, setGenerating] = useState(false);
   const [preview, setPreview] = useState(null);
+  const [stalePreview, setStalePreview] = useState(false);
   const modalRef = useRef(null);
   const firstFieldRef = useRef(null);
   const csrf = context?.csrf ?? {};
@@ -80,8 +91,10 @@ export function ShiftCopyPreviewModal({ context, onClose, onToast, open }) {
     }
     setDraft(initialDraft);
     setErrors({});
+    setFormMessage(null);
     setGenerating(false);
     setPreview(null);
+    setStalePreview(false);
     window.setTimeout(() => firstFieldRef.current?.focus(), 0);
     return undefined;
   }, [initialDraft, open]);
@@ -109,6 +122,10 @@ export function ShiftCopyPreviewModal({ context, onClose, onToast, open }) {
     const { checked, name, type, value } = event.target;
     setDraft((current) => ({ ...current, [name]: type === 'checkbox' ? checked : value }));
     setErrors((current) => ({ ...current, [name]: undefined }));
+    setFormMessage(null);
+    if (preview) {
+      setStalePreview(true);
+    }
   }
 
   function requestClose() {
@@ -124,7 +141,10 @@ export function ShiftCopyPreviewModal({ context, onClose, onToast, open }) {
     }
     const result = validateCopyPreviewDraft(draft);
     setErrors(result.errors);
+    setFormMessage(null);
     if (!result.payload) {
+      setStalePreview(Boolean(preview));
+      setFormMessage('Review the highlighted fields before generating a copy preview.');
       focusInvalidField(modalRef.current, result.errors);
       onToast({
         type: 'error',
@@ -138,6 +158,8 @@ export function ShiftCopyPreviewModal({ context, onClose, onToast, open }) {
     try {
       const response = await previewCopySchedule(result.payload, csrf);
       setPreview(response.data);
+      setStalePreview(false);
+      setFormMessage(null);
       onToast({
         type: 'success',
         title: 'Copy preview generated',
@@ -146,6 +168,7 @@ export function ShiftCopyPreviewModal({ context, onClose, onToast, open }) {
     } catch (error) {
       const apiErrors = copyPreviewFieldErrorsFromApi(error?.errors);
       setErrors(apiErrors);
+      setFormMessage(copyPreviewErrorMessage(error));
       if (Object.keys(apiErrors).length) {
         window.setTimeout(() => focusInvalidField(modalRef.current, apiErrors), 0);
       }
@@ -205,14 +228,32 @@ export function ShiftCopyPreviewModal({ context, onClose, onToast, open }) {
                 This preview reads source assignments and checks the target range. It never writes copied assignments and does not expose copy commit controls.
               </div>
 
+              {formMessage ? (
+                <div
+                  className="tr:rounded-tracs-lg tr:border tr:border-tracs-danger/30 tr:bg-tracs-danger/5 tr:p-tracs-3 tr:text-xs tr:leading-5 tr:text-tracs-danger"
+                  role="alert"
+                >
+                  {formMessage}
+                </div>
+              ) : null}
+
+              {stalePreview ? (
+                <div
+                  className="tr:rounded-tracs-lg tr:border tr:border-tracs-warning/30 tr:bg-tracs-warning/5 tr:p-tracs-3 tr:text-xs tr:leading-5 tr:text-tracs-secondary"
+                  role="status"
+                >
+                  Date options changed after the last preview. Generate a new copy preview before relying on the results below.
+                </div>
+              ) : null}
+
               <div className="tr:rounded-tracs-lg tr:border tr:border-tracs-border tr:bg-tracs-surface-2 tr:p-tracs-3">
                 <h3 className="tr:text-xs tr:font-semibold tr:text-tracs-primary">Source range</h3>
                 <div className="tr:mt-tracs-2 tr:grid tr:grid-cols-1 tr:gap-tracs-3 tr:sm:grid-cols-2">
-                  <Field error={errors.source_start_date} label="Source start date" name="source_start_date" required>
-                    <input className={fieldClass} name="source_start_date" onChange={update} placeholder="dd-mm-yyyy" ref={firstFieldRef} value={draft.source_start_date} />
+                  <Field error={errors.source_start_date} help="Use dd-mm-yyyy." label="Source start date" name="source_start_date" required>
+                    <input aria-describedby={describedBy('source_start_date', errors.source_start_date)} aria-invalid={Boolean(errors.source_start_date)} className={fieldClass} name="source_start_date" onChange={update} placeholder="dd-mm-yyyy" ref={firstFieldRef} value={draft.source_start_date} />
                   </Field>
-                  <Field error={errors.source_end_date} label="Source end date" name="source_end_date" required>
-                    <input className={fieldClass} name="source_end_date" onChange={update} placeholder="dd-mm-yyyy" value={draft.source_end_date} />
+                  <Field error={errors.source_end_date} help="Use dd-mm-yyyy." label="Source end date" name="source_end_date" required>
+                    <input aria-describedby={describedBy('source_end_date', errors.source_end_date)} aria-invalid={Boolean(errors.source_end_date)} className={fieldClass} name="source_end_date" onChange={update} placeholder="dd-mm-yyyy" value={draft.source_end_date} />
                   </Field>
                 </div>
               </div>
@@ -220,11 +261,11 @@ export function ShiftCopyPreviewModal({ context, onClose, onToast, open }) {
               <div className="tr:rounded-tracs-lg tr:border tr:border-tracs-border tr:bg-tracs-surface-2 tr:p-tracs-3">
                 <h3 className="tr:text-xs tr:font-semibold tr:text-tracs-primary">Target range</h3>
                 <div className="tr:mt-tracs-2 tr:grid tr:grid-cols-1 tr:gap-tracs-3 tr:sm:grid-cols-2">
-                  <Field error={errors.target_start_date} label="Target start date" name="target_start_date" required>
-                    <input className={fieldClass} name="target_start_date" onChange={update} placeholder="dd-mm-yyyy" value={draft.target_start_date} />
+                  <Field error={errors.target_start_date} help="Use dd-mm-yyyy." label="Target start date" name="target_start_date" required>
+                    <input aria-describedby={describedBy('target_start_date', errors.target_start_date)} aria-invalid={Boolean(errors.target_start_date)} className={fieldClass} name="target_start_date" onChange={update} placeholder="dd-mm-yyyy" value={draft.target_start_date} />
                   </Field>
-                  <Field error={errors.target_end_date} label="Target end date" name="target_end_date" required>
-                    <input className={fieldClass} name="target_end_date" onChange={update} placeholder="dd-mm-yyyy" value={draft.target_end_date} />
+                  <Field error={errors.target_end_date} help="Use dd-mm-yyyy." label="Target end date" name="target_end_date" required>
+                    <input aria-describedby={describedBy('target_end_date', errors.target_end_date)} aria-invalid={Boolean(errors.target_end_date)} className={fieldClass} name="target_end_date" onChange={update} placeholder="dd-mm-yyyy" value={draft.target_end_date} />
                   </Field>
                 </div>
               </div>
