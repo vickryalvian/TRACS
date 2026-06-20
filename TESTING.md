@@ -953,6 +953,28 @@ holiday coverage, monthly templates, monthly template items, and assignment
 audits. Browser click validation should be repeated on a disposable/staging
 app before template commit work begins.
 
+## Phase 30 Template Commit Safety Gate
+
+Phase 30 is non-mutating documentation and guard coverage only. It hardens the
+future commit contract for:
+
+- preview-to-commit integrity;
+- exact `APPLY TEMPLATE` confirmation;
+- `X-CSRF-Token`, exact Super Admin, and `shifts.manage`;
+- final conflict re-check;
+- audit coverage for created assignment ids;
+- bulk rollback or future `template_batch_id` migration planning.
+
+Phase 30 validation:
+
+```bash
+php tests/shift-assignment-template-commit-contract-gate.php
+```
+
+The test must prove the commit/copy route files do not exist and that the React
+module still has no commit/apply/save/copy caller. Commit implementation
+requires a later disposable DB mutation test plan.
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:

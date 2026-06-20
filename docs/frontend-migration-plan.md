@@ -308,7 +308,26 @@ Phase 29 adds a "Preview Template" modal that calls only the Phase 28 endpoint,
 renders preview items, warnings, conflicts, blocked items, and summary counts,
 and does not render commit, apply, save, copy, or bulk-write controls.
 
+Phase 30 keeps that UI preview-only. A future Commit Review step may appear
+only after the commit API exists and passes disposable tests. That step must
+show the final assignment count, warnings, conflicts, and blocked items,
+require exact `APPLY TEMPLATE`, reject whitespace/case variations, and keep the
+commit button disabled while conflicts exist. The future commit request must
+use preview-to-commit integrity checks, server-side conflict re-check, CSRF,
+and exact Super Admin plus `shifts.manage`.
+
 The UI must never call a bulk mutation directly from the first form step, must
 not optimistically write rows, and must keep Create/Edit/Delete pilot behavior
 unchanged until the template commit contracts pass disposable database
 validation.
+
+Phase 30 implementation gate before any commit or copy endpoint:
+
+- prove no production data is touched;
+- decide whether preview state is persisted, signed, or recomputed;
+- define preview-to-commit integrity and final conflict re-check behavior;
+- decide audit storage for parent template actions;
+- confirm bulk rollback evidence for generated assignments and dependents;
+- decide whether current `monthly_template_id` and `generated_assignment_id`
+  are sufficient or a future `template_batch_id` migration is required;
+- run disposable database integration before exposing any commit UI.

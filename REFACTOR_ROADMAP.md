@@ -399,3 +399,17 @@ Phase 29 template-preview UI notes:
   is included;
 - disposable no-mutation validation uses `tracs_phase29_test` and must confirm
   persisted counts remain unchanged.
+
+Phase 30 template-commit gate notes:
+
+- no commit/copy endpoint or React commit UI is implemented;
+- future commit preview-to-commit integrity means never trusting preview
+  payloads blindly and recomputing or revalidating server-side;
+- future commit requires exact `APPLY TEMPLATE`, CSRF, exact Super Admin plus
+  `shifts.manage`, and final conflict re-check;
+- default `conflict_policy = block`;
+- audit must include created assignment ids, warnings, conflicts, skipped or
+  blocked items, request id, and bulk rollback reference;
+- current schema has monthly-template ownership fields but no
+  `template_batch_id`, so arbitrary preview-batch rollback needs complete audit
+  evidence or a future reviewed migration with `up.sql` and `down.sql`.

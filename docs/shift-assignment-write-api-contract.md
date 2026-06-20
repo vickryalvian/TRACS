@@ -524,6 +524,23 @@ list as if preview rows were real assignments. The no-mutation evidence remains
 the backend/disposable preview validation, repeated with the Phase 29 UI guard
 against `tracs_phase29_test`.
 
+Phase 30 hardens the future commit gate but still adds no route or UI caller.
+The future `POST /api/v1/shift-assignment/templates/commit.php` route must use
+preview-to-commit integrity checks: Never trust client preview items blindly,
+recompute or revalidate preview server-side, re-check permission and
+`X-CSRF-Token`, and perform a final conflict re-check immediately before any
+write. The exact typed confirmation must be `APPLY TEMPLATE`, and the default
+policy is `conflict_policy = block`.
+
+bulk rollback must be designed before implementation. If commit uses
+`source=monthly_template`, `monthly_template_id`, and
+`generated_assignment_id`, rollback can target the generated records for that
+template. If a commit does not use a monthly template record, the audit must
+store every created assignment id and full created-row snapshots. The current
+schema has no `template_batch_id`, so arbitrary preview batch rollback needs a
+future migration or complete audit-only rollback plan before any endpoint is
+approved.
+
 The detailed canonical contract is:
 
 - `docs/shift-assignment-template-api-contract.md`

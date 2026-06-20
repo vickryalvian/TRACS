@@ -179,8 +179,67 @@ Purpose: commit a previously reviewed template preview.
 Required request fields:
 
 - `preview_id` or signed preview payload;
-- typed or tokenized confirmation;
+- optional `preview_payload` only if a signed payload approach is approved;
+- exact typed confirmation phrase: `APPLY TEMPLATE`;
+- `options.conflict_policy`, initially `block`;
+- `options.allow_warnings`, initially `false`;
 - CSRF token.
+
+Required request shape:
+
+```json
+{
+  "preview_id": "optional-if-supported",
+  "preview_payload": {},
+  "confirmation": "APPLY TEMPLATE",
+  "options": {
+    "conflict_policy": "block",
+    "allow_warnings": false
+  }
+}
+```
+
+## Phase 30 Commit Safety Gate
+
+Phase 30 does not implement the commit endpoint. It hardens the future
+contract because template commit is a bulk write.
+
+Preview-to-commit integrity requirements (`preview-to-commit integrity`):
+
+- Never trust client preview items blindly.
+- Commit must recompute or revalidate preview server-side.
+- Commit must re-check authenticated session, exact `super_admin` plus
+  explicit `shifts.manage`, future `shifts.template.commit` if migrated, and
+  `X-CSRF-Token`.
+- Commit must revalidate date range, selected agents, caller scope, shift
+  templates, Shift 3 `16:00-24:00`, and all item fields.
+- Commit must re-check overlaps, jumpshift/rest warnings, weekly hours,
+  holiday/overtime warnings, inactive agents, and missing shifts immediately
+  before writing.
+- If a stored `preview_id` exists later, commit must verify preview freshness.
+- If no stored preview exists, signed preview payload is only a transport hint;
+  the server must still revalidate against current database state.
+- If data changed after preview and conflicts now exist, commit must block.
+
+Required confirmation behavior:
+
+- User must type `APPLY TEMPLATE` exactly.
+- Whitespace or case variations must be rejected.
+- The UI must show assignment count, warnings, conflicts, and blocked items
+  before enabling commit.
+- Commit must remain disabled if blocking conflicts exist.
+
+Default conflict policy:
+
+- `conflict_policy = block`
+- Existing assignment overlap blocks commit.
+- Inactive or missing agent blocks commit.
+- Missing shift blocks commit.
+- Template-owned target conflict blocks commit until a safer policy is
+  separately approved.
+- Warnings such as holiday, jumpshift, overtime risk, or weekly-hour variance
+  are advisory only when they do not conflict with real data and when
+  `allow_warnings` is explicitly approved.
 
 Commit must:
 
@@ -193,6 +252,35 @@ Commit must:
 - return created assignment IDs, skipped items, blocked items, warnings, and
   conflicts;
 - write audit evidence before reporting success.
+
+Future commit audit must include actor user id, `shift_assignment.template.commit`,
+request ID, preview/reference ID if available, date range, selected agents,
+generated assignment count, created assignment ids, warnings, conflicts,
+skipped or blocked items, confirmation result, before/after summary,
+rollback reference, timestamp, and success/failure.
+
+Rollback and restoration requirements:
+
+- Bulk commit must be reversible.
+- Preferred strategy: monthly template ownership plus `source=monthly_template`,
+  `monthly_template_id`, and `shift_monthly_template_items.generated_assignment_id`
+  identify committed rows.
+- Current schema does not contain `template_batch_id`; rollback can target a
+  monthly template, but not an arbitrary preview batch unless the commit audit
+  stores the full created assignment ID list.
+- If no monthly template record is used, the commit audit must store every
+  created assignment ID and enough after-snapshot data to reverse the batch.
+- If neither ownership nor complete audit evidence is available, template
+  commit must remain blocked.
+
+Future migration recommendation only:
+
+- add `template_batch_id` or `source_batch_id` if arbitrary preview commits
+  need first-class rollback grouping;
+- add `generated_by`, `generated_at`, `source_template_id`, and optional
+  `rollback_status` only after review;
+- include `up.sql` and `down.sql`;
+- do not add this migration in Phase 30.
 
 ## Copy Schedule Preview
 

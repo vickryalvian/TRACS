@@ -1065,3 +1065,28 @@ DROP DATABASE IF EXISTS tracs_phase29_test;
 
 No production data restore is needed because the UI must never call commit,
 copy, create, update, or delete as part of template preview.
+
+## Phase 30 Template Commit Safety Gate Rollback
+
+Phase 30 adds only documentation and non-mutating guard tests for the future
+template commit contract, including the exact future `APPLY TEMPLATE`
+confirmation requirement, preview-to-commit integrity, conflict re-check,
+audit, and bulk rollback planning. It adds no commit route, no copy
+route, no React commit UI, no schema change, no Calendar change, no legacy-page
+change, and no data mutation.
+
+After commit:
+
+```bash
+git revert <phase-30-commit-sha>
+```
+
+To abandon the branch before commit:
+
+```bash
+git switch refactor/phase-29-shift-template-preview-ui
+git branch -D refactor/phase-30-shift-template-commit-contract-gate
+```
+
+No database restore is needed. Future commit implementation must define its
+own bulk rollback plan before any assignment rows are written.
