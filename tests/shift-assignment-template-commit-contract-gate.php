@@ -92,8 +92,9 @@ foreach ([
 }
 
 template_commit_gate_assert(
-    str_contains($securityInventory, 'Future Shift Assignment v1 template commit/copy contracts'),
-    'API security inventory no longer tracks future template commit/copy contracts.'
+    str_contains($securityInventory, 'api/v1/shift-assignment/templates/commit.php')
+        && str_contains($securityInventory, 'Future Shift Assignment v1 copy contracts'),
+    'API security inventory no longer tracks implemented commit and future copy contracts.'
 );
 
 template_commit_gate_assert(
@@ -114,10 +115,8 @@ template_commit_gate_assert(
 );
 
 foreach ([
-    'public/api/v1/shift-assignment/templates/commit.php',
     'public/api/v1/shift-assignment/templates/copy-preview.php',
     'public/api/v1/shift-assignment/templates/copy-commit.php',
-    'api/v1/shift-assignment/templates/commit.php',
     'api/v1/shift-assignment/templates/copy-preview.php',
     'api/v1/shift-assignment/templates/copy-commit.php',
 ] as $forbiddenRoute) {
@@ -128,9 +127,18 @@ foreach ([
 }
 
 foreach ([
+    'public/api/v1/shift-assignment/templates/commit.php',
+    'api/v1/shift-assignment/templates/commit.php',
+] as $requiredRoute) {
+    template_commit_gate_assert(
+        is_file(__DIR__ . '/../' . $requiredRoute),
+        "Phase 32 commit route is missing: {$requiredRoute}."
+    );
+}
+
+foreach ([
     'commitShiftTemplate',
     'copyShiftTemplate',
-    '/api/v1/shift-assignment/templates/commit.php',
     '/api/v1/shift-assignment/templates/copy-preview.php',
     '/api/v1/shift-assignment/templates/copy-commit.php',
     'APPLY TEMPLATE',

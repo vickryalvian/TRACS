@@ -319,7 +319,9 @@ Phase 23 result:
 - [x] Phase 30 documents preview-to-commit integrity, exact `APPLY TEMPLATE`,
       conflict re-check, audit, and bulk rollback requirements without adding
       commit behavior.
-- [ ] Template commit endpoints, copy/paste endpoints, React template commit UI,
+- [x] Phase 32 implements backend-only Template Commit API with disposable DB
+      rollback targeting evidence.
+- [ ] Copy/paste endpoints, React template commit UI,
       production navigation, and legacy replacement remain unapproved.
 
 ## Phase 27 Template Contract Gate
@@ -337,7 +339,7 @@ Before any template or copy/paste UI appears in the preview, verify:
       overlap conflicts appear in the preview step.
 - [ ] Bulk rollback or reversal evidence is documented and tested on a
       disposable database.
-- [ ] Commit endpoint proves preview-to-commit integrity, final conflict
+- [x] Commit endpoint proves preview-to-commit integrity, final conflict
       re-check, and exact `APPLY TEMPLATE` confirmation in a disposable DB.
 - [ ] Granular template permissions are either migrated with `up.sql` and
       `down.sql` or the implementation remains exact Super Admin plus

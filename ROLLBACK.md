@@ -1122,3 +1122,27 @@ DROP DATABASE IF EXISTS tracs_phase28_test;
 
 This rollback removes the new preflight and docs only. It does not affect real
 TRACS data because the guard refuses production labels and unsafe DB names.
+
+## Phase 32 Template Commit API Rollback
+
+Phase 32 adds the backend-only template commit endpoint, source/integration
+tests, and documentation. It adds no React commit UI, no copy endpoint, no
+schema change, no Calendar change, no navigation change, and no legacy-page
+replacement.
+
+After commit:
+
+```bash
+git revert <phase-32-commit-sha>
+```
+
+Emergency disposable cleanup:
+
+```sql
+DROP DATABASE IF EXISTS tracs_phase32_test;
+```
+
+For data created by the Phase 32 endpoint in an approved non-production
+environment, use the response/audit `created_assignment_ids` rollback target
+and delete exactly those IDs after confirming they are template-created rows.
+Do not use broad date-range deletion.

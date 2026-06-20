@@ -524,13 +524,13 @@ list as if preview rows were real assignments. The no-mutation evidence remains
 the backend/disposable preview validation, repeated with the Phase 29 UI guard
 against `tracs_phase29_test`.
 
-Phase 30 hardens the future commit gate but still adds no route or UI caller.
-The future `POST /api/v1/shift-assignment/templates/commit.php` route must use
-preview-to-commit integrity checks: Never trust client preview items blindly,
-recompute or revalidate preview server-side, re-check permission and
-`X-CSRF-Token`, and perform a final conflict re-check immediately before any
-write. The exact typed confirmation must be `APPLY TEMPLATE`, and the default
-policy is `conflict_policy = block`.
+Phase 30 hardened the future commit gate. Phase 32 implements
+`POST /api/v1/shift-assignment/templates/commit.php` as a backend-only route
+with preview-to-commit integrity checks: Never trust client preview items
+blindly, recompute preview server-side, re-check permission and `X-CSRF-Token`,
+and perform a final conflict re-check immediately before any write. The exact
+typed confirmation is `APPLY TEMPLATE`, and the only supported policy is
+`conflict_policy = block`.
 
 bulk rollback must be designed before implementation. If commit uses
 `source=monthly_template`, `monthly_template_id`, and
@@ -540,6 +540,11 @@ store every created assignment id and full created-row snapshots. The current
 schema has no `template_batch_id`, so arbitrary preview batch rollback needs a
 future migration or complete audit-only rollback plan before any endpoint is
 approved.
+
+Phase 32 disposable validation in `tracs_phase32_test` proved valid Shift 1/2/3
+commit creates assignments, conflicts return `409` without writes, created IDs
+appear in GET, audit contains created IDs, and rollback targeting deletes only
+the committed IDs. React commit UI and copy endpoints remain absent.
 
 The detailed canonical contract is:
 

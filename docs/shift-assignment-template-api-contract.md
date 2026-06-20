@@ -201,8 +201,8 @@ Required request shape:
 
 ## Phase 30 Commit Safety Gate
 
-Phase 30 does not implement the commit endpoint. It hardens the future
-contract because template commit is a bulk write.
+Phase 30 did not implement the commit endpoint. Phase 32 implements it as a
+controlled backend-only route because template commit is a bulk write.
 
 Preview-to-commit integrity requirements (`preview-to-commit integrity`):
 
@@ -281,6 +281,41 @@ Future migration recommendation only:
   `rollback_status` only after review;
 - include `up.sql` and `down.sql`;
 - do not add this migration in Phase 30.
+
+## Phase 32 Commit Implementation
+
+Phase 32 implements:
+
+```text
+POST /api/v1/shift-assignment/templates/commit.php
+```
+
+The endpoint requires authenticated session, CSRF, exact `super_admin`, and
+explicit `shifts.manage`. If `shifts.template.commit` is seeded later, the
+route requires that explicit permission too.
+
+Current Phase 32 behavior:
+
+- accepts `preview_payload` because preview storage/signing does not exist yet;
+- never trusts preview items blindly and recomputes preview server-side;
+- enforces exact `APPLY TEMPLATE`;
+- supports only `conflict_policy = block`;
+- performs final conflict re-check before creating assignments;
+- blocks overlap/existing-assignment conflicts with `409`;
+- creates assignments through the existing Shift Assignment service;
+- stores created rows with `source=monthly_template`;
+- captures created assignment IDs in the response and audit;
+- returns rollback targeting as `created_assignment_ids`;
+- adds no React commit UI and no copy endpoints.
+
+Known schema limitation: there is still no `template_batch_id`. Rollback for
+Phase 32 targets the created assignment IDs from response/audit. A future
+first-class batch migration remains recommended before broader rollout.
+
+Phase 32 disposable validation used `tracs_phase32_test` and verified Shift 1,
+Shift 2, Shift 3 `16:00-24:00`, exact confirmation rejection, conflict `409`
+with no created rows, GET visibility, audit created IDs, and rollback cleanup
+that removed only committed assignment IDs.
 
 ## Copy Schedule Preview
 

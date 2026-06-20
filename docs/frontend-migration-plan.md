@@ -337,3 +337,9 @@ review UI or bulk apply control is added, `tests/disposable-db-preflight.php`
 must pass and the delete restoration, dependent restoration, and template
 preview integration drills must run green against a safely marked disposable
 database.
+
+Phase 32 adds the backend Template Commit API only. The React preview still has
+no commit/apply/generate-save button and no API caller for
+`templates/commit.php`. Future UI work must wait for authenticated disposable
+browser evidence against the committed backend route and must keep the exact
+`APPLY TEMPLATE` confirmation.

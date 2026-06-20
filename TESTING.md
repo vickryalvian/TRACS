@@ -489,6 +489,30 @@ php tests/shift-assignment-template-preview-integration.php
 Template Commit API remains blocked until this gate is green in the current
 environment.
 
+## Phase 32 Template Commit Integration
+
+Phase 32 adds the backend-only Template Commit API:
+
+```text
+POST /api/v1/shift-assignment/templates/commit.php
+```
+
+Run only against disposable DB:
+
+```bash
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 \
+TRACS_TEST_DB_NAME=tracs_phase32_test \
+php tests/disposable-db-preflight.php
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 \
+TRACS_TEST_DB_NAME=tracs_phase32_test \
+php tests/shift-assignment-template-commit-integration.php
+```
+
+The integration validates unauthenticated, CSRF, non-Super-Admin, confirmation
+variants, invalid payload, conflict `409`, Shift 1/2/3 creation including
+`16:00-24:00`, GET visibility, audit created IDs, preview non-mutation, and
+rollback cleanup by created assignment IDs.
+
 Validated on June 15, 2026:
 
 - authenticated create succeeded;

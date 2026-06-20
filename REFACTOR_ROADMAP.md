@@ -425,3 +425,17 @@ Phase 31 disposable-DB gate notes:
 - Template Commit API remains blocked unless delete restoration, dependent
   restoration, template preview integration, and the Phase 30 guard pass in the
   current environment.
+
+Phase 32 template-commit API notes:
+
+- `POST /api/v1/shift-assignment/templates/commit.php` is implemented as a
+  controlled backend-only bulk write;
+- it requires auth, CSRF, exact Super Admin, explicit `shifts.manage`, and
+  future `shifts.template.commit` if seeded;
+- exact `APPLY TEMPLATE` is enforced;
+- preview is recomputed server-side and conflicts block with `409`;
+- created assignment IDs are returned and audited for rollback targeting;
+- `tracs_phase32_test` validates Shift 1/2/3 creation, conflict no-write,
+  GET visibility, audit IDs, and rollback cleanup;
+- no React commit UI, copy endpoints, schema, Calendar, navigation, or legacy
+  page changes are included.

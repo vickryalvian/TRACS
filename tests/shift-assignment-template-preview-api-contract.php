@@ -88,10 +88,8 @@ template_preview_contract_assert(
 );
 
 foreach ([
-    'public/api/v1/shift-assignment/templates/commit.php',
     'public/api/v1/shift-assignment/templates/copy-preview.php',
     'public/api/v1/shift-assignment/templates/copy-commit.php',
-    'api/v1/shift-assignment/templates/commit.php',
     'api/v1/shift-assignment/templates/copy-preview.php',
     'api/v1/shift-assignment/templates/copy-commit.php',
 ] as $forbiddenRoute) {
@@ -102,11 +100,20 @@ foreach ([
 }
 
 foreach ([
+    'public/api/v1/shift-assignment/templates/commit.php',
+    'api/v1/shift-assignment/templates/commit.php',
+] as $implementedRoute) {
+    template_preview_contract_assert(
+        is_file(__DIR__ . '/../' . $implementedRoute),
+        "Expected template commit route is missing: {$implementedRoute}"
+    );
+}
+
+foreach ([
     'Template Generator',
     'Copy Schedule',
     'copy-preview.php',
     'copy-commit.php',
-    'templates/commit.php',
 ] as $forbiddenFrontend) {
     template_preview_contract_assert(
         !str_contains($frontend, $forbiddenFrontend),

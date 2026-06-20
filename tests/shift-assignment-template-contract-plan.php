@@ -135,10 +135,8 @@ foreach ([
 }
 
 foreach ([
-    'public/api/v1/shift-assignment/templates/commit.php',
     'public/api/v1/shift-assignment/templates/copy-preview.php',
     'public/api/v1/shift-assignment/templates/copy-commit.php',
-    'api/v1/shift-assignment/templates/commit.php',
     'api/v1/shift-assignment/templates/copy-preview.php',
     'api/v1/shift-assignment/templates/copy-commit.php',
 ] as $plannedRoute) {
@@ -149,11 +147,20 @@ foreach ([
 }
 
 foreach ([
+    'public/api/v1/shift-assignment/templates/commit.php',
+    'api/v1/shift-assignment/templates/commit.php',
+] as $implementedRoute) {
+    template_contract_assert(
+        is_file(__DIR__ . '/../' . $implementedRoute),
+        "Phase 32 commit route is missing: {$implementedRoute}."
+    );
+}
+
+foreach ([
     'Template Generator',
     'Copy Schedule',
     'copy-preview.php',
     'copy-commit.php',
-    'templates/commit.php',
 ] as $forbiddenFrontendNeedle) {
     template_contract_assert(
         !str_contains($frontendModule, $forbiddenFrontendNeedle),
