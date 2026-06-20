@@ -1186,3 +1186,26 @@ git revert <phase-34-commit-sha>
 ```
 
 No database cleanup is required because this phase does not mutate data.
+
+## Phase 35 Apply Template UI Pilot Rollback
+
+Phase 35 adds the controlled React Apply Template UI inside the existing
+authenticated preview pilot. It adds no copy endpoint, no copy/paste UI, no
+schema change, no Calendar change, no navigation change, and no legacy-page
+replacement.
+
+After commit:
+
+```bash
+git revert <phase-35-commit-sha>
+```
+
+Emergency disposable cleanup:
+
+```sql
+DROP DATABASE IF EXISTS tracs_phase35_test;
+```
+
+If approved non-production apply testing created assignments, use the backend
+response/audit `created_assignment_ids` rollback target and remove exactly
+those IDs only. Do not use broad date-range deletion.

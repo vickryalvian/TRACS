@@ -601,3 +601,28 @@ Criteria before Phase 35 active React Apply Template UI pilot:
 - run authenticated disposable-browser validation;
 - prove no copy/paste endpoints or UI are introduced;
 - show rollback evidence after success without exposing sensitive details.
+
+## Phase 35 Apply Template UI Pilot
+
+The React preview now includes a controlled Apply Template step inside the
+existing Template Preview modal. It remains direct-preview only: users must
+generate a successful non-mutating preview first, then review summary,
+warnings, conflicts, blocked items, and rollback evidence before applying.
+
+Apply is visible only in the authenticated preview pilot and is usable only
+when the Shift Assignment context grants `allowed_actions.apply_template`.
+During this pilot that maps to exact Super Admin plus explicit `shifts.manage`;
+the backend commit route still re-enforces auth, CSRF, exact role, permission,
+confirmation, and final conflict checks.
+
+The UI disables Apply when preview is absent, loading, stale, missing CSRF,
+missing permission, has conflicts, has `blocked_items`, or the typed
+confirmation is not exactly `APPLY TEMPLATE`. Lowercase, leading/trailing
+spaces, double spaces, punctuation variants, and case variations stay disabled
+client-side and remain rejected server-side.
+
+On backend `409`, the modal stays open, displays returned conflicts and blocked
+items, marks the preview stale, and requires regeneration. On success, the
+modal displays created count, request id, created assignment IDs or rollback
+reference, and refreshes the current assignments request without optimistic
+rows. There is no rollback button and no copy/paste UI in this phase.

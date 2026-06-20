@@ -120,6 +120,10 @@ export function ShiftAssignmentApp() {
     });
   }
 
+  async function handleTemplateApplied() {
+    return assignments.refresh();
+  }
+
   const theme = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
 
   return (
@@ -161,7 +165,7 @@ export function ShiftAssignmentApp() {
                       {filters.view[0].toUpperCase() + filters.view.slice(1)} assignments
                     </h2>
                     <p className="tr:mt-1 tr:text-xs tr:text-tracs-muted">
-                      Controlled create/edit/delete plus preview-only template pilot · {context.global?.user?.name || 'Authenticated user'}
+                      Controlled create/edit/delete plus template preview/apply pilot · {context.global?.user?.name || 'Authenticated user'}
                     </p>
                   </div>
                   <span className="tr:font-mono tr:text-[9px] tr:text-tracs-muted">
@@ -236,6 +240,7 @@ export function ShiftAssignmentApp() {
       />
       <ShiftTemplatePreviewModal
         context={context.shift}
+        onApplied={handleTemplateApplied}
         onClose={() => setTemplatePreviewOpen(false)}
         onToast={setToast}
         open={templatePreviewOpen && canTemplatePreview}

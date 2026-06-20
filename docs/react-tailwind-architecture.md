@@ -504,3 +504,14 @@ No Phase 34 React code calls `templates/commit.php`; the Template Preview modal
 stays preview-only. Future commit UI must never inject Tailwind globally,
 never bypass PHP permissions, and never optimistically render bulk-created
 assignments before the backend confirms success.
+
+## Phase 35 Apply Template UI Pilot
+
+The Apply Template pilot remains inside the isolated Shift Assignment React
+root and uses existing prefixed Tailwind utilities. The Commit Review and
+Commit Result sections reuse the preview modal surface, compact cards, warning
+and danger states, and existing toast behavior. The UI shows rollback evidence
+after backend success but does not add rollback controls.
+
+No Tailwind output is loaded globally, no legacy PHP page is changed, and no
+copy/paste control is exposed.

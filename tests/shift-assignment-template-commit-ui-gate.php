@@ -60,7 +60,7 @@ foreach ([
     'created assignment IDs',
     'rollback evidence',
     'commitTemplatePreview(payload)',
-    'No active Apply Template UI is implemented in Phase 34.',
+    'Phase 35 Apply Template UI Pilot',
 ] as $required) {
     template_commit_ui_gate_assert(
         str_contains($templateContract, $required),
@@ -69,9 +69,9 @@ foreach ([
 }
 
 foreach ([
-    'No active Apply Template UI',
-    'no commit/apply/generate-save button',
-    'no API caller for `templates/commit.php`',
+    'Apply Template UI pilot',
+    'exact APPLY TEMPLATE',
+    'rollback evidence',
 ] as $required) {
     template_commit_ui_gate_assert(
         str_contains($frontendPlan, $required)
@@ -82,18 +82,12 @@ foreach ([
 }
 
 template_commit_ui_gate_assert(
-    str_contains($rollback, 'Phase 34 Template Commit UI Gate Rollback')
-        && str_contains($reactArchitecture, 'Template Commit UI Gate'),
-    'Rollback or React architecture docs missing Phase 34 UI gate.'
+    str_contains($rollback, 'Phase 35 Apply Template UI Pilot Rollback')
+        && str_contains($reactArchitecture, 'Phase 35 Apply Template UI Pilot'),
+    'Rollback or React architecture docs missing Phase 35 apply UI pilot.'
 );
 
 foreach ([
-    'commitShiftTemplate',
-    'commitTemplatePreview',
-    '/api/v1/shift-assignment/templates/commit.php',
-    'Apply Template',
-    'Commit Template',
-    'APPLY TEMPLATE',
     'Copy Schedule',
     'Copy to month',
     'copy-preview.php',
@@ -108,10 +102,19 @@ foreach ([
 }
 
 template_commit_ui_gate_assert(
-    str_contains($frontendModule, 'Preview only')
-        && str_contains($frontendModule, 'Writing, applying, saving, and copy actions are intentionally unavailable')
+    str_contains($frontendModule, 'Apply Template')
+        && str_contains($frontendModule, 'APPLY TEMPLATE')
+        && str_contains($frontendModule, 'This preview is stale. Regenerate it before applying.')
+        && str_contains($frontendModule, 'Rollback targeting is based on the created assignment IDs')
         && str_contains($apiClient, '/api/v1/shift-assignment/templates/preview.php'),
-    'Template Preview UI no longer appears preview-only.'
+    'Controlled Template Apply UI pilot is missing expected safety copy.'
+);
+
+template_commit_ui_gate_assert(
+    str_contains($apiClient, '/api/v1/shift-assignment/templates/commit.php')
+        && str_contains($apiClient, 'conflict_policy')
+        && str_contains($apiClient, 'confirmation'),
+    'React API client is missing the controlled template commit caller.'
 );
 
 foreach ([
@@ -122,7 +125,7 @@ foreach ([
 ] as $forbiddenRoute) {
     template_commit_ui_gate_assert(
         !is_file(__DIR__ . '/../' . $forbiddenRoute),
-        "Phase 34 unexpectedly created {$forbiddenRoute}."
+        "Phase 35 unexpectedly created {$forbiddenRoute}."
     );
 }
 

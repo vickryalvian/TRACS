@@ -3,6 +3,7 @@ import { displayDateInput, isoDateInput, rangeForView } from './shiftDates.js';
 const TIME_PATTERN = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 const MAX_PREVIEW_DAYS = 35;
 export const TEMPLATE_PREVIEW_SHIFT_PRESETS = ['shift_1', 'shift_2', 'shift_3'];
+export const TEMPLATE_APPLY_CONFIRMATION = 'APPLY TEMPLATE';
 
 export function initialTemplatePreviewDraft(defaults = {}) {
   const range = rangeForView('weekly', defaults.start_date);
@@ -165,5 +166,57 @@ export function templatePreviewErrorMessage(error) {
         : error.message || 'The template preview did not pass server validation.';
     default:
       return error.message || 'The template preview could not be generated.';
+  }
+}
+
+export function templateApplyAvailability({ confirmation = '', csrf = {}, preview = null, previewPayload = null, stale = false } = {}) {
+  const summary = preview?.summary ?? {};
+  const conflicts = Number(summary.conflicts ?? preview?.conflicts?.length ?? 0);
+  const blockedItems = Number(summary.blocked_items ?? preview?.blocked_items?.length ?? 0);
+
+  if (!preview || !previewPayload) {
+    return { available: false, reason: 'Generate a successful preview before applying a template.' };
+  }
+  if (stale) {
+    return { available: false, reason: 'Regenerate the preview before applying this template.' };
+  }
+  if (conflicts > 0) {
+    return { available: false, reason: 'Resolve conflicts before applying this template.' };
+  }
+  if (blockedItems > 0) {
+    return { available: false, reason: 'Resolve blocked items before applying this template.' };
+  }
+  if (!csrf?.token) {
+    return { available: false, reason: 'Refresh the page to restore the CSRF token before applying.' };
+  }
+  if (confirmation !== TEMPLATE_APPLY_CONFIRMATION) {
+    return { available: false, reason: 'Type APPLY TEMPLATE exactly to apply this preview.' };
+  }
+
+  return { available: true, reason: '' };
+}
+
+export function templateApplyErrorMessage(error) {
+  if (!error?.status) {
+    return 'The network request failed while applying the template.';
+  }
+
+  switch (error.status) {
+    case 400:
+      return 'The apply request could not be read. Regenerate the preview and try again.';
+    case 401:
+      return 'Your session expired. Sign in again before applying a template.';
+    case 403:
+      return 'The template apply request was denied. Refresh permissions and try again.';
+    case 405:
+      return 'Template apply is not available from this route.';
+    case 409:
+      return 'The final backend conflict check blocked this template. Regenerate the preview.';
+    case 422:
+      return Array.isArray(error.errors) && error.errors.length
+        ? 'Review the template confirmation and preview before applying.'
+        : error.message || 'The template apply request did not pass server validation.';
+    default:
+      return error.message || 'The template could not be applied.';
   }
 }

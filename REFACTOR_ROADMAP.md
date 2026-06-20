@@ -467,3 +467,18 @@ Phase 34 template-commit UI gate notes:
 - no API caller for `templates/commit.php` is added in Phase 34;
 - Template Preview UI remains preview-only and Create/Edit/Delete behavior is
   unchanged.
+
+Phase 35 Apply Template UI pilot notes:
+
+- the existing Template Preview modal now includes a controlled Commit Review
+  and Commit Result surface;
+- Apply Template requires successful preview, zero conflicts, zero blocked
+  items, CSRF, `allowed_actions.apply_template`, and exact `APPLY TEMPLATE`;
+- the pilot requires exact APPLY TEMPLATE before commit;
+- React calls only `POST /api/v1/shift-assignment/templates/commit.php` and
+  never adds copy-preview or copy-commit behavior;
+- backend `409` marks the preview stale and requires regeneration;
+- success displays created count, request id, and rollback evidence based on
+  created assignment IDs, then refreshes assignments without optimistic rows;
+- no rollback UI, copy/paste UI, schema changes, Calendar changes, navigation
+  changes, or legacy-page changes are included.

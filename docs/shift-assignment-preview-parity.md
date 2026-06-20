@@ -352,6 +352,10 @@ Before any template or copy/paste UI appears in the preview, verify:
       commit, apply, save, or copy/paste control.
 - [x] Phase 34 documents the future Apply Template flow while guarding that
       React has no commit caller or active Apply Template button.
+- [x] Phase 35 adds controlled Apply Template UI only inside the React preview,
+      with exact confirmation, conflict blocking, stale-preview handling, and
+      rollback evidence display.
+- [x] Copy/paste UI and copy endpoints remain absent.
 
 ## Phase 17 Completed Browser Matrix
 

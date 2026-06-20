@@ -1,10 +1,17 @@
 const DEFAULT_CSRF_META_NAME = 'csrf-token';
 
 export class ApiError extends Error {
-  constructor(message, { status = 0, errors = [], meta = {}, response = null } = {}) {
+  constructor(message, {
+    status = 0,
+    data = null,
+    errors = [],
+    meta = {},
+    response = null,
+  } = {}) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.data = data;
     this.errors = errors;
     this.meta = meta;
     this.response = response;
@@ -102,6 +109,7 @@ export function createApiClient({
     if (!response.ok || payload.success !== true) {
       throw new ApiError(payload.message || 'The request could not be completed.', {
         status: response.status,
+        data: payload.data ?? null,
         errors: normalizeErrors(payload.errors),
         meta: payload.meta ?? {},
         response,

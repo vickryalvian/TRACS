@@ -113,7 +113,7 @@ delete_contract_assert(
     'Delete service transaction or before-delete audit changed.'
 );
 delete_contract_assert(
-    substr_count($frontendApi, "method: 'POST'") === 2
+    substr_count($frontendApi, "method: 'POST'") === 3
         && substr_count($frontendApi, "method: 'PATCH'") === 1
         && substr_count($frontendApi, "method: 'DELETE'") === 1,
     'React preview delete API caller changed.'

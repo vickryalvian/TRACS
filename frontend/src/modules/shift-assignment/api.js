@@ -70,3 +70,18 @@ export async function previewShiftTemplate(payload, csrf = {}) {
     csrfHeaderName: csrf.header ?? 'X-CSRF-Token',
   });
 }
+
+export async function applyShiftTemplatePreview(previewPayload, confirmation, csrf = {}) {
+  return apiClient.request('/api/v1/shift-assignment/templates/commit.php', {
+    method: 'POST',
+    body: {
+      preview_payload: previewPayload,
+      confirmation,
+      options: {
+        conflict_policy: 'block',
+      },
+    },
+    csrfToken: csrf.token ?? '',
+    csrfHeaderName: csrf.header ?? 'X-CSRF-Token',
+  });
+}

@@ -1093,6 +1093,35 @@ No active Apply Template UI is added in Phase 34.
 no commit/apply/generate-save button is added in Phase 34.
 no API caller for `templates/commit.php` is added in Phase 34.
 
+## Phase 35 Apply Template UI Pilot
+
+The Apply Template UI pilot is controlled inside the React preview only.
+It requires exact APPLY TEMPLATE before commit.
+
+Run the frontend and UI contract checks:
+
+```bash
+cd frontend && npm run test:contracts
+php tests/shift-assignment-template-apply-ui-contract.php
+```
+
+The pilot contract verifies exact `APPLY TEMPLATE` client-side gating, CSRF on
+the commit request, disabled apply when preview has conflicts or blocked items,
+safe `409` stale-preview handling, rollback evidence display, no copy/paste UI,
+and that Create/Edit/Delete plus Template Preview contracts remain intact.
+
+Disposable backend regression remains:
+
+```bash
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 TRACS_TEST_DB_NAME=tracs_phase35_test php tests/disposable-db-preflight.php
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 TRACS_TEST_DB_NAME=tracs_phase35_test php tests/shift-assignment-template-commit-integration.php
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 TRACS_TEST_DB_NAME=tracs_phase35_test php tests/shift-assignment-template-apply-ui-browser-validation.php
+```
+
+Authenticated browser validation is required before production replacement or
+copy/paste work. If a browser fixture is unavailable, do not claim browser
+mutation evidence; rely on frontend contracts plus disposable API drills only.
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:

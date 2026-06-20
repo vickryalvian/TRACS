@@ -46,6 +46,12 @@ try {
                     'shifts.manage',
                     $context['user']
                 ),
+            'template_apply' => (string)($context['user']['role_slug'] ?? '') === 'super_admin'
+                && \TRACS\Api\has_explicit_role_permission(
+                    $conn,
+                    'shifts.manage',
+                    $context['user']
+                ),
             'settings' => $service->canManageSettings(),
             'monthly_templates' => $service->canManageMonthlyTemplates(),
             'export' => $service->canExport(),

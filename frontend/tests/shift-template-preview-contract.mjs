@@ -3,6 +3,8 @@ import { createApiClient } from '../src/lib/apiClient.js';
 import {
   applyTemplatePreviewPreset,
   initialTemplatePreviewDraft,
+  templateApplyAvailability,
+  templateApplyErrorMessage,
   templatePreviewErrorMessage,
   templatePreviewFieldErrorsFromApi,
   validateTemplatePreviewDraft,
@@ -111,6 +113,90 @@ assert.equal(previewOptions.options.headers.get('X-CSRF-Token'), 'pilot-csrf-tok
 assert.equal(JSON.parse(previewOptions.options.body).pattern.items[0].end_time, '24:00');
 assert.equal(preview.data.summary.total_assignments, 1);
 
+let commitOptions;
+const commitClient = createApiClient({
+  fetchImpl: async (url, options) => {
+    commitOptions = { url, options };
+    return jsonResponse({
+      success: true,
+      message: 'Template applied.',
+      data: {
+        created_assignment_ids: [101, 102],
+        created_count: 2,
+        warnings: [],
+        skipped_items: [],
+        rollback: { type: 'created_assignment_ids', ids: [101, 102] },
+      },
+      errors: [],
+      meta: { request_id: 'template-commit-contract' },
+    }, 201);
+  },
+});
+
+const commitPayload = {
+  preview_payload: valid.payload,
+  confirmation: 'APPLY TEMPLATE',
+  options: { conflict_policy: 'block' },
+};
+const committed = await commitClient.request('/api/v1/shift-assignment/templates/commit.php', {
+  method: 'POST',
+  body: commitPayload,
+  csrfToken: 'pilot-csrf-token',
+  csrfHeaderName: 'X-CSRF-Token',
+});
+assert.equal(commitOptions.url, '/api/v1/shift-assignment/templates/commit.php');
+assert.equal(commitOptions.options.method, 'POST');
+assert.equal(commitOptions.options.headers.get('X-CSRF-Token'), 'pilot-csrf-token');
+assert.equal(JSON.parse(commitOptions.options.body).confirmation, 'APPLY TEMPLATE');
+assert.deepEqual(committed.data.rollback.ids, [101, 102]);
+
+const successfulPreview = {
+  summary: { total_assignments: 2, conflicts: 0, blocked_items: 0 },
+  conflicts: [],
+  blocked_items: [],
+};
+assert.equal(templateApplyAvailability({
+  confirmation: 'APPLY TEMPLATE',
+  csrf: { token: 'csrf' },
+  preview: successfulPreview,
+  previewPayload: valid.payload,
+}).available, true);
+for (const badConfirmation of ['apply template', ' APPLY TEMPLATE ', 'APPLY  TEMPLATE', 'APPLY-TEMPLATE', 'Apply Template']) {
+  assert.equal(templateApplyAvailability({
+    confirmation: badConfirmation,
+    csrf: { token: 'csrf' },
+    preview: successfulPreview,
+    previewPayload: valid.payload,
+  }).available, false);
+}
+assert.match(templateApplyAvailability({ confirmation: 'APPLY TEMPLATE', csrf: {}, preview: successfulPreview, previewPayload: valid.payload }).reason, /CSRF/i);
+assert.match(templateApplyAvailability({ confirmation: 'APPLY TEMPLATE', csrf: { token: 'csrf' }, preview: { summary: { conflicts: 1 } }, previewPayload: valid.payload }).reason, /conflicts/i);
+assert.match(templateApplyAvailability({ confirmation: 'APPLY TEMPLATE', csrf: { token: 'csrf' }, preview: { summary: { blocked_items: 1 } }, previewPayload: valid.payload }).reason, /blocked/i);
+assert.match(templateApplyAvailability({ confirmation: 'APPLY TEMPLATE', csrf: { token: 'csrf' }, preview: successfulPreview, previewPayload: valid.payload, stale: true }).reason, /Regenerate/i);
+
+const staleClient = createApiClient({
+  fetchImpl: async () => jsonResponse({
+    success: false,
+    message: 'Template commit blocked by conflicts.',
+    data: {
+      conflicts: [{ type: 'overlap', message: 'Overlap.' }],
+      blocked_items: [{ reason: 'Overlap.' }],
+    },
+    errors: [],
+    meta: { request_id: 'template-commit-conflict' },
+  }, 409),
+});
+await assert.rejects(
+  staleClient.request('/api/v1/shift-assignment/templates/commit.php', {
+    method: 'POST',
+    body: commitPayload,
+    csrfToken: 'pilot-csrf-token',
+  }),
+  (error) => error.status === 409
+    && error.data.conflicts.length === 1
+    && /Regenerate/.test(templateApplyErrorMessage(error)),
+);
+
 for (const status of [401, 403, 405, 422]) {
   const client = createApiClient({
     fetchImpl: async () => jsonResponse({
@@ -138,5 +224,9 @@ assert.match(templatePreviewErrorMessage({ status: 401 }), /session expired/i);
 assert.match(templatePreviewErrorMessage({ status: 403 }), /request was denied/i);
 assert.match(templatePreviewErrorMessage({ status: 405 }), /not available/i);
 assert.match(templatePreviewErrorMessage({ status: 422, errors: [{ field: 'agents.0' }] }), /highlighted fields/i);
+assert.match(templateApplyErrorMessage(new TypeError('Failed to fetch')), /network request failed/i);
+assert.match(templateApplyErrorMessage({ status: 401 }), /session expired/i);
+assert.match(templateApplyErrorMessage({ status: 403 }), /request was denied/i);
+assert.match(templateApplyErrorMessage({ status: 422, errors: [{ field: 'confirmation' }] }), /confirmation/i);
 
 console.log('TRACS controlled Shift Assignment template preview UI contracts passed.');

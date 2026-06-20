@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '../../../components/ui/Button';
-import { previewShiftTemplate } from '../api';
+import { applyShiftTemplatePreview, previewShiftTemplate } from '../api';
 import {
   applyTemplatePreviewPreset,
   initialTemplatePreviewDraft,
+  templateApplyAvailability,
+  templateApplyErrorMessage,
   templatePreviewErrorMessage,
   templatePreviewFieldErrorsFromApi,
   validateTemplatePreviewDraft,
@@ -59,15 +61,33 @@ function ResultList({ empty, items, title, tone = 'neutral' }) {
   );
 }
 
-export function ShiftTemplatePreviewModal({ context, onClose, onToast, open }) {
+export function ShiftTemplatePreviewModal({ context, onApplied, onClose, onToast, open }) {
   const [draft, setDraft] = useState(() => initialTemplatePreviewDraft());
   const [errors, setErrors] = useState({});
   const [generating, setGenerating] = useState(false);
+  const [applying, setApplying] = useState(false);
   const [preview, setPreview] = useState(null);
+  const [previewPayload, setPreviewPayload] = useState(null);
+  const [previewStale, setPreviewStale] = useState(false);
+  const [confirmation, setConfirmation] = useState('');
+  const [applyError, setApplyError] = useState('');
+  const [applyConflictData, setApplyConflictData] = useState(null);
+  const [commitResult, setCommitResult] = useState(null);
   const modalRef = useRef(null);
   const firstFieldRef = useRef(null);
   const csrf = context?.csrf ?? {};
   const filters = context?.filters ?? {};
+  const canApplyTemplate = Boolean(context?.allowed_actions?.apply_template);
+  const applyAvailability = templateApplyAvailability({
+    confirmation,
+    csrf,
+    preview,
+    previewPayload,
+    stale: previewStale,
+  });
+  const applyDisabledReason = canApplyTemplate
+    ? applyAvailability.reason
+    : 'Template apply is available only to the controlled Super Admin pilot.';
   const initialDraft = useMemo(() => initialTemplatePreviewDraft({
     start_date: context?.defaults?.start_date,
     end_date: context?.defaults?.end_date,
@@ -86,7 +106,14 @@ export function ShiftTemplatePreviewModal({ context, onClose, onToast, open }) {
     ));
     setErrors({});
     setGenerating(false);
+    setApplying(false);
     setPreview(null);
+    setPreviewPayload(null);
+    setPreviewStale(false);
+    setConfirmation('');
+    setApplyError('');
+    setApplyConflictData(null);
+    setCommitResult(null);
     window.setTimeout(() => firstFieldRef.current?.focus(), 0);
     return undefined;
   }, [context?.shift_definitions, filters.shift_templates, initialDraft, open]);
@@ -96,7 +123,7 @@ export function ShiftTemplatePreviewModal({ context, onClose, onToast, open }) {
       return undefined;
     }
     function closeOnEscape(event) {
-      if (event.key === 'Escape' && !generating) {
+      if (event.key === 'Escape' && !generating && !applying) {
         if (!dirty || window.confirm('Close the template preview form?')) {
           onClose();
         }
@@ -104,7 +131,7 @@ export function ShiftTemplatePreviewModal({ context, onClose, onToast, open }) {
     }
     window.addEventListener('keydown', closeOnEscape);
     return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [dirty, generating, onClose, open]);
+  }, [applying, dirty, generating, onClose, open]);
 
   if (!open) {
     return null;
@@ -114,6 +141,11 @@ export function ShiftTemplatePreviewModal({ context, onClose, onToast, open }) {
     const { checked, name, type, value } = event.target;
     setDraft((current) => ({ ...current, [name]: type === 'checkbox' ? checked : value }));
     setErrors((current) => ({ ...current, [name]: undefined }));
+    if (preview) {
+      setPreviewStale(true);
+      setCommitResult(null);
+      setApplyError('Preview changed. Regenerate before applying.');
+    }
   }
 
   function selectPreset(event) {
@@ -125,10 +157,15 @@ export function ShiftTemplatePreviewModal({ context, onClose, onToast, open }) {
       filters.shift_templates ?? [],
     ));
     setErrors((current) => ({ ...current, shift_preset: undefined, shift_template_id: undefined }));
+    if (preview) {
+      setPreviewStale(true);
+      setCommitResult(null);
+      setApplyError('Preview changed. Regenerate before applying.');
+    }
   }
 
   function requestClose() {
-    if (!generating && (!dirty || window.confirm('Close the template preview form?'))) {
+    if (!generating && !applying && (!dirty || window.confirm('Close the template preview form?'))) {
       onClose();
     }
   }
@@ -151,9 +188,15 @@ export function ShiftTemplatePreviewModal({ context, onClose, onToast, open }) {
     }
 
     setGenerating(true);
+    setApplyError('');
+    setApplyConflictData(null);
+    setCommitResult(null);
+    setConfirmation('');
     try {
       const response = await previewShiftTemplate(result.payload, csrf);
       setPreview(response.data);
+      setPreviewPayload(result.payload);
+      setPreviewStale(false);
       onToast({
         type: 'success',
         title: 'Template preview generated',
@@ -172,6 +215,47 @@ export function ShiftTemplatePreviewModal({ context, onClose, onToast, open }) {
       });
     } finally {
       setGenerating(false);
+    }
+  }
+
+  async function applyTemplate(event) {
+    event.preventDefault();
+    if (applying || !canApplyTemplate || !applyAvailability.available) {
+      setApplyError(applyDisabledReason);
+      return;
+    }
+
+    setApplying(true);
+    setApplyError('');
+    setApplyConflictData(null);
+    try {
+      const response = await applyShiftTemplatePreview(previewPayload, confirmation, csrf);
+      setCommitResult({
+        ...response.data,
+        request_id: response.meta?.request_id ?? '',
+      });
+      const refreshed = await onApplied?.(response.data, response.message);
+      onToast({
+        type: refreshed === false ? 'error' : 'success',
+        title: 'Template applied',
+        message: refreshed === false
+          ? `${response.data?.created_count ?? 0} assignments were created. Refresh the schedule manually to verify the latest data.`
+          : `${response.data?.created_count ?? 0} assignments were created and the schedule was refreshed.`,
+      });
+    } catch (error) {
+      if (error?.status === 409) {
+        setPreviewStale(true);
+        setApplyConflictData(error.data ?? {});
+      }
+      const message = templateApplyErrorMessage(error);
+      setApplyError(message);
+      onToast({
+        type: 'error',
+        title: 'Template apply failed',
+        message,
+      });
+    } finally {
+      setApplying(false);
     }
   }
 
@@ -200,13 +284,13 @@ export function ShiftTemplatePreviewModal({ context, onClose, onToast, open }) {
               Template Preview
             </h2>
             <p className="tr:mt-1 tr:text-xs tr:text-tracs-muted">
-              Preview only — this will not create or modify any assignments.
+              Preview first, then apply only with exact Super Admin confirmation.
             </p>
           </div>
           <button
             aria-label="Close template preview"
             className="tr:rounded-tracs tr:px-2 tr:py-1 tr:text-sm tr:text-tracs-muted tr:hover:bg-tracs-card"
-            disabled={generating}
+            disabled={generating || applying}
             onClick={requestClose}
             type="button"
           >
@@ -214,11 +298,11 @@ export function ShiftTemplatePreviewModal({ context, onClose, onToast, open }) {
           </button>
         </header>
 
-        <form aria-busy={generating} className="tr:min-h-0 tr:overflow-y-auto" noValidate onSubmit={submit}>
+        <form aria-busy={generating || applying} className="tr:min-h-0 tr:overflow-y-auto" noValidate onSubmit={submit}>
           <div className="tr:grid tr:min-w-0 tr:grid-cols-1 tr:gap-tracs-4 tr:p-tracs-5 tr:lg:grid-cols-[360px_minmax(0,1fr)]">
-            <fieldset className="tr:m-0 tr:flex tr:min-w-0 tr:flex-col tr:gap-tracs-4 tr:border-0 tr:p-0" disabled={generating}>
+            <fieldset className="tr:m-0 tr:flex tr:min-w-0 tr:flex-col tr:gap-tracs-4 tr:border-0 tr:p-0" disabled={generating || applying}>
               <div className="tr:rounded-tracs-lg tr:border tr:border-tracs-warning/30 tr:bg-tracs-warning/5 tr:p-tracs-3 tr:text-xs tr:leading-5 tr:text-tracs-secondary">
-                This phase generates preview data only. Writing, applying, saving, and copy actions are intentionally unavailable.
+                Template commit is a controlled pilot. Preview stays non-mutating; apply requires zero conflicts, exact APPLY TEMPLATE, CSRF, and backend revalidation.
               </div>
 
               <Field error={errors.agent_id} label="Agent" name="agent_id" required>
@@ -363,6 +447,74 @@ export function ShiftTemplatePreviewModal({ context, onClose, onToast, open }) {
                     <ResultList empty="No conflicts returned." items={preview.conflicts ?? []} title="Conflicts" tone="danger" />
                     <ResultList empty="No blocked items returned." items={preview.blocked_items ?? []} title="Blocked items" tone="danger" />
                   </div>
+
+                  <section className="tr:rounded-tracs-lg tr:border tr:border-tracs-warning/30 tr:bg-tracs-warning/5 tr:p-tracs-3">
+                    <div className="tr:flex tr:flex-col tr:gap-tracs-3 tr:lg:flex-row tr:lg:items-start tr:lg:justify-between">
+                      <div className="tr:min-w-0">
+                        <h3 className="tr:text-xs tr:font-semibold tr:text-tracs-primary">Commit Review</h3>
+                        <p className="tr:mt-1 tr:text-xs tr:leading-5 tr:text-tracs-secondary">
+                          Final backend conflict re-check still runs at apply time. Rollback targeting is based on created assignment IDs returned by the backend and recorded in audit.
+                        </p>
+                        <div className="tr:mt-tracs-2 tr:grid tr:grid-cols-1 tr:gap-1 tr:text-xs tr:text-tracs-secondary tr:sm:grid-cols-2">
+                          <span>Range: {preview.range?.start_date_display || preview.range?.start_date} to {preview.range?.end_date_display || preview.range?.end_date}</span>
+                          <span>Total: {preview.summary?.total_assignments ?? 0} assignments</span>
+                          <span>Agents: {preview.summary?.agents ?? 0}</span>
+                          <span>Warnings accepted: {preview.summary?.warnings ?? 0}</span>
+                        </div>
+                        {previewStale ? (
+                          <p className="tr:mt-2 tr:text-xs tr:font-semibold tr:text-tracs-danger">
+                            This preview is stale. Regenerate it before applying.
+                          </p>
+                        ) : null}
+                        {applyError ? (
+                          <p className="tr:mt-2 tr:text-xs tr:font-semibold tr:text-tracs-danger">{applyError}</p>
+                        ) : null}
+                      </div>
+                      <div className="tr:w-full tr:max-w-sm tr:shrink-0">
+                        <label className="tr:flex tr:flex-col tr:gap-1">
+                          <span className="tr:text-xs tr:font-semibold tr:text-tracs-secondary">
+                            Type APPLY TEMPLATE exactly
+                          </span>
+                          <input
+                            className={fieldClass}
+                            disabled={applying || !canApplyTemplate || previewStale}
+                            name="template_apply_confirmation"
+                            onChange={(event) => setConfirmation(event.target.value)}
+                            value={confirmation}
+                          />
+                        </label>
+                        <p className="tr:mt-1 tr:text-[10px] tr:leading-4 tr:text-tracs-muted">
+                          Rejects lowercase, extra spaces, punctuation, and case variations.
+                        </p>
+                      </div>
+                    </div>
+
+                    {applyConflictData ? (
+                      <div className="tr:mt-tracs-3 tr:grid tr:grid-cols-1 tr:gap-tracs-3 tr:lg:grid-cols-2">
+                        <ResultList empty="No conflicts returned." items={applyConflictData.conflicts ?? []} title="Final conflicts" tone="danger" />
+                        <ResultList empty="No blocked items returned." items={applyConflictData.blocked_items ?? []} title="Final blocked items" tone="danger" />
+                      </div>
+                    ) : null}
+
+                    {commitResult ? (
+                      <div className="tr:mt-tracs-3 tr:rounded-tracs tr:border tr:border-tracs-success/30 tr:bg-tracs-success/5 tr:p-tracs-3 tr:text-xs tr:leading-5 tr:text-tracs-secondary">
+                        <p className="tr:font-semibold tr:text-tracs-primary">
+                          Template applied: {commitResult.created_count ?? 0} assignments created.
+                        </p>
+                        <p className="tr:mt-1">
+                          Rollback targeting is based on the created assignment IDs returned by the backend and recorded in audit.
+                        </p>
+                        {(commitResult.rollback?.ids ?? commitResult.created_assignment_ids ?? []).length ? (
+                          <p className="tr:mt-1 tr:break-words tr:font-mono tr:text-[10px]">
+                            IDs: {(commitResult.rollback?.ids ?? commitResult.created_assignment_ids).join(', ')}
+                          </p>
+                        ) : null}
+                        {commitResult.request_id ? (
+                          <p className="tr:mt-1 tr:font-mono tr:text-[10px]">Request ID: {commitResult.request_id}</p>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </section>
                 </>
               ) : (
                 <div className="tr:flex tr:min-h-64 tr:flex-col tr:items-center tr:justify-center tr:rounded-tracs-lg tr:border tr:border-dashed tr:border-tracs-border tr:bg-tracs-surface-2 tr:p-tracs-5 tr:text-center">
@@ -376,12 +528,25 @@ export function ShiftTemplatePreviewModal({ context, onClose, onToast, open }) {
           </div>
 
           <footer className="tr:flex tr:flex-col tr:gap-tracs-2 tr:border-t tr:border-tracs-border tr:bg-tracs-surface-2 tr:px-tracs-5 tr:py-tracs-4 tr:sm:flex-row tr:sm:items-center tr:sm:justify-end">
-            <Button disabled={generating} onClick={requestClose} type="button" variant="quiet">
+            <Button disabled={generating || applying} onClick={requestClose} type="button" variant="quiet">
               Close
             </Button>
             <Button disabled={generating} type="submit" variant="primary">
               {generating ? 'Generating preview...' : 'Generate Preview'}
             </Button>
+            {preview ? (
+              <Button
+                disabled={applying || !canApplyTemplate || !applyAvailability.available}
+                onClick={applyTemplate}
+                type="button"
+                variant="danger"
+              >
+                {applying ? 'Applying...' : 'Apply Template'}
+              </Button>
+            ) : null}
+            {preview && !applyAvailability.available ? (
+              <p className="tr:text-xs tr:text-tracs-muted tr:sm:max-w-xs">{applyDisabledReason}</p>
+            ) : null}
           </footer>
         </form>
       </section>

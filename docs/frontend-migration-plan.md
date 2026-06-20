@@ -358,3 +358,10 @@ No active Apply Template UI is added in Phase 34.
 Commit must remain disabled for stale previews, conflicts, blocked items,
 missing CSRF, missing permission, non-Super-Admin users, and non-exact
 `APPLY TEMPLATE` confirmation.
+
+Phase 35 activates the Apply Template UI pilot only inside the isolated React preview. Apply
+Template appears after successful preview, remains disabled for conflicts,
+blocked items, stale preview, missing CSRF, missing capability, and non-exact
+confirmation, and calls only the existing protected commit endpoint. It does
+not add copy/paste UI, navigation, legacy replacement, or optimistic bulk rows.
+The pilot requires exact APPLY TEMPLATE before commit.

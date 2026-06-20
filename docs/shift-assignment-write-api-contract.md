@@ -787,3 +787,12 @@ require exact `APPLY TEMPLATE`, and display rollback evidence after success.
 The future API client must handle `401`, `403`, `405`, `409`, `422`, network,
 and unexpected safe errors without exposing SQL, stack traces, paths, or raw
 server details.
+
+### Phase 35 Apply Template UI Pilot
+
+The React pilot now calls the existing commit endpoint only after successful
+preview and exact typed confirmation. Backend permission, CSRF, confirmation,
+preview recomputation, and final conflict re-check remain authoritative.
+Backend `409` marks the preview stale, keeps the modal open, and requires
+regeneration. Success refreshes assignments and displays rollback targeting
+based on created assignment IDs. No rollback UI or copy/paste UI is introduced.

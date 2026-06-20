@@ -94,9 +94,6 @@ template_commit_contract_assert(
 
 foreach ([
     'commitShiftTemplate',
-    '/api/v1/shift-assignment/templates/commit.php',
-    'APPLY TEMPLATE',
-    'Apply Template',
     'Commit Template',
 ] as $forbiddenFrontend) {
     template_commit_contract_assert(
@@ -104,6 +101,14 @@ foreach ([
         "React commit UI/caller unexpectedly exists: {$forbiddenFrontend}."
     );
 }
+
+template_commit_contract_assert(
+    str_contains($frontend, '/api/v1/shift-assignment/templates/commit.php')
+        && str_contains($frontend, 'applyShiftTemplatePreview')
+        && str_contains($frontend, 'APPLY TEMPLATE')
+        && str_contains($frontend, 'Rollback targeting is based on the created assignment IDs'),
+    'Controlled React template apply UI evidence is missing.'
+);
 
 foreach ([
     'public/api/v1/shift-assignment/templates/copy-preview.php',

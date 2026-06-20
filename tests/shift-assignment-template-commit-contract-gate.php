@@ -137,13 +137,9 @@ foreach ([
 }
 
 foreach ([
-    'commitShiftTemplate',
     'copyShiftTemplate',
     '/api/v1/shift-assignment/templates/copy-preview.php',
     '/api/v1/shift-assignment/templates/copy-commit.php',
-    'APPLY TEMPLATE',
-    'Apply Template',
-    'Commit Template',
     'Save Template',
     'Copy to month',
 ] as $forbiddenFrontendNeedle) {
@@ -155,10 +151,12 @@ foreach ([
 }
 
 template_commit_gate_assert(
-    str_contains($frontendModule, 'Preview only')
-        && str_contains($frontendModule, 'this will not create or modify any assignments')
-        && str_contains($apiClient, '/api/v1/shift-assignment/templates/preview.php'),
-    'Template Preview UI no longer appears preview-only.'
+    str_contains($frontendModule, 'Apply Template')
+        && str_contains($frontendModule, 'APPLY TEMPLATE')
+        && str_contains($frontendModule, 'Final backend conflict re-check still runs')
+        && str_contains($apiClient, '/api/v1/shift-assignment/templates/preview.php')
+        && str_contains($apiClient, '/api/v1/shift-assignment/templates/commit.php'),
+    'Template Apply UI pilot evidence is missing or no longer controlled.'
 );
 
 echo "TRACS Shift Assignment template commit contract gate checks passed.\n";

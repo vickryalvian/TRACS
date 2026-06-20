@@ -117,6 +117,10 @@ shift_contract_assert(
     'Delete action must follow the controlled capability.'
 );
 shift_contract_assert(
+    $decoded['data']['allowed_actions']['apply_template'] === false,
+    'Template apply action must follow the controlled capability.'
+);
+shift_contract_assert(
     $decoded['data']['allowed_actions']['manage_workload_settings'] === false
         && $decoded['data']['allowed_actions']['manage_monthly_templates'] === true,
     'Permission-to-action mapping changed.'

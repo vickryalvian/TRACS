@@ -17,7 +17,7 @@ export function ShiftToolbar({
       <div className="tr:flex tr:flex-col tr:gap-tracs-3 tr:p-tracs-4 tr:xl:flex-row tr:xl:items-center tr:xl:justify-between">
         <div>
           <p className="tr:font-mono tr:text-[9px] tr:font-bold tr:uppercase tr:tracking-[.1em] tr:text-tracs-accent">
-            React pilot · create/edit/delete + template preview
+            React pilot · create/edit/delete + template preview/apply
           </p>
           <h1 className="tr:mt-tracs-1 tr:text-xl tr:font-semibold tr:tracking-[-.02em] tr:text-tracs-primary">
             Shift Assignment
