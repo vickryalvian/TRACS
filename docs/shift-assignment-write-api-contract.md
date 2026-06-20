@@ -796,3 +796,11 @@ preview recomputation, and final conflict re-check remain authoritative.
 Backend `409` marks the preview stale, keeps the modal open, and requires
 regeneration. Success refreshes assignments and displays rollback targeting
 based on created assignment IDs. No rollback UI or copy/paste UI is introduced.
+
+### Phase 36 Apply Template Hardening
+
+The UI now exposes clearer accessible stale/error and disabled-state copy, but
+the backend contract is unchanged. Browser validation remains a hard gate:
+copy-preview and copy-commit must not start until an authenticated disposable
+browser click-through has actually exercised Apply Template, conflict/stale
+handling, refresh, and rollback evidence.

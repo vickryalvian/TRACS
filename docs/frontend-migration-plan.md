@@ -365,3 +365,9 @@ blocked items, stale preview, missing CSRF, missing capability, and non-exact
 confirmation, and calls only the existing protected commit endpoint. It does
 not add copy/paste UI, navigation, legacy replacement, or optimistic bulk rows.
 The pilot requires exact APPLY TEMPLATE before commit.
+
+Phase 36 hardens the Apply Template disabled/error states and keeps copy/paste
+blocked. Live authenticated browser click-through is still required; the Codex
+browser tool failed before navigation in this environment, so Phase 37 cannot
+proceed from this evidence alone.
+Phase 36 is blocked by browser tooling for live authenticated click-through.

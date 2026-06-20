@@ -58,7 +58,7 @@ write_plan_assert(
     'The v1 assignments route no longer exposes only the approved GET and create POST methods.'
 );
 write_plan_assert(
-    substr_count($frontendApi, "method: 'POST'") === 2
+    substr_count($frontendApi, "method: 'POST'") === 3
         && substr_count($frontendApi, "method: 'PATCH'") === 1
         && substr_count($frontendApi, "method: 'DELETE'") === 1
         && str_contains($frontendApi, '/api/v1/shift-assignment/templates/preview.php')
@@ -66,7 +66,7 @@ write_plan_assert(
     'The React preview API client mutation allowlist changed.'
 );
 write_plan_assert(
-    str_contains($preview, 'Create/Edit/Delete and Template Preview actions are')
+    str_contains($preview, 'Create/Edit/Delete and Template Preview/Apply')
         && str_contains($preview, "tracs_require_page_permission(\$conn, 'shifts.view')")
         && str_contains($preview, 'tracs_require_super_admin_page($conn)'),
     'The controlled-create pilot banner or access restrictions changed.'
@@ -79,14 +79,13 @@ write_plan_assert(
 foreach ([
     'public/api/v1/shift-assignment/templates/generate.php',
     'public/api/v1/shift-assignment/templates/copy.php',
-    'public/api/v1/shift-assignment/templates/commit.php',
     'public/api/v1/shift-assignment/templates/copy-preview.php',
     'public/api/v1/shift-assignment/templates/copy-commit.php',
     'public/api/v1/shift-assignment/overtime.php',
 ] as $plannedRoute) {
     write_plan_assert(
         !is_file(__DIR__ . '/../' . $plannedRoute),
-        "Planning phase unexpectedly created {$plannedRoute}."
+        "Current template safety gate unexpectedly created {$plannedRoute}."
     );
 }
 
@@ -98,8 +97,8 @@ write_plan_assert(
 $routeAllowlists = [
     'public/api/v1/shift-assignment' => ['assignment.php', 'assignments.php', 'context.php'],
     'api/v1/shift-assignment' => ['assignment.php', 'assignments.php', 'context.php'],
-    'public/api/v1/shift-assignment/templates' => ['preview.php'],
-    'api/v1/shift-assignment/templates' => ['preview.php'],
+    'public/api/v1/shift-assignment/templates' => ['commit.php', 'preview.php'],
+    'api/v1/shift-assignment/templates' => ['commit.php', 'preview.php'],
 ];
 foreach ($routeAllowlists as $directory => $expectedFiles) {
     $files = array_values(array_filter(

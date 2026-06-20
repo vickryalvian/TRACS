@@ -44,7 +44,8 @@ template_preview_ui_assert(
 
 template_preview_ui_assert(
     str_contains($modal, 'Preview only')
-        && str_contains($modal, 'this will not create or modify any assignments')
+        && str_contains($modal, 'No assignments were created or modified.')
+        && str_contains($modal, 'Preview stays non-mutating')
         && str_contains($modal, 'Generate Preview')
         && str_contains($modal, 'Preview items')
         && str_contains($modal, 'Warnings')
@@ -54,18 +55,15 @@ template_preview_ui_assert(
 );
 
 foreach ([
-    'Commit',
-    'Apply template',
     'Save template',
     'Copy to month',
     'copy-commit.php',
     'copy-preview.php',
-    'templates/commit.php',
 ] as $forbidden) {
     template_preview_ui_assert(
         !str_contains($modal, $forbidden)
             && !str_contains($api, $forbidden),
-        "Template Preview UI unexpectedly exposes {$forbidden}."
+        "Template Preview UI unexpectedly exposes copy/paste control {$forbidden}."
     );
 }
 
@@ -93,7 +91,8 @@ template_preview_ui_assert(
 template_preview_ui_assert(
     !str_contains($header, 'shift-assignment-react-preview.php')
         && str_contains($previewPage, 'Template Preview is non-mutating')
-        && str_contains($previewPage, 'template commit, copy, overtime'),
+        && str_contains($previewPage, 'controlled backend commit')
+        && str_contains($previewPage, 'no copy, overtime'),
     'Preview remains direct URL only and explicitly non-copy/commit.'
 );
 

@@ -1122,6 +1122,25 @@ Authenticated browser validation is required before production replacement or
 copy/paste work. If a browser fixture is unavailable, do not claim browser
 mutation evidence; rely on frontend contracts plus disposable API drills only.
 
+## Phase 36 Apply Template Hardening Gate
+
+Run:
+
+```bash
+cd frontend && npm run test:contracts
+cd frontend && npm run build
+php tests/shift-assignment-template-apply-ui-contract.php
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 TRACS_TEST_DB_NAME=tracs_phase36_test php tests/disposable-db-preflight.php
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 TRACS_TEST_DB_NAME=tracs_phase36_test php tests/shift-assignment-template-apply-ui-browser-validation.php
+```
+
+Phase 36 hardens accessibility and disabled-state presentation, but live
+authenticated browser click-through remains required before copy/paste work.
+In the local Codex environment, in-app browser control failed before navigation
+with a missing browser tool metadata field, and standalone Playwright was not
+installed. Record this as blocked rather than successful browser evidence.
+Phase 36 is blocked by browser tooling for live authenticated click-through.
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:

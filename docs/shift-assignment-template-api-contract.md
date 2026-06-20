@@ -626,3 +626,19 @@ items, marks the preview stale, and requires regeneration. On success, the
 modal displays created count, request id, created assignment IDs or rollback
 reference, and refreshes the current assignments request without optimistic
 rows. There is no rollback button and no copy/paste UI in this phase.
+
+## Phase 36 Apply Template UI Hardening
+
+Phase 36 keeps the same backend route and hardens the React Apply Template UI
+states. The confirmation field now has an explicit accessible label and help
+text, stale/error states announce with alert semantics, and the Apply button is
+linked to its disabled reason when the preview is stale, conflicted, missing
+CSRF/capability, or lacks exact `APPLY TEMPLATE`.
+
+Disposable API/workflow validation still passes for preview, commit,
+rollback targeting, and race-conflict checks. Live authenticated browser
+click-through could not be completed in this environment because the in-app
+browser control failed before page navigation with a tool metadata error and
+standalone Playwright is not installed. This is a blocker for copy-preview and
+copy-commit phases; do not proceed until authenticated browser evidence exists.
+Phase 36 is blocked by browser tooling for live authenticated click-through.

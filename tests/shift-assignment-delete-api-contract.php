@@ -120,7 +120,9 @@ delete_contract_assert(
 );
 delete_contract_assert(
     str_contains($preview, 'Template Preview is non-mutating')
-        && str_contains($preview, 'template commit, copy, overtime')
+        && str_contains($preview, 'Apply Template uses')
+        && str_contains($preview, 'controlled backend commit')
+        && str_contains($preview, 'no copy, overtime')
         && !str_contains($header, 'shift-assignment-react-preview.php'),
     'Preview warning or navigation isolation changed.'
 );

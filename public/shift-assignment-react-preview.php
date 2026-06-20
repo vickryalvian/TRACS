@@ -40,12 +40,14 @@ include __DIR__ . '/includes/header.php';
       </div>
       <div class="panel-body" style="padding: var(--space-3) var(--space-4);">
         <p style="margin:0;color:var(--tx2);font-size:12px;">
-          React Preview Pilot — Create/Edit/Delete and Template Preview actions are
-          enabled only for Super Admin validation. Legacy
+          React Preview Pilot — Create/Edit/Delete and Template Preview/Apply
+          actions are enabled only for Super Admin validation. Legacy
           <code>shifting-assignment.php</code> remains the production source of
           truth. Delete is a hard-delete pilot with validated audit-backed
-          restoration. Template Preview is non-mutating. This pilot provides no
-          template commit, copy, overtime, or holiday write action.
+          restoration. Template Preview is non-mutating; Apply Template uses a
+          controlled backend commit with exact confirmation and rollback
+          evidence. This pilot provides no copy, overtime, or holiday write
+          action.
         </p>
       </div>
     </section>

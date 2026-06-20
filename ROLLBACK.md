@@ -1209,3 +1209,21 @@ DROP DATABASE IF EXISTS tracs_phase35_test;
 If approved non-production apply testing created assignments, use the backend
 response/audit `created_assignment_ids` rollback target and remove exactly
 those IDs only. Do not use broad date-range deletion.
+
+## Phase 36 Apply Template UI Hardening Rollback
+
+Phase 36 hardens the existing Apply Template UI and updates tests/docs. It adds
+no copy endpoint, no copy/paste UI, no rollback UI, no schema change, no
+Calendar change, no navigation change, and no legacy-page replacement.
+
+After commit:
+
+```bash
+git revert <phase-36-commit-sha>
+```
+
+Emergency disposable cleanup:
+
+```sql
+DROP DATABASE IF EXISTS tracs_phase36_test;
+```

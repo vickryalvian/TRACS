@@ -49,7 +49,7 @@ edit_ui_assert(
     'Controlled edit modal safety behavior changed.'
 );
 edit_ui_assert(
-    substr_count($api, "method: 'POST'") === 2
+    substr_count($api, "method: 'POST'") === 3
         && substr_count($api, "method: 'PATCH'") === 1
         && substr_count($api, "method: 'DELETE'") === 1
         && str_contains($api, '/api/v1/shift-assignment/assignment.php?id=')
@@ -67,11 +67,12 @@ edit_ui_assert(
     'Backend edit capability or exact pilot authorization changed.'
 );
 edit_ui_assert(
-    str_contains($preview, 'Create/Edit/Delete and Template Preview actions are')
+    str_contains($preview, 'Create/Edit/Delete and Template Preview/Apply')
         && str_contains($preview, "tracs_require_page_permission(\$conn, 'shifts.view')")
         && str_contains($preview, 'tracs_require_super_admin_page($conn)')
         && str_contains($preview, 'Template Preview is non-mutating')
-        && str_contains($preview, 'template commit, copy, overtime'),
+        && str_contains($preview, 'controlled backend commit')
+        && str_contains($preview, 'no copy, overtime'),
     'Preview access or controlled edit warning changed.'
 );
 edit_ui_assert(

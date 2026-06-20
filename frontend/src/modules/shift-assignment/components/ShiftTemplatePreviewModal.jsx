@@ -462,12 +462,12 @@ export function ShiftTemplatePreviewModal({ context, onApplied, onClose, onToast
                           <span>Warnings accepted: {preview.summary?.warnings ?? 0}</span>
                         </div>
                         {previewStale ? (
-                          <p className="tr:mt-2 tr:text-xs tr:font-semibold tr:text-tracs-danger">
+                          <p className="tr:mt-2 tr:text-xs tr:font-semibold tr:text-tracs-danger" role="alert">
                             This preview is stale. Regenerate it before applying.
                           </p>
                         ) : null}
                         {applyError ? (
-                          <p className="tr:mt-2 tr:text-xs tr:font-semibold tr:text-tracs-danger">{applyError}</p>
+                          <p className="tr:mt-2 tr:text-xs tr:font-semibold tr:text-tracs-danger" id="template-apply-error" role="alert">{applyError}</p>
                         ) : null}
                       </div>
                       <div className="tr:w-full tr:max-w-sm tr:shrink-0">
@@ -476,6 +476,8 @@ export function ShiftTemplatePreviewModal({ context, onApplied, onClose, onToast
                             Type APPLY TEMPLATE exactly
                           </span>
                           <input
+                            aria-describedby="template-apply-help template-apply-error"
+                            aria-label="Apply Template confirmation"
                             className={fieldClass}
                             disabled={applying || !canApplyTemplate || previewStale}
                             name="template_apply_confirmation"
@@ -483,7 +485,7 @@ export function ShiftTemplatePreviewModal({ context, onApplied, onClose, onToast
                             value={confirmation}
                           />
                         </label>
-                        <p className="tr:mt-1 tr:text-[10px] tr:leading-4 tr:text-tracs-muted">
+                        <p className="tr:mt-1 tr:text-[10px] tr:leading-4 tr:text-tracs-muted" id="template-apply-help">
                           Rejects lowercase, extra spaces, punctuation, and case variations.
                         </p>
                       </div>
@@ -536,6 +538,7 @@ export function ShiftTemplatePreviewModal({ context, onApplied, onClose, onToast
             </Button>
             {preview ? (
               <Button
+                aria-describedby={!applyAvailability.available || !canApplyTemplate ? 'template-apply-disabled-reason' : undefined}
                 disabled={applying || !canApplyTemplate || !applyAvailability.available}
                 onClick={applyTemplate}
                 type="button"
@@ -545,7 +548,7 @@ export function ShiftTemplatePreviewModal({ context, onApplied, onClose, onToast
               </Button>
             ) : null}
             {preview && !applyAvailability.available ? (
-              <p className="tr:text-xs tr:text-tracs-muted tr:sm:max-w-xs">{applyDisabledReason}</p>
+              <p className="tr:text-xs tr:text-tracs-muted tr:sm:max-w-xs" id="template-apply-disabled-reason">{applyDisabledReason}</p>
             ) : null}
           </footer>
         </form>

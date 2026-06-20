@@ -47,7 +47,7 @@ browser_validation_assert(
     'Browser environment no longer clones schema only.'
 );
 browser_validation_assert(
-    str_contains($preview, 'Create/Edit/Delete and Template Preview actions are')
+    str_contains($preview, 'Create/Edit/Delete and Template Preview/Apply')
         && str_contains($preview, "tracs_require_page_permission(\$conn, 'shifts.view')")
         && str_contains($preview, 'tracs_require_super_admin_page($conn)')
         && str_contains($preview, "require_once __DIR__ . '/includes/page_helpers.php'"),

@@ -169,9 +169,10 @@ foreach ([
 }
 
 template_contract_assert(
-    str_contains($preview, 'Create/Edit/Delete and Template Preview actions are')
+    str_contains($preview, 'Create/Edit/Delete and Template Preview/Apply')
         && str_contains($preview, 'Template Preview is non-mutating')
-        && str_contains($preview, 'template commit, copy, overtime'),
+        && str_contains($preview, 'controlled backend commit')
+        && str_contains($preview, 'no copy, overtime'),
     'React preview pilot banner changed unexpectedly.'
 );
 

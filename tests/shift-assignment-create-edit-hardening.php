@@ -57,7 +57,7 @@ hardening_assert(
     'Post-create/edit refresh result handling changed.'
 );
 hardening_assert(
-    substr_count($api, "method: 'POST'") === 2
+    substr_count($api, "method: 'POST'") === 3
         && substr_count($api, "method: 'PATCH'") === 1
         && substr_count($api, "method: 'DELETE'") === 1
         && !preg_match('/\b(method\s*:\s*[\'"]PUT|\.(put)\s*\()/i', $api),
@@ -66,9 +66,10 @@ hardening_assert(
 hardening_assert(
     str_contains($context, "'role_slug'] ?? '') === 'super_admin'")
         && str_contains($context, "'shifts.manage'")
-        && str_contains($preview, 'Create/Edit/Delete and Template Preview actions are')
+        && str_contains($preview, 'Create/Edit/Delete and Template Preview/Apply')
         && str_contains($preview, 'Template Preview is non-mutating')
-        && str_contains($preview, 'template commit, copy, overtime')
+        && str_contains($preview, 'controlled backend commit')
+        && str_contains($preview, 'no copy, overtime')
         && !str_contains($header, 'shift-assignment-react-preview.php'),
     'Pilot authorization, warning, or navigation isolation changed.'
 );

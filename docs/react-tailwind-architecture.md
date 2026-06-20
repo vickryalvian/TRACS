@@ -515,3 +515,10 @@ after backend success but does not add rollback controls.
 
 No Tailwind output is loaded globally, no legacy PHP page is changed, and no
 copy/paste control is exposed.
+
+## Phase 36 Apply Template Hardening
+
+The Apply Template pilot keeps all styling inside the isolated Shift Assignment
+bundle. Phase 36 adds clearer accessible alert/description wiring for stale
+preview and disabled confirmation states without adding rollback UI, copy UI,
+global Tailwind, or navigation exposure.

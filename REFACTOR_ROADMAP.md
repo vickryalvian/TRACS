@@ -482,3 +482,14 @@ Phase 35 Apply Template UI pilot notes:
   created assignment IDs, then refreshes assignments without optimistic rows;
 - no rollback UI, copy/paste UI, schema changes, Calendar changes, navigation
   changes, or legacy-page changes are included.
+
+Phase 36 Apply Template UI hardening notes:
+
+- stale/error states announce with alert semantics;
+- confirmation input and disabled Apply reason are explicitly labelled;
+- no rollback UI, copy/paste UI, copy endpoints, schema changes, Calendar
+  changes, navigation changes, or legacy-page changes are included;
+- disposable apply workflow validation remains green;
+- live authenticated browser click-through remains blocked by browser tooling,
+  so copy-preview and copy-commit work must not proceed yet.
+- Phase 36 is blocked by browser tooling for live authenticated click-through.

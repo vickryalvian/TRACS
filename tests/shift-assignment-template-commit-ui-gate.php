@@ -61,6 +61,8 @@ foreach ([
     'rollback evidence',
     'commitTemplatePreview(payload)',
     'Phase 35 Apply Template UI Pilot',
+    'Phase 36 Apply Template UI Hardening',
+    'blocked by browser tooling',
 ] as $required) {
     template_commit_ui_gate_assert(
         str_contains($templateContract, $required),
@@ -72,6 +74,7 @@ foreach ([
     'Apply Template UI pilot',
     'exact APPLY TEMPLATE',
     'rollback evidence',
+    'browser tooling',
 ] as $required) {
     template_commit_ui_gate_assert(
         str_contains($frontendPlan, $required)
@@ -83,6 +86,7 @@ foreach ([
 
 template_commit_ui_gate_assert(
     str_contains($rollback, 'Phase 35 Apply Template UI Pilot Rollback')
+        && str_contains($rollback, 'Phase 36 Apply Template UI Hardening Rollback')
         && str_contains($reactArchitecture, 'Phase 35 Apply Template UI Pilot'),
     'Rollback or React architecture docs missing Phase 35 apply UI pilot.'
 );
@@ -106,9 +110,24 @@ template_commit_ui_gate_assert(
         && str_contains($frontendModule, 'APPLY TEMPLATE')
         && str_contains($frontendModule, 'This preview is stale. Regenerate it before applying.')
         && str_contains($frontendModule, 'Rollback targeting is based on the created assignment IDs')
+        && str_contains($frontendModule, 'aria-label="Apply Template confirmation"')
+        && str_contains($frontendModule, 'template-apply-disabled-reason')
+        && str_contains($frontendModule, 'role="alert"')
         && str_contains($apiClient, '/api/v1/shift-assignment/templates/preview.php'),
     'Controlled Template Apply UI pilot is missing expected safety copy.'
 );
+
+foreach ([
+    'Rollback Assignment',
+    'Undo Template',
+    'Restore Template',
+    'Rollback Template',
+] as $forbiddenRollbackUi) {
+    template_commit_ui_gate_assert(
+        !str_contains($frontendModule, $forbiddenRollbackUi),
+        "Phase 36 unexpectedly added rollback UI: {$forbiddenRollbackUi}."
+    );
+}
 
 template_commit_ui_gate_assert(
     str_contains($apiClient, '/api/v1/shift-assignment/templates/commit.php')

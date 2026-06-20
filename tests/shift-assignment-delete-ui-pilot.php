@@ -46,7 +46,7 @@ delete_ui_assert(
     'Delete modal confirmation or hard-delete warning changed.'
 );
 delete_ui_assert(
-    substr_count($api, "method: 'POST'") === 2
+    substr_count($api, "method: 'POST'") === 3
         && substr_count($api, "method: 'PATCH'") === 1
         && substr_count($api, "method: 'DELETE'") === 1
         && str_contains($api, 'csrfToken: csrf.token')
@@ -60,10 +60,11 @@ delete_ui_assert(
     'Backend delete capability is not exact-Super-Admin plus shifts.manage.'
 );
 delete_ui_assert(
-    str_contains($preview, 'Create/Edit/Delete and Template Preview actions are')
+    str_contains($preview, 'Create/Edit/Delete and Template Preview/Apply')
         && str_contains($preview, 'hard-delete pilot')
         && str_contains($preview, 'Template Preview is non-mutating')
-        && str_contains($preview, 'template commit, copy, overtime')
+        && str_contains($preview, 'controlled backend commit')
+        && str_contains($preview, 'no copy, overtime')
         && !str_contains($header, 'shift-assignment-react-preview.php'),
     'Pilot warning or navigation isolation changed.'
 );
