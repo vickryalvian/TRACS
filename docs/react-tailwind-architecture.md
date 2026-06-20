@@ -491,3 +491,16 @@ server-capability driven, the modal uses existing TRACS compact form and card
 density, and preview result sections render as read-only data. No legacy PHP
 page loads the React bundle or Tailwind output, and no template commit/copy
 control is exposed in this phase.
+
+## Phase 34 Template Commit UI Gate
+
+The future Apply Template flow must remain inside the isolated Shift
+Assignment React root and use the same prefixed Tailwind strategy. The planned
+Commit Review step should reuse existing modal, card, alert, toast, focus, and
+danger/warning states. It may display rollback evidence and created assignment
+IDs only after backend success.
+
+No Phase 34 React code calls `templates/commit.php`; the Template Preview modal
+stays preview-only. Future commit UI must never inject Tailwind globally,
+never bypass PHP permissions, and never optimistically render bulk-created
+assignments before the backend confirms success.

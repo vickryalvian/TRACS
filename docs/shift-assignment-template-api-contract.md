@@ -549,3 +549,55 @@ These checks do not add React commit UI, copy endpoints, schema changes,
 Calendar changes, navigation changes, or legacy Shift Assignment changes.
 The `template_batch_id` schema limitation remains documented for future bulk
 rollback ergonomics.
+
+## Phase 34 React Commit UI Safety Gate
+
+No active Apply Template UI is implemented in Phase 34. The existing Template
+Preview UI remains preview-only, and React must not call
+`/api/v1/shift-assignment/templates/commit.php`.
+
+The future modal or wizard flow is:
+
+1. Step 1 - Configure Preview: choose date range, pattern, scoped agents, and
+   Shift 1/2/3 presets, then generate preview only.
+2. Step 2 - Review Preview: show summary, preview rows, warnings, conflicts,
+   and `blocked_items`. Commit is unavailable when conflicts or blocked items
+   exist.
+3. Step 3 - Commit Review: show assignment count, affected range, affected
+   agents, accepted advisory warnings, zero-conflict status, rollback evidence,
+   and require exact typed confirmation `APPLY TEMPLATE`.
+4. Step 4 - Commit Result: show created assignment count, created assignment
+   IDs or safe rollback reference, audit evidence, and a clear note that
+   rollback is manual/admin-controlled.
+
+Future confirmation UX must reject lowercase, case variations, leading or
+trailing spaces, double spaces, punctuation variants, and any text other than
+exact `APPLY TEMPLATE`. The commit control must remain disabled until the
+phrase is exact, must show `Applying...` while in flight, must prevent double
+submit, and must keep the modal open on errors.
+
+Future commit must be unavailable when:
+
+- preview has not succeeded;
+- preview has conflicts;
+- preview has blocked_items;
+- preview result is stale;
+- required permissions or CSRF token are missing;
+- the user is not exact Super Admin during pilot;
+- the confirmation phrase is not exact;
+- the commit endpoint returns `409`;
+- the API client detects an unsafe or malformed response.
+
+Future `commitTemplatePreview(payload)` behavior is documented only. It will
+POST to `/api/v1/shift-assignment/templates/commit.php`, send CSRF, handle
+success, `401`, `403`, `405`, `409`, `422`, network errors, and unexpected safe
+errors, and never trust client preview rows as authoritative. Success must
+refresh assignments and display created assignment IDs or rollback evidence.
+
+Criteria before Phase 35 active React Apply Template UI pilot:
+
+- keep exact Super Admin plus `shifts.manage`;
+- keep `conflict_policy=block`;
+- run authenticated disposable-browser validation;
+- prove no copy/paste endpoints or UI are introduced;
+- show rollback evidence after success without exposing sensitive details.

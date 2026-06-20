@@ -349,3 +349,12 @@ drills. The React preview remains preview-only for templates: no Apply
 Template button, no commit caller, no copy controls, and no optimistic bulk
 write. A future Apply Template UI still needs a separate approval phase and
 authenticated disposable-browser validation.
+
+Phase 34 defines that approval gate. The future UI may evolve the existing
+Template Preview modal into Configure Preview, Review Preview, Commit Review,
+and Commit Result steps, but this phase adds no active Apply Template UI, no
+commit/apply/generate-save button, and no API caller for `templates/commit.php`.
+No active Apply Template UI is added in Phase 34.
+Commit must remain disabled for stale previews, conflicts, blocked items,
+missing CSRF, missing permission, non-Super-Admin users, and non-exact
+`APPLY TEMPLATE` confirmation.

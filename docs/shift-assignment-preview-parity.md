@@ -350,6 +350,8 @@ Before any template or copy/paste UI appears in the preview, verify:
       `shifts.manage`.
 - [x] React has only an active template preview control; it has no active
       commit, apply, save, or copy/paste control.
+- [x] Phase 34 documents the future Apply Template flow while guarding that
+      React has no commit caller or active Apply Template button.
 
 ## Phase 17 Completed Browser Matrix
 

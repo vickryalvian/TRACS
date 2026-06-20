@@ -1076,6 +1076,23 @@ non-mutation, created-id rollback targeting, unrelated assignment retention,
 and commit/rollback audit evidence. The drill refuses production-like database
 names and drops the disposable database after the run.
 
+## Phase 34 Template Commit UI Gate
+
+Run the non-mutating UI guard:
+
+```bash
+php tests/shift-assignment-template-commit-ui-gate.php
+```
+
+The guard proves the React module still has no active Apply Template UI, no
+commit/apply/generate-save button, no API caller for `templates/commit.php`,
+and no copy/paste UI. It also checks that the future multi-step flow, exact
+`APPLY TEMPLATE` UX, disabled conditions, rollback evidence display, and
+future `commitTemplatePreview(payload)` behavior are documented.
+No active Apply Template UI is added in Phase 34.
+no commit/apply/generate-save button is added in Phase 34.
+no API caller for `templates/commit.php` is added in Phase 34.
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:

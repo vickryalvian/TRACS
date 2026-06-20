@@ -778,3 +778,12 @@ template rows.
 
 Because no `template_batch_id` exists yet, production rollback must continue to
 use response/audit ids and must never use a broad date-range delete.
+
+### Phase 34 Apply Template UI Gate
+
+The future React commit flow is not enabled. It must show conflicts and
+blocked items from preview, keep commit unavailable until conflicts are zero,
+require exact `APPLY TEMPLATE`, and display rollback evidence after success.
+The future API client must handle `401`, `403`, `405`, `409`, `422`, network,
+and unexpected safe errors without exposing SQL, stack traces, paths, or raw
+server details.

@@ -1171,3 +1171,18 @@ DROP DATABASE IF EXISTS tracs_phase33_race_test;
 For approved non-production template commits, rollback still targets exactly
 the response/audit `created_assignment_ids`. Phase 33 proves that cleanup path
 does not remove unrelated baseline assignments in the disposable drill.
+
+## Phase 34 Template Commit UI Gate Rollback
+
+Phase 34 adds documentation and a non-mutating guard test for the future React
+Apply Template UI. It adds no active Apply Template button, no React commit
+caller, no copy endpoint, no copy/paste UI, no schema change, no Calendar
+change, no navigation change, and no legacy-page replacement.
+
+After commit:
+
+```bash
+git revert <phase-34-commit-sha>
+```
+
+No database cleanup is required because this phase does not mutate data.

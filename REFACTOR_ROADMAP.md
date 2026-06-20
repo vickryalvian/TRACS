@@ -452,3 +452,18 @@ Phase 33 template-commit hardening notes:
 - commit audit contains created ids, generated count, and rollback ids;
 - React Apply Template UI, copy endpoints, schema changes, Calendar changes,
   navigation changes, and legacy-page changes remain blocked.
+
+Phase 34 template-commit UI gate notes:
+
+- the future React flow is documented as Configure Preview, Review Preview,
+  Commit Review, and Commit Result;
+- exact `APPLY TEMPLATE` confirmation UX and disabled conditions are defined;
+- rollback evidence display after success is documented;
+- future `commitTemplatePreview(payload)` client behavior is documented only;
+- a guard test proves there is no active Apply Template UI, no commit caller,
+  no copy UI, and no copy endpoints;
+- No active Apply Template UI is added in Phase 34;
+- no commit/apply/generate-save button is added in Phase 34;
+- no API caller for `templates/commit.php` is added in Phase 34;
+- Template Preview UI remains preview-only and Create/Edit/Delete behavior is
+  unchanged.
