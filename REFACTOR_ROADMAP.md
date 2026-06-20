@@ -413,3 +413,15 @@ Phase 30 template-commit gate notes:
 - current schema has monthly-template ownership fields but no
   `template_batch_id`, so arbitrary preview-batch rollback needs complete audit
   evidence or a future reviewed migration with `up.sql` and `down.sql`.
+
+Phase 31 disposable-DB gate notes:
+
+- no endpoint, UI, schema, Calendar, navigation, or legacy-page behavior is
+  changed;
+- disposable validation now has an explicit preflight for Docker socket,
+  `tracs_db`, MySQL `127.0.0.1:3307`, safe target DB naming, mutation opt-in,
+  source schema availability, and stale target cleanup;
+- local MySQL fallback is documented only for non-production environments;
+- Template Commit API remains blocked unless delete restoration, dependent
+  restoration, template preview integration, and the Phase 30 guard pass in the
+  current environment.

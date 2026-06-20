@@ -358,6 +358,20 @@ Phase 15 validates the route against disposable MySQL using a schema-only
 clone, dedicated fixtures, real session/CSRF state, and guaranteed teardown.
 The request harness is test-only and adds no production authentication bypass.
 
+Phase 31 adds a disposable DB preflight before any bulk Template Commit API:
+
+```bash
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 \
+TRACS_TEST_DB_NAME=tracs_phase31_test \
+php tests/disposable-db-preflight.php
+```
+
+The preflight verifies Docker/MySQL reachability, source schema availability,
+safe target naming, mutation opt-in, and stale disposable cleanup. If Docker is
+not available, a local MySQL fallback is allowed only for non-production
+schemas with the same `TRACS_ENV=test`, `TRACS_ALLOW_MUTATION_TESTS=1`, and
+safe target-name guard.
+
 Automated checks:
 
 ```bash

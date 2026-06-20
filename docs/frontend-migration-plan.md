@@ -331,3 +331,9 @@ Phase 30 implementation gate before any commit or copy endpoint:
 - decide whether current `monthly_template_id` and `generated_assignment_id`
   are sufficient or a future `template_batch_id` migration is required;
 - run disposable database integration before exposing any commit UI.
+
+Phase 31 restores that disposable integration gate. Before any React commit
+review UI or bulk apply control is added, `tests/disposable-db-preflight.php`
+must pass and the delete restoration, dependent restoration, and template
+preview integration drills must run green against a safely marked disposable
+database.

@@ -429,6 +429,66 @@ The child request harness lives outside the web root. It creates session/CSRF
 state and redirects `php://input` only inside its short-lived CLI process. It
 does not add a production authentication bypass.
 
+## Phase 31 Disposable DB Validation Gate
+
+Phase 31 restores the disposable database validation path before any template
+commit work. Run the preflight before mutation drills:
+
+```bash
+TRACS_ENV=test \
+TRACS_ALLOW_MUTATION_TESTS=1 \
+TRACS_TEST_DB_NAME=tracs_phase31_test \
+php tests/disposable-db-preflight.php
+```
+
+The preflight verifies Docker daemon/socket access, the `tracs_db` container,
+MySQL on `127.0.0.1:3307`, source schema availability, safe target DB naming,
+mutation opt-in, and stale disposable cleanup.
+
+Docker path:
+
+```bash
+docker compose up -d db
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 \
+TRACS_TEST_DB_NAME=tracs_phase31_test \
+php tests/disposable-db-preflight.php
+```
+
+Local MySQL fallback path when Docker is unavailable:
+
+1. Start a local MySQL instance that is not production.
+2. Import the TRACS schema into a non-production source database.
+3. Export explicit test variables:
+
+```bash
+export TRACS_ENV=test
+export TRACS_ALLOW_MUTATION_TESTS=1
+export TRACS_TEST_DB_HOST=127.0.0.1
+export TRACS_TEST_DB_PORT=3307
+export TRACS_TEST_DB_USER=root
+export TRACS_TEST_DB_PASS=root_secret
+export TRACS_TEST_SCHEMA_SOURCE=tracs_db
+export TRACS_TEST_DB_NAME=tracs_phase31_test
+```
+
+4. Run the same preflight and drills. Never point these variables at
+   production, and never use a target database name without `test`, `local`,
+   `dev`, `disposable`, or `staging`.
+
+Required recovery validation:
+
+```bash
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 \
+php tests/shift-assignment-delete-restore-drill.php
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 \
+php tests/shift-assignment-dependent-restore-drill.php
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 \
+php tests/shift-assignment-template-preview-integration.php
+```
+
+Template Commit API remains blocked until this gate is green in the current
+environment.
+
 Validated on June 15, 2026:
 
 - authenticated create succeeded;

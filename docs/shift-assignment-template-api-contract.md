@@ -448,6 +448,23 @@ This UI is not evidence that commit is safe. Commit implementation still
 requires a separate API contract, confirmation token/freshness decision,
 rollback evidence, audit design, and disposable database validation.
 
+## Phase 31 Disposable DB Gate
+
+Before `templates/commit.php` is implemented, the disposable DB validation
+environment must pass:
+
+- `php tests/disposable-db-preflight.php` with `TRACS_ENV=test` and
+  `TRACS_ALLOW_MUTATION_TESTS=1`;
+- exact delete restoration drill;
+- dependent restoration drill;
+- non-mutating template preview integration;
+- Phase 30 commit contract gate.
+
+If Docker is unavailable, a local MySQL fallback may be used only with explicit
+non-production connection variables, a safely marked disposable target
+database, and the same cleanup guarantees. Commit remains blocked while this
+gate is red.
+
 ## Implementation Gate
 
 Before any commit or copy endpoint is implemented:

@@ -1090,3 +1090,35 @@ git branch -D refactor/phase-30-shift-template-commit-contract-gate
 
 No database restore is needed. Future commit implementation must define its
 own bulk rollback plan before any assignment rows are written.
+
+## Phase 31 Disposable DB Validation Gate Rollback
+
+Phase 31 adds only a test-only disposable DB preflight and documentation for
+Docker/local MySQL recovery. It adds no endpoint, copy route, React commit UI,
+schema change, Calendar change, navigation change, legacy-page change, or
+production data mutation.
+
+After commit:
+
+```bash
+git revert <phase-31-commit-sha>
+```
+
+To abandon the branch before commit:
+
+```bash
+git switch refactor/phase-30-shift-template-commit-contract-gate
+git branch -D refactor/phase-31-disposable-db-validation-gate
+```
+
+Emergency disposable cleanup:
+
+```sql
+DROP DATABASE IF EXISTS tracs_phase31_test;
+DROP DATABASE IF EXISTS tracs_phase23_test;
+DROP DATABASE IF EXISTS tracs_phase24_test;
+DROP DATABASE IF EXISTS tracs_phase28_test;
+```
+
+This rollback removes the new preflight and docs only. It does not affect real
+TRACS data because the guard refuses production labels and unsafe DB names.
