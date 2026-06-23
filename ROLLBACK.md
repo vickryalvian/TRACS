@@ -1350,3 +1350,25 @@ disposable database:
 ```sql
 DROP DATABASE IF EXISTS tracs_phase42_test;
 ```
+
+## Phase 43 Copy Commit Environment Gate Rollback
+
+Phase 43 adds a test-only Copy Commit environment preflight and documentation
+for disposable DB, browser automation, cleanup, and mutation-safety readiness.
+It adds no copy-commit endpoint, Apply Copy/Commit Copy/Paste Schedule UI,
+rollback UI, copy mutation service/repository, schema change, Calendar change,
+navigation change, or legacy-page replacement.
+
+After commit:
+
+```bash
+git revert <phase-43-commit-sha>
+```
+
+Emergency disposable cleanup:
+
+```sql
+DROP DATABASE IF EXISTS tracs_phase43_test;
+DROP DATABASE IF EXISTS tracs_phase43_apply_test;
+DROP DATABASE IF EXISTS tracs_phase43_copy_test;
+```

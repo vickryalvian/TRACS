@@ -973,3 +973,20 @@ Future Apply Copy UI must require successful non-stale preview, zero conflicts,
 zero blocked items, valid CSRF, allowed server capability, and exact
 `APPLY COPY`. Phase 42 implements none of that UI; it only locks the contract
 and guard test.
+
+### Phase 43 Copy Commit Environment Gate
+
+Phase 43 adds no write API. It validates the disposable environment required
+before a future mutating Copy Commit endpoint is allowed.
+
+The test-only preflight
+`tests/shift-assignment-copy-commit-preflight.php` requires `TRACS_ENV=test`,
+`TRACS_ALLOW_MUTATION_TESTS=1`, disposable-safe DB naming, Docker/MySQL test DB
+availability, Playwright/browser test dependencies, the guarded authenticated
+session harness, rollback cleanup documentation, and the Phase 42 guard proving
+no copy-commit endpoint or Apply Copy UI exists.
+
+`tracs_phase43_test` is created and removed during the preflight. Future Copy
+Commit API implementation may proceed only after this environment gate,
+browser regressions, disposable cleanup checks, and existing copy-preview and
+Apply Template regressions pass.

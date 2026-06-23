@@ -1312,6 +1312,49 @@ The guard verifies:
 
 The documented future contract requires exact `APPLY COPY`, server-side preview recomputation, final conflict re-check, atomic all-or-nothing batch behavior, audit-created assignment IDs, and rollback targeting that removes only returned `created_assignment_ids`.
 
+## Phase 43 Copy Commit Environment Gate
+
+Phase 43 proves the disposable validation environment is ready before any
+future Copy Commit mutation endpoint can be implemented. It adds
+`tests/shift-assignment-copy-commit-preflight.php` and keeps copy commit
+absent.
+
+Run:
+
+```bash
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 TRACS_TEST_DB_NAME=tracs_phase43_test php tests/disposable-db-preflight.php
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 TRACS_TEST_DB_NAME=tracs_phase43_test php tests/shift-assignment-copy-commit-preflight.php
+```
+
+The preflight fails closed unless:
+
+- `TRACS_ENV=test`;
+- `TRACS_ALLOW_MUTATION_TESTS=1`;
+- the target database name contains `test`, `local`, `dev`, `disposable`, or
+  `staging`;
+- the target database is not `tracs_db` or production-named;
+- Docker, the `tracs_db` MySQL container, MySQL on `127.0.0.1:3307`, and the
+  source schema are available;
+- Playwright and the authenticated browser scripts are installed;
+- the test-only authenticated session harness remains guarded by test env,
+  mutation opt-in, and disposable DB naming;
+- rollback cleanup documentation exists;
+- the Phase 42 guard still proves no copy-commit endpoint, Apply Copy UI,
+  Paste Schedule UI, rollback UI, or copy mutation caller exists.
+
+The preflight creates and removes `tracs_phase43_test` to prove disposable DB
+creation and cleanup. Confirm cleanup with:
+
+```sql
+SELECT COUNT(*) AS tracs_phase43_test_count
+FROM information_schema.SCHEMATA
+WHERE SCHEMA_NAME = 'tracs_phase43_test';
+```
+
+Copy Commit API work may begin only after the contract gate, disposable DB
+gate, browser gate, cleanup gate, and existing copy-preview/apply-template
+regressions all pass.
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:

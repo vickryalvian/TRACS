@@ -598,3 +598,19 @@ Phase 42 Copy Commit Contract Gate notes:
   rollback UI, copy mutation caller, copy mutation service/repository, schema
   changes, Calendar changes, navigation changes, and legacy-page changes remain
   absent.
+
+Phase 43 Copy Commit Environment Gate notes:
+
+- adds `tests/shift-assignment-copy-commit-preflight.php` as a test-only
+  readiness gate before any Copy Commit mutation phase;
+- requires `TRACS_ENV=test`, `TRACS_ALLOW_MUTATION_TESTS=1`, disposable-safe DB
+  naming, Docker/MySQL availability, Playwright availability, guarded
+  authenticated browser scripts, and documented rollback cleanup;
+- proves `tracs_phase43_test` can be created and removed without leaving a
+  disposable database behind;
+- re-runs the Phase 42 contract guard from the environment preflight so
+  copy-commit route, Apply Copy/Paste Schedule UI, rollback UI, and copy
+  mutation callers remain absent;
+- Copy Commit API implementation may proceed only after this environment gate,
+  browser regressions, cleanup verification, and existing copy-preview/apply
+  validations remain green.

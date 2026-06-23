@@ -1059,3 +1059,34 @@ Non-goals for Phase 42:
 - no hidden feature flag that activates copy commit;
 - no schema change;
 - no Calendar, legacy Shift Assignment, or production navigation change.
+
+## Phase 43 Copy Commit Environment Gate
+
+Phase 43 does not change the Copy Commit API contract and does not implement
+the endpoint. It validates that the environment is ready for a later mutating
+Copy Commit phase.
+
+The required preflight command is:
+
+```bash
+TRACS_ENV=test TRACS_ALLOW_MUTATION_TESTS=1 TRACS_TEST_DB_NAME=tracs_phase43_test php tests/shift-assignment-copy-commit-preflight.php
+```
+
+The preflight requires:
+
+- exact `TRACS_ENV=test`;
+- `TRACS_ALLOW_MUTATION_TESTS=1`;
+- disposable-safe DB naming;
+- a non-production source/target DB configuration;
+- reachable Docker/MySQL test database infrastructure;
+- Playwright and authenticated browser validation scripts;
+- the guarded test-only auth session harness;
+- rollback cleanup documentation;
+- the Phase 42 copy-commit absence guard.
+
+The preflight creates and drops `tracs_phase43_test` to prove cleanup. Future
+Copy Commit implementation remains blocked unless this environment gate,
+browser validation, and cleanup checks pass. The future endpoint still must
+require exact `APPLY COPY`, server-side preview recomputation, final conflict
+re-check, atomic all-or-nothing inserts, audit-created assignment IDs, and
+rollback targeting.

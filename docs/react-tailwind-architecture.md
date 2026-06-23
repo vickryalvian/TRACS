@@ -583,3 +583,14 @@ rollback controls, copy-commit API callers, optimistic copied rows, global
 styles, navigation exposure, Calendar changes, and legacy-page changes. Any
 future UI must require successful non-stale preview, zero conflicts, zero
 blocked items, exact `APPLY COPY`, and backend-created rollback evidence.
+
+## Phase 43 Copy Commit Environment Gate
+
+Phase 43 adds no React UI and does not alter the isolated Shift Assignment
+bundle. The new preflight verifies that the existing Playwright browser
+validation path, test-only authenticated session harness, disposable database
+guards, and cleanup documentation are ready before any future Apply Copy UI or
+copy-commit caller is considered. Apply Copy, Commit Copy, Paste Schedule,
+rollback controls, copy-commit API callers, optimistic copied rows, global
+styles, navigation exposure, Calendar changes, and legacy-page changes remain
+absent.

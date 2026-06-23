@@ -440,6 +440,18 @@ Phase 42 copy-commit contract gate:
       schema changes, Calendar changes, legacy-page changes, and production
       navigation changes remain absent.
 
+Phase 43 copy-commit environment gate:
+
+- [x] Disposable DB readiness is guarded by `TRACS_ENV=test`,
+      `TRACS_ALLOW_MUTATION_TESTS=1`, and disposable-safe DB names.
+- [x] `tracs_phase43_test` creation/removal is validated by preflight.
+- [x] Playwright/Chrome browser validation dependencies and the guarded
+      authenticated test session harness are checked.
+- [x] Cleanup and rollback instructions are documented.
+- [x] The copy-commit endpoint, Apply Copy UI, Paste Schedule UI, rollback UI,
+      schema changes, Calendar changes, legacy-page changes, and production
+      navigation changes remain absent.
+
 ## Phase 17 Completed Browser Matrix
 
 | Check | Disposable browser result |
