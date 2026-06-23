@@ -427,6 +427,19 @@ Phase 41 copy-preview hardening:
       rollback UI, schema change, Calendar change, legacy-page change, or
       production navigation change is introduced.
 
+Phase 42 copy-commit contract gate:
+
+- [x] Future exact `APPLY COPY` confirmation is documented.
+- [x] Future preview-to-commit server-side recomputation is documented.
+- [x] Future final conflict re-check with `409` and no partial batch is
+      documented.
+- [x] Future rollback targeting by `created_assignment_ids` is documented.
+- [x] Current schema limitation, no `template_batch_id` or `copy_batch_id`, is
+      documented.
+- [x] Copy-commit endpoint, Apply Copy UI, Paste Schedule UI, rollback UI,
+      schema changes, Calendar changes, legacy-page changes, and production
+      navigation changes remain absent.
+
 ## Phase 17 Completed Browser Matrix
 
 | Check | Disposable browser result |

@@ -429,3 +429,11 @@ preview rendering, conflict rendering, and no-mutation count checks. Apply
 Template e2e remains passing. No Apply Copy, Commit Copy, Paste Schedule,
 rollback UI, schema change, Calendar change, legacy-page replacement, or
 production navigation exposure is added.
+
+Phase 42 Copy Commit Contract Gate is contract-only. It documents a future
+multi-step Apply Copy flow but adds no active UI. Future Apply Copy must be
+available only after a successful non-stale copy preview with zero conflicts
+and zero blocked items, must require exact `APPLY COPY`, must send CSRF, and
+must display created-count and rollback-targeting evidence after backend
+success. Future backend commit must use server-side preview recomputation,
+re-check conflicts immediately before writing, use an atomic all-or-nothing batch, audit created assignment IDs, and return rollback targeting data. No copy-commit endpoint, copy mutation caller, Paste Schedule UI, rollback UI, schema change, Calendar change, legacy-page replacement, or production navigation exposure is added in Phase 42.

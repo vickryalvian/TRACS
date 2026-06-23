@@ -582,3 +582,19 @@ Phase 41 Copy Schedule Preview UI hardening notes:
 - copy-commit endpoint, Apply Copy/Commit Copy/Paste Schedule UI, rollback UI,
   schema changes, Calendar changes, navigation changes, and legacy-page changes
   remain absent.
+
+Phase 42 Copy Commit Contract Gate notes:
+
+- defines future exact `APPLY COPY` confirmation only;
+- requires future server-side preview recomputation and rejection of client
+  preview counts, preview IDs, and transformed rows;
+- requires final conflict/blocked-item/assignment-validation re-check before
+  any insert;
+- requires atomic all-or-nothing batch behavior;
+- documents current schema limitation: no `template_batch_id` or
+  `copy_batch_id`;
+- requires future audit with created assignment IDs and rollback targeting;
+- adds a guard test proving copy-commit route, Apply Copy/Paste Schedule UI,
+  rollback UI, copy mutation caller, copy mutation service/repository, schema
+  changes, Calendar changes, navigation changes, and legacy-page changes remain
+  absent.

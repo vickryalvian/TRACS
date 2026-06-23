@@ -574,3 +574,12 @@ date help/error wiring, inline alert/status messages, disabled loading state,
 and stale-result messaging after edits. The layout remains within the prefixed
 TRACS utility surface and still renders no Apply Copy, Commit Copy, Paste
 Schedule, rollback UI, or global styles.
+
+## Phase 42 Copy Commit UI Gate
+
+Phase 42 adds no React UI. It only documents the future Apply Copy flow and
+keeps the isolated bundle free of Apply Copy, Commit Copy, Paste Schedule,
+rollback controls, copy-commit API callers, optimistic copied rows, global
+styles, navigation exposure, Calendar changes, and legacy-page changes. Any
+future UI must require successful non-stale preview, zero conflicts, zero
+blocked items, exact `APPLY COPY`, and backend-created rollback evidence.

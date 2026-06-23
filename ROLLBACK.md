@@ -1329,3 +1329,24 @@ Emergency disposable cleanup:
 ```sql
 DROP DATABASE IF EXISTS tracs_phase41_test;
 ```
+
+## Phase 42 Copy Commit Contract Gate Rollback
+
+Phase 42 adds Copy Schedule Commit contract documentation and a non-mutating
+guard test only. It adds no copy-commit endpoint, Apply Copy/Commit Copy/Paste
+Schedule UI, rollback UI, copy mutation service/repository, schema change,
+Calendar change, navigation change, or legacy-page replacement.
+
+After commit:
+
+```bash
+git revert <phase-42-commit-sha>
+```
+
+No disposable database should be required by Phase 42 itself beyond regression
+commands. If a disposable regression database is created, clean only the
+disposable database:
+
+```sql
+DROP DATABASE IF EXISTS tracs_phase42_test;
+```

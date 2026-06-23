@@ -1290,6 +1290,28 @@ rollback UI.
 Phase 42 copy-commit contract work may proceed only after this hardening gate
 passes and must remain contract-only unless separately approved.
 
+## Phase 42 Copy Commit Contract Gate
+
+Phase 42 is documentation and non-mutating guard coverage only. It defines the
+future `POST /api/v1/shift-assignment/templates/copy-commit.php` contract and
+adds no endpoint or Apply Copy UI.
+
+Run:
+
+```bash
+php tests/shift-assignment-copy-commit-contract-gate.php
+```
+
+The guard verifies:
+
+- `api/v1/shift-assignment/templates/copy-commit.php` does not exist;
+- `public/api/v1/shift-assignment/templates/copy-commit.php` does not exist;
+- React contains no Apply Copy, Commit Copy, Paste Schedule, or rollback UI;
+- React API client contains no copy-commit caller;
+- no copy mutation service/repository exists.
+
+The documented future contract requires exact `APPLY COPY`, server-side preview recomputation, final conflict re-check, atomic all-or-nothing batch behavior, audit-created assignment IDs, and rollback targeting that removes only returned `created_assignment_ids`.
+
 ## Future Automated Test Tools
 
 These tools are recommended but are not installed by this phase:

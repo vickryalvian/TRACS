@@ -935,3 +935,41 @@ and no `copy-commit.php` request.
 Copy-commit remains blocked until a separate contract phase defines exact
 `APPLY COPY`, final server-side revalidation, rollback targeting, audit
 coverage, disposable DB proof, and authenticated browser evidence.
+
+### Phase 42 Copy Commit Contract Gate
+
+Phase 42 defines the future mutating Copy Schedule Commit contract without
+creating `templates/copy-commit.php`, Apply Copy UI, Paste Schedule UI,
+rollback UI, mutation services, repositories, schema changes, Calendar changes,
+legacy-page changes, or production navigation changes.
+
+Future Copy Commit must require exact `APPLY COPY`. The comparison is case
+sensitive and whitespace sensitive. `apply copy`, `Apply Copy`, leading or
+trailing spaces, double spaces, `APPLY-COPY`, and `CONFIRM` must all be
+rejected.
+
+Future commit must use server-side preview recomputation or revalidation and must never
+trust browser preview results, preview IDs, or preview counts. It must verify
+source range, target range, scope filters, `conflict_policy=block`, actor
+permission state, eligible source assignments, and target conflicts before any
+insert.
+
+Immediately before writing, future commit must rerun conflict detection,
+blocked-item detection, and assignment validation. Any conflict returns `409`
+with no assignment writes and no partial batch.
+
+Batch behavior must be atomic all-or-nothing. Because the current schema
+has no `template_batch_id` or `copy_batch_id`, rollback targeting must use the
+`created_assignment_ids` returned by the commit response and written to audit.
+Disposable tests must prove rollback removes only those IDs and leaves
+unrelated assignments untouched before Apply Copy UI can activate.
+
+Audit must include request id, actor id, source range, target range, scope,
+generated count, created assignment IDs, rollback targeting data, timestamp,
+and success/failure without sensitive data. If audit cannot be written, commit
+must fail closed before creating assignments.
+
+Future Apply Copy UI must require successful non-stale preview, zero conflicts,
+zero blocked items, valid CSRF, allowed server capability, and exact
+`APPLY COPY`. Phase 42 implements none of that UI; it only locks the contract
+and guard test.

@@ -937,3 +937,125 @@ Phase 41 keeps the copy workflow preview-only and hardens the React modal:
 Phase 41 adds no copy-commit endpoint, no copy mutation UI, no rollback UI, no
 schema change, no Calendar change, no legacy page replacement, and no
 production navigation exposure.
+
+## Phase 42 Copy Commit Contract Gate
+
+Phase 42 is documentation and safety gating only. It defines future Copy
+Schedule Commit behavior and intentionally adds no endpoint, service,
+repository, schema change, Apply Copy UI, Paste Schedule UI, rollback UI, or
+production navigation exposure.
+
+Future route, not implemented in Phase 42:
+
+```text
+POST /api/v1/shift-assignment/templates/copy-commit.php
+```
+
+### Commit Confirmation
+
+Future Copy Commit must require the exact confirmation phrase:
+
+```text
+APPLY COPY
+```
+
+The phrase is case sensitive and whitespace sensitive. It must use exact match
+only: no fuzzy match, no localization variant, and no alternate phrase.
+
+Valid:
+
+- `APPLY COPY`
+
+Invalid examples:
+
+- `apply copy`
+- `Apply Copy`
+- ` APPLY COPY`
+- `APPLY COPY `
+- `APPLY  COPY`
+- `APPLY-COPY`
+- `CONFIRM`
+
+### Preview-To-Commit Integrity
+
+Future Copy Commit must never trust browser preview results, never trust preview counts, never trust preview IDs, and never trust client-provided transformed assignment rows. It must recompute or revalidate the copy preview server-side from the submitted source range, target range, scope filters, conflict policy, and current permission state before any insert occurs.
+
+Commit must re-check:
+
+- source range;
+- target range;
+- source/target length match;
+- scope filters;
+- conflict policy;
+- authenticated actor and permission state;
+- source assignments still exist and remain eligible;
+- target assignments still do not conflict.
+
+Only `conflict_policy=block` is allowed until a later approved phase defines a
+safer policy.
+
+### Final Conflict Re-Check
+
+Immediately before writing, future Copy Commit must rerun conflict detection,
+blocked-item detection, and assignment validation. If conflicts or blocked
+items exist, the endpoint must return `409`, create no assignments, write no
+partial batch, and fail closed.
+
+### Copy Batch Behavior And Schema Limitation
+
+Future Copy Commit must be atomic and all-or-nothing. It must run inside a
+transaction and roll back the entire batch on any validation, audit, or insert
+failure. Partial copy batches are not allowed.
+
+Current schema limitation: there is no `template_batch_id` or `copy_batch_id`.
+Until a reviewed migration exists, rollback targeting must rely on
+`created_assignment_ids` returned by the commit response and stored in audit.
+This is acceptable only if disposable tests prove rollback deletes exactly
+those IDs and leaves unrelated/baseline assignments untouched.
+
+### Audit And Rollback Requirements
+
+Future Copy Commit audit must include:
+
+- request id;
+- actor user id;
+- action such as `shift_assignment.copy.commit`;
+- source range;
+- target range;
+- scope filters;
+- generated count;
+- created assignment IDs;
+- rollback targeting data;
+- timestamp;
+- success/failure and conflicts where applicable.
+
+Audit must not include sensitive values, credentials, raw SQL, server paths, or
+unredacted internal logs. If commit audit cannot be written, commit must fail
+closed before creating assignments.
+
+Rollback must target only the `created_assignment_ids` returned by commit and
+recorded in audit. It must never affect unrelated assignments, baseline
+records, existing real schedules, or source assignments. Rollback targeting
+must be disposable-test verified before Apply Copy UI activation.
+
+### Security And Future UI Requirements
+
+Future Copy Commit must enforce authenticated session, CSRF, exact
+`super_admin` during the pilot, `shifts.manage`, and future
+`shifts.template.copy_commit` if a reviewed permission migration seeds it.
+Backend validation remains authoritative.
+
+Future Apply Copy UI must require a successful copy preview, zero conflicts,
+zero blocked items, a non-stale preview, valid CSRF, allowed server-issued
+capability, and exact `APPLY COPY`. It must display rollback reference after
+success, but Phase 42 adds no rollback UI.
+
+Non-goals for Phase 42:
+
+- no copy-commit endpoint;
+- no Apply Copy, Commit Copy, or Paste Schedule UI;
+- no rollback UI;
+- no copy mutation service or repository;
+- no hidden feature flag that activates copy commit;
+- no schema change;
+- no Calendar, legacy Shift Assignment, or production navigation change.
