@@ -6358,6 +6358,33 @@ input, select, textarea { font-family: inherit }
   flex-direction: column;
 }
 
+.shift-handover-panel > .panel-head {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.shift-handover-panel > .panel-head .panel-title {
+  flex: 1 1 150px;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.shift-handover-panel > .panel-head .panel-right {
+  flex: 1 1 100%;
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.shift-handover-panel > .panel-head .panel-meta {
+  flex: 1 1 160px;
+  min-width: 0;
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .shift-handover-empty {
   flex: 1 1 auto;
   min-height: 120px;
@@ -6419,7 +6446,7 @@ input, select, textarea { font-family: inherit }
 .tmgr-type.normal   { background:var(--s3);color:var(--tx3);border:1px solid var(--bd2) }
 
 /* ── Login ── */
-.login-shell { min-height:100vh;overflow:auto;display:flex;align-items:center;justify-content:center;background:var(--bg);position:relative; padding: 24px 16px;}
+.login-shell { min-height:100vh;overflow:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);position:relative; padding: 24px 16px;}
 .login-grid  { position:absolute;inset:0;background-image:linear-gradient(var(--bd1) 1px,transparent 1px),linear-gradient(90deg,var(--bd1) 1px,transparent 1px);background-size:40px 40px;opacity:.35;mask-image:radial-gradient(ellipse at center,black 20%,transparent 72%) }
 .login-card  { position:relative;z-index:1;width:440px;max-width: 92vw; background:var(--s1);border:0;border-radius:var(--r4);overflow:hidden }
 .login-accent { height:2px;background:linear-gradient(90deg,var(--blue),var(--purple)) }
@@ -6492,6 +6519,22 @@ input, select, textarea { font-family: inherit }
 .login-captcha { border:1px solid var(--bd2);background:var(--s2);border-radius:var(--r);padding:12px;display:flex;flex-direction:column;gap:9px }
 .login-captcha-title { font-size:11px;font-weight:700;color:var(--tx2);font-family:var(--mono);text-transform:uppercase;letter-spacing:.04em }
 .login-captcha .cf-turnstile { max-width:100%;overflow:hidden }
+.login-shell > .toast-dock--login {
+  position: relative;
+  top: auto;
+  right: auto;
+  left: auto;
+  z-index: 2;
+  width: min(440px, 92vw);
+  max-height: min(35vh, 240px);
+  margin: 0 0 12px;
+  overflow: visible;
+  transform: none;
+}
+.login-shell > .toast-dock--login .toast {
+  min-width: 0;
+  max-width: 100%;
+}
 .user-menu-logout { margin:0 }
 .user-menu-logout button {
   appearance:none;

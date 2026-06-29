@@ -386,6 +386,29 @@ function tracs_two_factor_user_configured(array $user): bool {
         && !empty($user['two_factor_confirmed_at']);
 }
 
+function tracs_two_factor_bypass_allowed(array $user, string $identifier): bool {
+    $raw = trim((string)tracs_auth_env('TRACS_2FA_BYPASS_IDENTIFIERS', ''));
+    if ($raw === '') {
+        return false;
+    }
+
+    $allowed = array_filter(array_map(
+        'tracs_auth_normalize_identifier',
+        preg_split('/[\s,;]+/', $raw) ?: []
+    ));
+    if (!$allowed) {
+        return false;
+    }
+
+    $candidates = array_filter(array_map('tracs_auth_normalize_identifier', [
+        $identifier,
+        (string)($user['email'] ?? ''),
+        (string)($user['username'] ?? ''),
+    ]));
+
+    return (bool)array_intersect($allowed, $candidates);
+}
+
 function tracs_two_factor_base32_encode(string $bytes): string {
     $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
     $bits = '';
@@ -717,7 +740,14 @@ function tracs_two_factor_locked(array $user): bool {
     return $lockedUntil !== '' && strtotime($lockedUntil) > time();
 }
 
-function tracs_auth_complete_full_login(mysqli $conn, array $user, string $identifier = '', ?string $landing = null): void {
+function tracs_auth_complete_full_login(
+    mysqli $conn,
+    array $user,
+    string $identifier = '',
+    ?string $landing = null,
+    string $loginReason = 'two_factor_completed',
+    bool $logTwoFactorVerified = true
+): void {
     tracs_start_session();
     $userId = (int)$user['id'];
     $landing = tracs_auth_allowed_landing($landing ?? tracs_auth_pending_landing());
@@ -749,8 +779,8 @@ function tracs_auth_complete_full_login(mysqli $conn, array $user, string $ident
     }
 
     tracs_two_factor_reset_attempts($conn, $userId);
-    tracs_auth_log_event($conn, 'two_factor_verified', 'success', $identifier, $userId);
-    tracs_auth_log_event($conn, 'login_success', 'success', $identifier, $userId, 'two_factor_completed');
+    tracs_auth_log_event($conn, $logTwoFactorVerified ? 'two_factor_verified' : 'two_factor_bypassed', 'success', $identifier, $userId);
+    tracs_auth_log_event($conn, 'login_success', 'success', $identifier, $userId, $loginReason);
     header('Location: /' . $landing);
     exit;
 }

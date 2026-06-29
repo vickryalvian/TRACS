@@ -114,6 +114,7 @@ let _lastToast=null;
 const tracsToastDocks=new Map();
 const tracsModalToastDocks=new WeakMap();
 const tracsInlineToastDocks=new WeakMap();
+let tracsLoginToastDockNode=null;
 const tracsToastDefaults={success:3500,info:4000,warning:7000,error:9000};
 const tracsModalOverlaySelector='.modal-overlay, .dpc-modal, .infra-modal, .cf-modal, .tracs-dialog-overlay';
 function tracsNoticeType(type){
@@ -255,6 +256,22 @@ function tracsToastDock(context='page',position='',modal=null,sourceElement=null
   tracsToastDocks.set(key,dock);
   return dock;
 }
+function tracsLoginToastDock(position='login-top'){
+  const card=document.querySelector('.login-card');
+  if(!card)return null;
+  const shell=card.closest('.login-shell') || card.parentElement || document.body;
+  if(!tracsLoginToastDockNode || !tracsLoginToastDockNode.isConnected){
+    tracsLoginToastDockNode=document.createElement('div');
+    tracsLoginToastDockNode.className=`toast-dock toast-dock--login toast-dock--${position}`;
+    tracsLoginToastDockNode.dataset.toastContext='login';
+    shell.insertBefore(tracsLoginToastDockNode,card);
+  }
+  const oldPosition=tracsLoginToastDockNode.dataset.toastPosition;
+  if(oldPosition && oldPosition!==position)tracsLoginToastDockNode.classList.remove(`toast-dock--${oldPosition}`);
+  tracsLoginToastDockNode.classList.add(`toast-dock--${position}`);
+  tracsLoginToastDockNode.dataset.toastPosition=position;
+  return tracsLoginToastDockNode;
+}
 window.addEventListener('resize',()=>{
   document.querySelectorAll('.toast-dock--modal-center, .toast-dock--modal-top-right').forEach(dock=>tracsPositionModalToastDock(dock,dock.parentElement));
 });
@@ -281,7 +298,9 @@ function showToast(...args){
   const context=tracsToastContext({...options,sourceElement});
   const position=options.position || (context === 'modal' ? 'modal-center' : '');
   const modal=options.modal || options.contextElement || (context === 'modal' ? tracsSourceModal(sourceElement) : null);
-  const dock=tracsToastDock(context,position,modal,sourceElement,options.maxWidth);
+  const dock=(context === 'page' && document.querySelector('.login-card') && options.loginGlobal !== true)
+    ? tracsLoginToastDock(position || 'login-top')
+    : tracsToastDock(context,position,modal,sourceElement,options.maxWidth);
   const title=parsed.title;
   const message=parsed.message;
   let toastTitle=String(title || '').trim();
@@ -4529,17 +4548,6 @@ document.addEventListener('DOMContentLoaded', () => {
   bindSidebarMenus();
   bindSidebarTooltips();
   initShiftReportReminders();
-
-  const loginError=document.querySelector('.login-card .err-box');
-  if(loginError?.textContent.trim()){
-    showToast(loginError.textContent.trim(),'error',{
-      context:'page',
-      position:'top-right',
-      persistent:true,
-      closable:true,
-      priority:'critical'
-    });
-  }
 
   /* ── Currency Converter ───────────────────── */
 
