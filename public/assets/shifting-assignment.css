@@ -223,7 +223,7 @@
   border: 1px solid var(--bd1);
   border-radius: 7px;
   font-size: 11px;
-  font-weight: 650;
+  font-weight: 600;
   color: var(--tx2);
   cursor: pointer;
   user-select: none;
@@ -325,7 +325,7 @@
   color: var(--tx2);
   font: inherit;
   font-size: 11px;
-  font-weight: 650;
+  font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
   transition: background .13s ease, border-color .13s ease, color .13s ease;
@@ -522,7 +522,7 @@
 
 .shift-timeline-day.is-empty-compact strong {
   color: var(--tx2);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 /* Day header */
@@ -605,7 +605,7 @@
 .shift-agent-cell strong {
   display: block;
   font-size: 10px;
-  font-weight: 650;
+  font-weight: 600;
   max-width: 108px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -974,7 +974,7 @@
   background: color-mix(in srgb, var(--blue) 9%, var(--s1));
   border-color: color-mix(in srgb, var(--blue) 45%, var(--bd1));
   color: var(--blue);
-  font-weight: 750;
+  font-weight: 700;
 }
 
 /* Recap table min-widths to avoid column compression */
@@ -988,7 +988,7 @@
 .shift-assignment-agent strong {
   display: block;
   font-size: 11px;
-  font-weight: 650;
+  font-weight: 600;
   color: var(--tx1);
   line-height: 1.3;
 }
@@ -1097,7 +1097,7 @@
   border-radius: 7px;
   font: inherit;
   font-size: 10px;
-  font-weight: 650;
+  font-weight: 600;
   color: var(--tx2);
   cursor: pointer;
   white-space: nowrap;
@@ -1177,7 +1177,7 @@
 .shift-assignment-agent strong {
   display: block;
   font-size: 11px;
-  font-weight: 650;
+  font-weight: 600;
   color: var(--tx1);
   line-height: 1.3;
   max-width: 148px;
@@ -1339,14 +1339,14 @@
   background: var(--s1);
   color: var(--tx2);
   font-size: 9px;
-  font-weight: 750;
+  font-weight: 700;
   line-height: 1;
 }
 
 .shift-warning-group-head strong {
   display: block;
   font-size: 11.5px;
-  font-weight: 750;
+  font-weight: 700;
   color: var(--tx1);
   line-height: 1.3;
 }
@@ -1782,7 +1782,7 @@
 /* — Shift Health card — */
 #shiftHealthScore {
   font-size: 17px;
-  font-weight: 750;
+  font-weight: 700;
   font-family: var(--mono);
   color: var(--tx1);
   line-height: 1.2;
@@ -1887,7 +1887,7 @@
   background: color-mix(in srgb, var(--red) 12%, transparent);
   color: var(--red);
   font-size: 8px;
-  font-weight: 750;
+  font-weight: 700;
   padding: 2px 7px;
   border-radius: 4px;
   line-height: 1.4;
@@ -1900,7 +1900,7 @@
   background: color-mix(in srgb, var(--green) 12%, transparent);
   color: var(--green);
   font-size: 8px;
-  font-weight: 750;
+  font-weight: 700;
   padding: 2px 7px;
   border-radius: 4px;
   line-height: 1.4;
@@ -2475,7 +2475,7 @@
 .shift-duration-preview small {
   color: var(--amber);
   font-size: 9px;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .shift-form-alert {

@@ -287,7 +287,7 @@
   color: var(--tx2);
   font-family: inherit;
   font-size: 11px;
-  font-weight: 650;
+  font-weight: 600;
   letter-spacing: 0;
   text-transform: none;
   cursor: pointer;
@@ -405,7 +405,7 @@
 .tracs-domain-price-crosscheck .empty.panel .empty-t {
   font-size: 14px;
   color: var(--tx1);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .tracs-domain-price-crosscheck .empty.panel .empty-s {
@@ -446,7 +446,7 @@
   color: var(--tx2);
   background: var(--s2);
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
   text-decoration: none;
   transition: color var(--dur), border-color var(--dur), background var(--dur), box-shadow var(--dur), transform var(--dur);
 }
@@ -856,7 +856,7 @@
   padding: 7px 9px;
   color: var(--tx1);
   font-size: 11.5px;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .tracs-domain-price-crosscheck .dpc-bucket-list summary span {
@@ -1375,7 +1375,7 @@
   background: var(--s1);
   color: var(--tx2);
   font-size: 11px;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .dpc-extension-chips span,
@@ -1390,7 +1390,7 @@
   background: var(--s1);
   color: var(--tx2);
   font-size: 11px;
-  font-weight: 650;
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2679,7 +2679,7 @@
   color: var(--tx2);
   background: var(--s2);
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
@@ -3209,7 +3209,7 @@
   background: var(--s1);
   color: var(--tx3);
   font-size: 9px;
-  font-weight: 750;
+  font-weight: 700;
   letter-spacing: 0;
   text-transform: none;
 }
@@ -3235,7 +3235,7 @@
   color: var(--tx3);
   font-family: var(--mono);
   font-size: 10px;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.25;
   white-space: nowrap;
 }
@@ -3288,7 +3288,7 @@
 }
 
 .tracs-domain-price-crosscheck .dpc-decision strong {
-  font-weight: 750;
+  font-weight: 700;
 }
 
 .tracs-domain-price-crosscheck .dpc-source-table {
@@ -3668,7 +3668,7 @@
   background: var(--s1);
   color: var(--tx2);
   font-size: 10.5px;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .tracs-domain-price-crosscheck .dpc-notes-list {
@@ -3801,7 +3801,7 @@
 .tracs-domain-price-crosscheck .dpc-priority-example small {
   color: var(--tx3);
   font-size: 9px;
-  font-weight: 750;
+  font-weight: 700;
   text-transform: uppercase;
 }
 
