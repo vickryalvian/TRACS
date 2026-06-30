@@ -20,7 +20,7 @@ $TC = new AlertTickerController($conn, $uid);
 $ticker_items = $TC->formatAlertsForTicker();
 $case_can_manage = tracs_user_can($conn, 'cases.manage');
 $case_role = (string)($_SESSION['user_role_slug'] ?? '');
-$case_can_delete = in_array($case_role, ['super_admin', 'admin'], true) || tracs_user_can($conn, 'cases.delete');
+$case_can_delete = tracs_user_can_delete_cases($conn, $uid);
 
 $all = array_map([$CC, 'formatCase'], $CC->getCases() ?: []);
 $total = count($all);

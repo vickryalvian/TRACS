@@ -62,6 +62,33 @@ function tracs_require_page_permission(mysqli $conn, string $permission): void {
     tracs_require_any_page_permission($conn, [$permission]);
 }
 
+/**
+ * True for supervisor-tier roles and above (supervisor, admin, super_admin),
+ * hard-coded by role slug rather than an editable permission flag, so a
+ * misconfigured role-permission grant cannot widen access for agents/interns.
+ */
+function tracs_is_supervisor_or_above(mysqli $conn, ?int $userId = null): bool {
+    $uid = $userId ?? (int)($_SESSION['user_id'] ?? 0);
+    if ($uid <= 0) {
+        return false;
+    }
+    $user = tracs_get_user_by_id($conn, $uid);
+    if (!$user || !tracs_user_can_login($user)) {
+        return false;
+    }
+    $role = (string)($user['role_slug'] ?? '');
+    return in_array($role, ['super_admin', 'admin', 'supervisor'], true);
+}
+
+/**
+ * Case deletion is restricted to supervisor-tier roles and above, hard-coded
+ * by role slug rather than the editable cases.delete permission flag, so a
+ * misconfigured role-permission grant cannot let an agent/intern delete cases.
+ */
+function tracs_user_can_delete_cases(mysqli $conn, ?int $userId = null): bool {
+    return tracs_is_supervisor_or_above($conn, $userId);
+}
+
 function tracs_require_super_admin_page(mysqli $conn): array {
     $user = tracs_get_user_by_id($conn, (int)($_SESSION['user_id'] ?? 0));
     if ($user && tracs_user_can_login($user) && (string)($user['role_slug'] ?? '') === 'super_admin') {

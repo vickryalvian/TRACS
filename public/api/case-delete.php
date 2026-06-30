@@ -1,6 +1,6 @@
 <?php require '_bootstrap.php';
 require_once __DIR__ . '/case-attachment-lib.php';
-$canDeleteCase = in_array((string)($authUser['role_slug'] ?? ''), ['super_admin','admin'], true) || tracs_user_can($conn, 'cases.delete', $uid);
+$canDeleteCase = tracs_user_can_delete_cases($conn, $uid);
 if (!$canDeleteCase) {
     fail('Forbidden', 403);
 }

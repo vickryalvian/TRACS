@@ -30,7 +30,7 @@ $uid        = (int)($_SESSION['user_id']??0);
 $user_email = $_SESSION['user_email']??'operator@tracs.local';
 $case_can_manage = tracs_user_can($conn, 'cases.manage');
 $case_role = (string)($_SESSION['user_role_slug'] ?? '');
-$case_can_delete = in_array($case_role, ['super_admin','admin'], true) || tracs_user_can($conn, 'cases.delete');
+$case_can_delete = tracs_user_can_delete_cases($conn, $uid);
 tracs_ensure_creator_columns($conn, 'tracs_cases', 'user_id');
 tracs_ensure_creator_columns($conn, 'tracs_reminders', 'user_id');
 tracs_ensure_creator_columns($conn, 'tracs_side_tasks', 'user_id');

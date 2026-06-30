@@ -39,5 +39,5 @@ if ($stmt) {
 }
 $row['activity'] = $activity;
 $row['can_manage'] = tracs_user_can($conn, 'cases.manage', $uid);
-$row['can_delete'] = in_array((string)($authUser['role_slug'] ?? ''), ['super_admin','admin'], true) || tracs_user_can($conn, 'cases.delete', $uid);
+$row['can_delete'] = tracs_user_can_delete_cases($conn, $uid);
 ok($row);

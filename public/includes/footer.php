@@ -7,7 +7,7 @@ $_tracs_footer_build = tracs_build_public_payload();
 $_tracs_can_view_build_info = isset($conn) && $conn instanceof mysqli && function_exists('tracs_user_can') && tracs_user_can($conn, 'settings.manage');
 $_tracs_case_can_manage = isset($conn) && $conn instanceof mysqli && function_exists('tracs_user_can') && tracs_user_can($conn, 'cases.manage');
 $_tracs_case_role = (string)($_SESSION['user_role_slug'] ?? '');
-$_tracs_case_can_delete = in_array($_tracs_case_role, ['super_admin', 'admin'], true) || (isset($conn) && $conn instanceof mysqli && function_exists('tracs_user_can') && tracs_user_can($conn, 'cases.delete'));
+$_tracs_case_can_delete = isset($conn) && $conn instanceof mysqli && function_exists('tracs_user_can_delete_cases') && tracs_user_can_delete_cases($conn, (int)($_SESSION['user_id'] ?? 0));
 ?>
 <!-- CASE MODAL -->
 <div class="modal-overlay hidden" id="caseModal">
