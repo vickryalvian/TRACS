@@ -1240,7 +1240,7 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape') umCloseDrawers();
 
 <?php if($flash): ?>
 <script>
-document.addEventListener('DOMContentLoaded', () => toast(<?=json_encode($flash['message'])?>, <?=json_encode($flash['type'])?>));
+document.addEventListener('DOMContentLoaded', () => toast(<?=json_encode($flash['message'])?>, <?=json_encode($flash['type'])?><?= ($flash['type'] ?? '') === 'success' ? ', 5000' : '' ?>));
 </script>
 <?php endif; ?>
 
