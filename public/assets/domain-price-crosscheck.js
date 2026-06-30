@@ -1282,7 +1282,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     dpcReloadAfterNotice();
                 } else {
                     notesForm.dispatchEvent(new CustomEvent('tracs:save-error', { bubbles: true }));
-                    dpcToast('error', 'Save failed', data.message || 'Unknown error');
+                    dpcToast('error', 'Save failed', data.message || 'The note could not be saved. Please try again.');
                 }
             })
             .catch(error => {
@@ -1336,7 +1336,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     handleModalError({
                         modal: 'assignTaskModal',
                         button: btnSave,
-                        error: { message: data.message || 'Unknown error' },
+                        error: { message: data.message || '' },
                         fallbackMessage: 'The task could not be assigned. Please check the data and try again.'
                     });
                 }
@@ -1408,7 +1408,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     dpcReloadAfterNotice();
                 } else {
                     btn.dispatchEvent(new CustomEvent('tracs:save-error', { bubbles: true }));
-                    dpcToast('error', 'Matrix save failed', data.message || 'Unknown error');
+                    dpcToast('error', 'Matrix save failed', data.message || 'The matrix could not be saved. Please try again.');
                 }
             })
             .catch(error => {

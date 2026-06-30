@@ -178,7 +178,7 @@ function saveMOMObjective(mom_id) {
     } else {
       toast(r.msg || 'Failed to update objective', 'error');
     }
-  }).catch(e => toast('Error: ' + e.message, 'error'));
+  }).catch(e => toast(e.message || "The change didn't go through. Please try again.", 'error'));
 }
 
 function editMOMParticipants(mom_id) {
@@ -198,7 +198,7 @@ function saveMOMParticipants(mom_id) {
     } else {
       toast(r.msg || 'Failed to update participants', 'error');
     }
-  }).catch(e => toast('Error: ' + e.message, 'error'));
+  }).catch(e => toast(e.message || "The change didn't go through. Please try again.", 'error'));
 }
 
 function toggleMOMSidebarEdit(section) {
@@ -282,7 +282,7 @@ function closeMOM(mom_id) {
       } else {
         toast(r.msg || 'Failed to close meeting', 'error');
       }
-    }).catch(e => toast('Error: ' + e.message, 'error'));
+    }).catch(e => toast(e.message || "The change didn't go through. Please try again.", 'error'));
   });
 }
 
@@ -297,7 +297,7 @@ function startMOM(mom_id) {
     } else {
       toast(r.msg || 'Failed to start meeting', 'error');
     }
-  }).catch(e => toast('Error: ' + e.message, 'error'));
+  }).catch(e => toast(e.message || "The change didn't go through. Please try again.", 'error'));
 }
 
 function cancelMOM(mom_id) {
@@ -312,7 +312,7 @@ function cancelMOM(mom_id) {
       } else {
         toast(r.msg || 'Failed to cancel meeting', 'error');
       }
-    }).catch(e => toast('Error: ' + e.message, 'error'));
+    }).catch(e => toast(e.message || "The change didn't go through. Please try again.", 'error'));
   }, 'Cancel Meeting');
 }
 
@@ -325,7 +325,7 @@ function saveMOMSummary(mom_id) {
   }).then(r => {
     if(r.ok) toast('MOM summary saved', 'success');
     else toast(r.msg || 'Failed to save summary', 'error');
-  }).catch(e => toast('Error: ' + e.message, 'error'));
+  }).catch(e => toast(e.message || "The change didn't go through. Please try again.", 'error'));
 }
 
 function deleteMOM(mom_id) {
@@ -340,7 +340,7 @@ function deleteMOM(mom_id) {
       } else {
         toast(r.msg || 'Failed to delete meeting', 'error');
       }
-    }).catch(e => toast('Error: ' + e.message, 'error'));
+    }).catch(e => toast(e.message || "The change didn't go through. Please try again.", 'error'));
   });
 }
 
@@ -393,7 +393,7 @@ function saveInlineAgendaItem(mom_id, options = {}) {
     }
   }).catch(e => {
     momStopInlineSave('agenda', mom_id);
-    toast('Error: ' + e.message, 'error');
+    toast(e.message || "The change didn't go through. Please try again.", 'error');
   });
 }
 
@@ -412,7 +412,7 @@ function toggleAgendaItem(item_id, checked) {
         item.classList.toggle('agenda-item-completed', checked);
       }
     }
-  }).catch(e => toast('Error: ' + e.message, 'error'));
+  }).catch(e => toast(e.message || "The change didn't go through. Please try again.", 'error'));
 }
 
 function deleteAgendaItem(item_id) {
@@ -425,7 +425,7 @@ function deleteAgendaItem(item_id) {
         toast('Agenda item deleted', 'success');
         momReloadAfterToast();
       }
-    }).catch(e => toast('Error: ' + e.message, 'error'));
+    }).catch(e => toast(e.message || "The change didn't go through. Please try again.", 'error'));
   });
 }
 
@@ -467,7 +467,7 @@ function saveInlineDiscussionNote(mom_id, options = {}) {
     }
   }).catch(e => {
     momStopInlineSave('note', mom_id);
-    toast('Error: ' + e.message, 'error');
+    toast(e.message || "The change didn't go through. Please try again.", 'error');
   });
 }
 
@@ -507,7 +507,7 @@ function deleteNote(note_id) {
         toast('Note deleted', 'success');
         momReloadAfterToast();
       }
-    }).catch(e => toast('Error: ' + e.message, 'error'));
+    }).catch(e => toast(e.message || "The change didn't go through. Please try again.", 'error'));
   });
 }
 
@@ -589,7 +589,7 @@ function saveInlineDecision(mom_id, options = {}) {
     }
   }).catch(e => {
     momStopInlineSave('decision', mom_id);
-    toast('Error: ' + e.message, 'error');
+    toast(e.message || "The change didn't go through. Please try again.", 'error');
   });
 }
 
@@ -630,7 +630,7 @@ function deleteDecision(decision_id) {
         toast('Decision deleted', 'success');
         momReloadAfterToast();
       }
-    }).catch(e => toast('Error: ' + e.message, 'error'));
+    }).catch(e => toast(e.message || "The change didn't go through. Please try again.", 'error'));
   });
 }
 
@@ -694,7 +694,7 @@ function saveInlineActionItem(mom_id, options = {}) {
     }
   }).catch(e => {
     momStopInlineSave('action', mom_id);
-    toast('Error: ' + e.message, 'error');
+    toast(e.message || "The change didn't go through. Please try again.", 'error');
   });
 }
 
@@ -776,7 +776,7 @@ function completeAction(action_id, checked) {
       }
       toast(checked ? 'Action completed' : 'Action reopened', 'success');
     }
-  }).catch(e => toast('Error: ' + e.message, 'error'));
+  }).catch(e => toast(e.message || "The change didn't go through. Please try again.", 'error'));
 }
 
 function deleteActionItem(action_id) {
@@ -789,7 +789,7 @@ function deleteActionItem(action_id) {
         toast('Action deleted', 'success');
         momReloadAfterToast();
       }
-    }).catch(e => toast('Error: ' + e.message, 'error'));
+    }).catch(e => toast(e.message || "The change didn't go through. Please try again.", 'error'));
   });
 }
 
@@ -809,7 +809,7 @@ function createReminderFromAction(action_id) {
       } else {
         toast(r.msg || 'Failed to create reminder', 'error');
       }
-    }).catch(e => toast('Error: ' + e.message, 'error'));
+    }).catch(e => toast(e.message || "The change didn't go through. Please try again.", 'error'));
   }, 'Create Reminder');
 }
 
@@ -845,7 +845,7 @@ function saveInlineCaseLink(mom_id) {
     } else {
       toast(r.msg || 'Failed to link case', 'error');
     }
-  }).catch(e => toast('Error: ' + e.message, 'error'));
+  }).catch(e => toast(e.message || "The change didn't go through. Please try again.", 'error'));
 }
 
 function markMOMCaseForRemoval(button) {
@@ -890,7 +890,7 @@ function saveMOMSidebarCases(mom_id) {
     }
     toast('Linked cases updated', 'success');
     momReloadAfterToast();
-  }).catch(e => toast('Error: ' + e.message, 'error'));
+  }).catch(e => toast(e.message || "The change didn't go through. Please try again.", 'error'));
 }
 
 function createCaseFromAction(action_id) {
@@ -905,7 +905,7 @@ function createCaseFromAction(action_id) {
       } else {
         toast(r.msg || 'Failed to create case', 'error');
       }
-    }).catch(e => toast('Error: ' + e.message, 'error'));
+    }).catch(e => toast(e.message || "The change didn't go through. Please try again.", 'error'));
   }, 'Create Case');
 }
 
@@ -925,7 +925,7 @@ function resolveLinkedCaseFromMOM(mom_id, case_id) {
     } else {
       toast(r.msg || 'Failed to update case', 'error');
     }
-  }).catch(e => toast('Error: ' + e.message, 'error'));
+  }).catch(e => toast(e.message || "The change didn't go through. Please try again.", 'error'));
 }
 
 function uploadMOMScreenshot(mom_id, input) {
@@ -954,7 +954,7 @@ function uploadMOMScreenshot(mom_id, input) {
       } else {
         toast(r.msg || 'Failed to upload screenshot', 'error');
       }
-    }).catch(e => toast('Error: ' + e.message, 'error'));
+    }).catch(e => toast(e.message || "The change didn't go through. Please try again.", 'error'));
   };
   reader.readAsDataURL(file);
 }
@@ -987,7 +987,7 @@ function saveMOMSidebarScreenshots(mom_id) {
     }
     toast('Screenshots updated', 'success');
     momReloadAfterToast();
-  }).catch(e => toast('Error: ' + e.message, 'error'));
+  }).catch(e => toast(e.message || "The change didn't go through. Please try again.", 'error'));
 }
 
 let momShotLightboxItems = [];

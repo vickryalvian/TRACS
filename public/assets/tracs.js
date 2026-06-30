@@ -340,9 +340,11 @@ function showToast(...args){
   t.setAttribute('aria-live',noticeType === 'error' ? 'assertive' : 'polite');
   const radar=document.createElement('span');
   radar.className='toast-radar';
+  radar.setAttribute('aria-hidden','true');
   const icon=document.createElement('i');
   icon.dataset.lucide=ic;
   icon.className='toast-icon';
+  icon.setAttribute('aria-hidden','true');
   radar.appendChild(icon);
   const body=document.createElement('span');
   body.className='toast-body';
@@ -1996,7 +1998,7 @@ async function deleteFeedback(id) {
           toast('Feedback deleted', 'success');
           reloadAfterToast();
         }
-        else toast(res.error || 'Delete failed', 'error');
+        else toast(res.error || "Couldn't delete the feedback entry. Please try again.", 'error');
     });
 }
 
@@ -2056,7 +2058,7 @@ function quickSaveFeedback() {
             toast('Feedback added', 'success');
             reloadAfterToast();
         } else {
-            toast(res.error || 'Save failed', 'error');
+            toast(res.error || "Couldn't save the feedback. Please check the fields and try again.", 'error');
         }
     });
 }
@@ -3876,7 +3878,7 @@ async function archiveTickerMsg(id){
 
       } else {
 
-        toast(d.message || 'Error','error');
+        toast(d.message || "Couldn't archive the announcement. Please try again.",'error');
       }
 
     },
@@ -4550,6 +4552,16 @@ document.addEventListener('DOMContentLoaded', () => {
   bindSidebarTooltips();
   initShiftReportReminders();
 
+  const loginError=document.querySelector('.login-card .err-box');
+  if(loginError?.textContent.trim()){
+    showToast(loginError.textContent.trim(),'error',{
+      context:'page',
+      persistent:true,
+      closable:true,
+      priority:'critical'
+    });
+  }
+
   /* ── Currency Converter ───────────────────── */
 
   document.getElementById('convert-btn')
@@ -4706,7 +4718,7 @@ async function quickStatusUpdate(id, selectEl) {
     toast('Status updated', 'success');
     [...selectEl.options].forEach(o => { o.defaultSelected = (o.value === newStatus); });
   } else {
-    toast(d.message || 'Error updating status', 'error');
+    toast(d.message || "Couldn't update the status. Please try again.", 'error');
     if (badge && prevStatus) {
       badge.className  = 'dt-status ' + (DT_STATUS_CLASS[prevStatus] || '');
       badge.textContent = DT_STATUS_LABEL[prevStatus] || prevStatus;
@@ -4732,7 +4744,7 @@ async function quickMoveUpdate(id, selectEl) {
     toast(newVal ? 'Move domain: ' + newVal : 'Move domain cleared', 'success');
     [...selectEl.options].forEach(o => { o.defaultSelected = (o.value === newVal); });
   } else {
-    toast(d.message || 'Error updating', 'error');
+    toast(d.message || "Couldn't update the move-domain field. Please try again.", 'error');
     selectEl.value = prevVal;
     selectEl.classList.toggle('has-value', !!prevVal);
     window.TRACSDropdowns?.syncSelect(selectEl);
@@ -4757,7 +4769,7 @@ async function quickEndDateUpdate(id, inputEl) {
     inputEl.dataset.prev = newVal;
     toast(newVal ? 'End date set' : 'End date cleared', 'success');
   } else {
-    toast(d.message || 'Error updating end date', 'error');
+    toast(d.message || "Couldn't update the end date. Please try again.", 'error');
     inputEl.value = prevVal;
     inputEl.classList.toggle('has-value', !!prevVal);
   }
@@ -4793,7 +4805,7 @@ async function quickSaveDt() {
     document.getElementById('nDomain').focus();
     _reload();
   } else {
-    toast(d.message || 'Error saving transfer', 'error');
+    toast(d.message || "Couldn't save the transfer. Please try again.", 'error');
   }
 }
 
@@ -4853,7 +4865,7 @@ function deleteDt(id) {
       toast('Transfer deleted', 'success');
       removeRow(`[data-dt-id="${id}"]`);
     } else {
-      toast(d.message || 'Error deleting transfer', 'error');
+      toast(d.message || "Couldn't delete the transfer. Please try again.", 'error');
     }
   });
 }
@@ -4916,7 +4928,7 @@ async function quickSaveBt() {
     document.getElementById('nAmount').focus();
     _reload();
   } else {
-    toast(d.message || 'Error saving transfer', 'error');
+    toast(d.message || "Couldn't save the transfer. Please try again.", 'error');
   }
 }
 
@@ -4985,7 +4997,7 @@ function deleteBt(id) {
       toast('Transfer deleted', 'success');
       removeRow(`[data-bt-id="${id}"]`);
     } else {
-      toast(d.message || 'Error deleting transfer', 'error');
+      toast(d.message || "Couldn't delete the transfer. Please try again.", 'error');
     }
   });
 }
