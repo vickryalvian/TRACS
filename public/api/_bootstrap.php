@@ -179,6 +179,10 @@ $apiMethodMap = [
     'ticker-list.php' => ['GET'],
     'tv-mode-summary.php' => ['GET'],
     'user-avatar.php' => ['POST'],
+    'user-notes-list.php' => ['GET'],
+    'user-notes-create.php' => ['POST'],
+    'user-notes-update.php' => ['POST'],
+    'user-notes-delete.php' => ['POST'],
 ];
 $requestMethod = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
 if (isset($apiMethodMap[$script]) && !in_array($requestMethod, $apiMethodMap[$script], true)) {
@@ -233,6 +237,10 @@ $apiPermissionMap = [
     'ticker-create.php' => ['dashboard.view'],
     'ticker-delete.php' => ['dashboard.view'],
     'ticker-list.php' => ['dashboard.view'],
+    'user-notes-list.php' => ['users.view'],
+    'user-notes-create.php' => ['users.view'],
+    'user-notes-update.php' => ['users.view'],
+    'user-notes-delete.php' => ['users.view'],
 ];
 if (isset($apiPermissionMap[$script])) {
     api_require_permissions($apiPermissionMap[$script]);

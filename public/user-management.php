@@ -156,6 +156,7 @@ $actor_permissions = tracs_user_permissions($conn, $uid);
 $is_super_admin = ($actor['role_slug'] ?? '') === 'super_admin';
 $is_admin_or_above = in_array((string)($actor['role_slug'] ?? ''), ['super_admin', 'admin'], true);
 $can_reset_2fa = $schema_ready && $is_admin_or_above && tracs_two_factor_schema_ready($conn);
+$can_view_user_notes = $schema_ready && tracs_is_supervisor_or_above($conn, $uid);
 $build_signature = tracs_build_public_payload();
 
 $TC = new AlertTickerController($conn, $uid);
@@ -733,6 +734,24 @@ include __DIR__ . '/includes/header.php';
       <div class="um-form-section" id="umSecuritySection"><div class="um-form-section-title">Security</div>
         <div class="form-group"><label class="form-label">Initial Password</label><input class="form-input" type="password" name="password" id="umPassword" placeholder="Leave blank to generate a secure temporary password"><div class="form-hint">Minimum 8 characters. Generated passwords are shown once after save.</div></div>
       </div>
+      <?php if ($can_view_user_notes): ?>
+      <div class="um-form-section um-notes-section" id="umNotesSection" hidden>
+        <div class="um-form-section-title">Internal Notes <span class="form-hint">(Supervisor+ only — not visible to this user)</span></div>
+        <div class="um-notes-add-row">
+          <select class="form-select compact-select" id="umNoteCategory">
+            <option value="access_provisioning">Access Provisioning</option>
+            <option value="training">Training</option>
+            <option value="performance">Performance</option>
+            <option value="monitoring">Monitoring</option>
+            <option value="internship_evaluation">Internship Evaluation</option>
+            <option value="administrative" selected>Administrative</option>
+          </select>
+          <textarea class="form-textarea" id="umNoteContent" rows="2" placeholder="Add an internal note..."></textarea>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="umAddUserNote()"><i data-lucide="plus" class="icon-sm"></i>Add Note</button>
+        </div>
+        <div class="um-notes-list" id="umNotesList"><div class="form-hint">No notes yet.</div></div>
+      </div>
+      <?php endif; ?>
     </div>
     <div class="modal-foot"><button type="button" class="btn btn-ghost" onclick="closeModal('userForm')">Cancel</button><button type="submit" class="btn btn-primary"><i data-lucide="check" class="icon-sm"></i>Save User</button></div>
   </form>
@@ -961,6 +980,8 @@ function umCreateUser(){
   umSetAvatarEditor({id:'', name:'User', email:'U'});
   umClearInternFields();
   umSetValue('umStatus','active'); umSetValue('umDivisionId',''); document.getElementById('umSecuritySection').style.display='';
+  const notesSection=document.getElementById('umNotesSection');
+  if(notesSection) notesSection.hidden=true;
   openModal('userForm'); umToggleInternSection(); window.TRACSDropdowns?.syncAll();
 }
 function umCreateUserInDivision(divisionId){ umCreateUser(); umSetValue('umDivisionId', divisionId); window.TRACSDropdowns?.syncAll(); }
@@ -979,7 +1000,99 @@ function umEditUser(btn){
   umSetValue('umEvaluationStatus',u.evaluation_status || 'not_started'); umSetValue('umSkillLevel',u.skill_level || 'beginner'); umSetValue('umAllowedTaskScope',u.allowed_task_scope || '');
   umSetValue('umSpecialNotes',u.special_notes);
   umSetValue('umPassword',''); document.getElementById('umSecuritySection').style.display='none';
+  const notesSection=document.getElementById('umNotesSection');
+  if(notesSection){ notesSection.hidden=false; notesSection.dataset.targetUserId=u.id; umLoadUserNotes(u.id); }
   openModal('userForm'); umToggleInternSection(); window.TRACSDropdowns?.syncAll();
+}
+
+/* ── Internal Notes (supervisor+ only) ───────────────── */
+function umNoteCategoryLabel(category){
+  const labels={access_provisioning:'Access Provisioning',training:'Training',performance:'Performance',monitoring:'Monitoring',internship_evaluation:'Internship Evaluation',administrative:'Administrative'};
+  return labels[category] || 'Administrative';
+}
+function umRenderUserNotes(notes){
+  const host=document.getElementById('umNotesList');
+  if(!host) return;
+  if(!notes || !notes.length){ host.innerHTML='<div class="form-hint">No notes yet.</div>'; return; }
+  host.innerHTML=notes.map(n=>`
+    <div class="um-note-item" data-note-id="${n.id}" data-note-category="${umEscapeHtml(n.category || 'administrative')}">
+      <div class="um-note-meta">
+        <span class="um-note-category">${umEscapeHtml(n.category_label || umNoteCategoryLabel(n.category))}</span>
+        <span class="um-note-author">${umEscapeHtml(n.author_name || 'Unknown')}</span>
+        <span class="um-note-time">${umEscapeHtml(n.created_at || '')}${n.updated_at && n.updated_at!==n.created_at ? ' (edited '+umEscapeHtml(n.updated_at)+')' : ''}</span>
+      </div>
+      <div class="um-note-content">${umEscapeHtml(n.content)}</div>
+      <div class="um-note-actions">
+        <button type="button" class="btn btn-ghost btn-xs" onclick="umEditUserNotePrompt(${n.id}, this)">Edit</button>
+        <button type="button" class="btn btn-ghost btn-xs is-danger" onclick="umDeleteUserNote(${n.id})">Delete</button>
+      </div>
+    </div>
+  `).join('');
+}
+function umEscapeHtml(value){
+  const div=document.createElement('div');
+  div.textContent=String(value ?? '');
+  return div.innerHTML;
+}
+async function umLoadUserNotes(userId){
+  const host=document.getElementById('umNotesList');
+  if(!userId || !host) return;
+  host.innerHTML='<div class="form-hint">Loading notes...</div>';
+  try{
+    const res=await fetch(`/api/user-notes-list.php?user_id=${encodeURIComponent(userId)}`, {headers:{'Accept':'application/json'}});
+    const json=await res.json();
+    if(!json.success){ host.innerHTML='<div class="form-hint">Unable to load notes.</div>'; return; }
+    umRenderUserNotes(json.data?.notes || []);
+  }catch(e){ host.innerHTML='<div class="form-hint">Unable to load notes.</div>'; }
+}
+async function umAddUserNote(){
+  const section=document.getElementById('umNotesSection');
+  const userId=section?.dataset.targetUserId;
+  const category=document.getElementById('umNoteCategory')?.value || 'administrative';
+  const contentEl=document.getElementById('umNoteContent');
+  const content=(contentEl?.value || '').trim();
+  if(!userId || !content) return;
+  try{
+    const res=await fetch('/api/user-notes-create.php', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({user_id:Number(userId), category, content})
+    });
+    const json=await res.json();
+    if(json.success){ if(contentEl) contentEl.value=''; umLoadUserNotes(userId); }
+    else toast?.(json.message || 'Unable to add note', 'error');
+  }catch(e){ toast?.('Unable to add note', 'error'); }
+}
+async function umEditUserNotePrompt(noteId, btn){
+  const item=btn.closest('.um-note-item');
+  const currentContent=item?.querySelector('.um-note-content')?.textContent || '';
+  const currentCategory=item?.dataset.noteCategory || 'administrative';
+  const updated=prompt('Edit note', currentContent);
+  if(updated===null || updated.trim()==='') return;
+  const section=document.getElementById('umNotesSection');
+  const userId=section?.dataset.targetUserId;
+  try{
+    const res=await fetch('/api/user-notes-update.php', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({id:noteId, category:currentCategory, content:updated.trim()})
+    });
+    const json=await res.json();
+    if(json.success) umLoadUserNotes(userId);
+    else toast?.(json.message || 'Unable to update note', 'error');
+  }catch(e){ toast?.('Unable to update note', 'error'); }
+}
+async function umDeleteUserNote(noteId){
+  if(!confirm('Delete this internal note? This cannot be undone.')) return;
+  const section=document.getElementById('umNotesSection');
+  const userId=section?.dataset.targetUserId;
+  try{
+    const res=await fetch('/api/user-notes-delete.php', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({id:noteId})
+    });
+    const json=await res.json();
+    if(json.success) umLoadUserNotes(userId);
+    else toast?.(json.message || 'Unable to delete note', 'error');
+  }catch(e){ toast?.('Unable to delete note', 'error'); }
 }
 function umCreateDivision(){
   document.getElementById('umDivisionModalTitle').textContent='Add Division';
