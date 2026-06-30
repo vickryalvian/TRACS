@@ -26,11 +26,11 @@ include __DIR__ . '/includes/header.php';
 ?>
 <main class="main"><div class="main-inner server-health-page">
   <div class="topbar">
-    <div>
+    <div class="topbar-left">
       <div class="page-title">Server Health & Logs</div>
       <div class="page-sub">Super Admin-only resource, storage, deployment, and sanitized error monitoring</div>
     </div>
-    <div class="server-health-actions">
+    <div class="topbar-right server-health-actions">
       <span class="badge b-done" id="serverHealthChecked">Not checked</span>
       <button type="button" class="btn btn-primary btn-sm" id="serverHealthRefresh">
         <i data-lucide="refresh-cw" class="icon-sm"></i>Refresh

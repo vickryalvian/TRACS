@@ -5426,6 +5426,9 @@ input, select, textarea { font-family: inherit }
   flex-wrap: wrap;
   gap: var(--sp-2);
 }
+.server-health-actions {
+  margin-left: auto;
+}
 
 .server-health-grid {
   display: grid;
@@ -5570,7 +5573,7 @@ input, select, textarea { font-family: inherit }
 @media (max-width: 780px) {
   .server-health-grid,
   .server-health-columns { grid-template-columns: 1fr; }
-  .server-health-actions { justify-content: flex-start; }
+  .server-health-actions { justify-content: flex-start; margin-left: 0; width: 100%; }
 }
 @media (max-width: 520px) {
   .modal-ticket {
