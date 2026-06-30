@@ -11,6 +11,30 @@
 - **Timezone:** `Asia/Jakarta` / WIB.
 - **Runtime style:** Server-rendered pages plus authenticated JSON/CSV APIs. There is no Composer, npm, SPA router, or frontend build step.
 
+## Multi-Machine Git Workflow
+
+This repo is actively developed from more than one machine (PC and MacBook). The
+GitHub remote (`origin`) is the single source of truth, not either local working
+tree. To avoid divergent or lost work:
+
+1. **At the start of every session**, before editing anything: `git fetch origin`,
+   then compare local `HEAD` against `origin/<current-branch>`. If local is
+   behind, `git pull --rebase origin <branch>` before making changes. If
+   uncommitted changes already exist in the working tree, surface them to the
+   user rather than assuming they are stale or safe to discard.
+2. **Never force-push** a shared branch (e.g.
+   `feat/user-mgmt-auth-domain-ui-improvements`, `main`) unless the user
+   explicitly asks for it. A force-push from one machine can silently discard
+   unpushed commits made on the other machine.
+3. **At natural stopping points** — end of a task, before a long pause, or
+   whenever the user is likely to switch machines — commit and push completed
+   work rather than leaving it only on local disk. If a session ends with
+   unpushed commits, say so explicitly.
+4. Production (`/opt/tracs` on the VPS) is deployed via manual file-copy, not a
+   `git pull` of `main` — see `deployment-summary.md` and
+   `docs/USER_LIFECYCLE_REMEDIATION.md`. Do not assume pushing to GitHub alone
+   updates production.
+
 ## Current Direction
 
 - Keep the interface clean, compact, operational-first, and low-noise.
