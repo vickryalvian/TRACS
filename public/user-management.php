@@ -775,7 +775,7 @@ include __DIR__ . '/includes/header.php';
       <button type="button" class="modal-close" onclick="closeModal('passwordReset')"><i data-lucide="x"></i></button>
     </div>
     <div class="modal-body">
-      <div class="um-permission-note warning"><i data-lucide="key-round" class="icon-sm"></i><span>Leave both fields blank to auto-generate a temporary password, or set one manually (minimum 8 characters). The result is shown once and this action is logged.</span></div>
+      <div class="um-permission-note warning"><i data-lucide="key-round" class="icon-sm"></i><span>This overrides the user's password immediately — their current password is not required. Leave both fields blank to auto-generate a temporary password, or set one manually (minimum 8 characters). The result is shown once and this action is logged.</span></div>
       <div class="form-row">
         <div class="form-group"><label class="form-label" for="umPasswordResetNew">New Password <span style="color:var(--tx4)">(optional)</span></label><input class="form-input" type="password" id="umPasswordResetNew" name="new_password" autocomplete="new-password" placeholder="Leave blank to auto-generate"></div>
         <div class="form-group"><label class="form-label" for="umPasswordResetConfirm">Confirm New Password</label><input class="form-input" type="password" id="umPasswordResetConfirm" autocomplete="new-password" placeholder="Re-type the new password"></div>
