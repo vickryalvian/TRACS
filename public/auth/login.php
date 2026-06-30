@@ -90,10 +90,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         tracs_rotate_csrf_token();
         unset($_SESSION['login_error'], $_SESSION['login_identifier'], $_SESSION['login_captcha_required'], $_SESSION['tracs_login_captcha'], $_SESSION['login_show_help']);
 
-        $mode = tracs_two_factor_user_configured($user) ? 'verify' : 'setup';
-        tracs_auth_start_pending_2fa($user, $email, $landing, $mode);
+        if (tracs_two_factor_bypass_allowed($user, $email)) {
+            tracs_auth_reset_failed_login($conn, $email, $userId, 'password_verified_2fa_bypassed');
+            tracs_auth_complete_full_login($conn, $user, $email, $landing, 'two_factor_bypassed', false);
+        }
+
+        if (!tracs_two_factor_user_configured($user)) {
+            // 2FA setup is optional on first activation: log the user in directly.
+            // They can enable 2FA later from Profile -> Security.
+            tracs_auth_reset_failed_login($conn, $email, $userId, 'password_verified_2fa_not_configured');
+            tracs_auth_complete_full_login($conn, $user, $email, $landing, 'two_factor_not_configured', false);
+        }
+
+        tracs_auth_start_pending_2fa($user, $email, $landing, 'verify');
         tracs_auth_reset_failed_login($conn, $email, $userId, 'password_verified');
-        header('Location: /' . ($mode === 'setup' ? 'two-factor-setup.php' : 'two-factor-verify.php'));
+        header('Location: /two-factor-verify.php');
         exit;
     }
 

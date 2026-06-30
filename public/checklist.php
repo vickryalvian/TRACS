@@ -101,7 +101,7 @@ include 'includes/header.php';
       <tr class="checkable-row <?=$tdone?'is-completed':''?>" data-tid="<?=$tid?>" data-completed="<?=$tdone?'1':'0'?>" data-title="<?=esc($t['title']??'')?>" data-desc="<?=esc($t['description']??'')?>">
         <td style="text-align:center"><input type="checkbox" class="rem-check task-chk" <?=$tdone?'checked':''?> onchange="toggleTask(<?=$tid?>,this)"></td>
         <td style="max-width:300px">
-          <div style="font-weight:500;color:var(--tx1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" class="task-title <?=$tdone?'done':''?>"><?=$ttit?></div>
+          <button type="button" class="task-title <?=$tdone?'done':''?>" style="font-weight:500;color:var(--tx1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:none;border:0;padding:0;text-align:left;cursor:pointer;width:100%" onclick="openEditTask(<?=$tid?>)" title="View details"><?=$ttit?></button>
           <?php if($tdesc):?><div class="task-sub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="<?=$tdesc?>"><?=$tdesc?></div><?php endif;?>
           <?=tracs_creator_meta($t)?>
         </td>

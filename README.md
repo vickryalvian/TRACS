@@ -92,6 +92,17 @@ Change this immediately after first login.
 | [docs/INFRASTRUCTURE_PULSE.md](docs/INFRASTRUCTURE_PULSE.md) | Current prototype scope and usage. |
 | [docs/SECURITY_AUDIT_2FA.md](docs/SECURITY_AUDIT_2FA.md) | Focused mandatory-2FA audit. |
 | [docs/TRACS_SIGNATURE.md](docs/TRACS_SIGNATURE.md) | Preserved build authorship/deployment marker. |
+| [TESTING.md](TESTING.md) | Pre-refactor testing baseline, priorities, tools, and future CI direction. |
+| [ROLLBACK.md](ROLLBACK.md) | Local, branch, commit, deployment, and database rollback procedures. |
+| [REFACTOR_ROADMAP.md](REFACTOR_ROADMAP.md) | Full-system React, Tailwind, PHP API, and MySQL migration direction. |
+| [docs/manual-smoke-checklist.md](docs/manual-smoke-checklist.md) | Manual smoke coverage for critical TRACS pages and workflows. |
+| [docs/permission-api-contract-checklist.md](docs/permission-api-contract-checklist.md) | Role, object-scope, CSRF, API, export, upload, and monitoring contracts. |
+| [docs/calendar-reference-regression-checklist.md](docs/calendar-reference-regression-checklist.md) | Zero-mistake Calendar reference regression checklist. |
+| [docs/react-tailwind-architecture.md](docs/react-tailwind-architecture.md) | React islands, Tailwind isolation, Vite loading, components, tokens, and API client direction. |
+| [docs/frontend-migration-plan.md](docs/frontend-migration-plan.md) | Module order, behavior-slice migration stages, feature flags, parity, and rollback. |
+| [docs/php-api-architecture-plan.md](docs/php-api-architecture-plan.md) | Gradual PHP controller, middleware, service, repository, response, and security direction. |
+| [docs/tailwind-design-system-plan.md](docs/tailwind-design-system-plan.md) | Tailwind safety, component contracts, responsive behavior, dark mode, and governance. |
+| [docs/design-token-map.md](docs/design-token-map.md) | Semantic mapping for TRACS colors, spacing, typography, radius, elevation, and density. |
 
 Files under `MOM README/` are historical package documentation. Files under backup trees are not current documentation.
 

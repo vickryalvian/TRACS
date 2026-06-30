@@ -1,0 +1,11 @@
+{
+  "src/modules/shift-assignment/main.jsx": {
+    "file": "assets/shiftAssignment-UQjEJGb4.js",
+    "name": "shiftAssignment",
+    "src": "src/modules/shift-assignment/main.jsx",
+    "isEntry": true,
+    "css": [
+      "assets/shiftAssignment-1LEXCu9A.css"
+    ]
+  }
+}

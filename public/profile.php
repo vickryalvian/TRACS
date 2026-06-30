@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../core/security/csrf.php';
 require_once __DIR__ . '/../core/security/error_response.php';
+require_once __DIR__ . '/../core/security/auth_hardening.php';
 tracs_start_session();
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/auth/auth_check.php';
@@ -155,10 +156,10 @@ include __DIR__ . '/includes/header.php';
         <?=csrf_input()?><input type="hidden" name="action" value="change_password">
         <div class="panel-head"><span class="panel-title">Change Password</span><span class="panel-meta">Current password verification required</span></div>
         <div class="profile-form-body">
-          <div class="form-group profile-password-field"><label class="form-label">Current Password</label><input class="form-input" type="password" name="current_password" id="profileCurrentPassword" required><button type="button" onclick="profileTogglePassword('profileCurrentPassword')"><i data-lucide="eye" class="icon-sm"></i></button></div>
+          <div class="form-group profile-password-field"><label class="form-label">Current Password</label><input class="form-input" type="password" name="current_password" id="profileCurrentPassword" autocomplete="current-password" required><button type="button" aria-label="Show password" onclick="profileTogglePassword('profileCurrentPassword', this)"><i data-lucide="eye" class="icon-sm"></i></button></div>
           <div class="form-row">
-            <div class="form-group profile-password-field"><label class="form-label">New Password</label><input class="form-input" type="password" name="new_password" id="profileNewPassword" required oninput="profilePasswordStrength()"><button type="button" onclick="profileTogglePassword('profileNewPassword')"><i data-lucide="eye" class="icon-sm"></i></button></div>
-            <div class="form-group profile-password-field"><label class="form-label">Confirm New Password</label><input class="form-input" type="password" name="confirm_password" id="profileConfirmPassword" required><button type="button" onclick="profileTogglePassword('profileConfirmPassword')"><i data-lucide="eye" class="icon-sm"></i></button></div>
+            <div class="form-group profile-password-field"><label class="form-label">New Password</label><input class="form-input" type="password" name="new_password" id="profileNewPassword" autocomplete="new-password" required oninput="profilePasswordStrength()"><button type="button" aria-label="Show password" onclick="profileTogglePassword('profileNewPassword', this)"><i data-lucide="eye" class="icon-sm"></i></button></div>
+            <div class="form-group profile-password-field"><label class="form-label">Confirm New Password</label><input class="form-input" type="password" name="confirm_password" id="profileConfirmPassword" autocomplete="new-password" required><button type="button" aria-label="Show password" onclick="profileTogglePassword('profileConfirmPassword', this)"><i data-lucide="eye" class="icon-sm"></i></button></div>
           </div>
           <div class="profile-strength"><div class="profile-strength-track"><span id="profileStrengthBar"></span></div><span id="profileStrengthText">Minimum 8 characters. Uppercase, lowercase, number, and symbol are recommended.</span></div>
           <div class="profile-readonly-grid">
@@ -168,6 +169,24 @@ include __DIR__ . '/includes/header.php';
         </div>
         <div class="modal-foot"><button type="submit" class="btn btn-primary"><i data-lucide="lock-keyhole" class="icon-sm"></i>Update Password</button></div>
       </form>
+
+      <?php $tfa_configured = tracs_two_factor_user_configured($me ?? []); ?>
+      <div class="panel profile-section-panel">
+        <div class="panel-head"><span class="panel-title">Two-Factor Authentication</span><span class="panel-meta">Optional extra login step using an authenticator app</span></div>
+        <div class="profile-form-body">
+          <div class="profile-readonly-grid">
+            <div><span>Status</span><strong><?=$tfa_configured ? 'Enabled' : 'Not enabled'?></strong></div>
+          </div>
+          <?php if($tfa_configured): ?>
+            <p class="form-hint">Two-factor authentication is active on your account. Contact a Super Admin or Admin if you need it reset.</p>
+          <?php else: ?>
+            <p class="form-hint">2FA is optional. Enable it for extra protection on your account; you can still sign in normally without it.</p>
+          <?php endif; ?>
+        </div>
+        <?php if(!$tfa_configured): ?>
+          <div class="modal-foot"><a class="btn btn-primary" href="/two-factor-setup.php"><i data-lucide="shield-check" class="icon-sm"></i>Set Up 2FA</a></div>
+        <?php endif; ?>
+      </div>
     <?php endif; ?>
 
     <?php if($section === 'preferences'): ?>
@@ -245,9 +264,16 @@ include __DIR__ . '/includes/header.php';
 <?php endif; ?>
 
 <script>
-function profileTogglePassword(id){
+function profileTogglePassword(id, btn){
   const input=document.getElementById(id); if(!input)return;
-  input.type = input.type === 'password' ? 'text' : 'password';
+  const showing = input.type === 'text';
+  input.type = showing ? 'password' : 'text';
+  const button = btn || input.parentElement?.querySelector('button');
+  if(button){
+    button.innerHTML = '<i data-lucide="'+(showing ? 'eye' : 'eye-off')+'" class="icon-sm"></i>';
+    button.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
+    if(window.lucide) lucide.createIcons({ nodes: button.querySelectorAll('[data-lucide]') });
+  }
 }
 function profilePasswordStrength(){
   const value=document.getElementById('profileNewPassword')?.value || '';
@@ -285,7 +311,7 @@ try {
 
 <?php if($flash): ?>
 <script>
-document.addEventListener('DOMContentLoaded', () => toast(<?=json_encode($flash['message'])?>, <?=json_encode($flash['type'])?>));
+document.addEventListener('DOMContentLoaded', () => toast(<?=json_encode($flash['message'])?>, <?=json_encode($flash['type'])?><?= ($flash['type'] ?? '') === 'success' ? ', 5000' : '' ?>));
 </script>
 <?php endif; ?>
 

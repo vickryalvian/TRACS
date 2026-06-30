@@ -38,7 +38,7 @@ $twoFactorReady = !empty($user['two_factor_enabled']) && empty($user['two_factor
       <?=um_badge(ucwords(str_replace('_', ' ', (string)($user['internship_status'] ?: 'active'))), $internBadgeClass)?>
     <?php endif; ?>
     <?=um_badge(ucfirst($user['status'] ?? 'active'), $statusClass)?>
-    <?=um_badge($twoFactorReady ? '2FA enabled' : '2FA setup required', $twoFactorReady ? 'b-active' : 'b-warning')?>
+    <?=um_badge($twoFactorReady ? '2FA enabled' : '2FA not enabled', $twoFactorReady ? 'b-active' : 'b-info')?>
     <span class="badge b-info" title="<?=count($user['role_permissions'] ?? [])?> role permissions"><span class="badge-dot"></span><?=count($user['role_permissions'] ?? [])?> permissions</span>
   </div>
   <?php if($isIntern && $showInternMeta): ?>
@@ -59,10 +59,17 @@ $twoFactorReady = !empty($user['two_factor_enabled']) && empty($user['two_factor
     <details class="row-action-menu">
       <summary class="btn btn-ghost btn-icon" title="More actions" aria-label="More actions for <?=esc($user['display_name'])?>"><i data-lucide="more-vertical" class="icon-sm"></i></summary>
       <div class="row-action-popover">
+        <?php if($can_reset_password): ?>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="umOpenPasswordResetModal(<?=(int)$user['id']?>, <?=htmlspecialchars(json_encode($user['display_name'] ?? ''), ENT_QUOTES, 'UTF-8')?>)"><i data-lucide="key-round" class="icon-sm"></i>Reset Password</button>
+        <?php endif; ?>
+        <?php if($can_reset_2fa): ?>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="umOpenTwoFactorResetModal(this)" data-user="<?=$payload?>"><i data-lucide="shield-off" class="icon-sm"></i>Reset 2FA</button>
+        <?php endif; ?>
+        <a class="btn btn-ghost btn-sm" href="?tab=activity&target_user_id=<?=$user['id']?>"><i data-lucide="history" class="icon-sm"></i>View Activity</a>
         <?php if(($user['status'] ?? '') === 'active' && $can_suspend_user): ?>
           <form method="post" onsubmit="return umSubmitReason(this, 'Suspension reason is required.')">
             <?=csrf_input()?><input type="hidden" name="action" value="set_user_status"><input type="hidden" name="user_id" value="<?=$user['id']?>"><input type="hidden" name="status" value="suspended"><input type="hidden" name="reason">
-            <button type="submit" class="btn btn-danger btn-sm"><i data-lucide="ban" class="icon-sm"></i>Suspend</button>
+            <button type="submit" class="btn btn-warning btn-sm"><i data-lucide="ban" class="icon-sm"></i>Suspend</button>
           </form>
         <?php elseif(($user['status'] ?? '') !== 'active' && $can_activate_user): ?>
           <form method="post" onsubmit="return tracsConfirmSubmit(this, {type:'warning', title:'Activate user', message:'Activate this user?', confirmText:'Activate', destructive:false})">
@@ -70,16 +77,18 @@ $twoFactorReady = !empty($user['two_factor_enabled']) && empty($user['two_factor
             <button type="submit" class="btn btn-success btn-sm"><i data-lucide="circle-check" class="icon-sm"></i>Activate</button>
           </form>
         <?php endif; ?>
-        <?php if($can_reset_password): ?>
-          <form method="post" onsubmit="return umConfirmReset(this)">
-            <?=csrf_input()?><input type="hidden" name="action" value="reset_password"><input type="hidden" name="user_id" value="<?=$user['id']?>"><input type="hidden" name="reason">
-            <button type="submit" class="btn btn-ghost btn-sm"><i data-lucide="key-round" class="icon-sm"></i>Reset Password</button>
+        <?php if(($user['status'] ?? '') === 'active' && $can_suspend_user): ?>
+          <form method="post" onsubmit="return umSubmitReason(this, 'Deactivation reason is required.')">
+            <?=csrf_input()?><input type="hidden" name="action" value="set_user_status"><input type="hidden" name="user_id" value="<?=$user['id']?>"><input type="hidden" name="status" value="inactive"><input type="hidden" name="reason">
+            <button type="submit" class="btn btn-orange btn-sm"><i data-lucide="circle-slash" class="icon-sm"></i>Close</button>
           </form>
         <?php endif; ?>
-        <?php if($can_reset_2fa): ?>
-          <button type="button" class="btn btn-ghost btn-sm" onclick="umOpenTwoFactorResetModal(this)" data-user="<?=$payload?>"><i data-lucide="shield-off" class="icon-sm"></i>Reset 2FA</button>
+        <?php if($can_remove_user && ($user['status'] ?? '') !== 'removed' && (int)$user['id'] !== $uid): ?>
+          <form method="post" onsubmit="return umSubmitReason(this, 'A reason is required to remove this user.')">
+            <?=csrf_input()?><input type="hidden" name="action" value="remove_user"><input type="hidden" name="user_id" value="<?=$user['id']?>"><input type="hidden" name="reason">
+            <button type="submit" class="btn btn-danger btn-sm"><i data-lucide="user-x" class="icon-sm"></i>Remove User</button>
+          </form>
         <?php endif; ?>
-        <a class="btn btn-ghost btn-sm" href="?tab=activity&target_user_id=<?=$user['id']?>"><i data-lucide="history" class="icon-sm"></i>View Activity</a>
       </div>
     </details>
   </div>

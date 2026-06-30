@@ -386,6 +386,29 @@ function tracs_two_factor_user_configured(array $user): bool {
         && !empty($user['two_factor_confirmed_at']);
 }
 
+function tracs_two_factor_bypass_allowed(array $user, string $identifier): bool {
+    $raw = trim((string)tracs_auth_env('TRACS_2FA_BYPASS_IDENTIFIERS', ''));
+    if ($raw === '') {
+        return false;
+    }
+
+    $allowed = array_filter(array_map(
+        'tracs_auth_normalize_identifier',
+        preg_split('/[\s,;]+/', $raw) ?: []
+    ));
+    if (!$allowed) {
+        return false;
+    }
+
+    $candidates = array_filter(array_map('tracs_auth_normalize_identifier', [
+        $identifier,
+        (string)($user['email'] ?? ''),
+        (string)($user['username'] ?? ''),
+    ]));
+
+    return (bool)array_intersect($allowed, $candidates);
+}
+
 function tracs_two_factor_base32_encode(string $bytes): string {
     $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
     $bits = '';
@@ -552,7 +575,7 @@ function tracs_two_factor_otpauth_uri(array $user, string $secret): string {
 
 function tracs_auth_allowed_landing(string $landing): string {
     $landing = ltrim($landing, '/');
-    $allowed = ['index.php', 'cases.php', 'reminders.php', 'checklist.php', 'shift-reports.php', 'mom.php', 'activity.php', 'tasks.php', 'monitoring.php', 'domains.php', 'finance.php'];
+    $allowed = ['index.php', 'cases.php', 'reminders.php', 'checklist.php', 'shift-reports.php', 'mom.php', 'activity.php', 'tasks.php', 'monitoring.php', 'domain-transfer.php', 'finance.php'];
     return in_array($landing, $allowed, true) ? $landing : 'index.php';
 }
 
@@ -569,6 +592,49 @@ function tracs_auth_user_landing(mysqli $conn, int $userId): string {
         }
     }
     return $landing;
+}
+
+/**
+ * Map each allowed landing page to the page permission it enforces, so the
+ * login flow can verify the destination is actually reachable.
+ */
+function tracs_auth_landing_permission(string $landing): string {
+    return [
+        'index.php'           => 'dashboard.view',
+        'cases.php'           => 'cases.view',
+        'reminders.php'       => 'reminders.view',
+        'checklist.php'       => 'checklist.view',
+        'shift-reports.php'   => 'reports.view',
+        'mom.php'             => 'moms.view',
+        'activity.php'        => 'users.view_activity',
+        'tasks.php'           => 'tasks.view_own',
+        'monitoring.php'      => 'tasks.view_own',
+        'domain-transfer.php' => 'domains.view',
+        'finance.php'         => 'finance.view',
+    ][$landing] ?? 'dashboard.view';
+}
+
+/**
+ * Resolve a landing the user can actually open. Prevents a successful login
+ * from dead-ending in a 404 when the role lacks the landing's permission
+ * (every page guard returns 404 for an unauthorized account). profile.php is
+ * the guaranteed fallback because every active account holds profile.view_own.
+ */
+function tracs_auth_resolve_safe_landing(mysqli $conn, int $userId, string $landing): string {
+    if ($userId <= 0 || !function_exists('tracs_user_can')) {
+        return $landing;
+    }
+    $landing = tracs_auth_allowed_landing($landing);
+    $candidates = array_merge([$landing], [
+        'index.php', 'cases.php', 'reminders.php', 'checklist.php',
+    ]);
+    foreach ($candidates as $candidate) {
+        if (tracs_user_can($conn, tracs_auth_landing_permission($candidate), $userId)) {
+            return $candidate;
+        }
+    }
+    // Universally accessible: profile.view_own is granted to every role.
+    return 'profile.php';
 }
 
 function tracs_auth_clear_pending_2fa(): void {
@@ -717,10 +783,18 @@ function tracs_two_factor_locked(array $user): bool {
     return $lockedUntil !== '' && strtotime($lockedUntil) > time();
 }
 
-function tracs_auth_complete_full_login(mysqli $conn, array $user, string $identifier = '', ?string $landing = null): void {
+function tracs_auth_complete_full_login(
+    mysqli $conn,
+    array $user,
+    string $identifier = '',
+    ?string $landing = null,
+    string $loginReason = 'two_factor_completed',
+    bool $logTwoFactorVerified = true
+): void {
     tracs_start_session();
     $userId = (int)$user['id'];
     $landing = tracs_auth_allowed_landing($landing ?? tracs_auth_pending_landing());
+    $landing = tracs_auth_resolve_safe_landing($conn, $userId, $landing);
     session_regenerate_id(true);
     tracs_rotate_csrf_token();
     if (function_exists('tracs_sync_session_user')) {
@@ -749,8 +823,8 @@ function tracs_auth_complete_full_login(mysqli $conn, array $user, string $ident
     }
 
     tracs_two_factor_reset_attempts($conn, $userId);
-    tracs_auth_log_event($conn, 'two_factor_verified', 'success', $identifier, $userId);
-    tracs_auth_log_event($conn, 'login_success', 'success', $identifier, $userId, 'two_factor_completed');
+    tracs_auth_log_event($conn, $logTwoFactorVerified ? 'two_factor_verified' : 'two_factor_bypassed', 'success', $identifier, $userId);
+    tracs_auth_log_event($conn, 'login_success', 'success', $identifier, $userId, $loginReason);
     header('Location: /' . $landing);
     exit;
 }

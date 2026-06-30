@@ -159,8 +159,9 @@ include __DIR__ . '/includes/header.php';
         $overdue = (int)($task['overdue_tasks'] ?? 0);
       ?>
       <div class="im-profile">
+        <?php $im_avatar_url = tracs_user_avatar_url($selected); ?>
         <div class="im-profile-head">
-          <div class="um-avatar"><?=tracs_user_initials($selected['display_name'] ?? '', $selected['email'] ?? 'I')?></div>
+          <div class="um-avatar tracs-avatar" data-avatar-user-id="<?=esc((string)$selected['id'])?>" data-avatar-initials="<?=esc(tracs_user_initials($selected['display_name'] ?? '', $selected['email'] ?? 'I'))?>"><?php if($im_avatar_url): ?><img src="<?=esc($im_avatar_url)?>" alt="" loading="lazy" decoding="async"><?php else: ?><span><?=tracs_user_initials($selected['display_name'] ?? '', $selected['email'] ?? 'I')?></span><?php endif; ?></div>
           <div><strong><?=esc($selected['display_name'])?></strong><span><?=esc($selected['university_name'] ?: 'University not set')?></span></div>
         </div>
         <div class="im-detail-grid">

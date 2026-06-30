@@ -60,7 +60,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'create_user' => $UM->createUser($_POST),
             'update_user' => $UM->updateUser((int)($_POST['user_id'] ?? 0), $_POST),
             'set_user_status' => $UM->setUserStatus((int)($_POST['user_id'] ?? 0), (string)($_POST['status'] ?? ''), (string)($_POST['reason'] ?? '')),
-            'reset_password' => $UM->resetPassword((int)($_POST['user_id'] ?? 0), (string)($_POST['reason'] ?? '')),
+            'remove_user' => $UM->removeUser((int)($_POST['user_id'] ?? 0), (string)($_POST['reason'] ?? '')),
+            'reset_password' => $UM->resetPassword((int)($_POST['user_id'] ?? 0), (string)($_POST['reason'] ?? ''), (string)($_POST['new_password'] ?? '')),
             'reset_two_factor' => $UM->resetTwoFactor((int)($_POST['user_id'] ?? 0), (string)($_POST['reason'] ?? '')),
             'create_division' => $UM->createDivision($_POST),
             'update_division' => $UM->updateDivision((int)($_POST['division_id'] ?? 0), $_POST),
@@ -73,6 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['um_temp_password'] = [
                 'password' => $result['temporary_password'],
                 'for' => $result['temporary_password_for'] ?? 'User',
+                'manual' => !empty($result['manual_password']),
             ];
         }
         $tab = ($action === 'update_permissions') ? 'roles' : 'users';
@@ -144,6 +146,7 @@ $can_update_user = tracs_user_can($conn, 'users.update');
 $can_suspend_user = tracs_user_can($conn, 'users.suspend');
 $can_activate_user = tracs_user_can($conn, 'users.activate');
 $can_reset_password = tracs_user_can($conn, 'users.reset_password');
+$can_remove_user = tracs_user_can($conn, 'users.delete');
 $can_create_division = tracs_user_can($conn, 'divisions.create');
 $can_update_division = tracs_user_can($conn, 'divisions.update');
 $can_archive_division = tracs_user_can($conn, 'divisions.archive');
@@ -151,7 +154,8 @@ $can_manage_permissions = tracs_user_can($conn, 'roles.manage_permissions');
 $actor = tracs_get_user_by_id($conn, $uid) ?? [];
 $actor_permissions = tracs_user_permissions($conn, $uid);
 $is_super_admin = ($actor['role_slug'] ?? '') === 'super_admin';
-$can_reset_2fa = $schema_ready && $is_super_admin && tracs_two_factor_schema_ready($conn);
+$is_admin_or_above = in_array((string)($actor['role_slug'] ?? ''), ['super_admin', 'admin'], true);
+$can_reset_2fa = $schema_ready && $is_admin_or_above && tracs_two_factor_schema_ready($conn);
 $build_signature = tracs_build_public_payload();
 
 $TC = new AlertTickerController($conn, $uid);
@@ -313,8 +317,8 @@ include __DIR__ . '/includes/header.php';
   <div class="panel um-once-panel">
     <div class="um-once-copy">
       <div>
-        <div class="um-once-title"><i data-lucide="key-round" class="icon-sm"></i> Temporary password for <?=esc($temp_password['for'])?></div>
-        <div class="page-sub">Shown once. Share it securely and ask the user to change it after login.</div>
+        <div class="um-once-title"><i data-lucide="key-round" class="icon-sm"></i> <?=!empty($temp_password['manual']) ? 'New password for ' : 'Temporary password for '?><?=esc($temp_password['for'])?></div>
+        <div class="page-sub"><?=!empty($temp_password['manual']) ? 'Shown once. Share it securely with the user.' : 'Shown once. Share it securely and ask the user to change it after login.'?></div>
       </div>
       <div class="um-copy-row">
         <input type="text" class="form-input" id="umTempPassword" value="<?=esc($temp_password['password'])?>" readonly>
@@ -365,14 +369,12 @@ include __DIR__ . '/includes/header.php';
     <form method="get" class="um-user-filter" aria-label="Filter users">
       <input type="hidden" name="tab" value="users">
       <div class="um-filter-search">
-        <label class="um-filter-label" for="umUserSearch">Search users</label>
         <div class="search-form-wrap">
           <i data-lucide="search" class="search-ic icon-sm"></i>
-          <input id="umUserSearch" type="text" name="q" class="search-input" placeholder="Name, username, email, phone, position" value="<?=esc($_GET['q'] ?? '')?>">
+          <input id="umUserSearch" type="text" name="q" class="search-input" placeholder="Name, username, email, phone, position" value="<?=esc($_GET['q'] ?? '')?>" aria-label="Search users">
         </div>
       </div>
-      <fieldset class="um-filter-group">
-        <legend>People</legend>
+      <fieldset class="um-filter-group" aria-label="Filter people">
         <select name="division_id" class="form-select compact-select" aria-label="Division">
           <option value="">All Divisions</option>
           <option value="0" <?=($_GET['division_id'] ?? '')==='0'?'selected':''?>>Without Division</option>
@@ -388,7 +390,7 @@ include __DIR__ . '/includes/header.php';
         </select>
         <select name="status" class="form-select compact-select" aria-label="Account status">
           <option value="">All Status</option>
-          <?php foreach(['active'=>'Active','inactive'=>'Inactive','suspended'=>'Suspended'] as $value=>$label): ?>
+          <?php foreach(['active'=>'Active','inactive'=>'Inactive','suspended'=>'Suspended','removed'=>'Removed'] as $value=>$label): ?>
             <option value="<?=$value?>" <?=($_GET['status'] ?? '')===$value?'selected':''?>><?=$label?></option>
           <?php endforeach; ?>
         </select>
@@ -762,6 +764,32 @@ include __DIR__ . '/includes/header.php';
 </div>
 <?php endif; ?>
 
+<?php if($can_reset_password): ?>
+<div class="modal-overlay hidden" id="passwordResetModal">
+  <form method="post" class="modal" onsubmit="return umConfirmPasswordResetSubmit(this)">
+    <?=csrf_input()?>
+    <input type="hidden" name="action" value="reset_password">
+    <input type="hidden" name="user_id" id="umPasswordResetUserId" value="">
+    <div class="modal-head">
+      <div><div class="modal-title">Reset password</div><div class="modal-sub" id="umPasswordResetSub">Set a new password or auto-generate one.</div></div>
+      <button type="button" class="modal-close" onclick="closeModal('passwordReset')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="um-permission-note warning"><i data-lucide="key-round" class="icon-sm"></i><span>This overrides the user's password immediately — their current password is not required. Leave both fields blank to auto-generate a temporary password, or set one manually (minimum 8 characters). The result is shown once and this action is logged.</span></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label" for="umPasswordResetNew">New Password <span style="color:var(--tx4)">(optional)</span></label><input class="form-input" type="password" id="umPasswordResetNew" name="new_password" autocomplete="new-password" placeholder="Leave blank to auto-generate"></div>
+        <div class="form-group"><label class="form-label" for="umPasswordResetConfirm">Confirm New Password</label><input class="form-input" type="password" id="umPasswordResetConfirm" autocomplete="new-password" placeholder="Re-type the new password"></div>
+      </div>
+      <div class="form-group"><label class="form-label" for="umPasswordResetReason">Reason <span style="color:var(--tx4)">(optional)</span></label><input class="form-input" type="text" id="umPasswordResetReason" name="reason" placeholder="Operational note for the audit log"></div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-ghost" onclick="closeModal('passwordReset')">Cancel</button>
+      <button type="submit" class="btn btn-primary"><i data-lucide="key-round" class="icon-sm"></i>Update Password</button>
+    </div>
+  </form>
+</div>
+<?php endif; ?>
+
 <div class="modal-overlay hidden" id="divisionFormModal">
   <form method="post" class="modal" data-tracs-modal-ajax data-close-delay="1000">
     <?=csrf_input()?>
@@ -853,6 +881,7 @@ const UM_PERMISSION_CATALOG = <?=json_encode($permission_catalog_payload, JSON_U
 const UM_ROLE_PERMISSIONS = <?=json_encode($role_permission_payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)?>;
 const UM_CAN_MANAGE_PERMISSIONS = <?=json_encode($can_manage_permissions)?>;
 const UM_CAN_RESET_2FA = <?=json_encode($can_reset_2fa)?>;
+const UM_CAN_RESET_PASSWORD = <?=json_encode($can_reset_password)?>;
 const UM_ACTOR_ROLE_ID = <?=json_encode((int)($actor['role_id'] ?? 0))?>;
 const UM_IS_SUPER_ADMIN = <?=json_encode($is_super_admin)?>;
 function umEsc(value){ return String(value ?? '').replace(/[&<>"']/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch])); }
@@ -1028,28 +1057,27 @@ function umUserFormSubmit(form){
   }
   return true;
 }
-function umConfirmReset(form){
-  if(umAllowDialogSubmit(form)) return true;
-  (async()=>{
-    const reason=await umPromptText({
-      type:'warning',
-      title:'Password reset reason',
-      message:'Add an optional reason for this password reset.',
-      inputLabel:'Reason (optional)',
-      required:false,
-      confirmText:'Continue'
-    });
-    form.querySelector('[name="reason"]').value=reason;
-    const ok=await tracsConfirm({
-      type:'warning',
-      title:'Generate temporary password',
-      message:'Generate a temporary password for this user? It will be shown once.',
-      confirmText:'Generate',
-      destructive:true
-    });
-    if(ok) umSubmitAfterDialog(form);
-  })();
-  return false;
+function umOpenPasswordResetModal(userId, userName){
+  if(!UM_CAN_RESET_PASSWORD || !userId) return;
+  umSetValue('umPasswordResetUserId', userId);
+  umSetValue('umPasswordResetNew', '');
+  umSetValue('umPasswordResetConfirm', '');
+  umSetValue('umPasswordResetReason', '');
+  const sub=document.getElementById('umPasswordResetSub');
+  if(sub) sub.textContent=`Set a new password for ${userName || 'this user'}, or leave blank to auto-generate.`;
+  openModal('passwordReset');
+}
+function umResetPasswordForUser(u){
+  umOpenPasswordResetModal(u?.id, u?.name || u?.email);
+}
+function umConfirmPasswordResetSubmit(form){
+  const newPw=document.getElementById('umPasswordResetNew')?.value || '';
+  const confirmPw=document.getElementById('umPasswordResetConfirm')?.value || '';
+  if(newPw !== ''){
+    if(newPw.length < 8){ toast('Password must be at least 8 characters.','error'); return false; }
+    if(newPw !== confirmPw){ toast('New password and confirmation do not match.','error'); return false; }
+  }
+  return true;
 }
 function umOpenTwoFactorResetModal(btn){
   umOpenTwoFactorResetModalForUser(umData(btn,'user'));
@@ -1147,6 +1175,9 @@ function umOpenUserDrawer(btn){
     `<button type="button" class="btn btn-ghost btn-sm" onclick="umRenderPermissionDrawer(window.UM_DRAWER_USER || {})"><i data-lucide="shield-check" class="icon-sm"></i>Permissions</button>`,
     `<a class="btn btn-ghost btn-sm" href="?tab=activity&target_user_id=${u.id}"><i data-lucide="history" class="icon-sm"></i>Activity</a>`
   ];
+  if(UM_CAN_RESET_PASSWORD){
+    drawerActions.push(`<button type="button" class="btn btn-ghost btn-sm" onclick="umResetPasswordForUser(window.UM_DRAWER_USER || {})"><i data-lucide="key-round" class="icon-sm"></i>Reset Password</button>`);
+  }
   if(UM_CAN_RESET_2FA){
     drawerActions.push(`<button type="button" class="btn btn-ghost btn-sm" onclick="umOpenTwoFactorResetModalForUser(window.UM_DRAWER_USER || {})"><i data-lucide="shield-off" class="icon-sm"></i>Reset 2FA</button>`);
   }
@@ -1209,7 +1240,7 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape') umCloseDrawers();
 
 <?php if($flash): ?>
 <script>
-document.addEventListener('DOMContentLoaded', () => toast(<?=json_encode($flash['message'])?>, <?=json_encode($flash['type'])?>));
+document.addEventListener('DOMContentLoaded', () => toast(<?=json_encode($flash['message'])?>, <?=json_encode($flash['type'])?><?= ($flash['type'] ?? '') === 'success' ? ', 5000' : '' ?>));
 </script>
 <?php endif; ?>
 

@@ -232,6 +232,7 @@ function tracs_default_role_permissions(string $roleSlug): array {
             'settings.manage',
         ])),
         'supervisor' => array_values(array_unique(array_merge($profile, [
+            'dashboard.view',
             'users.view',
             'users.update',
             'users.suspend',
@@ -809,7 +810,7 @@ function tracs_user_role_badge_class(string $roleSlug): string {
 function tracs_user_status_badge_class(string $status): string {
     return match ($status) {
         'active' => 'b-active',
-        'suspended' => 'b-critical',
+        'suspended', 'removed' => 'b-critical',
         default => 'b-done',
     };
 }

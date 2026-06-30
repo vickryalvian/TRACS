@@ -114,6 +114,7 @@ let _lastToast=null;
 const tracsToastDocks=new Map();
 const tracsModalToastDocks=new WeakMap();
 const tracsInlineToastDocks=new WeakMap();
+let tracsLoginToastDockNode=null;
 const tracsToastDefaults={success:3500,info:4000,warning:7000,error:9000};
 const tracsModalOverlaySelector='.modal-overlay, .dpc-modal, .infra-modal, .cf-modal, .tracs-dialog-overlay';
 function tracsNoticeType(type){
@@ -255,6 +256,22 @@ function tracsToastDock(context='page',position='',modal=null,sourceElement=null
   tracsToastDocks.set(key,dock);
   return dock;
 }
+function tracsLoginToastDock(position='login-top'){
+  const card=document.querySelector('.login-card');
+  if(!card)return null;
+  const shell=card.closest('.login-shell') || card.parentElement || document.body;
+  if(!tracsLoginToastDockNode || !tracsLoginToastDockNode.isConnected){
+    tracsLoginToastDockNode=document.createElement('div');
+    tracsLoginToastDockNode.className=`toast-dock toast-dock--login toast-dock--${position}`;
+    tracsLoginToastDockNode.dataset.toastContext='login';
+    shell.insertBefore(tracsLoginToastDockNode,card);
+  }
+  const oldPosition=tracsLoginToastDockNode.dataset.toastPosition;
+  if(oldPosition && oldPosition!==position)tracsLoginToastDockNode.classList.remove(`toast-dock--${oldPosition}`);
+  tracsLoginToastDockNode.classList.add(`toast-dock--${position}`);
+  tracsLoginToastDockNode.dataset.toastPosition=position;
+  return tracsLoginToastDockNode;
+}
 window.addEventListener('resize',()=>{
   document.querySelectorAll('.toast-dock--modal-center, .toast-dock--modal-top-right').forEach(dock=>tracsPositionModalToastDock(dock,dock.parentElement));
 });
@@ -281,7 +298,9 @@ function showToast(...args){
   const context=tracsToastContext({...options,sourceElement});
   const position=options.position || (context === 'modal' ? 'modal-center' : '');
   const modal=options.modal || options.contextElement || (context === 'modal' ? tracsSourceModal(sourceElement) : null);
-  const dock=tracsToastDock(context,position,modal,sourceElement,options.maxWidth);
+  const dock=(context === 'page' && document.querySelector('.login-card') && options.loginGlobal !== true)
+    ? tracsLoginToastDock(position || 'login-top')
+    : tracsToastDock(context,position,modal,sourceElement,options.maxWidth);
   const title=parsed.title;
   const message=parsed.message;
   let toastTitle=String(title || '').trim();
@@ -321,9 +340,11 @@ function showToast(...args){
   t.setAttribute('aria-live',noticeType === 'error' ? 'assertive' : 'polite');
   const radar=document.createElement('span');
   radar.className='toast-radar';
+  radar.setAttribute('aria-hidden','true');
   const icon=document.createElement('i');
   icon.dataset.lucide=ic;
   icon.className='toast-icon';
+  icon.setAttribute('aria-hidden','true');
   radar.appendChild(icon);
   const body=document.createElement('span');
   body.className='toast-body';
@@ -845,7 +866,8 @@ function tracsOpenSystemDialog(options={},mode='alert'){
   const icon=toastIconFor(type);
   overlay.dataset.type=type;
   dialog.dataset.type=type;
-  overlay.querySelector('.tracs-dialog-icon i').dataset.lucide=icon;
+  const iconWrap=overlay.querySelector('.tracs-dialog-icon');
+  iconWrap.innerHTML='<i data-lucide="'+icon+'" class="icon-sm"></i>';
   overlay.querySelector('#tracsDialogTitle').textContent=String(options.title || (mode === 'confirm' ? 'Confirm action' : 'Notice'));
   const sub=overlay.querySelector('#tracsDialogSub');
   sub.textContent=String(options.subtitle || (mode === 'confirm' ? 'Please review this action' : 'TRACS notification'));
@@ -1976,7 +1998,7 @@ async function deleteFeedback(id) {
           toast('Feedback deleted', 'success');
           reloadAfterToast();
         }
-        else toast(res.error || 'Delete failed', 'error');
+        else toast(res.error || "Couldn't delete the feedback entry. Please try again.", 'error');
     });
 }
 
@@ -2036,7 +2058,7 @@ function quickSaveFeedback() {
             toast('Feedback added', 'success');
             reloadAfterToast();
         } else {
-            toast(res.error || 'Save failed', 'error');
+            toast(res.error || "Couldn't save the feedback. Please check the fields and try again.", 'error');
         }
     });
 }
@@ -3856,7 +3878,7 @@ async function archiveTickerMsg(id){
 
       } else {
 
-        toast(d.message || 'Error','error');
+        toast(d.message || "Couldn't archive the announcement. Please try again.",'error');
       }
 
     },
@@ -4534,7 +4556,6 @@ document.addEventListener('DOMContentLoaded', () => {
   if(loginError?.textContent.trim()){
     showToast(loginError.textContent.trim(),'error',{
       context:'page',
-      position:'top-right',
       persistent:true,
       closable:true,
       priority:'critical'
@@ -4650,6 +4671,7 @@ API.DT = {
 
 /* Status badge class map (mirrors PHP dt_status_class) */
 const DT_STATUS_CLASS = {
+  'pending'              : 'dt-status-awaiting',
   'pending transfer'    : 'dt-status-pending',
   'locked'              : 'dt-status-locked',
   'error epp code'      : 'dt-status-error',
@@ -4662,6 +4684,7 @@ const DT_STATUS_CLASS = {
   'renew period'        : 'dt-status-renew',
 };
 const DT_STATUS_LABEL = {
+  'pending'              : 'Pending',
   'pending transfer'    : 'Pending Transfer',
   'locked'              : 'Locked',
   'error epp code'      : 'Error EPP Code',
@@ -4695,7 +4718,7 @@ async function quickStatusUpdate(id, selectEl) {
     toast('Status updated', 'success');
     [...selectEl.options].forEach(o => { o.defaultSelected = (o.value === newStatus); });
   } else {
-    toast(d.message || 'Error updating status', 'error');
+    toast(d.message || "Couldn't update the status. Please try again.", 'error');
     if (badge && prevStatus) {
       badge.className  = 'dt-status ' + (DT_STATUS_CLASS[prevStatus] || '');
       badge.textContent = DT_STATUS_LABEL[prevStatus] || prevStatus;
@@ -4721,7 +4744,7 @@ async function quickMoveUpdate(id, selectEl) {
     toast(newVal ? 'Move domain: ' + newVal : 'Move domain cleared', 'success');
     [...selectEl.options].forEach(o => { o.defaultSelected = (o.value === newVal); });
   } else {
-    toast(d.message || 'Error updating', 'error');
+    toast(d.message || "Couldn't update the move-domain field. Please try again.", 'error');
     selectEl.value = prevVal;
     selectEl.classList.toggle('has-value', !!prevVal);
     window.TRACSDropdowns?.syncSelect(selectEl);
@@ -4746,7 +4769,7 @@ async function quickEndDateUpdate(id, inputEl) {
     inputEl.dataset.prev = newVal;
     toast(newVal ? 'End date set' : 'End date cleared', 'success');
   } else {
-    toast(d.message || 'Error updating end date', 'error');
+    toast(d.message || "Couldn't update the end date. Please try again.", 'error');
     inputEl.value = prevVal;
     inputEl.classList.toggle('has-value', !!prevVal);
   }
@@ -4782,7 +4805,7 @@ async function quickSaveDt() {
     document.getElementById('nDomain').focus();
     _reload();
   } else {
-    toast(d.message || 'Error saving transfer', 'error');
+    toast(d.message || "Couldn't save the transfer. Please try again.", 'error');
   }
 }
 
@@ -4842,7 +4865,7 @@ function deleteDt(id) {
       toast('Transfer deleted', 'success');
       removeRow(`[data-dt-id="${id}"]`);
     } else {
-      toast(d.message || 'Error deleting transfer', 'error');
+      toast(d.message || "Couldn't delete the transfer. Please try again.", 'error');
     }
   });
 }
@@ -4905,7 +4928,7 @@ async function quickSaveBt() {
     document.getElementById('nAmount').focus();
     _reload();
   } else {
-    toast(d.message || 'Error saving transfer', 'error');
+    toast(d.message || "Couldn't save the transfer. Please try again.", 'error');
   }
 }
 
@@ -4974,7 +4997,7 @@ function deleteBt(id) {
       toast('Transfer deleted', 'success');
       removeRow(`[data-bt-id="${id}"]`);
     } else {
-      toast(d.message || 'Error deleting transfer', 'error');
+      toast(d.message || "Couldn't delete the transfer. Please try again.", 'error');
     }
   });
 }

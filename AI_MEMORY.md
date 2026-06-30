@@ -11,6 +11,30 @@
 - **Timezone:** `Asia/Jakarta` / WIB.
 - **Runtime style:** Server-rendered pages plus authenticated JSON/CSV APIs. There is no Composer, npm, SPA router, or frontend build step.
 
+## Multi-Machine Git Workflow
+
+This repo is actively developed from more than one machine (PC and MacBook). The
+GitHub remote (`origin`) is the single source of truth, not either local working
+tree. To avoid divergent or lost work:
+
+1. **At the start of every session**, before editing anything: `git fetch origin`,
+   then compare local `HEAD` against `origin/<current-branch>`. If local is
+   behind, `git pull --rebase origin <branch>` before making changes. If
+   uncommitted changes already exist in the working tree, surface them to the
+   user rather than assuming they are stale or safe to discard.
+2. **Never force-push** a shared branch (e.g.
+   `feat/user-mgmt-auth-domain-ui-improvements`, `main`) unless the user
+   explicitly asks for it. A force-push from one machine can silently discard
+   unpushed commits made on the other machine.
+3. **At natural stopping points** — end of a task, before a long pause, or
+   whenever the user is likely to switch machines — commit and push completed
+   work rather than leaving it only on local disk. If a session ends with
+   unpushed commits, say so explicitly.
+4. Production (`/opt/tracs` on the VPS) is deployed via manual file-copy, not a
+   `git pull` of `main` — see `deployment-summary.md` and
+   `docs/USER_LIFECYCLE_REMEDIATION.md`. Do not assume pushing to GitHub alone
+   updates production.
+
 ## Current Direction
 
 - Keep the interface clean, compact, operational-first, and low-noise.
@@ -37,6 +61,24 @@ font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Ro
 - Checklist and Reminder are merged. Do not recreate a separate dashboard Reminder tab unless explicitly requested.
 - Reminder List belongs inside the combined tab. The standalone `reminders.php` page remains an implemented full-list page.
 - Assigned tasks create linked checklist items and, when due dates exist, reminders. New assignments can therefore appear in the combined tab and Assignments tab.
+
+## User Lifecycle Rules
+
+- Page guards return **404** (not 403) for unauthorized accounts. Every role that
+  lands on the dashboard must hold `dashboard.view`; the login flow falls back to
+  an accessible page (ultimately `profile.php`) so a successful login never 404s.
+  Do not remove `dashboard.view` from operational roles.
+- User removal is a **non-destructive archive**, never a hard delete. It marks the
+  account `removed`, sets `is_active = 0`, preserves the original identity in
+  `archived_email`/`archived_username`, and releases the live `email`/`username`
+  as id-tied tombstones so they can be reused by a new account.
+- The identity row is never deleted. History references users by immutable id, so
+  case history, audit logs, reporting, measurements, and ISO 9001 traceability
+  stay intact. A recreated account always gets a new id and never inherits history.
+- `emailExists`/`usernameExists` ignore `removed` rows; `listUsers` hides `removed`
+  by default. Removal is terminal (recreate, do not reactivate).
+- See `docs/USER_LIFECYCLE_REMEDIATION.md` and migration
+  `2026_06_30_user_removal_release.sql`.
 
 ## Case Ticket Rules
 

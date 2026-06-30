@@ -257,6 +257,94 @@ final class ShiftingAssignmentService {
         return ['assignment' => $assignment, 'history' => $history];
     }
 
+    public function deleteAssignment(int $id): bool {
+        $this->requireManage();
+        $existing = $this->getScopedAssignmentRecord($id);
+        if (!$existing) return false;
+        if ($this->hasMonthlyTemplateItemLink($id)) {
+            throw new DomainException(
+                'Template-generated assignments cannot be deleted through this pilot endpoint.'
+            );
+        }
+
+        $this->conn->begin_transaction();
+        try {
+            $auditBefore = $existing;
+            $auditBefore['_dependents'] = $this->getDeleteDependentSnapshot($id);
+            $this->writeRequiredAssignmentAudit(
+                $id,
+                'deleted',
+                $auditBefore,
+                null,
+                'Deleted through controlled v1 API.'
+            );
+            if ($this->tableExists('shift_warnings')) {
+                $stmt = $this->conn->prepare(
+                    'DELETE FROM shift_warnings WHERE shift_assignment_id=?'
+                );
+                if (!$stmt) throw new RuntimeException('Unable to prepare warning cleanup.');
+                $stmt->bind_param('i', $id);
+                if (!$stmt->execute()) {
+                    $stmt->close();
+                    throw new RuntimeException('Unable to clean assignment warnings.');
+                }
+                $stmt->close();
+            }
+
+            $stmt = $this->conn->prepare(
+                'DELETE FROM shift_assignments WHERE id=? LIMIT 1'
+            );
+            if (!$stmt) throw new RuntimeException('Unable to prepare assignment deletion.');
+            $stmt->bind_param('i', $id);
+            if (!$stmt->execute()) {
+                $stmt->close();
+                throw new RuntimeException('Unable to delete assignment.');
+            }
+            $deleted = $stmt->affected_rows === 1;
+            $stmt->close();
+            if (!$deleted) {
+                throw new RuntimeException('Assignment not found.');
+            }
+
+            $this->conn->commit();
+            return true;
+        } catch (Throwable $error) {
+            $this->conn->rollback();
+            throw $error;
+        }
+    }
+
+    private function hasMonthlyTemplateItemLink(int $assignmentId): bool {
+        if (!$this->tableExists('shift_monthly_template_items')) return false;
+        return $this->fetchOne(
+            'SELECT id FROM shift_monthly_template_items WHERE generated_assignment_id=? LIMIT 1',
+            'i',
+            [$assignmentId]
+        ) !== null;
+    }
+
+    private function getDeleteDependentSnapshot(int $assignmentId): array {
+        $snapshot = [
+            'shift_warnings' => [],
+            'holiday_coverage_assignments' => [],
+        ];
+        if ($this->tableExists('shift_warnings')) {
+            $snapshot['shift_warnings'] = $this->fetchAll(
+                'SELECT * FROM shift_warnings WHERE shift_assignment_id=? ORDER BY id',
+                'i',
+                [$assignmentId]
+            );
+        }
+        if ($this->tableExists('holiday_coverage_assignments')) {
+            $snapshot['holiday_coverage_assignments'] = $this->fetchAll(
+                'SELECT * FROM holiday_coverage_assignments WHERE shift_assignment_id=? ORDER BY id',
+                'i',
+                [$assignmentId]
+            );
+        }
+        return $snapshot;
+    }
+
     public function saveAssignment(array $input): array {
         $this->requireManage();
         $id = max(0, (int)($input['id'] ?? 0));
@@ -2302,6 +2390,48 @@ final class ShiftingAssignmentService {
         if (!$stmt) return;
         $stmt->bind_param('isisss', $assignmentId, $action, $this->actorId, $beforeJson, $afterJson, $note);
         $stmt->execute();
+        $stmt->close();
+    }
+
+    private function writeRequiredAssignmentAudit(
+        int $assignmentId,
+        string $action,
+        ?array $before,
+        ?array $after,
+        string $note
+    ): void {
+        if (!$this->tableExists('assignment_audit_logs')) {
+            throw new RuntimeException('Assignment audit storage is unavailable.');
+        }
+        $beforeJson = $before
+            ? json_encode($before, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+            : null;
+        $afterJson = $after
+            ? json_encode($after, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+            : null;
+        if (($before && $beforeJson === false) || ($after && $afterJson === false)) {
+            throw new RuntimeException('Unable to serialize assignment audit.');
+        }
+
+        $stmt = $this->conn->prepare("
+            INSERT INTO assignment_audit_logs
+              (assignment_id,action,changed_by,before_snapshot,after_snapshot,note,changed_at)
+            VALUES (?,?,?,?,?,?,NOW())
+        ");
+        if (!$stmt) throw new RuntimeException('Unable to prepare assignment audit.');
+        $stmt->bind_param(
+            'isisss',
+            $assignmentId,
+            $action,
+            $this->actorId,
+            $beforeJson,
+            $afterJson,
+            $note
+        );
+        if (!$stmt->execute()) {
+            $stmt->close();
+            throw new RuntimeException('Unable to write assignment audit.');
+        }
         $stmt->close();
     }
 

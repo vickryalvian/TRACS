@@ -59,6 +59,10 @@ Current migrations:
 - `2026_06_08_shifting_assignment.sql`
 - `2026_06_13_main_shift_hours.sql`
 - `2026_06_13_shifting_assignment_audit_fixes.sql`
+- `2026_06_30_user_removed_status.sql` — adds the `removed` user status value.
+- `2026_06_30_user_removal_release.sql` — safe user removal (archive + identity
+  release) plus `dashboard.view` repair for operational roles. Idempotent;
+  supersedes the status-only migration above by also ensuring the enum.
 
 ## File Structure
 
@@ -140,10 +144,18 @@ config/
 Use this naming pattern:
 
 ```text
-YYYY_MM_DD_short_description.sql
+YYYY_MM_DD_short_description/
+  up.sql
+  down.sql
 ```
 
-Migrations should be safe to re-run when practical. For column/index additions, use `information_schema` checks or helper procedures. For destructive changes, include backup instructions, rollback notes, and a clear reason.
+Existing single-file migrations remain part of the current deployment history.
+New refactor-phase migrations must use paired `up.sql` and `down.sql` files.
+They should be safe to re-run when practical. For column/index additions, use
+`information_schema` checks or helper procedures. For destructive changes,
+include backup instructions, rollback notes, verification queries, data-loss
+warnings, and a clear reason. A database backup remains mandatory when a down
+migration cannot recreate removed or transformed data.
 
 ## Backup Recommendation
 

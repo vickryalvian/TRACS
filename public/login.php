@@ -64,7 +64,7 @@ window.TRACS_BUILD_INFO = <?=json_encode($tracs_build_info, JSON_UNESCAPED_SLASH
       <div class="login-p">Authorized personnel only. Credentials required.</div>
     </div>
     <div class="login-body">
-      <?php if($error):?><div class="err-box" role="alert"><?=htmlspecialchars($error, ENT_QUOTES, 'UTF-8')?></div><?php endif;?>
+      <?php if($error):?><div class="err-box" role="alert"><i data-lucide="circle-alert" class="icon-sm err-box-icon"></i><span><?=htmlspecialchars($error, ENT_QUOTES, 'UTF-8')?></span></div><?php endif;?>
       <form action="/auth/login.php" method="POST" class="login-body login-form">
         <?= csrf_input() ?>
         <div class="form-group">
@@ -102,4 +102,8 @@ window.TRACS_BUILD_INFO = <?=json_encode($tracs_build_info, JSON_UNESCAPED_SLASH
 </div>
 <?php $_js_v = @filemtime(__DIR__ . '/assets/tracs.js') ?: time(); ?>
 <script src="assets/tracs.js?v=<?=$_js_v?>"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<script>
+  lucide.createIcons();
+</script>
 </body></html>

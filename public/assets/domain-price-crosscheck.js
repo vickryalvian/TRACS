@@ -189,16 +189,23 @@ function closeExportModal() {
 }
 
 // 4c. Domain Extension Modal
-function openExtensionModal() {
+function openExtensionModal(focusSection) {
     const modal = document.getElementById('extensionModal');
     if (modal) {
         tracsOpenModalElement(modal, { display: 'flex' });
         window.TRACSDropdowns?.init?.(modal);
         window.TRACSDropdowns?.syncAll?.();
+        if (focusSection === 'registrars') {
+            const registrarCard = modal.querySelector('.dpc-source-config-card');
+            registrarCard?.scrollIntoView({ block: 'start' });
+        }
         const sourceInput = modal.querySelector('input[name="source_name"]');
         const extensionInput = modal.querySelector('input[name="tld_name"]');
-        (sourceInput || extensionInput)?.focus();
+        (focusSection === 'registrars' ? sourceInput : (sourceInput || extensionInput))?.focus();
     }
+}
+function openRegistrarManagementModal() {
+    openExtensionModal('registrars');
 }
 
 function closeExtensionModal() {
@@ -1275,7 +1282,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     dpcReloadAfterNotice();
                 } else {
                     notesForm.dispatchEvent(new CustomEvent('tracs:save-error', { bubbles: true }));
-                    dpcToast('error', 'Save failed', data.message || 'Unknown error');
+                    dpcToast('error', 'Save failed', data.message || 'The note could not be saved. Please try again.');
                 }
             })
             .catch(error => {
@@ -1329,7 +1336,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     handleModalError({
                         modal: 'assignTaskModal',
                         button: btnSave,
-                        error: { message: data.message || 'Unknown error' },
+                        error: { message: data.message || '' },
                         fallbackMessage: 'The task could not be assigned. Please check the data and try again.'
                     });
                 }
@@ -1401,7 +1408,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     dpcReloadAfterNotice();
                 } else {
                     btn.dispatchEvent(new CustomEvent('tracs:save-error', { bubbles: true }));
-                    dpcToast('error', 'Matrix save failed', data.message || 'Unknown error');
+                    dpcToast('error', 'Matrix save failed', data.message || 'The matrix could not be saved. Please try again.');
                 }
             })
             .catch(error => {
