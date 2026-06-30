@@ -122,7 +122,7 @@ class UserManagementController {
 
     private function normalizeStatus(mixed $value): string {
         $status = (string)($value ?? 'active');
-        if (!in_array($status, ['active', 'inactive', 'suspended'], true)) {
+        if (!in_array($status, ['active', 'inactive', 'suspended', 'removed'], true)) {
             throw new InvalidArgumentException('Invalid account status.');
         }
         return $status;
@@ -469,21 +469,57 @@ class UserManagementController {
         return ['message' => $status === 'active' ? 'User activated successfully.' : 'User access updated successfully.'];
     }
 
-    public function resetPassword(int $userId, string $reason = ''): array {
+    public function removeUser(int $userId, string $reason): array {
+        tracs_require_permission($this->conn, 'users.delete');
+        $before = $this->model->getUserById($userId);
+        if (!$before) {
+            throw new RuntimeException('User not found.');
+        }
+        $this->assertCanManageUser($before);
+        if ($userId === $this->actorId) {
+            throw new RuntimeException('You cannot remove your own account.');
+        }
+        if (tracs_is_last_active_super_admin($this->conn, $userId)) {
+            throw new RuntimeException('The last active Super Admin cannot be removed.');
+        }
+        $reason = $this->cleanLongText($reason, 500);
+        if ($reason === '') {
+            throw new InvalidArgumentException('A reason is required to remove a user.');
+        }
+
+        $this->model->updateUserStatus($userId, 'removed', $this->actorId);
+        $after = $this->model->getUserById($userId);
+        tracs_log_user_event($this->conn, $this->actorId, 'remove_user', 'user', $userId, $before, $after, $reason);
+
+        return ['message' => 'User removed. Their account and history are preserved but they can no longer sign in.'];
+    }
+
+    public function resetPassword(int $userId, string $reason = '', string $manualPassword = ''): array {
         tracs_require_permission($this->conn, 'users.reset_password');
         $target = $this->model->getUserById($userId);
         if (!$target) {
             throw new RuntimeException('User not found.');
         }
         $this->assertCanManageUser($target);
-        $password = tracs_generate_temporary_password();
+        $manualPassword = trim($manualPassword);
+        $isManual = $manualPassword !== '';
+        if ($isManual) {
+            $errors = tracs_password_policy_errors($manualPassword);
+            if ($errors) {
+                throw new InvalidArgumentException(implode(' ', $errors));
+            }
+            $password = $manualPassword;
+        } else {
+            $password = tracs_generate_temporary_password();
+        }
         $this->model->updatePasswordHash($userId, password_hash($password, PASSWORD_DEFAULT), $this->actorId);
-        tracs_log_user_event($this->conn, $this->actorId, 'reset_password', 'user', $userId, ['last_password_change_at' => $target['last_password_change_at'] ?? null], ['temporary_password_generated' => true], $this->cleanLongText($reason, 500));
+        tracs_log_user_event($this->conn, $this->actorId, 'reset_password', 'user', $userId, ['last_password_change_at' => $target['last_password_change_at'] ?? null], ['temporary_password_generated' => !$isManual, 'manual_password_set' => $isManual], $this->cleanLongText($reason, 500));
 
         return [
-            'message' => 'Temporary password generated. It is visible once below.',
+            'message' => $isManual ? 'Password updated successfully.' : 'Temporary password generated successfully.',
             'temporary_password' => $password,
             'temporary_password_for' => $target['display_name'] ?? $target['email'],
+            'manual_password' => $isManual,
         ];
     }
 
@@ -509,8 +545,8 @@ class UserManagementController {
             ['two_factor_reset_required' => true],
             $this->cleanLongText($reason, 500)
         );
-        tracs_auth_log_event($this->conn, 'two_factor_reset', 'success', (string)($target['email'] ?? ''), $userId, 'reset_by_super_admin');
-        return ['message' => 'Two-factor authentication reset. The user must set it up again on next login.'];
+        tracs_auth_log_event($this->conn, 'two_factor_reset', 'success', (string)($target['email'] ?? ''), $userId, 'reset_by_admin');
+        return ['message' => 'Two-factor authentication reset. The user can sign in normally and may set up 2FA again from Profile > Security.'];
     }
 
     public function createDivision(array $input): array {

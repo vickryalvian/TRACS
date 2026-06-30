@@ -94,7 +94,7 @@ $_task_monitoring_items = [
   ],
   [
     'label' => 'Domain Transfer Log',
-    'href' => 'domains.php',
+    'href' => 'domain-transfer.php',
     'icon' => 'globe',
     'active_page' => 'domains',
     'visible' => $_can_domains,

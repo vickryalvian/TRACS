@@ -904,11 +904,11 @@ CREATE TABLE IF NOT EXISTS `tracs_currency_history` (
 CREATE TABLE IF NOT EXISTS `domain_transfers` (
   `id`                       INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `domain_name`              VARCHAR(255) NOT NULL,
-  `transfer_status`          ENUM('pending transfer','locked','error epp code','move domain','done','cancelled','retransferred','transferred away','pending verification','renew period')
+  `transfer_status`          ENUM('pending','pending transfer','locked','error epp code','move domain','done','cancelled','retransferred','transferred away','pending verification','renew period')
                                       NOT NULL DEFAULT 'pending transfer',
   `process_start_date`       DATE                  DEFAULT NULL,
   `process_end_date`         DATE                  DEFAULT NULL,
-  `webnic_reseller_transfer` ENUM('Webnic','Resellercamp') DEFAULT NULL,
+  `webnic_reseller_transfer` VARCHAR(100) DEFAULT NULL,
   `notes`                    TEXT                  DEFAULT NULL,
   `created_by`               INT UNSIGNED          DEFAULT NULL,
   `created_by_name`          VARCHAR(150)          DEFAULT NULL,

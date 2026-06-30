@@ -864,7 +864,8 @@ function tracsOpenSystemDialog(options={},mode='alert'){
   const icon=toastIconFor(type);
   overlay.dataset.type=type;
   dialog.dataset.type=type;
-  overlay.querySelector('.tracs-dialog-icon i').dataset.lucide=icon;
+  const iconWrap=overlay.querySelector('.tracs-dialog-icon');
+  iconWrap.innerHTML='<i data-lucide="'+icon+'" class="icon-sm"></i>';
   overlay.querySelector('#tracsDialogTitle').textContent=String(options.title || (mode === 'confirm' ? 'Confirm action' : 'Notice'));
   const sub=overlay.querySelector('#tracsDialogSub');
   sub.textContent=String(options.subtitle || (mode === 'confirm' ? 'Please review this action' : 'TRACS notification'));
@@ -4658,6 +4659,7 @@ API.DT = {
 
 /* Status badge class map (mirrors PHP dt_status_class) */
 const DT_STATUS_CLASS = {
+  'pending'              : 'dt-status-awaiting',
   'pending transfer'    : 'dt-status-pending',
   'locked'              : 'dt-status-locked',
   'error epp code'      : 'dt-status-error',
@@ -4670,6 +4672,7 @@ const DT_STATUS_CLASS = {
   'renew period'        : 'dt-status-renew',
 };
 const DT_STATUS_LABEL = {
+  'pending'              : 'Pending',
   'pending transfer'    : 'Pending Transfer',
   'locked'              : 'Locked',
   'error epp code'      : 'Error EPP Code',

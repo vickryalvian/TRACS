@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../core/security/csrf.php';
 require_once __DIR__ . '/../core/security/error_response.php';
+require_once __DIR__ . '/../core/security/auth_hardening.php';
 tracs_start_session();
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/auth/auth_check.php';
@@ -168,6 +169,24 @@ include __DIR__ . '/includes/header.php';
         </div>
         <div class="modal-foot"><button type="submit" class="btn btn-primary"><i data-lucide="lock-keyhole" class="icon-sm"></i>Update Password</button></div>
       </form>
+
+      <?php $tfa_configured = tracs_two_factor_user_configured($me ?? []); ?>
+      <div class="panel profile-section-panel">
+        <div class="panel-head"><span class="panel-title">Two-Factor Authentication</span><span class="panel-meta">Optional extra login step using an authenticator app</span></div>
+        <div class="profile-form-body">
+          <div class="profile-readonly-grid">
+            <div><span>Status</span><strong><?=$tfa_configured ? 'Enabled' : 'Not enabled'?></strong></div>
+          </div>
+          <?php if($tfa_configured): ?>
+            <p class="form-hint">Two-factor authentication is active on your account. Contact a Super Admin or Admin if you need it reset.</p>
+          <?php else: ?>
+            <p class="form-hint">2FA is optional. Enable it for extra protection on your account; you can still sign in normally without it.</p>
+          <?php endif; ?>
+        </div>
+        <?php if(!$tfa_configured): ?>
+          <div class="modal-foot"><a class="btn btn-primary" href="/two-factor-setup.php"><i data-lucide="shield-check" class="icon-sm"></i>Set Up 2FA</a></div>
+        <?php endif; ?>
+      </div>
     <?php endif; ?>
 
     <?php if($section === 'preferences'): ?>

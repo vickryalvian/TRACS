@@ -7,35 +7,48 @@ header('Pragma: no-cache');
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../core/user_management.php';
 
-if (tracs_is_fully_authenticated()) {
-    header('Location: /index.php');
-    exit;
-}
+// Two entry points are supported:
+// 1) Voluntary setup by an already-logged-in user (e.g. Profile > Security).
+// 2) Legacy pending-2FA session (kept for back-compat / forced setup flows).
+$voluntary = tracs_is_fully_authenticated();
 
-$pendingUserId = tracs_auth_pending_user_id();
-if ($pendingUserId <= 0 || tracs_auth_pending_expired()) {
-    if ($pendingUserId > 0) {
-        tracs_auth_log_event($conn, 'two_factor_session_expired', 'expired', tracs_auth_pending_identifier(), $pendingUserId, 'setup_timeout');
+if ($voluntary) {
+    $pendingUserId = (int)($_SESSION['user_id'] ?? 0);
+    $identifier = (string)($_SESSION['user_email'] ?? '');
+} else {
+    $pendingUserId = tracs_auth_pending_user_id();
+    if ($pendingUserId <= 0 || tracs_auth_pending_expired()) {
+        if ($pendingUserId > 0) {
+            tracs_auth_log_event($conn, 'two_factor_session_expired', 'expired', tracs_auth_pending_identifier(), $pendingUserId, 'setup_timeout');
+        }
+        tracs_auth_clear_pending_2fa();
+        $_SESSION['login_error'] = TRACS_2FA_SESSION_EXPIRED;
+        $_SESSION['login_show_help'] = true;
+        header('Location: /login.php');
+        exit;
     }
-    tracs_auth_clear_pending_2fa();
-    $_SESSION['login_error'] = TRACS_2FA_SESSION_EXPIRED;
-    $_SESSION['login_show_help'] = true;
-    header('Location: /login.php');
-    exit;
+    $identifier = tracs_auth_pending_identifier();
 }
 
 $user = tracs_get_user_by_id($conn, $pendingUserId);
 if (!$user || !tracs_user_can_login($user) || !tracs_two_factor_ensure_schema($conn)) {
-    tracs_auth_log_event($conn, 'two_factor_setup_blocked', 'blocked', tracs_auth_pending_identifier(), $pendingUserId, 'account_or_schema_unavailable');
+    tracs_auth_log_event($conn, 'two_factor_setup_blocked', 'blocked', $identifier, $pendingUserId, 'account_or_schema_unavailable');
+    if ($voluntary) {
+        header('Location: /index.php');
+        exit;
+    }
     tracs_auth_clear_pending_2fa();
     $_SESSION['login_error'] = 'Two-factor authentication is not ready. Please contact your administrator.';
     $_SESSION['login_show_help'] = true;
     header('Location: /login.php');
     exit;
 }
-$user = tracs_get_user_by_id($conn, $pendingUserId) ?: $user;
 
 if (tracs_two_factor_locked($user)) {
+    if ($voluntary) {
+        header('Location: /index.php');
+        exit;
+    }
     tracs_auth_clear_pending_2fa();
     $_SESSION['login_error'] = TRACS_AUTH_GENERIC_LOCKED;
     $_SESSION['login_show_help'] = true;
@@ -43,8 +56,9 @@ if (tracs_two_factor_locked($user)) {
     exit;
 }
 
-if (tracs_two_factor_user_configured($user) && tracs_auth_pending_mode() !== 'setup') {
-    header('Location: /two-factor-verify.php');
+if (tracs_two_factor_user_configured($user)) {
+    // Already enabled: nothing left to set up.
+    header('Location: ' . ($voluntary ? '/profile.php?section=security' : '/two-factor-verify.php'));
     exit;
 }
 
@@ -56,8 +70,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $secret = (string)($_SESSION['tracs_pending_2fa_secret'] ?? '');
     $code = (string)($_POST['verification_code'] ?? '');
     if ($secret === '' || !tracs_two_factor_verify_code($secret, $code)) {
-        $state = tracs_two_factor_record_failure($conn, $pendingUserId, tracs_auth_pending_identifier());
+        $state = tracs_two_factor_record_failure($conn, $pendingUserId, $identifier);
         if (!empty($state['locked'])) {
+            if ($voluntary) {
+                header('Location: /index.php');
+                exit;
+            }
             tracs_auth_clear_pending_2fa();
             $_SESSION['login_error'] = TRACS_AUTH_GENERIC_LOCKED;
             $_SESSION['login_show_help'] = true;
@@ -67,9 +85,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = TRACS_2FA_GENERIC_INVALID;
     } else {
         tracs_two_factor_confirm_setup($conn, $pendingUserId, $secret);
-        tracs_auth_log_event($conn, 'two_factor_setup_completed', 'success', tracs_auth_pending_identifier(), $pendingUserId);
+        tracs_auth_log_event($conn, 'two_factor_setup_completed', 'success', $identifier, $pendingUserId);
+        unset($_SESSION['tracs_pending_2fa_secret'], $_SESSION['tracs_pending_2fa_setup_logged']);
+        if ($voluntary) {
+            $_SESSION['profile_flash'] = ['type' => 'success', 'message' => 'Two-factor authentication enabled.'];
+            header('Location: /profile.php?section=security');
+            exit;
+        }
         $user = tracs_get_user_by_id($conn, $pendingUserId) ?: $user;
-        tracs_auth_complete_full_login($conn, $user, tracs_auth_pending_identifier(), tracs_auth_pending_landing());
+        tracs_auth_complete_full_login($conn, $user, $identifier, tracs_auth_pending_landing());
     }
 }
 
@@ -77,7 +101,7 @@ if (empty($_SESSION['tracs_pending_2fa_secret'])) {
     $_SESSION['tracs_pending_2fa_secret'] = tracs_two_factor_generate_secret();
 }
 if (empty($_SESSION['tracs_pending_2fa_setup_logged'])) {
-    tracs_auth_log_event($conn, 'two_factor_setup_started', 'started', tracs_auth_pending_identifier(), $pendingUserId);
+    tracs_auth_log_event($conn, 'two_factor_setup_started', 'started', $identifier, $pendingUserId);
     $_SESSION['tracs_pending_2fa_setup_logged'] = true;
 }
 
@@ -114,7 +138,7 @@ if ($login_contact !== '') {
   <div class="login-card two-factor-card fadein">
     <div class="login-top">
       <div class="login-logo"><img src="/assets/img/logo.svg" alt="TRACS Logo"></div>
-      <div class="login-p">Two-factor authentication is required for every TRACS account.</div>
+      <div class="login-p"><?=$voluntary ? 'Add an extra layer of security to your account.' : 'Two-factor authentication for your TRACS account.'?></div>
     </div>
     <div class="login-body two-factor-body">
       <?php if($error): ?><div class="err-box two-factor-alert" role="alert"><?=htmlspecialchars($error, ENT_QUOTES, 'UTF-8')?></div><?php endif; ?>
@@ -139,6 +163,7 @@ if ($login_contact !== '') {
         </div>
         <button type="submit" class="btn-login" data-loading-text="Verifying..."><span class="btn-login-label">Verify and continue</span></button>
       </form>
+      <?php if($voluntary): ?><div class="login-help"><a href="/profile.php?section=security">Cancel and go back</a></div><?php endif; ?>
     </div>
     <div class="login-foot"><div class="status-online"><span class="status-dot"></span>TRACS Secure Login</div></div>
   </div>
