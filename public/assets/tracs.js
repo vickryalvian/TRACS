@@ -4149,6 +4149,135 @@ function formatCurrencyConverterNumber(value, allowSmallMarker = false) {
   });
 }
 
+/* ── Website Screenshot widget ─────────────────── */
+
+let screenshotDataUrl = null;
+let screenshotHost = 'screenshot';
+
+function setScreenshotStatus(message, isError = false) {
+  const el = document.getElementById('screenshot-status');
+  if (!el) return;
+  if (!message) {
+    el.hidden = true;
+    el.textContent = '';
+    return;
+  }
+  el.hidden = false;
+  el.textContent = message;
+  el.classList.toggle('is-error', !!isError);
+}
+
+async function captureScreenshot() {
+  const input = document.getElementById('screenshot-url');
+  const btn = document.getElementById('screenshot-btn');
+  const result = document.getElementById('screenshot-result');
+  const label = btn?.querySelector('.screenshot-btn-label');
+
+  const raw = (input?.value || '').trim();
+  if (!raw) {
+    setScreenshotStatus('Enter a domain, URL, or IP address first.', true);
+    input?.focus();
+    return;
+  }
+
+  const region = document.getElementById('screenshot-region')?.value || '';
+
+  // Per spec: the previous image clears as soon as a new capture starts.
+  if (result) result.hidden = true;
+  screenshotDataUrl = null;
+  setScreenshotStatus('Capturing screenshot…');
+  if (btn) btn.disabled = true;
+  if (label) label.textContent = 'Capturing…';
+
+  const params = new URLSearchParams({ url: raw });
+  if (region) params.set('region', region);
+
+  try {
+    const res = await fetch(`/api/screenshot-capture.php?${params.toString()}`, {
+      headers: { 'Accept': 'application/json' },
+    });
+    const data = await res.json().catch(() => null);
+
+    if (!res.ok || !data || !data.success || !data.data?.image) {
+      setScreenshotStatus(data?.message || `Capture failed (HTTP ${res.status}).`, true);
+      return;
+    }
+
+    const payload = data.data;
+    screenshotDataUrl = payload.image;
+    screenshotHost = payload.host || 'screenshot';
+
+    const img = document.getElementById('screenshot-img');
+    if (img) img.src = screenshotDataUrl;
+    if (result) result.hidden = false;
+    setScreenshotStatus('');
+
+    const m = payload.meta || {};
+    const bits = [];
+    if (m.load != null) bits.push(`Load ${m.load}ms`);
+    if (m.dns != null) bits.push(`DNS ${m.dns}ms`);
+    if (m.ttfb != null) bits.push(`TTFB ${m.ttfb}ms`);
+    const meta = document.getElementById('screenshot-meta');
+    if (meta) meta.textContent = bits.length ? `${screenshotHost} · ${bits.join(' · ')}` : screenshotHost;
+  } catch (err) {
+    console.error('Screenshot capture error:', err);
+    setScreenshotStatus('Could not reach the screenshot service.', true);
+  } finally {
+    if (btn) btn.disabled = false;
+    if (label) label.textContent = 'Capture';
+  }
+}
+
+async function screenshotToBlob() {
+  if (!screenshotDataUrl) return null;
+  const res = await fetch(screenshotDataUrl);
+  return await res.blob();
+}
+
+function screenshotFileName() {
+  const safeHost = (screenshotHost || 'screenshot').replace(/[^a-z0-9.-]+/gi, '_');
+  const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+  return `screenshot_${safeHost}_${stamp}.png`;
+}
+
+async function viewScreenshot() {
+  const blob = await screenshotToBlob();
+  if (!blob) return;
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank', 'noopener');
+  // Give the new tab time to load before releasing the object URL.
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+function downloadScreenshot() {
+  if (!screenshotDataUrl) return;
+  const a = document.createElement('a');
+  a.href = screenshotDataUrl;
+  a.download = screenshotFileName();
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+async function copyScreenshot() {
+  const labelEl = document.querySelector('.screenshot-copy-label');
+  const original = labelEl?.textContent || 'Copy';
+  try {
+    const blob = await screenshotToBlob();
+    if (!blob || !navigator.clipboard || typeof ClipboardItem === 'undefined') {
+      throw new Error('Clipboard image copy unsupported');
+    }
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    if (labelEl) {
+      labelEl.textContent = 'Copied!';
+      setTimeout(() => { labelEl.textContent = original; }, 1800);
+    }
+  } catch (err) {
+    console.error('Screenshot copy failed:', err);
+    setScreenshotStatus('Copy not supported in this browser — use Download instead.', true);
+  }
+}
+
 function setOpsModalMode(isEdit) {
   const title = document.getElementById('ops-modal-title');
   const sub = document.getElementById('ops-modal-sub');
@@ -4600,6 +4729,28 @@ document.addEventListener('DOMContentLoaded', () => {
   if (document.getElementById('currency-result')) {
     convertCurrency();
   }
+
+  /* ── Website Screenshot widget ────────────── */
+
+  document.getElementById('screenshot-btn')
+    ?.addEventListener('click', captureScreenshot);
+
+  document.getElementById('screenshot-url')
+    ?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        captureScreenshot();
+      }
+    });
+
+  document.getElementById('screenshot-preview')
+    ?.addEventListener('click', viewScreenshot);
+  document.getElementById('screenshot-view')
+    ?.addEventListener('click', viewScreenshot);
+  document.getElementById('screenshot-download')
+    ?.addEventListener('click', downloadScreenshot);
+  document.getElementById('screenshot-copy')
+    ?.addEventListener('click', copyScreenshot);
 
   /* ── OPS STATUS SLIDER ────────────────────── */
 

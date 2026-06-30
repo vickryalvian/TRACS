@@ -1670,6 +1670,42 @@ include 'includes/header.php';
     </div><!-- /col-right -->
     </div><!-- /dashboard-workspace -->
 
+    <!-- WEBSITE SCREENSHOT PANEL (full-width bottom row) -->
+    <div class="panel screenshot-panel">
+      <div class="panel-head">
+        <span class="panel-title"><i data-lucide="camera" class="icon-sm"></i> Website Screenshot</span>
+        <div class="panel-right">
+          <select id="screenshot-region" class="form-select" aria-label="Capture region">
+            <option value="">Auto region</option>
+            <option value="id-1">🇮🇩 ID — Jakarta</option>
+            <option value="us-1">🇺🇸 US — Oregon</option>
+          </select>
+        </div>
+      </div>
+      <div class="screenshot-body">
+        <div class="screenshot-input-row">
+          <input type="text" id="screenshot-url" class="form-input" placeholder="Enter domain, URL, or IP — e.g. example.com" autocomplete="off" spellcheck="false">
+          <button type="button" class="btn btn-primary" id="screenshot-btn">
+            <i data-lucide="camera" class="icon-sm"></i> <span class="screenshot-btn-label">Capture</span>
+          </button>
+        </div>
+        <div class="screenshot-status" id="screenshot-status" role="status" hidden></div>
+        <div class="screenshot-result" id="screenshot-result" hidden>
+          <button type="button" class="screenshot-preview" id="screenshot-preview" title="Click to view full size">
+            <img id="screenshot-img" alt="Captured website screenshot">
+          </button>
+          <div class="screenshot-toolbar">
+            <span class="screenshot-meta" id="screenshot-meta"></span>
+            <div class="screenshot-actions">
+              <button type="button" class="btn btn-ghost screenshot-action" id="screenshot-view"><i data-lucide="maximize-2" class="icon-sm"></i> View</button>
+              <button type="button" class="btn btn-ghost screenshot-action" id="screenshot-download"><i data-lucide="download" class="icon-sm"></i> Download</button>
+              <button type="button" class="btn btn-ghost screenshot-action" id="screenshot-copy"><i data-lucide="copy" class="icon-sm"></i> <span class="screenshot-copy-label">Copy</span></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div><!-- /screenshot -->
+
     </div><!-- /dash-grid -->
   </div><!-- /dashboard-content -->
 </div><!-- /main-inner -->
