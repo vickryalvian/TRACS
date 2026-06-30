@@ -4,6 +4,24 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Pending Deploy — User Lifecycle Fix (2026-06-30)
+
+Branch `feat/user-mgmt-auth-domain-ui-improvements` fixes the post-login 404 and
+the email/username reuse conflict. Production (installed from `install.sql`) has
+both defects until this is merged to `main` and the migration is applied. Run on
+the VPS after merging:
+
+```bash
+cd /opt/tracs
+git fetch origin && git checkout main && git pull
+REPO_DIR=/opt/tracs WEB_ROOT=/opt/tracs \
+  ./deploy.sh deploy --with-migration config/migrations/2026_06_30_user_removal_release.sql --yes
+```
+
+The migration is idempotent. After it runs, verify a non–super-admin user can log
+in (lands on the dashboard, no 404) and that a removed user's email can be reused.
+See `docs/USER_LIFECYCLE_REMEDIATION.md`.
+
 ## 1. Deployment Path
 
 - Application path: `/opt/tracs`
