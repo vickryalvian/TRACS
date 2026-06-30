@@ -21,21 +21,25 @@ $deletedAttachments = [];
 
 try {
     $conn->begin_transaction();
-    $check = $conn->prepare("SELECT id, status FROM tracs_cases WHERE id=? AND user_id=? LIMIT 1");
+    $check = $conn->prepare("SELECT id, status, user_id FROM tracs_cases WHERE id=? LIMIT 1");
     if (!$check) {
         throw new RuntimeException('Database error');
     }
-    $check->bind_param('ii', $id, $uid);
+    $check->bind_param('i', $id);
     $check->execute();
     $found = $check->get_result()->fetch_assoc();
     $check->close();
     if (!$found) {
         $conn->rollback();
-        fail('Case not found or not yours', 404);
+        fail('Case not found', 404);
+    }
+    if ((int)$found['user_id'] !== $uid && !tracs_user_can($conn, 'cases.manage', $uid)) {
+        $conn->rollback();
+        fail('Forbidden', 403);
     }
 
-    $stmt = $conn->prepare("UPDATE tracs_cases SET title=?,status=?,priority=?,next_check_at=?,notes=?,updated_at=NOW() WHERE id=? AND user_id=?");
-    $stmt->bind_param('sssssii', $title,$status,$priority,$next,$notes,$id,$uid);
+    $stmt = $conn->prepare("UPDATE tracs_cases SET title=?,status=?,priority=?,next_check_at=?,notes=?,updated_at=NOW() WHERE id=?");
+    $stmt->bind_param('sssssi', $title,$status,$priority,$next,$notes,$id);
     if (!$stmt->execute()) {
         throw new RuntimeException('Database error');
     }

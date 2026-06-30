@@ -72,16 +72,14 @@ class CaseModel {
             FROM tracs_cases c
             LEFT JOIN tracs_users u ON c.created_by = u.id
             {$attachmentJoin}
-            WHERE c.user_id = ?
             ORDER BY FIELD(c.status, 'stuck', 'active', 'in_progress', 'pending', 'on_hold', 'completed'), c.next_check_at ASC, c.updated_at DESC
         ";
-        
+
         $stmt = $this->conn->prepare($query);
         if (!$stmt) {
             return false;
         }
-        
-        $stmt->bind_param('i', $user_id);
+
         $stmt->execute();
         $result = $stmt->get_result();
         
@@ -136,8 +134,7 @@ class CaseModel {
                 COALESCE(NULLIF(c.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name
             FROM tracs_cases c
             LEFT JOIN tracs_users u ON c.created_by = u.id
-            WHERE c.user_id = ?
-            AND (
+            WHERE (
                 c.priority = 'critical'
                 OR c.next_check_at < NOW()
                 OR c.status = 'stuck'
@@ -145,13 +142,12 @@ class CaseModel {
             ORDER BY c.priority DESC, c.next_check_at ASC
             LIMIT 10
         ";
-        
+
         $stmt = $this->conn->prepare($query);
         if (!$stmt) {
             return false;
         }
-        
-        $stmt->bind_param('i', $user_id);
+
         $stmt->execute();
         $result = $stmt->get_result();
         
@@ -180,17 +176,15 @@ class CaseModel {
                 COALESCE(NULLIF(c.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name
             FROM tracs_cases c
             LEFT JOIN tracs_users u ON c.created_by = u.id
-            WHERE c.user_id = ?
-            AND DATE(c.next_check_at) = CURDATE()
+            WHERE DATE(c.next_check_at) = CURDATE()
             ORDER BY c.next_check_at ASC
         ";
-        
+
         $stmt = $this->conn->prepare($query);
         if (!$stmt) {
             return false;
         }
-        
-        $stmt->bind_param('i', $user_id);
+
         $stmt->execute();
         $result = $stmt->get_result();
         

@@ -6,9 +6,9 @@ require_once __DIR__ . '/_export_helpers.php';
 $filter = (string)($_GET['f'] ?? 'all');
 $q = trim((string)($_GET['q'] ?? ''));
 
-$where = ['user_id = ?'];
-$types = 'i';
-$params = [$uid];
+$where = ['1=1'];
+$types = '';
+$params = [];
 
 if ($filter === 'critical') {
     $where[] = "priority = 'critical'";

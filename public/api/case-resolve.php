@@ -4,17 +4,20 @@ tracs_ensure_case_status_values($conn);
 $id = (int)($body['id'] ?? 0);
 if (!$id) fail('ID required');
 
-$stmt = $conn->prepare("SELECT title, status FROM tracs_cases WHERE id=? AND user_id=? LIMIT 1");
+$stmt = $conn->prepare("SELECT title, status, user_id FROM tracs_cases WHERE id=? LIMIT 1");
 if (!$stmt) fail('Database error', 500);
-$stmt->bind_param('ii', $id, $uid);
+$stmt->bind_param('i', $id);
 $stmt->execute();
 $row = $stmt->get_result()->fetch_assoc();
 $stmt->close();
 if (!$row) fail('Case not found', 404);
+if ((int)$row['user_id'] !== $uid && !tracs_user_can($conn, 'cases.manage', $uid)) {
+    fail('Forbidden', 403);
+}
 
-$stmt = $conn->prepare("UPDATE tracs_cases SET status='completed', updated_at=NOW() WHERE id=? AND user_id=?");
+$stmt = $conn->prepare("UPDATE tracs_cases SET status='completed', updated_at=NOW() WHERE id=?");
 if (!$stmt) fail('Database error', 500);
-$stmt->bind_param('ii', $id, $uid);
+$stmt->bind_param('i', $id);
 $ok = $stmt->execute();
 $stmt->close();
 if (!$ok) fail('Database error', 500);

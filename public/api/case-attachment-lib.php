@@ -272,14 +272,14 @@ function case_attachment_fetch_for_user(mysqli $conn, int $attachmentId, int $ui
     $stmt = $conn->prepare("
         SELECT a.*
         FROM case_attachments a
-        INNER JOIN tracs_cases c ON c.id = a.case_id AND c.user_id = ?
+        INNER JOIN tracs_cases c ON c.id = a.case_id
         WHERE a.id = ?
         LIMIT 1
     ");
     if (!$stmt) {
         return null;
     }
-    $stmt->bind_param('ii', $uid, $attachmentId);
+    $stmt->bind_param('i', $attachmentId);
     $stmt->execute();
     $row = $stmt->get_result()->fetch_assoc();
     $stmt->close();
@@ -291,14 +291,14 @@ function case_attachment_list_for_case(mysqli $conn, int $caseId, int $uid): arr
     $stmt = $conn->prepare("
         SELECT a.id, a.case_id, a.original_filename, a.mime_type, a.file_size, a.uploaded_by, a.created_at
         FROM case_attachments a
-        INNER JOIN tracs_cases c ON c.id = a.case_id AND c.user_id = ?
+        INNER JOIN tracs_cases c ON c.id = a.case_id
         WHERE a.case_id = ?
         ORDER BY a.created_at ASC, a.id ASC
     ");
     if (!$stmt) {
         return [];
     }
-    $stmt->bind_param('ii', $uid, $caseId);
+    $stmt->bind_param('i', $caseId);
     $stmt->execute();
     $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $stmt->close();
@@ -333,13 +333,13 @@ function case_attachment_full_list_for_case(mysqli $conn, int $caseId, int $uid)
     $stmt = $conn->prepare("
         SELECT a.*
         FROM case_attachments a
-        INNER JOIN tracs_cases c ON c.id = a.case_id AND c.user_id = ?
+        INNER JOIN tracs_cases c ON c.id = a.case_id
         WHERE a.case_id = ?
     ");
     if (!$stmt) {
         return [];
     }
-    $stmt->bind_param('ii', $uid, $caseId);
+    $stmt->bind_param('i', $caseId);
     $stmt->execute();
     $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $stmt->close();

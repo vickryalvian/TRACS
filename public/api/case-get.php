@@ -8,11 +8,11 @@ $stmt = $conn->prepare("
     SELECT c.*, COALESCE(NULLIF(c.created_by_name, ''), NULLIF(u.name, ''), u.email, 'System') AS creator_name
     FROM tracs_cases c
     LEFT JOIN tracs_users u ON u.id = c.created_by
-    WHERE c.id = ? AND c.user_id = ?
+    WHERE c.id = ?
     LIMIT 1
 ");
 if (!$stmt) fail('Database error', 500);
-$stmt->bind_param('ii', $id, $uid);
+$stmt->bind_param('i', $id);
 $stmt->execute();
 $row = $stmt->get_result()->fetch_assoc();
 $stmt->close();
