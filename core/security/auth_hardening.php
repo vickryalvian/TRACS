@@ -594,6 +594,49 @@ function tracs_auth_user_landing(mysqli $conn, int $userId): string {
     return $landing;
 }
 
+/**
+ * Map each allowed landing page to the page permission it enforces, so the
+ * login flow can verify the destination is actually reachable.
+ */
+function tracs_auth_landing_permission(string $landing): string {
+    return [
+        'index.php'           => 'dashboard.view',
+        'cases.php'           => 'cases.view',
+        'reminders.php'       => 'reminders.view',
+        'checklist.php'       => 'checklist.view',
+        'shift-reports.php'   => 'reports.view',
+        'mom.php'             => 'moms.view',
+        'activity.php'        => 'users.view_activity',
+        'tasks.php'           => 'tasks.view_own',
+        'monitoring.php'      => 'tasks.view_own',
+        'domain-transfer.php' => 'domains.view',
+        'finance.php'         => 'finance.view',
+    ][$landing] ?? 'dashboard.view';
+}
+
+/**
+ * Resolve a landing the user can actually open. Prevents a successful login
+ * from dead-ending in a 404 when the role lacks the landing's permission
+ * (every page guard returns 404 for an unauthorized account). profile.php is
+ * the guaranteed fallback because every active account holds profile.view_own.
+ */
+function tracs_auth_resolve_safe_landing(mysqli $conn, int $userId, string $landing): string {
+    if ($userId <= 0 || !function_exists('tracs_user_can')) {
+        return $landing;
+    }
+    $landing = tracs_auth_allowed_landing($landing);
+    $candidates = array_merge([$landing], [
+        'index.php', 'cases.php', 'reminders.php', 'checklist.php',
+    ]);
+    foreach ($candidates as $candidate) {
+        if (tracs_user_can($conn, tracs_auth_landing_permission($candidate), $userId)) {
+            return $candidate;
+        }
+    }
+    // Universally accessible: profile.view_own is granted to every role.
+    return 'profile.php';
+}
+
 function tracs_auth_clear_pending_2fa(): void {
     tracs_start_session();
     unset(
@@ -751,6 +794,7 @@ function tracs_auth_complete_full_login(
     tracs_start_session();
     $userId = (int)$user['id'];
     $landing = tracs_auth_allowed_landing($landing ?? tracs_auth_pending_landing());
+    $landing = tracs_auth_resolve_safe_landing($conn, $userId, $landing);
     session_regenerate_id(true);
     tracs_rotate_csrf_token();
     if (function_exists('tracs_sync_session_user')) {

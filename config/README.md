@@ -59,6 +59,10 @@ Current migrations:
 - `2026_06_08_shifting_assignment.sql`
 - `2026_06_13_main_shift_hours.sql`
 - `2026_06_13_shifting_assignment_audit_fixes.sql`
+- `2026_06_30_user_removed_status.sql` — adds the `removed` user status value.
+- `2026_06_30_user_removal_release.sql` — safe user removal (archive + identity
+  release) plus `dashboard.view` repair for operational roles. Idempotent;
+  supersedes the status-only migration above by also ensuring the enum.
 
 ## File Structure
 

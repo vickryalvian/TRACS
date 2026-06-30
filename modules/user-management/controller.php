@@ -487,11 +487,16 @@ class UserManagementController {
             throw new InvalidArgumentException('A reason is required to remove a user.');
         }
 
-        $this->model->updateUserStatus($userId, 'removed', $this->actorId);
+        // Archive the account and release its email/username for reuse. The
+        // $before snapshot above retains the original identity for the audit
+        // trail; case history and reporting stay linked by immutable user id.
+        $this->model->archiveUserForRemoval($userId, $this->actorId);
         $after = $this->model->getUserById($userId);
         tracs_log_user_event($this->conn, $this->actorId, 'remove_user', 'user', $userId, $before, $after, $reason);
 
-        return ['message' => 'User removed. Their account and history are preserved but they can no longer sign in.'];
+        // The removed account fails tracs_user_can_login(), so auth_check.php
+        // tears down any live session on the next request and blocks new logins.
+        return ['message' => 'User removed. Their account history is preserved, they can no longer sign in, and their email and username are free to reuse.'];
     }
 
     public function resetPassword(int $userId, string $reason = '', string $manualPassword = ''): array {

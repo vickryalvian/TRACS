@@ -232,6 +232,7 @@ function tracs_default_role_permissions(string $roleSlug): array {
             'settings.manage',
         ])),
         'supervisor' => array_values(array_unique(array_merge($profile, [
+            'dashboard.view',
             'users.view',
             'users.update',
             'users.suspend',

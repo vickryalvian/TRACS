@@ -191,6 +191,10 @@ class UserManagementModel {
             $where[] = "COALESCE(u.status, 'active') = ?";
             $types .= 's';
             $params[] = (string)$filters['status'];
+        } elseif (empty($filters['include_removed'])) {
+            // Removed (archived) accounts are hidden from User Management and all
+            // active listings unless a caller explicitly asks for them.
+            $where[] = "COALESCE(u.status, 'active') <> 'removed'";
         }
         if (!empty($filters['last_active'])) {
             match ((string)$filters['last_active']) {
@@ -430,7 +434,9 @@ class UserManagementModel {
     }
 
     public function usernameExists(string $username, ?int $ignoreUserId = null): bool {
-        $sql = 'SELECT id FROM tracs_users WHERE username = ?';
+        // Removed accounts release their username for reuse, so they must not
+        // block recreation. Their original value is kept in archived_username.
+        $sql = "SELECT id FROM tracs_users WHERE username = ? AND COALESCE(status, 'active') <> 'removed'";
         $types = 's';
         $params = [$username];
         if ($ignoreUserId) {
@@ -451,7 +457,9 @@ class UserManagementModel {
     }
 
     public function emailExists(string $email, ?int $ignoreUserId = null): bool {
-        $sql = 'SELECT id FROM tracs_users WHERE email = ?';
+        // Removed accounts release their email for reuse, so they must not block
+        // recreation. Their original value is kept in archived_email.
+        $sql = "SELECT id FROM tracs_users WHERE email = ? AND COALESCE(status, 'active') <> 'removed'";
         $types = 's';
         $params = [$email];
         if ($ignoreUserId) {
@@ -689,6 +697,85 @@ class UserManagementModel {
         if (!$stmt->execute()) {
             $stmt->close();
             throw new RuntimeException('Unable to update user status.');
+        }
+        $stmt->close();
+    }
+
+    /**
+     * Archive a user for removal: mark the account `removed`, revoke sign-in,
+     * preserve the original identity in archive columns, and release the email
+     * and username so the same values can be reused by a new account.
+     *
+     * Historical records reference the user by immutable id, so case history,
+     * audit logs, and reporting stay linked to this original identity record.
+     * A newly created account using the same email gets a new id and never
+     * inherits this account's history.
+     */
+    public function archiveUserForRemoval(int $userId, int $actorId): void {
+        $current = tracs_get_user_by_id($this->conn, $userId);
+        if (!$current) {
+            throw new RuntimeException('User not found.');
+        }
+        if ((string)($current['status'] ?? '') === 'removed') {
+            return; // Already archived; keep the original release idempotent.
+        }
+
+        $originalEmail = (string)($current['email'] ?? '');
+        $originalUsername = (string)($current['username'] ?? '');
+
+        // Tombstones are tied to the immutable id, so they are guaranteed unique
+        // and never collide with a real account or another removed account.
+        $tombstoneEmail = 'removed+' . $userId . '@removed.tracs.invalid';
+        $tombstoneUsername = 'removed_' . $userId;
+
+        $hasArchiveColumns = tracs_column_exists($this->conn, 'tracs_users', 'archived_email')
+            && tracs_column_exists($this->conn, 'tracs_users', 'archived_username');
+        $hasRemovedMeta = tracs_column_exists($this->conn, 'tracs_users', 'removed_at')
+            && tracs_column_exists($this->conn, 'tracs_users', 'removed_by');
+
+        if ($hasArchiveColumns && $hasRemovedMeta) {
+            $sql = "
+                UPDATE tracs_users
+                SET status = 'removed',
+                    is_active = 0,
+                    archived_email = COALESCE(archived_email, ?),
+                    archived_username = COALESCE(archived_username, ?),
+                    email = ?,
+                    username = ?,
+                    removed_at = NOW(),
+                    removed_by = ?,
+                    updated_by = ?,
+                    updated_at = NOW()
+                WHERE id = ?
+            ";
+            $stmt = $this->conn->prepare($sql);
+            if (!$stmt) {
+                throw new RuntimeException('Unable to remove user.');
+            }
+            $stmt->bind_param('ssssiii', $originalEmail, $originalUsername, $tombstoneEmail, $tombstoneUsername, $actorId, $actorId, $userId);
+        } else {
+            // Degraded mode if the removal-release migration has not run yet:
+            // still release the identifiers (the audit log keeps the originals).
+            $sql = "
+                UPDATE tracs_users
+                SET status = 'removed',
+                    is_active = 0,
+                    email = ?,
+                    username = ?,
+                    updated_by = ?,
+                    updated_at = NOW()
+                WHERE id = ?
+            ";
+            $stmt = $this->conn->prepare($sql);
+            if (!$stmt) {
+                throw new RuntimeException('Unable to remove user.');
+            }
+            $stmt->bind_param('ssii', $tombstoneEmail, $tombstoneUsername, $actorId, $userId);
+        }
+
+        if (!$stmt->execute()) {
+            $stmt->close();
+            throw new RuntimeException('Unable to remove user.');
         }
         $stmt->close();
     }

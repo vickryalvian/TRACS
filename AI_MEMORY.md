@@ -38,6 +38,24 @@ font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Ro
 - Reminder List belongs inside the combined tab. The standalone `reminders.php` page remains an implemented full-list page.
 - Assigned tasks create linked checklist items and, when due dates exist, reminders. New assignments can therefore appear in the combined tab and Assignments tab.
 
+## User Lifecycle Rules
+
+- Page guards return **404** (not 403) for unauthorized accounts. Every role that
+  lands on the dashboard must hold `dashboard.view`; the login flow falls back to
+  an accessible page (ultimately `profile.php`) so a successful login never 404s.
+  Do not remove `dashboard.view` from operational roles.
+- User removal is a **non-destructive archive**, never a hard delete. It marks the
+  account `removed`, sets `is_active = 0`, preserves the original identity in
+  `archived_email`/`archived_username`, and releases the live `email`/`username`
+  as id-tied tombstones so they can be reused by a new account.
+- The identity row is never deleted. History references users by immutable id, so
+  case history, audit logs, reporting, measurements, and ISO 9001 traceability
+  stay intact. A recreated account always gets a new id and never inherits history.
+- `emailExists`/`usernameExists` ignore `removed` rows; `listUsers` hides `removed`
+  by default. Removal is terminal (recreate, do not reactivate).
+- See `docs/USER_LIFECYCLE_REMEDIATION.md` and migration
+  `2026_06_30_user_removal_release.sql`.
+
 ## Case Ticket Rules
 
 - Keep `Resolve` as the primary footer action on the right.
