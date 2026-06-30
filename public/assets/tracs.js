@@ -1286,6 +1286,9 @@ function tracsToggleCustomPopup(host) {
   const willOpen = !host.classList.contains('is-open');
   tracsCloseIconPopups(host);
   tracsSetCustomPopupOpen(host, willOpen);
+  if (willOpen && host.matches('.notif-bell-btn')) {
+    window.TRACSNotifications?.markVisibleRead?.();
+  }
 }
 
 function tracsInitNotificationPopups(root = document) {
@@ -3570,6 +3573,7 @@ const TRACSNotifications = (() => {
   let polling = false;
   let pollTimer = null;
   let initialPoll = true;
+  let lastItems = [];
 
   function supported() {
     return typeof window.Notification !== 'undefined';
@@ -3726,6 +3730,16 @@ const TRACSNotifications = (() => {
     } catch (e) {}
   }
 
+  function markVisibleRead() {
+    const unreadIds = lastItems
+      .filter(item => !(item.is_read === '1' || item.is_read === 1))
+      .map(item => Number(item.id))
+      .filter(Boolean);
+    if (!unreadIds.length) return;
+    updateBadge(0);
+    markRead(unreadIds);
+  }
+
   function notifyInApp(items = []) {
     let lastSeen = 0;
     try { lastSeen = parseInt(localStorage.getItem(SEEN_KEY) || '0', 10) || 0; } catch (e) {}
@@ -3783,6 +3797,7 @@ const TRACSNotifications = (() => {
       if (!json.success) return;
       const data = json.data || {};
       const items = data.items || [];
+      lastItems = items;
       renderList(items);
       updateBadge(data.unread_count || 0);
       notifyInApp(items);
@@ -3825,7 +3840,7 @@ const TRACSNotifications = (() => {
     pollTimer = setInterval(poll, POLL_MS);
   }
 
-  return { start, poll, requestPermission, markRead };
+  return { start, poll, requestPermission, markRead, markVisibleRead };
 })();
 
 window.TRACSNotifications = TRACSNotifications;
