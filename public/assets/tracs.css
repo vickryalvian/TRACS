@@ -10246,27 +10246,31 @@ input, select, textarea { font-family: inherit }
   position: relative;
 }
 .profile-password-field .form-input {
-  padding-right: 42px;
+  padding-right: 40px;
 }
 .profile-password-field button {
   position: absolute;
-  right: 7px;
-  bottom: 6px;
-  width: 26px;
-  height: 26px;
+  right: 5px;
+  bottom: 0;
+  height: var(--toolbar-h, 36px);
+  width: 32px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--bd2);
+  border: 0;
   border-radius: var(--r);
-  background: var(--s3);
+  background: transparent;
   color: var(--tx3);
   cursor: pointer;
+  transition: color var(--dur), background var(--dur);
 }
 .profile-password-field button:hover {
   color: var(--blue);
-  border-color: var(--blue-bd);
   background: var(--blue-lt);
+}
+.profile-password-field button:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: -2px;
 }
 .profile-strength {
   display: grid;
