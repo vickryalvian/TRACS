@@ -4,6 +4,45 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Website Screenshot Widget (2026-07-01 ~01:45 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`).
+
+Adds the full-width "Website Screenshot" dashboard widget from branch
+`feat/dashboard-website-screenshot-widget`. Operators enter a domain, URL, or
+IP and receive a rendered PNG with view (full size) / download / clipboard-copy
+actions; submitting a new target replaces the previous image. Backed by the
+PageFleets API (`https://api.pagefleets.com/api/v1/screenshot`), proxied
+server-side so the bearer key never reaches the browser.
+
+What was applied:
+
+- Code (file-copy deploy; prior versions backed up under
+  `backups/screenshot-widget-20260701-014140/`): new
+  `public/api/screenshot-capture.php`; modified `public/api/_bootstrap.php`
+  (GET + `dashboard.view` maps), `public/index.php`, `public/assets/tracs.js`,
+  `public/assets/tracs.css`, `.env.example`.
+- Secret: `PAGEFLEETS_API_KEY` added to `/opt/tracs/config/.env` (`.env` backed
+  up to `config/.env.bak-screenshot-*`). PHP reads `.env` per request, so no
+  reload was required; opcache validates by timestamp.
+
+Verification on production:
+
+- `php -l` clean for all deployed PHP; deployed copies grep-verified to contain
+  the feature.
+- PHP env loader exposes the key (`len=56`).
+- Direct PageFleets call with the live key returns **HTTP 200**, a valid
+  `1280×800` PNG.
+- TRACS endpoint reachable over HTTPS: unauthenticated request returns a clean
+  `application/json` **401** (auth/routing wiring correct; no 404/500, no PHP
+  errors logged).
+- Remaining user-side check: an authenticated browser capture
+  (`input → generate → preview → download/copy`).
+
+The branch remains pushed for review/PR; production tracks the working tree via
+file-copy deploy (not a `main` pull).
+
 ## Deployed — User Lifecycle Fix (2026-06-30 ~19:55 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
