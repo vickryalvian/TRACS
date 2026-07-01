@@ -79,6 +79,41 @@ function tracs_ensure_case_status_values(mysqli $conn): void {
     ");
 }
 
+/**
+ * Ensure the manual Workflow Board ordering column exists on tracs_cases.
+ * Self-healing (mirrors tracs_ensure_case_status_values) so the drag & drop
+ * board works on any environment without a separate manual migration step.
+ * On first creation the column is backfilled per status so existing cases keep
+ * a stable, sensible order (by next_check, then recency).
+ */
+function tracs_ensure_case_board_order(mysqli $conn): void {
+    if (!tracs_column_exists($conn, 'tracs_cases', 'status')) {
+        return;
+    }
+    if (tracs_column_exists($conn, 'tracs_cases', 'board_order')) {
+        return;
+    }
+
+    $conn->query("ALTER TABLE `tracs_cases` ADD COLUMN `board_order` INT NOT NULL DEFAULT 0");
+    $conn->query("ALTER TABLE `tracs_cases` ADD INDEX `idx_cases_board_order` (`status`, `board_order`)");
+
+    // Backfill a deterministic manual order per status column so nothing starts
+    // at a tied 0. Uses a session variable window instead of window functions
+    // for MariaDB 10.1+/MySQL 5.7 compatibility.
+    $conn->query("SET @tracs_bo := 0, @tracs_bo_status := ''");
+    $conn->query("
+        UPDATE `tracs_cases` c
+        JOIN (
+            SELECT id,
+                   (@tracs_bo := IF(@tracs_bo_status = status, @tracs_bo + 1, 0)) AS ord,
+                   (@tracs_bo_status := status) AS s
+            FROM `tracs_cases`
+            ORDER BY status, next_check_at IS NULL, next_check_at ASC, updated_at DESC, id DESC
+        ) ranked ON ranked.id = c.id
+        SET c.board_order = ranked.ord
+    ");
+}
+
 function tracs_current_user_display(mysqli $conn): string {
     static $cached = null;
     if ($cached !== null) {

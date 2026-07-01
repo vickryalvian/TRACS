@@ -128,6 +128,7 @@ $apiMethodMap = [
     'bt-update.php' => ['POST'],
     'case-attachment.php' => ['GET'],
     'case-create.php' => ['POST'],
+    'case-reorder.php' => ['POST'],
     'case-delete.php' => ['POST'],
     'case-get.php' => ['POST'],
     'case-resolve.php' => ['POST'],
@@ -200,8 +201,11 @@ $apiPermissionMap = [
     'case-delete.php' => ['cases.view'],
     'case-get.php' => ['cases.view'],
     'case-resolve.php' => ['cases.manage'],
-    'case-status.php' => ['cases.manage'],
+    // Workflow-board status changes (drag between columns) are open to every
+    // user who can view cases, per the drag & drop board spec.
+    'case-status.php' => ['cases.view'],
     'case-attachment.php' => ['cases.view'],
+    'case-reorder.php' => ['cases.view'],
     'case-update.php' => ['cases.manage'],
     'currency.php' => ['dashboard.view'],
     'currency-converter.php' => ['dashboard.view'],

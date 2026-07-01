@@ -53,10 +53,9 @@ try {
         $conn->rollback();
         fail_not_found();
     }
-    if ((int)$case['user_id'] !== $uid && !tracs_user_can($conn, 'cases.manage', $uid)) {
-        $conn->rollback();
-        fail('Forbidden', 403);
-    }
+    // Per the Workflow Board spec, any authenticated user who can view cases may
+    // move a card between columns (change its status). Endpoint-level permission
+    // (cases.view) is enforced in _bootstrap.php, so no owner/manage gate here.
 
     $previous = strtolower((string)($case['status'] ?? 'pending'));
     if ($previous === $status) {

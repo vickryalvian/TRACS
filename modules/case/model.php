@@ -14,6 +14,9 @@ class CaseModel {
         if (function_exists('tracs_ensure_case_status_values')) {
             tracs_ensure_case_status_values($this->conn);
         }
+        if (function_exists('tracs_ensure_case_board_order')) {
+            tracs_ensure_case_board_order($this->conn);
+        }
     }
 
     private function ensureAttachmentTable(): bool {
@@ -67,12 +70,13 @@ class CaseModel {
                 c.updated_at,
                 c.created_by,
                 c.created_by_name,
+                c.board_order,
                 {$attachmentSelect} AS attachment_count,
                 COALESCE(NULLIF(c.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name
             FROM tracs_cases c
             LEFT JOIN tracs_users u ON c.created_by = u.id
             {$attachmentJoin}
-            ORDER BY FIELD(c.status, 'stuck', 'active', 'in_progress', 'pending', 'on_hold', 'completed'), c.next_check_at ASC, c.updated_at DESC
+            ORDER BY FIELD(c.status, 'stuck', 'active', 'in_progress', 'pending', 'on_hold', 'completed'), c.board_order ASC, c.next_check_at ASC, c.updated_at DESC
         ";
 
         $stmt = $this->conn->prepare($query);

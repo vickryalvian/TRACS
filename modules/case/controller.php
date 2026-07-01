@@ -74,6 +74,7 @@ class CaseController {
                 'created_by_name' => $case['created_by_name'] ?? null,
                 'creator_name'   => $case['creator_name'] ?? null,
                 'attachment_count' => (int)($case['attachment_count'] ?? 0),
+                'board_order'    => (int)($case['board_order'] ?? 0),
             ];
         }
         $nextCheck = new DateTime($case['next_check_at']);
@@ -102,9 +103,10 @@ class CaseController {
             'created_by_name' => $case['created_by_name'] ?? null,
             'creator_name' => $case['creator_name'] ?? null,
             'attachment_count' => (int)($case['attachment_count'] ?? 0),
+            'board_order' => (int)($case['board_order'] ?? 0),
         ];
     }
-    
+
     /**
      * Format time interval
      */

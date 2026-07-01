@@ -80,6 +80,7 @@ $case_dataset = array_map(function(array $case): array {
     'id' => (int)($case['id'] ?? 0),
     'title' => (string)($case['title'] ?? ''),
     'status' => $status,
+    'board_order' => (int)($case['board_order'] ?? 0),
     'priority' => strtolower((string)($case['priority'] ?? 'low')),
     'notes' => (string)($case['notes'] ?? ''),
     'description' => (string)($case['description'] ?? $case['notes'] ?? ''),
@@ -164,6 +165,22 @@ include 'includes/header.php';
     <div class="case-board-title-block">
       <div class="case-board-title-line"><strong>Workflow Board</strong><span id="caseBoardCount"><?=$total?> cases shown</span></div>
     </div>
+    <div class="case-board-tools">
+    <details class="case-reorder-menu" id="caseReorderMenu">
+      <summary class="btn btn-ghost btn-sm case-reorder-trigger" title="Reorder board" aria-label="Reorder board"><i data-lucide="arrow-down-up" class="icon-sm"></i><span>Reorder</span></summary>
+      <div class="case-reorder-popover" role="menu" aria-label="Board ordering">
+        <div class="case-reorder-title">Auto-sort columns</div>
+        <button type="button" role="menuitemradio" data-board-order="priority"><i data-lucide="flame" class="icon-xs"></i>Priority (Critical → Low)</button>
+        <button type="button" role="menuitemradio" data-board-order="next_check"><i data-lucide="calendar-clock" class="icon-xs"></i>Next Check Date</button>
+        <button type="button" role="menuitemradio" data-board-order="created"><i data-lucide="calendar-plus" class="icon-xs"></i>Created Date</button>
+        <button type="button" role="menuitemradio" data-board-order="updated"><i data-lucide="history" class="icon-xs"></i>Updated Date</button>
+        <button type="button" role="menuitemradio" data-board-order="case_number"><i data-lucide="hash" class="icon-xs"></i>Case ID</button>
+        <button type="button" role="menuitemradio" data-board-order="category"><i data-lucide="tag" class="icon-xs"></i>Category / Service</button>
+        <button type="button" role="menuitemradio" data-board-order="assigned"><i data-lucide="user-round" class="icon-xs"></i>Assigned User</button>
+        <div class="case-reorder-divider"></div>
+        <button type="button" role="menuitemradio" data-board-order="manual" class="is-active"><i data-lucide="hand" class="icon-xs"></i>Manual Order (your arrangement)</button>
+      </div>
+    </details>
     <details class="report-export-menu">
       <summary class="btn btn-ghost btn-icon report-export-trigger" title="Export cases" aria-label="Export cases"><i data-lucide="download" class="icon-sm"></i></summary>
       <form method="get" action="/api/export-cases.php" class="report-export-popover">
@@ -179,6 +196,7 @@ include 'includes/header.php';
         <button type="submit" class="btn btn-primary"><i data-lucide="download" class="icon-sm"></i>Download CSV</button>
       </form>
     </details>
+    </div><!-- /case-board-tools -->
   </div>
   <div class="case-kanban">
     <?php foreach ($board_columns as $column_key => $column): ?>

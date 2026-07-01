@@ -5069,6 +5069,115 @@ input, select, textarea { font-family: inherit }
   font-family: var(--mono);
   font-size: 9px;
 }
+.case-board-head > .case-board-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ── Workflow Board: Reorder menu ── */
+.case-reorder-menu {
+  position: relative;
+  flex-shrink: 0;
+}
+.case-reorder-menu summary {
+  list-style: none;
+  cursor: pointer;
+}
+.case-reorder-menu summary::-webkit-details-marker { display: none; }
+.case-reorder-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.case-reorder-trigger.is-custom {
+  color: var(--blue);
+  background: var(--blue-lt);
+  border-color: var(--blue-bd);
+}
+.case-reorder-menu[open] .case-reorder-trigger {
+  color: var(--blue-dk);
+  background: var(--blue-lt);
+  border-color: var(--blue-bd);
+}
+.case-reorder-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  width: 236px;
+  padding: 6px;
+  display: grid;
+  gap: 1px;
+  background: var(--s1);
+  border: 1px solid var(--bd2);
+  border-radius: var(--r3);
+  box-shadow: 0 14px 32px rgba(17,24,39,.16);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-6px);
+  transition: opacity 120ms ease, transform 120ms ease, visibility 0s linear 120ms;
+}
+.case-reorder-menu[open] .case-reorder-popover {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0);
+  transition-delay: 0s;
+}
+[data-theme="dark"] .case-reorder-popover {
+  background: var(--s2);
+  border-color: var(--bd3);
+  box-shadow: 0 18px 40px rgba(0,0,0,.42);
+}
+.case-reorder-title {
+  padding: 5px 8px 3px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--tx3);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.case-reorder-popover button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: var(--r2);
+  background: transparent;
+  color: var(--tx2);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur), color var(--dur);
+}
+.case-reorder-popover button:hover {
+  background: var(--s3);
+  color: var(--tx1);
+}
+.case-reorder-popover button .lucide {
+  color: var(--tx4);
+  flex-shrink: 0;
+}
+.case-reorder-popover button.is-active {
+  background: var(--blue-lt);
+  color: var(--blue-dk);
+}
+.case-reorder-popover button.is-active .lucide { color: var(--blue); }
+[data-theme="dark"] .case-reorder-popover button.is-active {
+  color: #dbeafe;
+  background: rgba(59,130,246,.16);
+}
+.case-reorder-divider {
+  height: 1px;
+  margin: 4px 4px;
+  background: var(--bd1);
+}
 .case-active-state {
   display: flex;
   align-items: center;
@@ -5334,6 +5443,60 @@ input, select, textarea { font-family: inherit }
 }
 .case-kanban-card.is-resolved {
   opacity: .78;
+}
+
+/* ── Workflow Board drag & drop (Trello-like) ── */
+.case-card-grip {
+  cursor: grab;
+}
+.case-kanban-card[data-case-draggable="true"] {
+  touch-action: pan-y;   /* let the board own horizontal drags on touch */
+}
+/* Original card while its clone is being dragged */
+.case-kanban-card.is-dragging-source {
+  opacity: 0;
+  pointer-events: none;
+}
+/* Prevent accidental text selection / native image drag mid-drag */
+body.case-drag-active {
+  cursor: grabbing;
+  user-select: none;
+  -webkit-user-select: none;
+}
+body.case-drag-active .case-card-grip { cursor: grabbing; }
+/* Drop-slot indicator that neighbours reflow around */
+.case-drag-placeholder {
+  border: 2px dashed var(--blue);
+  border-radius: var(--r2);
+  background: color-mix(in srgb, var(--blue-lt) 55%, transparent);
+  margin: 0 0 8px 0;
+  box-sizing: border-box;
+  transition: height var(--dur);
+}
+/* Floating clone that follows the pointer with physics */
+.case-drag-clone {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 12000;
+  margin: 0;
+  pointer-events: none;
+  will-change: transform;
+  cursor: grabbing;
+  box-shadow: 0 18px 40px rgba(17,24,39,.28), 0 6px 14px rgba(17,24,39,.18);
+  border-color: var(--blue-bd);
+  transform-origin: center center;
+}
+.case-drag-clone.is-dropping {
+  transition: transform .22s cubic-bezier(.22,.68,.32,1.35);
+}
+.case-drag-clone .case-card-menu { display: none; }
+[data-theme="dark"] .case-drag-clone {
+  box-shadow: 0 20px 46px rgba(0,0,0,.5), 0 6px 16px rgba(0,0,0,.4);
+}
+@media (prefers-reduced-motion: reduce) {
+  .case-drag-clone.is-dropping,
+  .case-drag-placeholder { transition: none; }
 }
 .case-card-click {
   min-width: 0;

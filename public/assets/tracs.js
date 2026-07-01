@@ -45,6 +45,7 @@ const API = {
     DELETE : API_BASE + 'case-delete.php',
     RESOLVE: API_BASE + 'case-resolve.php',
     STATUS : API_BASE + 'case-status.php',
+    REORDER: API_BASE + 'case-reorder.php',
     GET    : API_BASE + 'case-get.php'
   },
 
@@ -2143,9 +2144,11 @@ const caseBoardState = {
   filter: 'all',
   query: '',
   sort: 'operational',
+  boardOrder: 'manual',   // Workflow-board per-column ordering (see CASE_BOARD_ORDER_MODES)
   draggedId: 0,
   initialized: false
 };
+const CASE_BOARD_ORDER_MODES = new Set(['manual','priority','next_check','created','updated','case_number','category','assigned']);
 function caseStatusMeta(status='pending'){
   return CASE_STATUS_META[String(status||'pending').toLowerCase()] || CASE_STATUS_META.pending;
 }
@@ -2627,6 +2630,64 @@ function groupCasesByWorkflow(caseList){
   caseList.forEach(caseItem=>groups[getWorkflowColumn(caseItem)].push(caseItem));
   return groups;
 }
+function caseBoardOrderValue(item){
+  const raw=Number(item?.board_order);
+  return Number.isFinite(raw)?raw:Number.MAX_SAFE_INTEGER;
+}
+function caseCategoryValue(item){
+  return String(item?.service||item?.client||item?.domain||item?.status||'').toLowerCase();
+}
+function caseAssignedValue(item){
+  return String(item?.assigned_agent||item?.creator_name||item?.created_by_name||'').toLowerCase();
+}
+// Order a single board column. 'manual' honours the saved drag arrangement
+// (board_order); every other mode is a non-destructive view sort.
+function sortBoardColumn(items,mode='manual'){
+  const active=CASE_BOARD_ORDER_MODES.has(mode)?mode:'manual';
+  const list=[...items];
+  list.sort((a,b)=>{
+    switch(active){
+      case 'priority': return caseComparePriority(a,b)||caseBoardOrderValue(a)-caseBoardOrderValue(b)||Number(a?.id||0)-Number(b?.id||0);
+      case 'next_check': return caseCompareNextCheck(a,b)||caseComparePriority(a,b)||Number(a?.id||0)-Number(b?.id||0);
+      case 'created': return caseTimestamp(b?.created_at,0)-caseTimestamp(a?.created_at,0)||Number(b?.id||0)-Number(a?.id||0);
+      case 'updated': return caseCompareUpdated(a,b)||Number(b?.id||0)-Number(a?.id||0);
+      case 'case_number': return Number(a?.id||0)-Number(b?.id||0);
+      case 'category': return caseCategoryValue(a).localeCompare(caseCategoryValue(b))||caseBoardOrderValue(a)-caseBoardOrderValue(b);
+      case 'assigned': return caseAssignedValue(a).localeCompare(caseAssignedValue(b))||caseBoardOrderValue(a)-caseBoardOrderValue(b);
+      default: return caseBoardOrderValue(a)-caseBoardOrderValue(b)||Number(a?.id||0)-Number(b?.id||0);
+    }
+  });
+  return list;
+}
+// FLIP: capture card positions before a DOM re-order, then animate the delta so
+// auto-sorts and drop settling glide instead of snapping. Skips when the user
+// prefers reduced motion or nothing actually moved.
+function caseFlipCapture(){
+  if(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)return null;
+  const map=new Map();
+  document.querySelectorAll('.case-kanban .case-kanban-card').forEach(card=>{
+    map.set(card.dataset.cid,card.getBoundingClientRect());
+  });
+  return map;
+}
+function caseFlipPlay(before){
+  if(!before)return;
+  document.querySelectorAll('.case-kanban .case-kanban-card').forEach(card=>{
+    const prev=before.get(card.dataset.cid);
+    if(!prev)return;
+    const next=card.getBoundingClientRect();
+    const dx=prev.left-next.left;
+    const dy=prev.top-next.top;
+    if(Math.abs(dx)<1 && Math.abs(dy)<1)return;
+    card.style.transition='none';
+    card.style.transform=`translate(${dx}px, ${dy}px)`;
+    requestAnimationFrame(()=>{
+      card.style.transition='transform .32s cubic-bezier(.22,.68,.32,1.4)';
+      card.style.transform='';
+    });
+    card.addEventListener('transitionend',()=>{card.style.transition='';card.style.transform='';},{once:true});
+  });
+}
 function caseFiltersActive(){
   return caseBoardState.filter!=='all' || normalizeCaseText(caseBoardState.query)!=='';
 }
@@ -2663,13 +2724,13 @@ function caseCardHtml(caseItem){
   return `
     <article class="case-kanban-card ${overdue?'is-overdue':''} ${status==='completed'?'is-resolved':''} ${pending?'is-status-updating':''}"
       ${caseDataAttributes(caseItem)}
-      draggable="${canManage && !pending?'true':'false'}"
+      data-case-draggable="${pending?'false':'true'}"
       aria-grabbed="false">
       <div class="case-card-click" role="button" tabindex="0" onclick="openCaseTicket(${id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openCaseTicket(${id})}">
         <div class="case-card-header">
           <span class="case-card-number">#${id}</span>
           ${caseCardToplineHtml(status,priority)}
-          ${canManage?'<i data-lucide="grip-horizontal" class="case-card-grip"></i>':''}
+          <i data-lucide="grip-horizontal" class="case-card-grip" title="Drag to reorder or move"></i>
         </div>
         <h3>${escHtml(caseItem.title||'Untitled case')}</h3>
         <div class="case-card-badges">
@@ -2791,8 +2852,9 @@ function renderBoard(filteredCases=caseBoardState.filteredCases){
     }
     if(summary)summary.textContent=caseColumnSummary(key,items);
     if(list){
-      list.innerHTML=items.length
-        ? items.map(caseCardHtml).join('')
+      const ordered=sortBoardColumn(items,caseBoardState.boardOrder);
+      list.innerHTML=ordered.length
+        ? ordered.map(caseCardHtml).join('')
         : `<div class="case-column-empty" data-column-empty><i data-lucide="inbox" class="icon-sm"></i><span data-column-empty-label>${active?'No matching cases':'No cases in this stage'}</span></div>`;
     }
   });
@@ -3060,45 +3122,276 @@ function initCaseBoard(){
   },{passive:false});
   window.addEventListener('resize',closeCaseCardMenus,{passive:true});
 
-  if(window.TRACS_CASE_CAPS?.canManage){
-    workspace.addEventListener('dragstart',event=>{
-      const card=event.target.closest?.('.case-kanban-card[draggable="true"]');
-      if(!card)return;
-      caseBoardState.draggedId=Number(card.dataset.cid)||0;
-      card.classList.add('is-dragging');
-      card.setAttribute('aria-grabbed','true');
-      event.dataTransfer.effectAllowed='move';
-      event.dataTransfer.setData('text/plain',String(caseBoardState.draggedId));
-    });
-    workspace.addEventListener('dragend',event=>{
-      event.target.closest?.('.case-kanban-card')?.classList.remove('is-dragging');
-      event.target.closest?.('.case-kanban-card')?.setAttribute('aria-grabbed','false');
-      document.querySelectorAll('.case-kanban-column.is-drag-over').forEach(column=>column.classList.remove('is-drag-over'));
-      caseBoardState.draggedId=0;
-    });
-    workspace.addEventListener('dragover',event=>{
-      const zone=event.target.closest?.('[data-case-dropzone]');
-      if(!zone||!caseBoardState.draggedId)return;
-      event.preventDefault();
-      event.dataTransfer.dropEffect='move';
-      zone.closest('.case-kanban-column')?.classList.add('is-drag-over');
-    });
-    workspace.addEventListener('dragleave',event=>{
-      const zone=event.target.closest?.('[data-case-dropzone]');
-      if(zone && !zone.contains(event.relatedTarget))zone.closest('.case-kanban-column')?.classList.remove('is-drag-over');
-    });
-    workspace.addEventListener('drop',event=>{
-      const zone=event.target.closest?.('[data-case-dropzone]');
-      const column=zone?.closest('.case-kanban-column');
-      if(!zone||!column||!caseBoardState.draggedId)return;
-      event.preventDefault();
-      column.classList.remove('is-drag-over');
-      updateCaseStatusImmediately(caseBoardState.draggedId,column.dataset.targetStatus,'drag_drop');
-    });
-  }
+  initCaseBoardDrag(workspace);
+  initCaseReorderMenu();
 
   if(sort)sort.value=caseBoardState.sort;
   renderCaseWorkspace({preserveScroll:false,syncUrl:false});
+}
+/* ── Workflow Board: Reorder button (animated auto-sorts + manual) ── */
+function initCaseReorderMenu(){
+  const menu=document.getElementById('caseReorderMenu');
+  if(!menu)return;
+  menu.querySelectorAll('[data-board-order]').forEach(button=>{
+    button.addEventListener('click',()=>{
+      const mode=CASE_BOARD_ORDER_MODES.has(button.dataset.boardOrder)?button.dataset.boardOrder:'manual';
+      applyBoardOrder(mode);
+      menu.removeAttribute('open');
+    });
+  });
+}
+function applyBoardOrder(mode){
+  const next=CASE_BOARD_ORDER_MODES.has(mode)?mode:'manual';
+  const before=caseFlipCapture();
+  caseBoardState.boardOrder=next;
+  document.querySelectorAll('#caseReorderMenu [data-board-order]').forEach(button=>{
+    button.classList.toggle('is-active',button.dataset.boardOrder===next);
+  });
+  const trigger=document.querySelector('#caseReorderMenu .case-reorder-trigger');
+  if(trigger)trigger.classList.toggle('is-custom',next!=='manual');
+  renderCaseWorkspace();
+  requestAnimationFrame(()=>caseFlipPlay(before));
+}
+/* ── Workflow Board: pointer-based drag & drop (mouse + touch) ────────
+ * A single lifted clone follows the pointer with rotation/scale/elevation; a
+ * placeholder marks the drop slot and neighbours FLIP into place. Works for
+ * within-column reorder and cross-column moves. Optimistic: persists board
+ * order (case-reorder.php) + status change (case-status.php); on failure the
+ * previous arrangement is restored and a toast is shown. */
+const caseDrag={active:false,pointerId:null,card:null,id:0,clone:null,placeholder:null,
+  fromColumn:null,startX:0,startY:0,lastX:0,offsetX:0,offsetY:0,width:0,height:0,
+  pointerX:0,pointerY:0,lastRef:undefined,lastColumn:null,autoScrollRAF:0,moved:false,
+  suppressClickUntil:0};
+const CASE_DRAG_THRESHOLD=6;
+
+function initCaseBoardDrag(workspace){
+  const board=workspace.querySelector('.case-kanban');
+  if(!board)return;
+  // Swallow the click that some browsers synthesise right after a drag so the
+  // case ticket doesn't open on drop. Time-boxed so it never blocks real clicks.
+  workspace.addEventListener('click',event=>{
+    if(Date.now()<caseDrag.suppressClickUntil){
+      event.stopPropagation();
+      event.preventDefault();
+    }
+  },true);
+  board.addEventListener('pointerdown',onCasePointerDown);
+}
+function caseIsInteractive(target){
+  return !!target.closest?.('.case-card-menu, .case-card-menu *, a, button:not(.case-card-click), input, select, textarea');
+}
+function onCasePointerDown(event){
+  if(event.button!==undefined && event.button!==0)return;      // primary/touch only
+  const card=event.target.closest?.('.case-kanban-card[data-case-draggable="true"]');
+  if(!card||caseDrag.active)return;
+  if(caseIsInteractive(event.target))return;                    // let menus/links work
+  caseDrag.card=card;
+  caseDrag.id=Number(card.dataset.cid)||0;
+  caseDrag.pointerId=event.pointerId;
+  caseDrag.startX=caseDrag.lastX=event.clientX;
+  caseDrag.startY=event.clientY;
+  caseDrag.moved=false;
+  window.addEventListener('pointermove',onCasePointerMove,{passive:false});
+  window.addEventListener('pointerup',onCasePointerUp);
+  window.addEventListener('pointercancel',onCasePointerUp);
+}
+function beginCaseDrag(event){
+  const card=caseDrag.card;
+  const rect=card.getBoundingClientRect();
+  caseDrag.active=true;
+  caseDrag.moved=true;
+  caseDrag.fromColumn=card.closest('.case-kanban-column');
+  caseDrag.width=rect.width;
+  caseDrag.height=rect.height;
+  caseDrag.offsetX=event.clientX-rect.left;
+  caseDrag.offsetY=event.clientY-rect.top;
+  caseDrag.pointerX=event.clientX;
+  caseDrag.pointerY=event.clientY;
+  caseDrag.lastRef=undefined;
+  caseDrag.lastColumn=null;
+
+  // Floating clone that tracks the pointer.
+  const clone=card.cloneNode(true);
+  clone.classList.add('case-drag-clone');
+  clone.style.width=`${rect.width}px`;
+  clone.style.height=`${rect.height}px`;
+  clone.setAttribute('aria-hidden','true');
+  document.body.appendChild(clone);
+  caseDrag.clone=clone;
+
+  // Placeholder occupies the original slot; original hidden.
+  const placeholder=document.createElement('div');
+  placeholder.className='case-drag-placeholder';
+  placeholder.style.height=`${rect.height}px`;
+  card.parentNode.insertBefore(placeholder,card.nextSibling);
+  caseDrag.placeholder=placeholder;
+  card.classList.add('is-dragging-source');
+  card.setAttribute('aria-grabbed','true');
+  document.body.classList.add('case-drag-active');
+  positionCaseClone(event.clientX,event.clientY,0);
+  startCaseAutoScroll();
+}
+function positionCaseClone(x,y,tilt){
+  const c=caseDrag.clone;
+  if(!c)return;
+  c.style.transform=`translate(${x-caseDrag.offsetX}px, ${y-caseDrag.offsetY}px) rotate(${tilt}deg) scale(1.03)`;
+}
+function onCasePointerMove(event){
+  if(!caseDrag.card)return;
+  if(!caseDrag.active){
+    if(Math.abs(event.clientX-caseDrag.startX)<CASE_DRAG_THRESHOLD && Math.abs(event.clientY-caseDrag.startY)<CASE_DRAG_THRESHOLD)return;
+    beginCaseDrag(event);
+  }
+  event.preventDefault();
+  const dx=event.clientX-caseDrag.lastX;
+  caseDrag.lastX=event.clientX;
+  const tilt=Math.max(-7,Math.min(7,dx*0.9));
+  positionCaseClone(event.clientX,event.clientY,tilt);
+  caseDrag.pointerX=event.clientX;
+  caseDrag.pointerY=event.clientY;
+  updateCaseDropTarget(event.clientX,event.clientY);
+}
+function updateCaseDropTarget(x,y){
+  const el=document.elementFromPoint(x,y);
+  const column=el?.closest?.('.case-kanban-column');
+  document.querySelectorAll('.case-kanban-column.is-drag-over').forEach(c=>{if(c!==column)c.classList.remove('is-drag-over');});
+  if(!column)return;
+  column.classList.add('is-drag-over');
+  const list=column.querySelector('[data-case-dropzone]');
+  if(!list)return;
+  const cards=[...list.querySelectorAll('.case-kanban-card:not(.is-dragging-source)')];
+  let ref=null;
+  for(const card of cards){
+    const r=card.getBoundingClientRect();
+    if(y < r.top + r.height/2){ ref=card; break; }
+  }
+  // Only reflow + FLIP when the drop slot actually changes — keeps drag cheap
+  // even with hundreds of cards (elementFromPoint runs every move, this doesn't).
+  if(column===caseDrag.lastColumn && ref===caseDrag.lastRef)return;
+  caseDrag.lastColumn=column;
+  caseDrag.lastRef=ref;
+  const before=caseFlipCapture();
+  const empty=list.querySelector('[data-column-empty]');
+  if(empty)empty.remove();
+  if(ref)list.insertBefore(caseDrag.placeholder,ref);
+  else list.appendChild(caseDrag.placeholder);
+  requestAnimationFrame(()=>caseFlipPlay(before));
+}
+function startCaseAutoScroll(){
+  const board=document.querySelector('.case-kanban');
+  const step=()=>{
+    if(!caseDrag.active){caseDrag.autoScrollRAF=0;return;}
+    const x=caseDrag.pointerX,y=caseDrag.pointerY;
+    if(board){
+      const b=board.getBoundingClientRect();
+      const edge=64;
+      if(x<b.left+edge)board.scrollLeft-=Math.ceil((b.left+edge-x)/6);
+      else if(x>b.right-edge)board.scrollLeft+=Math.ceil((x-(b.right-edge))/6);
+    }
+    const overCol=document.elementFromPoint(x,y)?.closest?.('.case-kanban-column');
+    const list=overCol?.querySelector('[data-case-dropzone]');
+    if(list){
+      const r=list.getBoundingClientRect();
+      const edge=48;
+      if(y<r.top+edge)list.scrollTop-=Math.ceil((r.top+edge-y)/5);
+      else if(y>r.bottom-edge)list.scrollTop+=Math.ceil((y-(r.bottom-edge))/5);
+    }
+    caseDrag.autoScrollRAF=requestAnimationFrame(step);
+  };
+  caseDrag.autoScrollRAF=requestAnimationFrame(step);
+}
+function onCasePointerUp(event){
+  window.removeEventListener('pointermove',onCasePointerMove);
+  window.removeEventListener('pointerup',onCasePointerUp);
+  window.removeEventListener('pointercancel',onCasePointerUp);
+  if(!caseDrag.active){resetCaseDrag();return;}
+  caseDrag.suppressClick=true;
+  const placeholder=caseDrag.placeholder;
+  const targetColumn=placeholder?.closest('.case-kanban-column');
+  const clone=caseDrag.clone;
+  // Settle the clone onto the placeholder slot, then commit.
+  const finish=()=>{ commitCaseDrag(targetColumn); resetCaseDrag(); };
+  if(clone && placeholder){
+    const r=placeholder.getBoundingClientRect();
+    clone.classList.add('is-dropping');
+    clone.style.transform=`translate(${r.left}px, ${r.top}px) rotate(0deg) scale(1)`;
+    let done=false;
+    const settle=()=>{if(done)return;done=true;finish();};
+    clone.addEventListener('transitionend',settle,{once:true});
+    setTimeout(settle,260);
+  }else finish();
+}
+function commitCaseDrag(targetColumn){
+  const id=caseDrag.id;
+  const caseItem=caseBoardState.rawCases.find(c=>Number(c.id)===id);
+  if(!caseItem||!targetColumn){return;}
+  const targetKey=targetColumn.dataset.caseColumn;
+  const targetStatus=targetColumn.dataset.targetStatus;
+  const list=targetColumn.querySelector('[data-case-dropzone]');
+  if(!list)return;
+  // Build the new ordered id list for the target column from the live DOM,
+  // substituting the placeholder position with the dragged card.
+  const orderedIds=[];
+  [...list.children].forEach(child=>{
+    if(child===caseDrag.placeholder){orderedIds.push(id);return;}
+    if(child.classList?.contains('case-kanban-card') && !child.classList.contains('is-dragging-source')){
+      orderedIds.push(Number(child.dataset.cid)||0);
+    }
+  });
+  if(!orderedIds.includes(id))orderedIds.push(id);
+
+  const fromKey=caseDrag.fromColumn?.dataset.caseColumn;
+  const statusChanged=getWorkflowColumn(caseItem)!==targetKey;
+  const snapshot=caseBoardState.rawCases.map(c=>({id:c.id,status:c.status,board_order:c.board_order,overdue:c.overdue}));
+
+  // Optimistic client update: apply target status + per-column board_order.
+  if(statusChanged){
+    caseItem.status=targetStatus;
+    if(targetStatus==='completed')caseItem.overdue=false;
+    else caseItem.overdue=caseIsOverdue(caseItem);
+  }
+  orderedIds.forEach((cid,index)=>{
+    const item=caseBoardState.rawCases.find(c=>Number(c.id)===cid);
+    if(item)item.board_order=index;
+  });
+  caseBoardState.boardOrder='manual';
+  document.querySelectorAll('#caseReorderMenu [data-board-order]').forEach(b=>b.classList.toggle('is-active',b.dataset.boardOrder==='manual'));
+  renderCaseWorkspace();
+
+  persistCaseBoardOrder(targetStatus,orderedIds,statusChanged,id,snapshot,fromKey,targetKey);
+}
+async function persistCaseBoardOrder(status,orderedIds,statusChanged,id,snapshot,fromKey,targetKey){
+  try{
+    // Reorder the target column (also carries the status move server-side).
+    const d=await api(API.CASE.REORDER,{status,ordered_ids:orderedIds});
+    if(!d?.success)throw {message:d?.message,status:d?.status};
+    // If the card left another column, persist that column's compacted order too.
+    if(statusChanged && fromKey && fromKey!==targetKey){
+      const fromStatus=CASE_BOARD_COLUMN_META[fromKey]?.status;
+      const fromList=document.querySelector(`[data-case-column="${fromKey}"] [data-case-dropzone]`);
+      if(fromStatus && fromList){
+        const fromIds=[...fromList.querySelectorAll('.case-kanban-card')].map(c=>Number(c.dataset.cid)||0).filter(Boolean);
+        fromIds.forEach((cid,index)=>{const item=caseBoardState.rawCases.find(c=>Number(c.id)===cid);if(item)item.board_order=index;});
+        await api(API.CASE.REORDER,{status:fromStatus,ordered_ids:fromIds});
+      }
+    }
+    showToast(statusChanged?'Case moved and order saved.':'Board order saved.','success',{context:'page'});
+  }catch(error){
+    // Roll back to the pre-drag arrangement.
+    snapshot.forEach(s=>{const item=caseBoardState.rawCases.find(c=>Number(c.id)===Number(s.id));if(item){item.status=s.status;item.board_order=s.board_order;item.overdue=s.overdue;}});
+    renderCaseWorkspace();
+    handleRequestError(error,'page','The board order could not be saved. Your changes were reverted.');
+  }
+}
+function resetCaseDrag(){
+  if(caseDrag.autoScrollRAF)cancelAnimationFrame(caseDrag.autoScrollRAF);
+  caseDrag.clone?.remove();
+  caseDrag.placeholder?.remove();
+  caseDrag.card?.classList.remove('is-dragging-source');
+  caseDrag.card?.setAttribute('aria-grabbed','false');
+  document.querySelectorAll('.case-kanban-column.is-drag-over').forEach(c=>c.classList.remove('is-drag-over'));
+  document.body.classList.remove('case-drag-active');
+  Object.assign(caseDrag,{active:false,pointerId:null,card:null,id:0,clone:null,placeholder:null,fromColumn:null,moved:false,autoScrollRAF:0});
 }
 async function resolveCaseFromTicket(){
   const id=currentCaseTicketId;
