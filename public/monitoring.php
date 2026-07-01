@@ -104,6 +104,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $result = match ($action) {
             'create_task' => $TM->create($_POST, tracs_current_user_display($conn)),
             'update_assignment' => $TM->updateAssignment($_POST),
+            'update_task' => $TM->updateTask($_POST),
+            'reassign_task' => $TM->reassign($_POST, tracs_current_user_display($conn)),
+            'delete_task' => $TM->deleteTask($_POST),
             default => throw new InvalidArgumentException('Unknown task action.'),
         };
         $return_tab = (string)($_POST['return_tab'] ?? 'my');
@@ -282,7 +285,11 @@ include __DIR__ . '/includes/header.php';
         <table class="tracs-table tm-table">
           <thead><tr><th>Task</th><th>Assigned To</th><th>Priority</th><th>Due</th><th>Status</th><th>Time Left / Overdue</th><th>Completion Time</th><th>Last Update</th><th>Actions</th></tr></thead>
           <tbody>
-          <?php foreach($tasks as $task): $delta = tm_time_delta($task['due_at'] ?? null, (string)$task['assignment_status']); ?>
+          <?php foreach($tasks as $task):
+            $delta = tm_time_delta($task['due_at'] ?? null, (string)$task['assignment_status']);
+            $tm_can_edit = $can_monitor || (int)($task['created_by'] ?? 0) === $uid;
+            $tm_due_dt = !empty($task['due_at']) ? strtotime($task['due_at']) : 0;
+          ?>
             <tr>
               <td><strong><?=esc($task['title'])?></strong><?php if(!empty($task['description'])): ?><span><?=esc($task['description'])?></span><?php endif; ?></td>
               <td><?=esc($task['assignee_name'])?><span><?=esc($task['role_name'] ?? '')?> · <?=esc($task['division_name'] ?? 'No division')?></span></td>
@@ -296,6 +303,26 @@ include __DIR__ . '/includes/header.php';
                 <div class="tm-row-actions">
                   <a class="btn btn-ghost btn-sm" href="?<?=http_build_query(array_merge($_GET, ['assignment_id' => (int)$task['assignment_id']]))?>"><i data-lucide="eye" class="icon-xs"></i>Details</a>
                   <button type="button" class="btn btn-ghost btn-sm" onclick="tmOpenUpdate(<?=$task['assignment_id']?>,'<?=esc($task['stored_status'] ?: $task['assignment_status'])?>')"><i data-lucide="pencil" class="icon-xs"></i>Update</button>
+                  <?php if($tm_can_edit): ?>
+                  <details class="row-action-menu tm-row-menu" onclick="event.stopPropagation()">
+                    <summary class="btn btn-ghost btn-icon btn-sm" title="More actions" aria-label="More task actions"><i data-lucide="more-vertical" class="icon-xs"></i></summary>
+                    <div class="row-action-popover">
+                      <button type="button" class="btn btn-ghost btn-sm"
+                        data-task-id="<?=(int)$task['task_id']?>"
+                        data-title="<?=esc($task['title'])?>"
+                        data-category="<?=esc($task['category'])?>"
+                        data-desc="<?=esc($task['description'] ?? '')?>"
+                        data-priority="<?=esc($task['priority'])?>"
+                        data-due="<?=$tm_due_dt ? date('Y-m-d', $tm_due_dt) : ''?>"
+                        data-time="<?=$tm_due_dt ? date('H:i', $tm_due_dt) : ''?>"
+                        data-url="<?=esc($task['reference_url'] ?? '')?>"
+                        data-review="<?=!empty($task['requires_review']) ? '1' : '0'?>"
+                        onclick="tmOpenEdit(this)"><i data-lucide="pencil-line" class="icon-xs"></i>Edit task</button>
+                      <button type="button" class="btn btn-ghost btn-sm" onclick="tmOpenReassign(<?=(int)$task['task_id']?>,this)" data-title="<?=esc($task['title'])?>"><i data-lucide="user-plus" class="icon-xs"></i>Reassign</button>
+                      <button type="button" class="btn btn-danger btn-sm" data-task-id="<?=(int)$task['task_id']?>" data-title="<?=esc($task['title'])?>" onclick="tmDeleteTask(this)"><i data-lucide="trash-2" class="icon-xs"></i>Delete task</button>
+                    </div>
+                  </details>
+                  <?php endif; ?>
                 </div>
               </td>
             </tr>
@@ -353,13 +380,23 @@ include __DIR__ . '/includes/header.php';
     <?=csrf_input()?><input type="hidden" name="action" value="create_task"><input type="hidden" name="return_tab" value="<?=esc($tab)?>">
     <div class="modal-head"><div><div class="modal-title">Add Task Assignment</div><div class="modal-sub">Assign once or daily, with checklist and reminder sync.</div></div><button type="button" class="modal-close" onclick="closeModal('tmTask')"><i data-lucide="x"></i></button></div>
     <div class="modal-body tm-form">
-      <div class="form-row"><div class="form-group"><label class="form-label">Task Title</label><input class="form-input" name="title" required></div><div class="form-group"><label class="form-label">Category</label><select class="form-select" name="category"><?php foreach(['daily_checklist','case_follow_up','domain_transfer','balance_transfer','finance_log_mutasi','ssl_check','mom_follow_up','training_task','intern_task','custom'] as $c): ?><option value="<?=$c?>"><?=tm_label($c)?></option><?php endforeach; ?></select></div></div>
-      <div class="form-group"><label class="form-label">Instruction</label><textarea class="form-textarea" name="description" rows="4"></textarea></div>
-      <div class="form-row"><div class="form-group"><label class="form-label">Priority</label><select class="form-select" name="priority"><option value="normal">Normal</option><option value="low">Low</option><option value="high">High</option><option value="urgent">Urgent</option></select></div><div class="form-group"><label class="form-label">Reference URL</label><input class="form-input" type="url" name="reference_url" placeholder="https://..."></div></div>
-      <div class="form-row"><div class="form-group"><label class="form-label">Due Date</label><input class="form-input" type="date" name="due_date"></div><div class="form-group"><label class="form-label">Due Time</label><input class="form-input" type="time" name="due_time"></div></div>
-      <div class="form-row"><label class="tm-check"><input type="checkbox" name="is_recurring" value="1"><span>Daily recurring task</span></label><label class="tm-check"><input type="checkbox" name="requires_review" value="1"><span>Require review after completion</span></label></div>
-      <div class="form-row"><div class="form-group"><label class="form-label">Assign Users</label><select class="form-select" name="assignee_user_ids[]" multiple><?php foreach($users as $u): ?><option value="<?=$u['id']?>"><?=esc($u['display_name'])?></option><?php endforeach; ?></select></div><div class="form-group"><label class="form-label">Assign Roles</label><select class="form-select" name="assignee_role_ids[]" multiple><?php foreach($roles as $r): ?><option value="<?=$r['id']?>"><?=esc($r['name'])?></option><?php endforeach; ?></select></div></div>
-      <div class="form-group"><label class="form-label">Assign Divisions</label><select class="form-select" name="assignee_division_ids[]" multiple><?php foreach($divisions as $d): ?><option value="<?=$d['id']?>"><?=esc($d['name'])?></option><?php endforeach; ?></select></div>
+      <div class="tm-form-section">
+        <div class="tm-section-label">1 · Task details</div>
+        <div class="form-row"><div class="form-group"><label class="form-label">Task Title <span class="tm-req">*</span></label><input class="form-input" name="title" required></div><div class="form-group"><label class="form-label">Category</label><select class="form-select" name="category"><?php foreach(['daily_checklist','case_follow_up','domain_transfer','balance_transfer','finance_log_mutasi','ssl_check','mom_follow_up','training_task','intern_task','custom'] as $c): ?><option value="<?=$c?>" <?=$c==='custom'?'selected':''?>><?=tm_label($c)?></option><?php endforeach; ?></select></div></div>
+        <div class="form-group"><label class="form-label">Instruction</label><textarea class="form-textarea" name="description" rows="3" placeholder="What needs to be done?"></textarea></div>
+        <div class="form-row"><div class="form-group"><label class="form-label">Priority</label><select class="form-select" name="priority"><option value="normal" selected>Normal</option><option value="low">Low</option><option value="high">High</option><option value="urgent">Urgent</option></select></div><div class="form-group"><label class="form-label">Reference URL</label><input class="form-input" type="url" name="reference_url" placeholder="https://..."></div></div>
+        <div class="form-row"><div class="form-group"><label class="form-label">Due Date</label><input class="form-input" type="date" name="due_date"></div><div class="form-group"><label class="form-label">Due Time</label><input class="form-input" type="time" name="due_time"></div></div>
+        <div class="form-row"><label class="tm-check"><input type="checkbox" name="is_recurring" value="1"><span>Daily recurring task</span></label><label class="tm-check"><input type="checkbox" name="requires_review" value="1"><span>Require review after completion</span></label></div>
+      </div>
+      <div class="tm-form-section tm-assign-section">
+        <div class="tm-section-label">2 · Assign to <span class="tm-req">*</span></div>
+        <p class="tm-assign-hint"><i data-lucide="info" class="icon-xs"></i>Pick any combination of people, roles, or divisions. Everyone selected gets their own checklist entry and (if a due time is set) a reminder.</p>
+        <div class="form-group"><label class="form-label"><i data-lucide="user-round" class="icon-xs"></i> People</label><select class="form-select tm-assignee-select" name="assignee_user_ids[]" multiple data-searchable="true" data-placeholder="Search &amp; select people…"><?php foreach($users as $u): ?><option value="<?=$u['id']?>"><?=esc($u['display_name'])?></option><?php endforeach; ?></select></div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label"><i data-lucide="shield" class="icon-xs"></i> Roles</label><select class="form-select tm-assignee-select" name="assignee_role_ids[]" multiple data-searchable="true" data-placeholder="By role…"><?php foreach($roles as $r): ?><option value="<?=$r['id']?>"><?=esc($r['name'])?></option><?php endforeach; ?></select></div>
+          <div class="form-group"><label class="form-label"><i data-lucide="building-2" class="icon-xs"></i> Divisions</label><select class="form-select tm-assignee-select" name="assignee_division_ids[]" multiple data-searchable="true" data-placeholder="By division…"><?php foreach($divisions as $d): ?><option value="<?=$d['id']?>"><?=esc($d['name'])?></option><?php endforeach; ?></select></div>
+        </div>
+      </div>
     </div>
     <div class="modal-foot"><button type="button" class="btn btn-ghost" onclick="closeModal('tmTask')">Cancel</button><button type="submit" class="btn btn-primary"><i data-lucide="send" class="icon-sm"></i>Assign Task</button></div>
   </form>
@@ -381,6 +418,74 @@ include __DIR__ . '/includes/header.php';
 </div>
 <script>
 function tmOpenUpdate(id,status){document.getElementById('tmAssignmentId').value=id;document.getElementById('tmStatus').value=status||'in_progress';openModal('tmUpdate');window.TRACSDropdowns?.syncAll();}
+</script>
+<?php endif; ?>
+
+<?php if($schema_ready && ($can_monitor || $can_create)): ?>
+<!-- EDIT TASK MODAL -->
+<div class="modal-overlay hidden" id="tmEditModal">
+  <form method="post" class="modal modal-lg" data-tracs-modal-ajax data-close-delay="1000">
+    <?=csrf_input()?><input type="hidden" name="action" value="update_task"><input type="hidden" name="task_id" id="tmEditTaskId"><input type="hidden" name="return_tab" value="<?=esc($tab)?>">
+    <div class="modal-head"><div><div class="modal-title">Edit Task</div><div class="modal-sub">Changes sync to the linked checklist items and reminders.</div></div><button type="button" class="modal-close" onclick="closeModal('tmEdit')"><i data-lucide="x"></i></button></div>
+    <div class="modal-body tm-form">
+      <div class="form-row"><div class="form-group"><label class="form-label">Task Title</label><input class="form-input" name="title" id="tmEditTitle" required></div><div class="form-group"><label class="form-label">Category</label><select class="form-select" name="category" id="tmEditCategory"><?php foreach(['daily_checklist','case_follow_up','domain_transfer','balance_transfer','finance_log_mutasi','ssl_check','mom_follow_up','training_task','intern_task','custom'] as $c): ?><option value="<?=$c?>"><?=tm_label($c)?></option><?php endforeach; ?></select></div></div>
+      <div class="form-group"><label class="form-label">Instruction</label><textarea class="form-textarea" name="description" id="tmEditDesc" rows="4"></textarea></div>
+      <div class="form-row"><div class="form-group"><label class="form-label">Priority</label><select class="form-select" name="priority" id="tmEditPriority"><option value="normal">Normal</option><option value="low">Low</option><option value="high">High</option><option value="urgent">Urgent</option></select></div><div class="form-group"><label class="form-label">Reference URL</label><input class="form-input" type="url" name="reference_url" id="tmEditUrl" placeholder="https://..."></div></div>
+      <div class="form-row"><div class="form-group"><label class="form-label">Due Date</label><input class="form-input" type="date" name="due_date" id="tmEditDue"></div><div class="form-group"><label class="form-label">Due Time</label><input class="form-input" type="time" name="due_time" id="tmEditTime"></div></div>
+      <div class="form-row"><label class="tm-check"><input type="checkbox" name="requires_review" id="tmEditReview" value="1"><span>Require review after completion</span></label></div>
+    </div>
+    <div class="modal-foot"><button type="button" class="btn btn-ghost" onclick="closeModal('tmEdit')">Cancel</button><button type="submit" class="btn btn-primary"><i data-lucide="save" class="icon-sm"></i>Save Changes</button></div>
+  </form>
+</div>
+
+<!-- REASSIGN MODAL -->
+<div class="modal-overlay hidden" id="tmReassignModal">
+  <form method="post" class="modal" data-tracs-modal-ajax data-close-delay="1000">
+    <?=csrf_input()?><input type="hidden" name="action" value="reassign_task"><input type="hidden" name="task_id" id="tmReassignTaskId"><input type="hidden" name="return_tab" value="<?=esc($tab)?>">
+    <div class="modal-head"><div><div class="modal-title">Reassign Task</div><div class="modal-sub" id="tmReassignSub">Add more people to this task.</div></div><button type="button" class="modal-close" onclick="closeModal('tmReassign')"><i data-lucide="x"></i></button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Add Assignees</label><select class="form-select" name="assignee_user_ids[]" id="tmReassignUsers" multiple data-searchable="true"><?php foreach($users as $u): ?><option value="<?=$u['id']?>"><?=esc($u['display_name'])?></option><?php endforeach; ?></select><small class="tm-field-hint">New assignees get their own checklist entry and reminder; already-assigned users are skipped.</small></div>
+    </div>
+    <div class="modal-foot"><button type="button" class="btn btn-ghost" onclick="closeModal('tmReassign')">Cancel</button><button type="submit" class="btn btn-primary"><i data-lucide="user-plus" class="icon-sm"></i>Assign</button></div>
+  </form>
+</div>
+
+<!-- DELETE TASK (hidden form posted after confirm) -->
+<form method="post" id="tmDeleteForm" class="hidden" data-tracs-modal-ajax>
+  <?=csrf_input()?><input type="hidden" name="action" value="delete_task"><input type="hidden" name="task_id" id="tmDeleteTaskId"><input type="hidden" name="return_tab" value="<?=esc($tab)?>">
+</form>
+<script>
+function tmOpenEdit(btn){
+  const d=btn.dataset;
+  document.getElementById('tmEditTaskId').value=d.taskId||'';
+  document.getElementById('tmEditTitle').value=d.title||'';
+  document.getElementById('tmEditCategory').value=d.category||'custom';
+  document.getElementById('tmEditDesc').value=d.desc||'';
+  document.getElementById('tmEditPriority').value=d.priority||'normal';
+  document.getElementById('tmEditUrl').value=d.url||'';
+  document.getElementById('tmEditDue').value=d.due||'';
+  document.getElementById('tmEditTime').value=d.time||'';
+  document.getElementById('tmEditReview').checked=(d.review==='1');
+  btn.closest('details')?.removeAttribute('open');
+  openModal('tmEdit');window.TRACSDropdowns?.syncAll();
+}
+function tmOpenReassign(taskId,btn){
+  document.getElementById('tmReassignTaskId').value=taskId;
+  const sub=document.getElementById('tmReassignSub');
+  if(sub&&btn?.dataset.title)sub.textContent='Add more people to: '+btn.dataset.title;
+  const sel=document.getElementById('tmReassignUsers');
+  if(sel)[...sel.options].forEach(o=>o.selected=false);
+  btn.closest('details')?.removeAttribute('open');
+  openModal('tmReassign');window.TRACSDropdowns?.syncAll();
+}
+function tmDeleteTask(btn){
+  const id=btn.dataset.taskId, title=btn.dataset.title||'this task';
+  btn.closest('details')?.removeAttribute('open');
+  tracsConfirm('Delete "'+title+'"? This removes the task, its assignments, and the linked checklist items and reminders. This cannot be undone.', ()=>{
+    document.getElementById('tmDeleteTaskId').value=id;
+    document.getElementById('tmDeleteForm').requestSubmit();
+  });
+}
 </script>
 <?php endif; ?>
 

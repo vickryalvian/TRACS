@@ -1091,20 +1091,64 @@ const TRACSDropdowns = (() => {
     return item;
   }
 
+  function filterMenu(instance, term) {
+    const needle = String(term || '').trim().toLowerCase();
+    instance.searchTerm = needle;
+    let firstVisible = null;
+    instance.items.forEach(item => {
+      const match = !needle || labelOf(item.option).toLowerCase().includes(needle);
+      item.node.hidden = !match;
+      if (match && !item.option.disabled && !firstVisible) firstVisible = item;
+    });
+    const empty = instance.menu.querySelector('.tracs-select-empty');
+    if (empty) empty.hidden = !!firstVisible;
+    if (firstVisible) setActiveOption(instance, instance.items.indexOf(firstVisible));
+  }
+
   function renderMenu(instance) {
     instance.menu.innerHTML = '';
     instance.menu.className = `tracs-select-menu ${instance.select.multiple ? 'is-multiple' : ''}`;
     instance.menu.setAttribute('role', 'listbox');
     instance.menu.setAttribute('aria-multiselectable', instance.select.multiple ? 'true' : 'false');
+    // Opt-in searchable dropdown (data-searchable="true"): a filter box for
+    // long option lists (e.g. the task Assign-To people picker).
+    const searchable = instance.select.dataset.searchable === 'true';
+    if (searchable) {
+      const box = document.createElement('div');
+      box.className = 'tracs-select-search';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'tracs-select-search-input';
+      input.placeholder = 'Search…';
+      input.setAttribute('aria-label', 'Filter options');
+      input.addEventListener('input', () => filterMenu(instance, input.value));
+      input.addEventListener('keydown', event => { if (!['Escape'].includes(event.key)) event.stopPropagation(); });
+      input.addEventListener('click', event => event.stopPropagation());
+      box.appendChild(input);
+      instance.menu.appendChild(box);
+      instance.searchInput = input;
+    }
     instance.items = visibleOptions(instance.select).map((option, index) => {
       const node = makeOptionNode(instance, option, index);
       instance.menu.appendChild(node);
       return { option, node };
     });
+    if (searchable) {
+      const empty = document.createElement('div');
+      empty.className = 'tracs-select-empty';
+      empty.textContent = 'No matches';
+      empty.hidden = true;
+      instance.menu.appendChild(empty);
+    }
     const selected = instance.items.find(item => item.option.selected && !item.option.disabled);
     instance.activeOption = selected || instance.items.find(item => !item.option.disabled) || null;
     instance.items.forEach(item => item.node.classList.toggle('is-active', item === instance.activeOption));
+    if (searchable && instance.searchTerm) {
+      instance.searchInput.value = instance.searchTerm;
+      filterMenu(instance, instance.searchTerm);
+    }
     positionMenu(instance);
+    if (instance.searchInput) requestAnimationFrame(() => instance.searchInput.focus());
   }
 
   function open(instance) {
@@ -1122,6 +1166,7 @@ const TRACSDropdowns = (() => {
   function close(instance) {
     if (!instance) return;
     instance.open = false;
+    instance.searchTerm = '';
     instance.root.classList.remove('is-open');
     instance.trigger.setAttribute('aria-expanded', 'false');
     instance.menu.remove();
@@ -3752,6 +3797,57 @@ async function toggleTask(id,checkboxOrChecked,sourceElement=null){
     tracsTaskTogglePending.delete(requestKey);
   }
 }
+
+/* ── Checklist real-time sync (shared team checklist) ──────────────────
+ * Efficient polling: a cheap signature endpoint tells us when ANY user has
+ * created/updated/completed/deleted a checklist item; only then do we pull a
+ * fresh server-rendered fragment and swap it in (no JS/PHP template drift).
+ * Never swaps mid-interaction, so it can't clobber a local toggle/edit. */
+(function initChecklistLiveSync(){
+  const root=document.querySelector('[data-checklist-live]');
+  if(!root)return;
+  const SYNC_URL='/api/checklist-sync.php';
+  const POLL_MS=15000;
+  let signature=root.dataset.checklistSignature||'';
+  let busy=false;
+  function safeToSwap(){
+    if(document.visibilityState!=='visible')return false;
+    if(typeof tracsTaskTogglePending!=='undefined' && tracsTaskTogglePending.size>0)return false;
+    if(document.querySelector('.row-action-menu[open]'))return false;
+    if(document.querySelector('.modal-overlay:not(.hidden)'))return false;
+    const ae=document.activeElement;
+    if(ae && (ae.tagName==='INPUT' || ae.tagName==='TEXTAREA' || ae.isContentEditable))return false;
+    return true;
+  }
+  async function swapFragment(){
+    try{
+      const res=await fetch(window.location.href,{headers:{'X-Requested-With':'fragment'}});
+      if(!res.ok)return;
+      const doc=new DOMParser().parseFromString(await res.text(),'text/html');
+      ['.stat-strip','.checklist-progress-panel','.checklist-list-panel'].forEach(sel=>{
+        const next=doc.querySelector(sel), cur=document.querySelector(sel);
+        if(next && cur)cur.replaceWith(next);
+      });
+      const freshRoot=doc.querySelector('[data-checklist-live]');
+      if(freshRoot)signature=freshRoot.dataset.checklistSignature||signature;
+      if(window.lucide?.createIcons)window.lucide.createIcons();
+      try{showToast('Checklist updated by your team.','info',{context:'page',duration:3200});}catch(e){}
+    }catch(e){/* transient network */}
+  }
+  async function poll(){
+    if(busy || document.visibilityState!=='visible')return;
+    busy=true;
+    try{
+      const res=await fetch(SYNC_URL,{headers:{'Accept':'application/json'}});
+      const d=await res.json().catch(()=>null);
+      const sig=d?.data?.signature;
+      if(sig && sig!==signature && safeToSwap())await swapFragment();
+    }catch(e){/* offline/transient */}
+    finally{busy=false;}
+  }
+  setInterval(poll,POLL_MS);
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')poll();});
+})();
 
 function setCheckablePending(row, pending){
   if(!row)return;

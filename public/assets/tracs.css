@@ -3706,6 +3706,37 @@ input, select, textarea { font-family: inherit }
   box-shadow: 0 18px 44px rgba(17, 24, 39, .16), 0 2px 8px rgba(17, 24, 39, .08);
   backdrop-filter: blur(14px);
 }
+/* Opt-in searchable dropdown filter box */
+.tracs-select-search {
+  position: sticky;
+  top: -5px;
+  margin: -5px -5px 4px;
+  padding: 6px;
+  background: color-mix(in srgb, var(--s1) 96%, transparent);
+  border-bottom: 1px solid var(--bd1);
+  z-index: 1;
+}
+.tracs-select-search-input {
+  width: 100%;
+  height: 30px;
+  padding: 0 9px;
+  font-size: 12.5px;
+  color: var(--tx1);
+  background: var(--s2);
+  border: 1px solid var(--bd2);
+  border-radius: var(--r);
+  outline: none;
+}
+.tracs-select-search-input:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px var(--blue-lt);
+}
+.tracs-select-empty {
+  padding: 10px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--tx4);
+}
 
 .tracs-select-option {
   width: 100%;
@@ -11320,7 +11351,55 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
 }
 .tm-form {
   display: grid;
+  gap: 14px;
+}
+.tm-form-section {
+  display: grid;
   gap: 12px;
+}
+.tm-section-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--tx3);
+}
+.tm-req { color: var(--tracs-status-critical, #d84c4c); font-weight: 700; }
+/* Highlighted "Assign to" grouping so it can't be missed */
+.tm-assign-section {
+  padding: 12px;
+  border: 1px solid var(--blue-bd);
+  border-radius: var(--r2);
+  background: color-mix(in srgb, var(--blue-lt) 34%, var(--s1));
+}
+.tm-assign-section .tm-section-label { color: var(--blue-dk); }
+[data-theme="dark"] .tm-assign-section {
+  background: rgba(59,130,246,.08);
+  border-color: rgba(96,165,250,.28);
+}
+[data-theme="dark"] .tm-assign-section .tm-section-label { color: #93c5fd; }
+.tm-assign-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--tx3);
+}
+.tm-assign-hint .lucide { flex-shrink: 0; margin-top: 1px; color: var(--blue); }
+.tm-assign-section .form-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.tm-assign-section .form-label .lucide { color: var(--tx4); }
+.tm-field-hint {
+  display: block;
+  margin-top: 5px;
+  font-size: 10.5px;
+  color: var(--tx4);
+  line-height: 1.5;
 }
 .tm-detail-body {
   display: grid;

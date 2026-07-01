@@ -239,6 +239,142 @@ class TaskManagementModel {
         return $assignmentId;
     }
 
+    /** created_by of a task, for owner-or-monitor permission checks. */
+    public function taskOwnerId(int $taskId): int {
+        $stmt = $this->conn->prepare("SELECT created_by FROM tracs_tasks WHERE id = ? LIMIT 1");
+        if (!$stmt) return 0;
+        $stmt->bind_param('i', $taskId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        return (int)($row['created_by'] ?? 0);
+    }
+
+    /** Full task record for edit prefill. */
+    public function taskById(int $taskId): ?array {
+        $stmt = $this->conn->prepare("SELECT * FROM tracs_tasks WHERE id = ? LIMIT 1");
+        if (!$stmt) return null;
+        $stmt->bind_param('i', $taskId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        return $row ?: null;
+    }
+
+    /** Assignees currently on a task (for reassign prefill). */
+    public function taskAssigneeIds(int $taskId): array {
+        $ids = [];
+        $res = $this->conn->query("SELECT user_id FROM tracs_task_assignments WHERE task_id = " . (int)$taskId);
+        if ($res) { while ($row = $res->fetch_assoc()) $ids[] = (int)$row['user_id']; }
+        return $ids;
+    }
+
+    /**
+     * Edit a task's core fields and cascade the changes to every linked
+     * checklist item and reminder so the shared objects stay consistent.
+     */
+    public function updateTask(int $taskId, array $data, int $actorId): bool {
+        $this->conn->begin_transaction();
+        try {
+            $stmt = $this->conn->prepare("
+                UPDATE tracs_tasks
+                SET title=?, description=?, category=?, priority=?, due_at=?, reference_url=?, requires_review=?, updated_at=NOW()
+                WHERE id=?
+            ");
+            $stmt->bind_param('ssssssii', $data['title'], $data['description'], $data['category'], $data['priority'], $data['due_at'], $data['reference_url'], $data['requires_review'], $taskId);
+            if (!$stmt->execute()) { $stmt->close(); throw new RuntimeException('Task update failed.'); }
+            $stmt->close();
+
+            $desc = trim(($data['description'] ?? '') . (!empty($data['reference_url']) ? "\nReference: " . $data['reference_url'] : ''));
+            $remPriority = match ($data['priority']) { 'urgent' => 'critical', 'high' => 'high', 'low' => 'low', default => 'medium' };
+            $res = $this->conn->query("SELECT linked_checklist_task_id, linked_reminder_id FROM tracs_task_assignments WHERE task_id = " . (int)$taskId);
+            while ($res && ($row = $res->fetch_assoc())) {
+                $cid = (int)($row['linked_checklist_task_id'] ?? 0);
+                $rid = (int)($row['linked_reminder_id'] ?? 0);
+                if ($cid) {
+                    $s = $this->conn->prepare("UPDATE tracs_side_tasks SET title=?, description=?, updated_at=NOW() WHERE id=?");
+                    if ($s) { $s->bind_param('ssi', $data['title'], $desc, $cid); $s->execute(); $s->close(); }
+                }
+                if ($rid) {
+                    if (!empty($data['due_at'])) {
+                        $s = $this->conn->prepare("UPDATE tracs_reminders SET title=?, description=?, due_date=?, priority=?, updated_at=NOW() WHERE id=?");
+                        if ($s) { $s->bind_param('ssssi', $data['title'], $desc, $data['due_at'], $remPriority, $rid); $s->execute(); $s->close(); }
+                    } else {
+                        $s = $this->conn->prepare("UPDATE tracs_reminders SET title=?, description=?, priority=?, updated_at=NOW() WHERE id=?");
+                        if ($s) { $s->bind_param('sssi', $data['title'], $desc, $remPriority, $rid); $s->execute(); $s->close(); }
+                    }
+                }
+            }
+            $this->log($taskId, null, $actorId, 'updated', 'Task details updated.');
+            $this->conn->commit();
+            return true;
+        } catch (Throwable $e) {
+            $this->conn->rollback();
+            throw $e;
+        }
+    }
+
+    /** Add assignees to an existing task (reassign); skips users already assigned. Returns count added. */
+    public function addAssignees(int $taskId, array $userIds, int $actorId, string $actorName): int {
+        $task = $this->taskById($taskId);
+        if (!$task) throw new RuntimeException('Task not found.');
+        $existing = array_flip($this->taskAssigneeIds($taskId));
+        $added = 0;
+        $this->conn->begin_transaction();
+        try {
+            foreach ($userIds as $uid) {
+                $uid = (int)$uid;
+                if ($uid <= 0 || isset($existing[$uid])) continue;
+                $assignmentId = $this->createAssignment($taskId, $uid, $actorId, $actorName, $task);
+                $this->log($taskId, $assignmentId, $actorId, 'assigned', 'Additional assignee added.');
+                $added++;
+            }
+            $this->conn->commit();
+        } catch (Throwable $e) {
+            $this->conn->rollback();
+            throw $e;
+        }
+        return $added;
+    }
+
+    /**
+     * Delete a task and everything it spawned: linked checklist items (+ their
+     * logs), linked reminders, task logs, and all assignments. Children first so
+     * foreign keys stay satisfied regardless of cascade config.
+     */
+    public function deleteTask(int $taskId): bool {
+        $this->conn->begin_transaction();
+        try {
+            $cids = []; $rids = [];
+            $res = $this->conn->query("SELECT linked_checklist_task_id, linked_reminder_id FROM tracs_task_assignments WHERE task_id = " . (int)$taskId);
+            while ($res && ($row = $res->fetch_assoc())) {
+                if (!empty($row['linked_checklist_task_id'])) $cids[] = (int)$row['linked_checklist_task_id'];
+                if (!empty($row['linked_reminder_id'])) $rids[] = (int)$row['linked_reminder_id'];
+            }
+            if ($cids) {
+                $in = implode(',', array_map('intval', $cids));
+                $this->conn->query("DELETE FROM tracs_side_task_logs WHERE task_id IN ($in)");
+                $this->conn->query("DELETE FROM tracs_side_tasks WHERE id IN ($in)");
+            }
+            if ($rids) {
+                $in = implode(',', array_map('intval', $rids));
+                $this->conn->query("DELETE FROM tracs_reminders WHERE id IN ($in)");
+            }
+            $this->conn->query("DELETE FROM tracs_task_logs WHERE task_id = " . (int)$taskId);
+            $this->conn->query("DELETE FROM tracs_task_assignments WHERE task_id = " . (int)$taskId);
+            $stmt = $this->conn->prepare("DELETE FROM tracs_tasks WHERE id = ?");
+            $stmt->bind_param('i', $taskId);
+            $ok = $stmt->execute() && $stmt->affected_rows > 0;
+            $stmt->close();
+            if (!$ok) throw new RuntimeException('Task not found.');
+            $this->conn->commit();
+            return true;
+        } catch (Throwable $e) {
+            $this->conn->rollback();
+            throw $e;
+        }
+    }
+
     public function listTasks(array $filters, int $actorId, bool $canMonitor): array {
         $where = [$canMonitor ? '1=1' : 'ta.user_id = ?'];
         $types = $canMonitor ? '' : 'i';

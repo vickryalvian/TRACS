@@ -28,10 +28,11 @@ if($q) $tasks=array_filter($tasks,fn($t)=>str_contains(strtolower($t['title']??'
 $tasks=array_values($tasks);
 $critical_count=0;
 
+$checklist_signature=$KC->getSignature();
 $page_title='Checklist'; $active_page='checklist';
 include 'includes/header.php';
 ?>
-<main class="main checklist-page"><div class="main-inner">
+<main class="main checklist-page"><div class="main-inner" data-checklist-live data-checklist-signature="<?=esc($checklist_signature)?>">
 
 <div class="topbar">
   <div><div class="page-title">Checklist</div><div class="page-sub"><?=$total?> tasks · <?=$pending?> pending · <?=$pct?>% complete</div></div>

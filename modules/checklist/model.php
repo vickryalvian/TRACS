@@ -54,6 +54,23 @@ class ChecklistModel {
     }
     
     /**
+     * Cheap change signature for the whole (shared) checklist, used by the
+     * real-time poller to detect create/update/complete/delete by any user
+     * without transferring the full list every tick.
+     */
+    public function getSignature(): string {
+        $res = $this->conn->query("
+            SELECT COUNT(*) c,
+                   COALESCE(MAX(UNIX_TIMESTAMP(updated_at)),0) m,
+                   COALESCE(SUM(is_completed),0) s,
+                   COALESCE(MAX(id),0) mx
+            FROM tracs_side_tasks
+        ");
+        $row = $res ? $res->fetch_assoc() : [];
+        return md5(($row['c'] ?? 0) . '|' . ($row['m'] ?? 0) . '|' . ($row['s'] ?? 0) . '|' . ($row['mx'] ?? 0));
+    }
+
+    /**
      * Get a single side task
      */
     public function getTaskById($task_id, $user_id) {

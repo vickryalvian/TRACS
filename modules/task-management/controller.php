@@ -135,6 +135,82 @@ class TaskManagementController {
         return ['message' => 'Task assignment updated.'];
     }
 
+    /** Edit/delete/reassign are allowed for task monitors or the task's creator. */
+    private function requireTaskManage(int $taskId): void {
+        if ($this->canMonitor()) return;
+        if ($this->model->taskOwnerId($taskId) === $this->actorId) return;
+        throw new RuntimeException('You do not have permission to modify this task.');
+    }
+
+    /** Validate + normalise editable task fields (shared shape with create()). */
+    private function validateTaskFields(array $input): array {
+        $title = $this->cleanText($input['title'] ?? '', 180);
+        if ($title === '') throw new InvalidArgumentException('Task title is required.');
+        $category = (string)($input['category'] ?? 'custom');
+        $allowedCategories = ['daily_checklist','case_follow_up','domain_transfer','balance_transfer','finance_log_mutasi','ssl_check','mom_follow_up','training_task','intern_task','custom'];
+        if (!in_array($category, $allowedCategories, true)) throw new InvalidArgumentException('Invalid task category.');
+        $priority = (string)($input['priority'] ?? 'normal');
+        if (!in_array($priority, ['low','normal','high','urgent'], true)) throw new InvalidArgumentException('Invalid task priority.');
+        $dueDate = trim((string)($input['due_date'] ?? ''));
+        $dueTime = trim((string)($input['due_time'] ?? ''));
+        $dueAt = null;
+        if ($dueDate !== '') {
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dueDate) || !strtotime($dueDate)) throw new InvalidArgumentException('Invalid due date.');
+            if ($dueTime !== '' && !preg_match('/^\d{2}:\d{2}$/', $dueTime)) throw new InvalidArgumentException('Invalid due time.');
+            $dueAt = date('Y-m-d H:i:s', strtotime($dueDate . ' ' . ($dueTime ?: '23:59')));
+        }
+        $url = trim((string)($input['reference_url'] ?? ''));
+        if ($url !== '' && !filter_var($url, FILTER_VALIDATE_URL)) throw new InvalidArgumentException('Reference URL must be a valid URL.');
+        return [
+            'title' => $title,
+            'description' => $this->cleanLong($input['description'] ?? ''),
+            'category' => $category,
+            'priority' => $priority,
+            'due_at' => $dueAt,
+            'reference_url' => $url ?: null,
+            'requires_review' => !empty($input['requires_review']) ? 1 : 0,
+        ];
+    }
+
+    /** Task record + current assignee ids, for prefilling the edit modal. */
+    public function taskForEdit(int $taskId): array {
+        $this->requireTaskManage($taskId);
+        $task = $this->model->taskById($taskId);
+        if (!$task) throw new RuntimeException('Task not found.');
+        $task['assignee_user_ids'] = $this->model->taskAssigneeIds($taskId);
+        return $task;
+    }
+
+    public function updateTask(array $input): array {
+        $taskId = (int)($input['task_id'] ?? 0);
+        if ($taskId <= 0) throw new InvalidArgumentException('Task not specified.');
+        $this->requireTaskManage($taskId);
+        $data = $this->validateTaskFields($input);
+        $this->model->updateTask($taskId, $data, $this->actorId);
+        tracs_log_user_event($this->conn, $this->actorId, 'task_updated', 'task', $taskId, null, ['title' => $data['title']]);
+        return ['message' => 'Task updated.'];
+    }
+
+    public function reassign(array $input, string $actorName): array {
+        $taskId = (int)($input['task_id'] ?? 0);
+        if ($taskId <= 0) throw new InvalidArgumentException('Task not specified.');
+        $this->requireTaskManage($taskId);
+        $userIds = $this->normalizeMulti($input['assignee_user_ids'] ?? []);
+        if (!$userIds) throw new InvalidArgumentException('Select at least one user to assign.');
+        $added = $this->model->addAssignees($taskId, $userIds, $this->actorId, $actorName);
+        tracs_log_user_event($this->conn, $this->actorId, 'task_reassigned', 'task', $taskId, null, ['added' => $added]);
+        return ['message' => $added > 0 ? ($added . ' assignee(s) added.') : 'Those users are already assigned.'];
+    }
+
+    public function deleteTask(array $input): array {
+        $taskId = (int)($input['task_id'] ?? 0);
+        if ($taskId <= 0) throw new InvalidArgumentException('Task not specified.');
+        $this->requireTaskManage($taskId);
+        $this->model->deleteTask($taskId);
+        tracs_log_user_event($this->conn, $this->actorId, 'task_deleted', 'task', $taskId, null, null);
+        return ['message' => 'Task deleted.'];
+    }
+
     public function syncFromChecklist(int $checklistTaskId, bool $done): void {
         if ($this->schemaReady()) {
             $this->model->syncFromChecklist($checklistTaskId, $this->actorId, $done);
