@@ -4,6 +4,63 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Task Monitoring & MoM Permission Revision (2026-07-01 ~09:40 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`).
+
+Revises authorization for Checklist, Reminder, Assignment, and MoM from
+branch `feat/task-monitoring-mom-permission-revision`. Checklist
+create/update open to every authenticated user; delete now checks
+`created_by` instead of `user_id` (task-assignment-linked checklist items
+can have a different assignee than creator). Reminders are fully public
+(view/create/update); delete stays owner-only. MoM view/create/update
+opened to every authenticated user across the record and all sub-objects
+(agenda, notes, decisions, actions, screenshots, case links), with a new
+self-healing `updated_by` audit column; MoM deletion stays creator-only.
+Task Monitoring assignment visibility was already correctly private
+(non-monitor users scoped to their own assignments) — verified, no code
+change needed there.
+
+What was applied:
+
+- Code (file-copy deploy; prior versions backed up under
+  `backups/task-monitoring-mom-permission-revision-20260701-023642/`):
+  `core/access_control.php`, `modules/reminder/model.php`,
+  `public/api/reminder-get.php`, `reminder-toggle.php`,
+  `reminder-update.php`, `task-delete.php`, `task-toggle.php`,
+  `task-update.php`, `public/checklist.php`, `public/index.php`,
+  `public/mom.php`, `public/modules/mom/controller.php`.
+- Migration `config/migrations/2026_07_01_task_monitoring_mom_permission_revision.sql`
+  applied to `vickryid_tracs_alpha` (MariaDB): grants
+  `checklist.manage`, `reminders.view`, `reminders.manage`, `moms.view`,
+  `moms.manage` to the `intern` and `viewer` roles (both were previously
+  missing or view-only on these three modules).
+- `php8.3-fpm` reloaded to clear opcache.
+
+Verification on production:
+
+- `php -l` clean for all 12 deployed PHP files.
+- Role-permission grants confirmed live for `intern` and `viewer`
+  (all 5 permission keys present).
+- `nginx`, `php8.3-fpm`, `mysql` all active; no PHP fatal errors in
+  `php8.3-fpm.log` after reload; no new nginx errors beyond a pre-existing,
+  unrelated static-asset rule.
+- `login.php` returns `200`; `checklist.php`, `mom.php`, `reminders.php`
+  return `302` to login when unauthenticated (expected, no 404/500).
+- Pre-deploy drift check: production copies of `core/access_control.php`
+  and `public/index.php` differed only by CRLF line endings from the
+  `main` baseline (byte-identical content) — no production-only changes
+  were overwritten.
+- Local pre-deploy regression pass (Docker `tracs_db`/`tracs_app`, real
+  DB, real users): 15/15 checks passed — cross-user checklist/MoM update
+  allowed, cross-user delete blocked, `created_by` immutable, `updated_by`
+  correctly attributed, reminder view/update public, non-monitor task
+  assignment visibility unchanged.
+
+The branch remains pushed for review/PR; production tracks the working
+tree via file-copy deploy (not a `main` pull).
+
 ## Deployed — Website Screenshot Widget (2026-07-01 ~01:45 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
