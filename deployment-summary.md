@@ -4,6 +4,54 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Dashboard Restructure & Multi-Region Screenshot (2026-07-01 ~11:20 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch `feat/task-monitoring-mom-permission-revision`,
+commit `eb010b3`.
+
+Reworks the dashboard Website Screenshot widget and utility-row layout:
+
+- Screenshot region defaults to **All regions**; each region captures in
+  parallel and renders as a card in a modal (reuses the `case-image-modal`
+  frame/backdrop). `session_write_close()` added in `screenshot-capture.php` so
+  concurrent per-region requests don't serialize behind the PHP session lock.
+- Website Screenshot moved under the Cases panel (left column); Cases list
+  capped to ~7 rows with inline scroll.
+- **Activity** moved out of Task Monitoring into a standalone Recent Activity
+  widget beside a now half-width Currency Converter (equal-height row).
+- Fixed collapsed Currency dropdowns (flex layout for the enhanced selects).
+- Added a small Dobby easter-egg filler in the workspace.
+
+What was applied:
+
+- Code (file-copy deploy; prior versions backed up under
+  `/opt/tracs/backups/dashboard-20260701-111534/`): `public/index.php`,
+  `public/includes/footer.php`, `public/assets/tracs.css`,
+  `public/assets/tracs.js`, `public/api/screenshot-capture.php`. Ownership
+  restored to `vickry:www-data`; `php8.3-fpm` reloaded.
+- **PAGEFLEETS_API_KEY web-path fix:** the browser reported "Screenshot service
+  is not configured" because `.env` is `-rw-r----- vickry:vickry` and the
+  `www-data` FPM user cannot read it, so `config/env.php`'s `loadEnv()` no-ops on
+  web requests. DB/2FA vars work only via FPM pool `env[]` directives, and
+  `PAGEFLEETS_API_KEY` was missing there. Added
+  `env[PAGEFLEETS_API_KEY]` to `/etc/php/8.3/fpm/pool.d/www.conf` (backup:
+  `www.conf.bak-pagefleets-20260701-112036`), validated `php-fpm8.3 -t`,
+  reloaded FPM.
+
+Verification on production:
+
+- All 5 deployed files sha256-match the local committed versions.
+- FPM web path exposes the key (`env_len=56`, `getenv_len=56`) via a temporary
+  web-served probe (created and deleted immediately; value never printed).
+- Live key returns **HTTP 200** from PageFleets; TRACS endpoint over HTTPS
+  returns clean `401` unauthenticated (auth/routing correct, no 404/500).
+- Remaining user-side check: an authenticated **All regions** browser capture
+  rendering real images per region.
+
+Deployed via key auth (`~/.ssh/tracs_deploy_ed25519`, authorized on the host);
+no password used. Branch pushed to GitHub for review/PR.
+
 ## Deployed — Task Monitoring & MoM Permission Revision (2026-07-01 ~09:40 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
