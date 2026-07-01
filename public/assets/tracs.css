@@ -3591,8 +3591,13 @@ input, select, textarea { font-family: inherit }
   border-radius: 4px;
 }
 
-/* ── TRACS Custom Dropdowns ── */
+/* ── TRACS Custom Dropdowns ──
+   display:none is the primary hide — unambiguous regardless of layout
+   context (flex/grid parents, multi-select default sizing, etc). The
+   absolute/clip-path properties are kept as a harmless fallback for any
+   code path that might toggle display back on. */
 .tracs-native-select {
+  display: none !important;
   position: absolute !important;
   width: 1px !important;
   height: 1px !important;
@@ -11274,6 +11279,17 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
    without a horizontal scrollbar, instead of growing to fit long content. */
 .tm-table {
   table-layout: fixed;
+}
+/* .tm-panel has overflow:visible (no scroll container of its own), so the
+   generic .tracs-table th sticky-header rule escapes to the page's own
+   scroll — on shorter viewports the header then "sticks" to the browser
+   viewport top while the panel's own head ("N shown") is still in normal
+   flow nearby, visually overlapping it. This table doesn't need a frozen
+   header, so opt back out to normal, non-sticky flow. */
+.tm-table th {
+  position: static;
+  top: auto;
+  z-index: auto;
 }
 .tm-table th:nth-child(1), .tm-table td:nth-child(1) { width: 24%; }
 .tm-table th:nth-child(2), .tm-table td:nth-child(2) { width: 15%; }
