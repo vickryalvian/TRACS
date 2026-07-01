@@ -4,6 +4,71 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Full Custom Error-Page Suite (2026-07-01 ~16:30 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch `feat/task-monitoring-mom-permission-revision`.
+
+Audit found only `public/404.php` (with the Dobby mascot) existed; every
+other status code (400/401/403/405/408/419/429/500/502/503) had no page and
+no server-level routing at all, and production's nginx `try_files` fallback
+silently rewrote every unmatched path to the dashboard instead of ever
+returning a real 404 (`curl` confirmed a mistyped URL 302'd to `/login.php`).
+
+What was applied:
+
+- New `public/includes/error_page_render.php` — single shared render
+  function extracted from `404.php`'s existing markup/CSS, used by every
+  page so they can't drift out of sync with each other.
+- `public/404.php` refactored to call the shared renderer (output
+  unchanged); new `public/400.php`, `401.php`, `403.php`, `405.php`,
+  `408.php`, `419.php`, `429.php`, `500.php` built on the same pattern.
+- `public/502.html`, `public/503.html` — static (no PHP) fallback pages for
+  the two codes that mean "PHP-FPM itself is unreachable," so nginx can
+  serve them without needing a live backend.
+- `public/.htaccess` — added matching `ErrorDocument` lines (for local
+  Apache dev parity only; production runs nginx, which never reads
+  `.htaccess`).
+- **Production nginx** (`/etc/nginx/sites-available/tracs`, backed up
+  first as `tracs.bak-error-pages-20260701161721`): added `error_page`
+  directives for all 10 codes, and changed
+  `location / { try_files $uri $uri/ /index.php?$query_string; }` to
+  `try_files $uri $uri/ =404;` so genuinely unknown paths now correctly
+  404 instead of falling through to the dashboard/login redirect.
+  `nginx -t` passed before each reload.
+- **Regression caught and fixed during verification:** initially also added
+  `fastcgi_intercept_errors on;` to the `.php` location block per the
+  original plan, but this caused an infinite-loop condition — each error
+  page sets its own matching `http_response_code()`, so nginx re-triggered
+  `error_page` on the response and fell back to its own generic (but still
+  info-safe) error page instead of ours, for every code including the
+  previously-working 404. Removed that one line (kept everything else) and
+  reloaded; re-verified every code's response body afterward, not just its
+  status code.
+- **Known nginx limitation, not a bug:** with `fastcgi_intercept_errors`
+  off, direct hits to `/408.php` do render correctly. (Earlier, with that
+  directive on, nginx dropped 408 connections silently — a documented nginx
+  quirk that treats upstream-emitted 408 as an already-dead client
+  connection.)
+
+Verification on production:
+
+- Unknown path → **404** (previously 302 to `/login.php`).
+- Every one of `400/401/403/404/405/408/419/429/500`.php and
+  `502/503`.html returns its correct status code **and** its response body
+  contains the Dobby mascot / correct copy (checked body content, not just
+  status — the intercept_errors regression above returned the right status
+  with the wrong body).
+- Known real pages/API unaffected: `/login.php` → 200, `/assets/tracs.css`
+  → 200, `/api/server-health.php` → 401 (unchanged).
+- No `X-Powered-By`/version leakage on any error page; `display_errors`
+  confirmed `Off` server-wide.
+- 404.php and dobby-404.png were already byte-identical between local and
+  production before this deploy (sha256 verified) — no drift there.
+
+Deployed via key auth (`~/.ssh/tracs_deploy_ed25519`), file-copy for
+`public/`, direct edit for the nginx vhost. No password used.
+
 ## Deployed — Dashboard Restructure & Multi-Region Screenshot (2026-07-01 ~11:20 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
