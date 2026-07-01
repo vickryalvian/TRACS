@@ -1345,7 +1345,8 @@ input, select, textarea { font-family: inherit }
 .dashboard-workspace,
 .col-productivity,
 .col-center,
-.col-right {
+.col-right,
+.col-activity {
   display: flex;
   flex-direction: column;
   gap: var(--dashboard-row-gap);
@@ -1359,6 +1360,7 @@ input, select, textarea { font-family: inherit }
 .col-productivity > *,
 .col-center > *,
 .col-right > *,
+.col-activity > *,
 .panel > * {
   min-width: 0;
 }
@@ -1374,15 +1376,25 @@ input, select, textarea { font-family: inherit }
   grid-column: 4 / 7;
   grid-row: 1;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-rows: max-content max-content;
+  grid-template-rows: max-content max-content max-content max-content;
   grid-template-areas:
     "productivity productivity"
-    "handover currency";
+    "handover handover"
+    "currency activity"
+    "dobby dobby";
   column-gap: var(--dashboard-widget-gap);
   row-gap: var(--dashboard-row-gap);
   align-content: start;
-  align-items: start;
+  align-items: stretch;
   align-self: start;
+}
+
+/* Currency + Recent Activity share the bottom row; make both panels fill the
+   row so their heights match (the taller one drives, the list scrolls). */
+.col-right > .panel,
+.col-activity > .panel {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .col-productivity {
@@ -1395,6 +1407,54 @@ input, select, textarea { font-family: inherit }
 
 .col-right {
   grid-area: currency;
+}
+
+.col-activity {
+  grid-area: activity;
+}
+
+/* Dobby easter egg — a quiet, playful filler in the leftover workspace space. */
+.dobby-egg {
+  grid-area: dobby;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--tx4);
+  font-family: var(--mono);
+  user-select: none;
+  opacity: .55;
+  transition: opacity var(--dur);
+}
+.dobby-egg:hover { opacity: 1 }
+.dobby-egg-cat {
+  font-size: 16px;
+  animation: dobby-bob 2.4s ease-in-out infinite;
+}
+.dobby-egg:hover .dobby-egg-cat { animation-duration: .8s }
+.dobby-egg-paw { font-size: 12px; opacity: .7 }
+.dobby-egg-dots span {
+  animation: dobby-blink 1.4s infinite both;
+}
+.dobby-egg-dots span:nth-child(2) { animation-delay: .2s }
+.dobby-egg-dots span:nth-child(3) { animation-delay: .4s }
+@keyframes dobby-blink {
+  0%, 20% { opacity: 0 }
+  50% { opacity: 1 }
+  100% { opacity: 0 }
+}
+@keyframes dobby-bob {
+  0%, 100% { transform: translateY(0) rotate(0) }
+  50% { transform: translateY(-2px) rotate(-6deg) }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dobby-egg-cat,
+  .dobby-egg-dots span { animation: none }
+  .dobby-egg-dots span { opacity: 1 }
 }
 
 .col-left,
@@ -1416,22 +1476,26 @@ input, select, textarea { font-family: inherit }
 }
 
 .dashboard-case-list {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-height: 0;
+  /* Show ~7 case rows, then scroll inline for the rest. */
+  max-height: calc(7 * var(--dashboard-case-row-h, 4.75rem));
   overflow-y: auto;
   scrollbar-gutter: stable;
 }
 
 .dashboard-activity-panel {
   display: flex;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   min-height: 0;
   flex-direction: column;
 }
 
 .dashboard-activity-scroll {
-  flex: 0 1 auto;
+  flex: 1 1 0;
   min-height: 0;
+  /* Cap the intrinsic height so Currency drives the shared row; the list then
+     flex-fills the matched height and scrolls the overflow. */
   max-height: 300px;
   overflow-y: auto;
   scrollbar-gutter: stable;
@@ -3228,10 +3292,20 @@ input, select, textarea { font-family: inherit }
   padding: var(--panel-padding);
 }
 .currency-row {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  display: flex;
   align-items: center;
   gap: 6px;
+}
+/* The native <select> is visually hidden (position:absolute) and the custom
+   .tracs-select is inserted beside it; size the actual rendered controls so
+   both currency pickers fill the row evenly regardless of enhancement state. */
+.currency-row > .tracs-select,
+.currency-row > .form-select {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.currency-row > #swap-currency {
+  flex: 0 0 auto;
 }
 .currency-result {
   background: var(--s2);
@@ -3255,16 +3329,20 @@ input, select, textarea { font-family: inherit }
 ══════════════════════════════════════ */
 
 .screenshot-panel {
-  grid-column: 1 / -1;   /* full-width bottom row of the dashboard grid */
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 .screenshot-panel .panel-head .form-select {
   min-width: 150px;
 }
 .screenshot-body {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 12px;
   padding: var(--panel-padding);
+  min-height: 0;
 }
 .screenshot-input-row {
   display: flex;
@@ -3290,12 +3368,23 @@ input, select, textarea { font-family: inherit }
 .screenshot-status.is-error {
   color: var(--tracs-status-critical, #d84c4c);
 }
-.screenshot-result {
+
+/* Result modal (reuses the .case-image-modal frame/backdrop for design consistency) */
+.screenshot-result-frame {
+  width: min(720px, 92vw);
+  height: auto;
+  max-height: min(620px, 88vh);
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.screenshot-result-body {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+  padding: 14px;
+  overflow-y: auto;
+  background: var(--s3);
 }
-.screenshot-preview {
+.screenshot-result-body .screenshot-preview {
   display: block;
   width: 100%;
   padding: 0;
@@ -3306,13 +3395,17 @@ input, select, textarea { font-family: inherit }
   cursor: zoom-in;
   line-height: 0;
 }
-.screenshot-preview img {
+.screenshot-result-body .screenshot-preview img {
   display: block;
   width: 100%;
   height: auto;
-  max-height: 560px;
+  max-height: 46vh;
   object-fit: contain;
   object-position: top center;
+  background: transparent;
+}
+.screenshot-result-body .screenshot-preview img[hidden] {
+  display: none;
 }
 .screenshot-toolbar {
   display: flex;
@@ -3342,6 +3435,35 @@ input, select, textarea { font-family: inherit }
   padding: 5px 10px;
   font-size: 12px;
   white-space: nowrap;
+}
+
+.screenshot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+.screenshot-grid-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--bd2);
+  border-radius: var(--r2);
+  background: var(--s1);
+}
+.screenshot-grid-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tx2);
+}
+.screenshot-grid-item .screenshot-preview {
+  min-height: 90px;
+}
+.screenshot-grid-item .screenshot-preview img {
+  max-height: 320px;
+}
+.screenshot-grid-item .screenshot-status {
+  margin: 0;
 }
 
 @media (max-width: 640px) {
@@ -6964,7 +7086,9 @@ input, select, textarea { font-family: inherit }
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-areas:
       "productivity productivity"
-      "handover currency";
+      "handover handover"
+      "currency activity"
+      "dobby dobby";
   }
   .task-monitoring-grid {
     grid-template-columns: minmax(0, 1fr) minmax(240px, .84fr);
@@ -6995,7 +7119,9 @@ input, select, textarea { font-family: inherit }
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-areas:
       "productivity productivity"
-      "handover currency";
+      "handover handover"
+      "currency activity"
+      "dobby dobby";
   }
   .col-right .panel {
     flex: 0 0 auto;
@@ -7068,7 +7194,9 @@ input, select, textarea { font-family: inherit }
     grid-template-areas:
       "productivity"
       "handover"
-      "currency";
+      "currency"
+      "activity"
+      "dobby";
   }
   .col-right { flex-direction: column }
   .task-monitoring-head {

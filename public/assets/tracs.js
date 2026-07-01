@@ -976,6 +976,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')closeAllModals();});
 document.addEventListener('click',e=>{
   if(!e.target.classList.contains('modal-overlay'))return;
   if(e.target.id==='caseImageModal'){closeCaseImagePreview();return;}
+  if(e.target.id==='screenshotResultModal'){closeScreenshotResultModal();return;}
   closeAllModals();
 });
 
@@ -4151,8 +4152,13 @@ function formatCurrencyConverterNumber(value, allowSmallMarker = false) {
 
 /* ── Website Screenshot widget ─────────────────── */
 
-let screenshotDataUrl = null;
-let screenshotHost = 'screenshot';
+// Concrete capture regions PageFleets supports; "all" fans out to each of these.
+const SCREENSHOT_REGIONS = [
+  { value: 'id-1', label: '🇮🇩 ID — Jakarta' },
+  { value: 'us-1', label: '🇺🇸 US — Oregon' },
+];
+
+const screenshotResults = new Map(); // 'single' or region value -> { dataUrl, host }
 
 function setScreenshotStatus(message, isError = false) {
   const el = document.getElementById('screenshot-status');
@@ -4167,11 +4173,106 @@ function setScreenshotStatus(message, isError = false) {
   el.classList.toggle('is-error', !!isError);
 }
 
+function screenshotMetaText(host, meta) {
+  const m = meta || {};
+  const bits = [];
+  if (m.load != null) bits.push(`Load ${m.load}ms`);
+  if (m.dns != null) bits.push(`DNS ${m.dns}ms`);
+  if (m.ttfb != null) bits.push(`TTFB ${m.ttfb}ms`);
+  return bits.length ? `${host} · ${bits.join(' · ')}` : host;
+}
+
+async function fetchScreenshot(raw, region) {
+  const params = new URLSearchParams({ url: raw });
+  if (region) params.set('region', region);
+  const res = await fetch(`/api/screenshot-capture.php?${params.toString()}`, {
+    headers: { 'Accept': 'application/json' },
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !data || !data.success || !data.data?.image) {
+    throw new Error(data?.message || `Capture failed (HTTP ${res.status}).`);
+  }
+  return data.data;
+}
+
+function openScreenshotResultModal(title) {
+  const modal = document.getElementById('screenshotResultModal');
+  const titleEl = document.getElementById('screenshotResultTitle');
+  if (titleEl) titleEl.textContent = title;
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeScreenshotResultModal() {
+  const modal = document.getElementById('screenshotResultModal');
+  const body = document.getElementById('screenshotResultBody');
+  if (modal) modal.classList.add('hidden');
+  if (body) body.innerHTML = '';
+  screenshotResults.clear();
+}
+
+function screenshotCardHtml(key, label) {
+  return `
+    <div class="screenshot-grid-item" data-region="${escapeHtml(key)}">
+      <div class="screenshot-grid-label">${escapeHtml(label)}</div>
+      <button type="button" class="screenshot-preview" data-action="view" data-region="${escapeHtml(key)}" disabled>
+        <img alt="Captured website screenshot for ${escapeHtml(label)}" hidden>
+      </button>
+      <div class="screenshot-status" data-role="status">Capturing…</div>
+      <div class="screenshot-toolbar">
+        <span class="screenshot-meta" data-role="meta"></span>
+        <div class="screenshot-actions">
+          <button type="button" class="btn btn-ghost screenshot-action" data-action="view" data-region="${escapeHtml(key)}" disabled><i data-lucide="maximize-2" class="icon-sm"></i> View</button>
+          <button type="button" class="btn btn-ghost screenshot-action" data-action="download" data-region="${escapeHtml(key)}" disabled><i data-lucide="download" class="icon-sm"></i> Download</button>
+          <button type="button" class="btn btn-ghost screenshot-action" data-action="copy" data-region="${escapeHtml(key)}" disabled><i data-lucide="copy" class="icon-sm"></i> <span class="screenshot-copy-label">Copy</span></button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function fillScreenshotCard(body, key, payload, label) {
+  const card = body.querySelector(`.screenshot-grid-item[data-region="${CSS.escape(key)}"]`);
+  if (!card) return;
+  const statusEl = card.querySelector('[data-role="status"]');
+  const img = card.querySelector('img');
+  const actionBtns = card.querySelectorAll('[data-action]');
+  const host = payload.host || label;
+  screenshotResults.set(key, { dataUrl: payload.image, host });
+
+  if (img) {
+    img.onerror = () => {
+      screenshotResults.delete(key);
+      img.hidden = true;
+      if (statusEl) {
+        statusEl.hidden = false;
+        statusEl.textContent = 'The screenshot service returned an unreadable image.';
+        statusEl.classList.add('is-error');
+      }
+      actionBtns.forEach((b) => { b.disabled = true; });
+    };
+    img.src = payload.image;
+    img.hidden = false;
+  }
+  if (statusEl) statusEl.hidden = true;
+  const metaEl = card.querySelector('[data-role="meta"]');
+  if (metaEl) metaEl.textContent = screenshotMetaText(host, payload.meta);
+  actionBtns.forEach((b) => { b.disabled = false; });
+}
+
+function failScreenshotCard(body, key, message) {
+  const card = body.querySelector(`.screenshot-grid-item[data-region="${CSS.escape(key)}"]`);
+  const statusEl = card?.querySelector('[data-role="status"]');
+  if (statusEl) {
+    statusEl.textContent = message || 'Capture failed for this region.';
+    statusEl.classList.add('is-error');
+  }
+}
+
 async function captureScreenshot() {
   const input = document.getElementById('screenshot-url');
   const btn = document.getElementById('screenshot-btn');
-  const result = document.getElementById('screenshot-result');
   const label = btn?.querySelector('.screenshot-btn-label');
+  const region = document.getElementById('screenshot-region')?.value || '';
 
   const raw = (input?.value || '').trim();
   if (!raw) {
@@ -4180,101 +4281,126 @@ async function captureScreenshot() {
     return;
   }
 
-  const region = document.getElementById('screenshot-region')?.value || '';
-
-  // Per spec: the previous image clears as soon as a new capture starts.
-  if (result) result.hidden = true;
-  screenshotDataUrl = null;
-  setScreenshotStatus('Capturing screenshot…');
   if (btn) btn.disabled = true;
   if (label) label.textContent = 'Capturing…';
-
-  const params = new URLSearchParams({ url: raw });
-  if (region) params.set('region', region);
-
   try {
-    const res = await fetch(`/api/screenshot-capture.php?${params.toString()}`, {
-      headers: { 'Accept': 'application/json' },
-    });
-    const data = await res.json().catch(() => null);
-
-    if (!res.ok || !data || !data.success || !data.data?.image) {
-      setScreenshotStatus(data?.message || `Capture failed (HTTP ${res.status}).`, true);
-      return;
+    if (region === 'all') {
+      await captureAllRegions(raw);
+    } else {
+      await captureSingleRegion(raw, region);
     }
-
-    const payload = data.data;
-    screenshotDataUrl = payload.image;
-    screenshotHost = payload.host || 'screenshot';
-
-    const img = document.getElementById('screenshot-img');
-    if (img) img.src = screenshotDataUrl;
-    if (result) result.hidden = false;
-    setScreenshotStatus('');
-
-    const m = payload.meta || {};
-    const bits = [];
-    if (m.load != null) bits.push(`Load ${m.load}ms`);
-    if (m.dns != null) bits.push(`DNS ${m.dns}ms`);
-    if (m.ttfb != null) bits.push(`TTFB ${m.ttfb}ms`);
-    const meta = document.getElementById('screenshot-meta');
-    if (meta) meta.textContent = bits.length ? `${screenshotHost} · ${bits.join(' · ')}` : screenshotHost;
-  } catch (err) {
-    console.error('Screenshot capture error:', err);
-    setScreenshotStatus('Could not reach the screenshot service.', true);
   } finally {
     if (btn) btn.disabled = false;
     if (label) label.textContent = 'Capture';
   }
 }
 
-async function screenshotToBlob() {
-  if (!screenshotDataUrl) return null;
-  const res = await fetch(screenshotDataUrl);
-  return await res.blob();
-}
+async function captureSingleRegion(raw, region) {
+  screenshotResults.clear();
+  setScreenshotStatus('Capturing screenshot…');
 
-function screenshotFileName() {
-  const safeHost = (screenshotHost || 'screenshot').replace(/[^a-z0-9.-]+/gi, '_');
-  const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
-  return `screenshot_${safeHost}_${stamp}.png`;
-}
-
-async function viewScreenshot() {
-  const blob = await screenshotToBlob();
-  if (!blob) return;
-  const url = URL.createObjectURL(blob);
-  window.open(url, '_blank', 'noopener');
-  // Give the new tab time to load before releasing the object URL.
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
-}
-
-function downloadScreenshot() {
-  if (!screenshotDataUrl) return;
-  const a = document.createElement('a');
-  a.href = screenshotDataUrl;
-  a.download = screenshotFileName();
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-}
-
-async function copyScreenshot() {
-  const labelEl = document.querySelector('.screenshot-copy-label');
-  const original = labelEl?.textContent || 'Copy';
   try {
-    const blob = await screenshotToBlob();
-    if (!blob || !navigator.clipboard || typeof ClipboardItem === 'undefined') {
-      throw new Error('Clipboard image copy unsupported');
+    const payload = await fetchScreenshot(raw, region);
+    const host = payload.host || 'screenshot';
+    screenshotResults.set('single', { dataUrl: payload.image, host });
+
+    const body = document.getElementById('screenshotResultBody');
+    if (body) {
+      body.innerHTML = `
+        <button type="button" class="screenshot-preview" data-action="view" data-region="single">
+          <img alt="Captured website screenshot">
+        </button>
+        <div class="screenshot-toolbar">
+          <span class="screenshot-meta">${escapeHtml(screenshotMetaText(host, payload.meta))}</span>
+          <div class="screenshot-actions">
+            <button type="button" class="btn btn-ghost screenshot-action" data-action="view" data-region="single"><i data-lucide="maximize-2" class="icon-sm"></i> View</button>
+            <button type="button" class="btn btn-ghost screenshot-action" data-action="download" data-region="single"><i data-lucide="download" class="icon-sm"></i> Download</button>
+            <button type="button" class="btn btn-ghost screenshot-action" data-action="copy" data-region="single"><i data-lucide="copy" class="icon-sm"></i> <span class="screenshot-copy-label">Copy</span></button>
+          </div>
+        </div>
+      `;
+      const img = body.querySelector('img');
+      if (img) {
+        img.onerror = () => {
+          screenshotResults.delete('single');
+          setScreenshotStatus('The screenshot service returned an unreadable image.', true);
+          closeScreenshotResultModal();
+        };
+        img.src = payload.image;
+      }
+      if (window.lucide?.createIcons) window.lucide.createIcons();
     }
-    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-    if (labelEl) {
-      labelEl.textContent = 'Copied!';
-      setTimeout(() => { labelEl.textContent = original; }, 1800);
-    }
+    setScreenshotStatus('');
+    openScreenshotResultModal(host);
   } catch (err) {
-    console.error('Screenshot copy failed:', err);
-    setScreenshotStatus('Copy not supported in this browser — use Download instead.', true);
+    console.error('Screenshot capture error:', err);
+    setScreenshotStatus(err.message || 'Could not reach the screenshot service.', true);
+  }
+}
+
+async function captureAllRegions(raw) {
+  screenshotResults.clear();
+  setScreenshotStatus(`Capturing from ${SCREENSHOT_REGIONS.length} regions…`);
+
+  const body = document.getElementById('screenshotResultBody');
+  if (!body) return;
+  body.innerHTML = `<div class="screenshot-grid">${SCREENSHOT_REGIONS.map(({ value, label }) => screenshotCardHtml(value, label)).join('')}</div>`;
+  if (window.lucide?.createIcons) window.lucide.createIcons();
+  openScreenshotResultModal(`${raw} · All regions`);
+
+  const settled = await Promise.allSettled(
+    SCREENSHOT_REGIONS.map(({ value }) => fetchScreenshot(raw, value))
+  );
+
+  settled.forEach((outcome, i) => {
+    const { value, label } = SCREENSHOT_REGIONS[i];
+    if (outcome.status === 'rejected') {
+      failScreenshotCard(body, value, outcome.reason?.message);
+    } else {
+      fillScreenshotCard(body, value, outcome.value, label);
+    }
+  });
+
+  const failures = settled.filter((o) => o.status === 'rejected').length;
+  if (failures === settled.length) {
+    setScreenshotStatus('All regions failed to capture.', true);
+  } else if (failures > 0) {
+    setScreenshotStatus(`${failures} of ${settled.length} regions failed to capture.`, true);
+  } else {
+    setScreenshotStatus('');
+  }
+}
+
+async function screenshotResultAction(action, key) {
+  const entry = screenshotResults.get(key);
+  if (!entry) return;
+  if (action === 'view') {
+    const res = await fetch(entry.dataUrl);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank', 'noopener');
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } else if (action === 'download') {
+    const safeHost = (entry.host || key).replace(/[^a-z0-9.-]+/gi, '_');
+    const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+    const a = document.createElement('a');
+    a.href = entry.dataUrl;
+    a.download = `screenshot_${safeHost}_${key}_${stamp}.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } else if (action === 'copy') {
+    try {
+      const res = await fetch(entry.dataUrl);
+      const blob = await res.blob();
+      if (!navigator.clipboard || typeof ClipboardItem === 'undefined') {
+        throw new Error('Clipboard image copy unsupported');
+      }
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    } catch (err) {
+      console.error('Screenshot copy failed:', err);
+      setScreenshotStatus('Copy not supported in this browser — use Download instead.', true);
+    }
   }
 }
 
@@ -4743,14 +4869,13 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
-  document.getElementById('screenshot-preview')
-    ?.addEventListener('click', viewScreenshot);
-  document.getElementById('screenshot-view')
-    ?.addEventListener('click', viewScreenshot);
-  document.getElementById('screenshot-download')
-    ?.addEventListener('click', downloadScreenshot);
-  document.getElementById('screenshot-copy')
-    ?.addEventListener('click', copyScreenshot);
+  document.getElementById('screenshotResultBody')
+    ?.addEventListener('click', (e) => {
+      const actionEl = e.target.closest('[data-action]');
+      if (!actionEl || actionEl.disabled) return;
+      const key = actionEl.dataset.region || actionEl.closest('.screenshot-grid-item')?.dataset.region;
+      if (key) screenshotResultAction(actionEl.dataset.action, key);
+    });
 
   /* ── OPS STATUS SLIDER ────────────────────── */
 

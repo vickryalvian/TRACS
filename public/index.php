@@ -1378,6 +1378,30 @@ include 'includes/header.php';
         <?php endif; ?>
       </div><!-- /cases panel -->
 
+      <!-- WEBSITE SCREENSHOT PANEL (under Cases) -->
+      <div class="panel screenshot-panel">
+        <div class="panel-head">
+          <span class="panel-title">Website Screenshot</span>
+          <div class="panel-right">
+            <select id="screenshot-region" class="form-select" aria-label="Capture region">
+              <option value="">Auto region</option>
+              <option value="id-1">🇮🇩 ID — Jakarta</option>
+              <option value="us-1">🇺🇸 US — Oregon</option>
+              <option value="all" selected>🌐 All regions</option>
+            </select>
+          </div>
+        </div>
+        <div class="screenshot-body">
+          <div class="screenshot-input-row">
+            <input type="text" id="screenshot-url" class="form-input" placeholder="Enter domain, URL, or IP — e.g. example.com" autocomplete="off" spellcheck="false">
+            <button type="button" class="btn btn-primary" id="screenshot-btn">
+              <i data-lucide="camera" class="icon-sm"></i> <span class="screenshot-btn-label">Capture</span>
+            </button>
+          </div>
+          <div class="screenshot-status" id="screenshot-status" role="status" hidden></div>
+        </div>
+      </div><!-- /screenshot -->
+
     </div><!-- /col-left -->
 
     <div class="dashboard-workspace">
@@ -1403,7 +1427,6 @@ include 'includes/header.php';
         <div class="task-monitoring-tabs" role="tablist" aria-label="Task Monitoring">
           <button type="button" class="task-monitoring-tab active" role="tab" aria-selected="true" aria-controls="tm-pane-checklist" data-task-monitor-tab="checklist" data-all-href="checklist.php"><i data-lucide="list-checks" class="icon-xs"></i>Checklist and Reminder</button>
           <button type="button" class="task-monitoring-tab" role="tab" aria-selected="false" aria-controls="tm-pane-assignments" data-task-monitor-tab="assignments" data-all-href="monitoring.php"><i data-lucide="user-check" class="icon-xs"></i>Assignments<?php if($task_monitor_active_assignment_count > 0): ?><span class="tm-tab-count"><?=esc($task_monitor_active_assignment_count)?></span><?php endif; ?></button>
-          <button type="button" class="task-monitoring-tab" role="tab" aria-selected="false" aria-controls="tm-pane-activity" data-task-monitor-tab="activity" data-all-href="activity.php"><i data-lucide="activity" class="icon-xs"></i>Activity</button>
         </div>
 
         <div class="task-monitoring-viewport">
@@ -1521,43 +1544,6 @@ include 'includes/header.php';
             </div>
           </section>
 
-          <section class="task-monitoring-pane" id="tm-pane-activity" role="tabpanel" data-task-monitor-pane="activity" hidden>
-            <div class="task-monitoring-grid">
-              <div class="tm-column tm-primary">
-                <div class="tm-column-head">
-                  <div><span>Recent Activity</span><strong><?=count($activities)?> events</strong></div>
-                </div>
-                <?php if(empty($activities)): ?>
-                <div class="tm-empty"><i data-lucide="activity" class="icon-sm"></i><span>No activity yet</span></div>
-                <?php else: ?>
-                <div class="dashboard-activity-scroll tm-scroll">
-                  <?php foreach(array_slice($activities,0,10) as $a): ?>
-                  <div class="act-row">
-                    <div class="act-ic"><i data-lucide="<?=esc($a['icon']??'file-text')?>" class="icon-sm"></i></div>
-                    <div class="flex1 min0">
-                      <div class="act-text"><strong><?=esc(ucfirst($a['action']??''))?></strong><span>· <?=esc($a['module']??'')?></span></div>
-                      <div class="act-desc"><?=esc($a['description']??'')?></div>
-                      <div class="act-time"><?=esc($a['time_ago']??'')?> · <?=tracs_creator_meta($a, $a['created_at'] ?? null, false)?></div>
-                    </div>
-                  </div>
-                  <?php endforeach; ?>
-                </div>
-                <?php endif; ?>
-              </div>
-
-              <div class="tm-column">
-                <div class="tm-column-head">
-                  <div><span>Reminder List</span><strong><?=count($task_monitor_reminder_list_items)?> active</strong></div>
-                  <div class="tm-column-actions">
-                    <button type="button" class="btn btn-primary btn-sm btn-add-reveal tm-column-add" onclick="openNewReminder()" title="Add reminder" aria-label="Add reminder">
-                      <i data-lucide="plus" class="icon-sm"></i><span class="btn-add-label">Add</span>
-                    </button>
-                  </div>
-                </div>
-                <?=dashboard_monitor_reminder_list_html($task_monitor_reminder_list_items, 'No active reminders', 'Recent activity has no open task reminders.')?>
-              </div>
-            </div>
-          </section>
         </div>
       </section>
     </div><!-- /col-productivity -->
@@ -1670,43 +1656,52 @@ include 'includes/header.php';
       </div><!-- /currency -->
 
     </div><!-- /col-right -->
-    </div><!-- /dashboard-workspace -->
 
-    <!-- WEBSITE SCREENSHOT PANEL (full-width bottom row) -->
-    <div class="panel screenshot-panel">
-      <div class="panel-head">
-        <span class="panel-title"><i data-lucide="camera" class="icon-sm"></i> Website Screenshot</span>
-        <div class="panel-right">
-          <select id="screenshot-region" class="form-select" aria-label="Capture region">
-            <option value="">Auto region</option>
-            <option value="id-1">🇮🇩 ID — Jakarta</option>
-            <option value="us-1">🇺🇸 US — Oregon</option>
-          </select>
-        </div>
-      </div>
-      <div class="screenshot-body">
-        <div class="screenshot-input-row">
-          <input type="text" id="screenshot-url" class="form-input" placeholder="Enter domain, URL, or IP — e.g. example.com" autocomplete="off" spellcheck="false">
-          <button type="button" class="btn btn-primary" id="screenshot-btn">
-            <i data-lucide="camera" class="icon-sm"></i> <span class="screenshot-btn-label">Capture</span>
-          </button>
-        </div>
-        <div class="screenshot-status" id="screenshot-status" role="status" hidden></div>
-        <div class="screenshot-result" id="screenshot-result" hidden>
-          <button type="button" class="screenshot-preview" id="screenshot-preview" title="Click to view full size">
-            <img id="screenshot-img" alt="Captured website screenshot">
-          </button>
-          <div class="screenshot-toolbar">
-            <span class="screenshot-meta" id="screenshot-meta"></span>
-            <div class="screenshot-actions">
-              <button type="button" class="btn btn-ghost screenshot-action" id="screenshot-view"><i data-lucide="maximize-2" class="icon-sm"></i> View</button>
-              <button type="button" class="btn btn-ghost screenshot-action" id="screenshot-download"><i data-lucide="download" class="icon-sm"></i> Download</button>
-              <button type="button" class="btn btn-ghost screenshot-action" id="screenshot-copy"><i data-lucide="copy" class="icon-sm"></i> <span class="screenshot-copy-label">Copy</span></button>
-            </div>
+    <!-- ════════════════════════════
+         ACTIVITY COL — Recent Activity (moved from Task Monitoring)
+    ════════════════════════════ -->
+    <div class="col-activity">
+
+      <!-- RECENT ACTIVITY PANEL -->
+      <div class="panel dashboard-activity-panel">
+        <div class="panel-head">
+          <span class="panel-title">Recent Activity</span>
+          <div class="panel-right">
+            <span class="panel-meta"><?=count($activities)?> events</span>
+            <a href="activity.php" class="btn btn-ghost btn-sm">All →</a>
           </div>
         </div>
-      </div>
-    </div><!-- /screenshot -->
+        <?php if(empty($activities)): ?>
+        <div class="empty">
+          <div class="empty-ic"><i data-lucide="activity"></i></div>
+          <div class="empty-t">No activity yet</div>
+        </div>
+        <?php else: ?>
+        <div class="dashboard-activity-scroll scroll-y">
+          <?php foreach(array_slice($activities,0,10) as $a): ?>
+          <div class="act-row">
+            <div class="act-ic"><i data-lucide="<?=esc($a['icon']??'file-text')?>" class="icon-sm"></i></div>
+            <div class="flex1 min0">
+              <div class="act-text"><strong><?=esc(ucfirst($a['action']??''))?></strong><span>· <?=esc($a['module']??'')?></span></div>
+              <div class="act-desc"><?=esc($a['description']??'')?></div>
+              <div class="act-time"><?=esc($a['time_ago']??'')?> · <?=tracs_creator_meta($a, $a['created_at'] ?? null, false)?></div>
+            </div>
+          </div>
+          <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+      </div><!-- /recent activity -->
+
+    </div><!-- /col-activity -->
+
+    <!-- Dobby easter egg — fills the blank space below the utility row -->
+    <div class="dobby-egg" aria-hidden="true" title="Dobby says hi 🐾">
+      <span class="dobby-egg-cat">🐈‍⬛</span>
+      <span class="dobby-egg-text">Dobby is working on something more<span class="dobby-egg-dots"><span>.</span><span>.</span><span>.</span></span></span>
+      <span class="dobby-egg-paw">🐾</span>
+    </div>
+
+    </div><!-- /dashboard-workspace -->
 
     </div><!-- /dash-grid -->
   </div><!-- /dashboard-content -->

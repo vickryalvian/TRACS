@@ -197,6 +197,18 @@ $_tracs_case_can_delete = isset($conn) && $conn instanceof mysqli && function_ex
   </div>
 </div>
 
+<div class="modal-overlay hidden case-image-modal" id="screenshotResultModal">
+  <div class="case-image-frame screenshot-result-frame" role="dialog" aria-modal="true" aria-label="Website screenshot result">
+    <div class="case-image-bar">
+      <div class="case-image-title" id="screenshotResultTitle">Screenshot</div>
+      <div class="case-image-actions">
+        <button class="modal-close" type="button" onclick="closeScreenshotResultModal()" aria-label="Close preview"><i data-lucide="x"></i></button>
+      </div>
+    </div>
+    <div class="screenshot-result-body" id="screenshotResultBody"></div>
+  </div>
+</div>
+
 <!-- REMINDER MODAL -->
 <div class="modal-overlay hidden" id="remModal">
 <div class="modal">

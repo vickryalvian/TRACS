@@ -12,6 +12,11 @@
 
 require '_bootstrap.php';
 
+// Release the session file lock before the (slow) outbound capture call so
+// concurrent per-region requests from the same browser session don't queue
+// up behind each other on the server.
+session_write_close();
+
 const PAGEFLEETS_ENDPOINT = 'https://api.pagefleets.com/api/v1/screenshot';
 
 $rawUrl = trim((string)($_GET['url'] ?? ''));
