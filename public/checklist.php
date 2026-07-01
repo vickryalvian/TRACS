@@ -111,7 +111,9 @@ include 'includes/header.php';
             <summary class="btn btn-ghost btn-icon" title="Actions" aria-label="Row actions"><i data-lucide="more-vertical" class="icon-sm"></i></summary>
             <div class="row-action-popover">
               <button class="btn btn-ghost btn-sm" type="button" onclick="openEditTask(<?=$tid?>)">Edit</button>
+              <?php if((int)($t['created_by']??0)===(int)$uid):?>
               <button class="btn btn-danger btn-sm" type="button" onclick="deleteTask(<?=$tid?>,this)">Delete</button>
+              <?php endif;?>
             </div>
           </details>
         </td>

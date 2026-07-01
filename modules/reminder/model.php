@@ -12,13 +12,15 @@ class ReminderModel {
     }
     
     /**
-     * Get all reminders for the current user
+     * Reminders are fully public: every authenticated user sees every
+     * reminder, regardless of who created it. $user_id is unused but kept
+     * for backward-compatible call sites.
      */
     public function getRemindersByUser($user_id) {
         $completedAtSelect = $this->columnExists('tracs_reminders', 'completed_at') ? 'r.completed_at,' : 'NULL AS completed_at,';
         $archivedAtSelect = $this->columnExists('tracs_reminders', 'archived_at') ? 'r.archived_at,' : 'NULL AS archived_at,';
         $query = "
-            SELECT 
+            SELECT
                 r.id,
                 r.title,
                 r.description,
@@ -34,24 +36,22 @@ class ReminderModel {
                 COALESCE(NULLIF(r.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name
             FROM tracs_reminders r
             LEFT JOIN tracs_users u ON r.created_by = u.id
-            WHERE r.user_id = ?
             ORDER BY r.is_completed ASC, r.created_at DESC
         ";
-        
+
         $stmt = $this->conn->prepare($query);
         if (!$stmt) {
             return false;
         }
-        
-        $stmt->bind_param('i', $user_id);
+
         $stmt->execute();
         $result = $stmt->get_result();
-        
+
         $reminders = [];
         while ($row = $result->fetch_assoc()) {
             $reminders[] = $row;
         }
-        
+
         $stmt->close();
         return $reminders;
     }

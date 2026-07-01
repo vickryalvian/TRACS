@@ -694,7 +694,7 @@ function render_mom_table($items, $MC, $mode='upcoming') {
         <a href="?mom_id=<?=$mid?>" class="btn btn-ghost btn-sm mom-schedule-open">View</a>
         <?php endif; ?>
         <a href="?mom_id=<?=$mid?>" class="btn btn-ghost btn-icon" title="View MOM" aria-label="View MOM"><i data-lucide="external-link" class="icon-sm"></i></a>
-        <?php if($mstat!=='completed'): ?><button class="btn btn-ghost btn-icon mom-schedule-delete" onclick="deleteMOM(<?=$mid?>)" title="Delete"><i data-lucide="trash-2" class="icon-sm"></i></button><?php endif; ?>
+        <?php if($mstat!=='completed' && (int)($m['created_by']??0)===(int)$uid): ?><button class="btn btn-ghost btn-icon mom-schedule-delete" onclick="deleteMOM(<?=$mid?>)" title="Delete"><i data-lucide="trash-2" class="icon-sm"></i></button><?php endif; ?>
       </div>
     </div>
     <?php endforeach; ?>
@@ -769,7 +769,9 @@ function render_mom_table($items, $MC, $mode='upcoming') {
                 <summary class="btn btn-ghost btn-icon" title="Actions" aria-label="Row actions"><i data-lucide="edit-2" class="icon-sm"></i></summary>
                 <div class="row-action-popover">
                   <a class="btn btn-ghost btn-sm" href="?mom_id=<?=$mid?>">Open MOM</a>
+                  <?php if((int)($m['created_by']??0)===(int)$uid): ?>
                   <button class="btn btn-danger btn-sm" type="button" onclick="deleteMOM(<?=$mid?>)">Delete</button>
+                  <?php endif; ?>
                 </div>
               </details>
               <?php endif; ?>

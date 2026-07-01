@@ -28,17 +28,18 @@ if(taskColumnExists($conn,'reset_at')) $sets[]="reset_at=NULL";
 if(taskColumnExists($conn,'completed_by')) $sets[]=$done ? "completed_by={$uid}" : "completed_by=NULL";
 
 $taskTitle = "task #{$id}";
-$taskStmt = $conn->prepare("SELECT title FROM tracs_side_tasks WHERE id=? AND user_id=? LIMIT 1");
+// Every authenticated user with checklist.manage may update (toggle) any checklist item.
+$taskStmt = $conn->prepare("SELECT title FROM tracs_side_tasks WHERE id=? LIMIT 1");
 if($taskStmt){
-    $taskStmt->bind_param('ii',$id,$uid);
+    $taskStmt->bind_param('i',$id);
     $taskStmt->execute();
     $taskRow=$taskStmt->get_result()->fetch_assoc();
     if($taskRow && !empty($taskRow['title'])) $taskTitle=$taskRow['title'];
     $taskStmt->close();
 }
 
-$stmt=$conn->prepare("UPDATE tracs_side_tasks SET ".implode(',',$sets)." WHERE id=? AND user_id=?");
-$stmt->bind_param('iii',$done,$id,$uid);
+$stmt=$conn->prepare("UPDATE tracs_side_tasks SET ".implode(',',$sets)." WHERE id=?");
+$stmt->bind_param('ii',$done,$id);
 if(!$stmt->execute()||$stmt->affected_rows===0) fail('Not found',404);
 $stmt->close();
 $note=$done?'Checklist item completed and archived from active ticker':'Checklist item reopened';

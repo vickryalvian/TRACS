@@ -28,17 +28,18 @@ if(reminderColumnExists($conn,'reset_at')) $sets[]="reset_at=NULL";
 if(reminderColumnExists($conn,'completed_by')) $sets[]=$done ? "completed_by={$uid}" : "completed_by=NULL";
 
 $reminderTitle = "reminder #{$id}";
-$remStmt = $conn->prepare("SELECT title FROM tracs_reminders WHERE id=? AND user_id=? LIMIT 1");
+// Reminders are fully public: any authenticated user may update any reminder.
+$remStmt = $conn->prepare("SELECT title FROM tracs_reminders WHERE id=? LIMIT 1");
 if($remStmt){
-    $remStmt->bind_param('ii',$id,$uid);
+    $remStmt->bind_param('i',$id);
     $remStmt->execute();
     $remRow=$remStmt->get_result()->fetch_assoc();
     if($remRow && !empty($remRow['title'])) $reminderTitle=$remRow['title'];
     $remStmt->close();
 }
 
-$stmt=$conn->prepare("UPDATE tracs_reminders SET ".implode(',',$sets)." WHERE id=? AND user_id=?");
-$stmt->bind_param('iii',$done,$id,$uid);
+$stmt=$conn->prepare("UPDATE tracs_reminders SET ".implode(',',$sets)." WHERE id=?");
+$stmt->bind_param('ii',$done,$id);
 if(!$stmt->execute()||$stmt->affected_rows===0) fail('Not found',404);
 $stmt->close();
 $act=$done?'completed':'uncompleted';

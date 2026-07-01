@@ -212,8 +212,35 @@ function tracs_can_view_owned_record(mysqli $conn, string $table, int $id, array
     return false;
 }
 
+/**
+ * MoM is a shared, collaborative record: any authenticated user holding
+ * moms.view or moms.manage may view any MoM, not just ones they created.
+ * created_by remains an immutable audit field, not a view/edit gate.
+ */
 function tracs_can_view_mom(mysqli $conn, int $momId): bool {
-    return tracs_can_view_owned_record($conn, 'tracs_moms', $momId, ['created_by'], null);
+    if ($momId <= 0) {
+        return false;
+    }
+
+    $stmt = $conn->prepare('SELECT id FROM `tracs_moms` WHERE id = ? LIMIT 1');
+    if (!$stmt) {
+        return false;
+    }
+    $stmt->bind_param('i', $momId);
+    $stmt->execute();
+    $exists = (bool)$stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$exists) {
+        return false;
+    }
+
+    $actor = tracs_get_user_by_id($conn, (int)($_SESSION['user_id'] ?? 0));
+    if (!$actor || !tracs_user_can_login($actor)) {
+        return false;
+    }
+
+    return tracs_user_can($conn, 'moms.view', (int)$actor['id'])
+        || tracs_user_can($conn, 'moms.manage', (int)$actor['id']);
 }
 
 function tracs_can_view_case(mysqli $conn, int $caseId): bool {

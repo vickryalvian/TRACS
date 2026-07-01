@@ -141,6 +141,7 @@ class MOMController {
     $this->ensureMeetingUrlColumn();
     $this->ensureColumn('scheduled_reminder_id', 'INT UNSIGNED DEFAULT NULL COMMENT "Reminder created for scheduled meeting"', 'created_by');
     $this->ensureColumn('created_by_name', 'VARCHAR(150) DEFAULT NULL COMMENT "Creator display snapshot"', 'created_by');
+    $this->ensureColumn('updated_by', 'INT UNSIGNED DEFAULT NULL COMMENT "Last user who updated this MoM"', 'created_by_name');
     $this->ensureColumn('ops_status_id', 'INT UNSIGNED DEFAULT NULL COMMENT "Ops window status entry for meeting"', 'scheduled_reminder_id');
     $this->ensureColumn('started_at', 'DATETIME DEFAULT NULL', 'ops_status_id');
     $this->ensureColumn('completed_at', 'DATETIME DEFAULT NULL', 'started_at');
@@ -211,18 +212,18 @@ class MOMController {
     if(!$this->hasColumn('tracs_moms', 'meeting_at')) return;
     $this->ensureColumn('started_at', 'DATETIME DEFAULT NULL', 'ops_status_id');
 
+    // MoM is collaborative: auto-start considers every due meeting, not just
+    // ones created by the current viewer.
     $stmt = $this->conn->prepare("
       SELECT id, title, type, meeting_at, scheduled_reminder_id, ops_status_id
       FROM tracs_moms
-      WHERE created_by=?
-        AND status='upcoming'
+      WHERE status='upcoming'
         AND meeting_at IS NOT NULL
         AND meeting_at <= NOW()
       ORDER BY meeting_at ASC
       LIMIT 50
     ");
     if(!$stmt) return;
-    $stmt->bind_param('i', $this->uid);
     $stmt->execute();
     $due = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     if(empty($due)) return;
@@ -233,11 +234,11 @@ class MOMController {
       if(!$mom_id) continue;
       $upd = $this->conn->prepare("
         UPDATE tracs_moms
-        SET status='ongoing', started_at=COALESCE(started_at, ?), updated_at=?
-        WHERE id=? AND created_by=? AND status='upcoming'
+        SET status='ongoing', started_at=COALESCE(started_at, ?), updated_at=?, updated_by=?
+        WHERE id=? AND status='upcoming'
       ");
       if(!$upd) continue;
-      $upd->bind_param('ssii', $now, $now, $mom_id, $this->uid);
+      $upd->bind_param('ssii', $now, $now, $this->uid, $mom_id);
       if(!$upd->execute() || $upd->affected_rows < 1) continue;
 
       $msg = "Meeting auto-started: " . ($mom['title'] ?? "MOM #$mom_id");
@@ -245,10 +246,10 @@ class MOMController {
         $this->updateOpsStatus((int)$mom['ops_status_id'], $msg, 'warning', 1);
       }
       if(!empty($mom['scheduled_reminder_id'])) {
-        $rem = $this->conn->prepare("UPDATE tracs_reminders SET is_completed=1, updated_at=NOW() WHERE id=? AND user_id=?");
+        $rem = $this->conn->prepare("UPDATE tracs_reminders SET is_completed=1, updated_at=NOW() WHERE id=?");
         if($rem) {
           $rid = (int)$mom['scheduled_reminder_id'];
-          $rem->bind_param('ii', $rid, $this->uid);
+          $rem->bind_param('i', $rid);
           $rem->execute();
         }
       }
@@ -333,18 +334,24 @@ class MOMController {
     return false;
   }
 
+  // MoM is a shared, collaborative record: every authenticated user with
+  // moms.view/moms.manage can see and edit any MoM, not just the ones they
+  // created. created_by/created_by_name remain immutable audit fields.
   public function getMOM($mom_id) {
     if(!$this->isInstalled()) return null;
     $this->ensureOperationalSchema();
     $this->autoStartDueMOMs();
     $mom_id = (int)$mom_id;
     $stmt = $this->conn->prepare("
-      SELECT m.*, COALESCE(NULLIF(m.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name
+      SELECT m.*,
+             COALESCE(NULLIF(m.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name,
+             COALESCE(NULLIF(ub.name,''), ub.email) AS updated_by_name
       FROM tracs_moms m
       LEFT JOIN tracs_users u ON m.created_by = u.id
-      WHERE m.id=? AND m.created_by=? LIMIT 1
+      LEFT JOIN tracs_users ub ON m.updated_by = ub.id
+      WHERE m.id=? LIMIT 1
     ");
-    $stmt->bind_param('ii', $mom_id, $this->uid);
+    $stmt->bind_param('i', $mom_id);
     $stmt->execute();
     $result = $stmt->get_result();
     return $result->fetch_assoc();
@@ -355,25 +362,28 @@ class MOMController {
     $this->ensureOperationalSchema();
     $this->autoStartDueMOMs();
     $query = "
-      SELECT m.*, COALESCE(NULLIF(m.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name
+      SELECT m.*,
+             COALESCE(NULLIF(m.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name,
+             COALESCE(NULLIF(ub.name,''), ub.email) AS updated_by_name
       FROM tracs_moms m
       LEFT JOIN tracs_users u ON m.created_by = u.id
-      WHERE m.created_by=?
+      LEFT JOIN tracs_users ub ON m.updated_by = ub.id
+      WHERE 1=1
     ";
-    $params = [$this->uid];
-    $types = 'i';
-    
+    $params = [];
+    $types = '';
+
     if($status !== 'all') {
       $query .= " AND m.status=?";
       $params[] = $status;
       $types .= 's';
     }
-    
+
     $order = $this->hasColumn('tracs_moms', 'meeting_at') ? 'COALESCE(m.meeting_at, m.created_at)' : 'm.created_at';
     $query .= " ORDER BY $order DESC LIMIT ?";
     $params[] = $limit;
     $types .= 'i';
-    
+
     $stmt = $this->conn->prepare($query);
     $stmt->bind_param($types, ...$params);
     $stmt->execute();
@@ -390,27 +400,29 @@ class MOMController {
     $has_meeting_at = $this->ensureMeetingAtColumn();
     $has_meeting_url = $this->ensureMeetingUrlColumn();
 
+    // Every authenticated user may update any existing MoM; created_by stays
+    // immutable, updated_by tracks the most recent editor for audit history.
     if($has_meeting_at && $has_meeting_url) {
       $stmt = $this->conn->prepare("
-        UPDATE tracs_moms 
-        SET title=?, objective=?, participants=?, type=?, status=?, meeting_at=?, meeting_url=?, updated_at=?
-        WHERE id=? AND created_by=?
+        UPDATE tracs_moms
+        SET title=?, objective=?, participants=?, type=?, status=?, meeting_at=?, meeting_url=?, updated_at=?, updated_by=?
+        WHERE id=?
       ");
-      $stmt->bind_param('ssssssssii', $title, $objective, $participants, $type, $status, $meeting_at, $meeting_url, $now, $mom_id, $this->uid);
+      $stmt->bind_param('ssssssssii', $title, $objective, $participants, $type, $status, $meeting_at, $meeting_url, $now, $this->uid, $mom_id);
     } else if($has_meeting_at) {
       $stmt = $this->conn->prepare("
-        UPDATE tracs_moms 
-        SET title=?, objective=?, participants=?, type=?, status=?, meeting_at=?, updated_at=?
-        WHERE id=? AND created_by=?
+        UPDATE tracs_moms
+        SET title=?, objective=?, participants=?, type=?, status=?, meeting_at=?, updated_at=?, updated_by=?
+        WHERE id=?
       ");
-      $stmt->bind_param('sssssssii', $title, $objective, $participants, $type, $status, $meeting_at, $now, $mom_id, $this->uid);
+      $stmt->bind_param('sssssssii', $title, $objective, $participants, $type, $status, $meeting_at, $now, $this->uid, $mom_id);
     } else {
       $stmt = $this->conn->prepare("
-        UPDATE tracs_moms 
-        SET title=?, objective=?, participants=?, type=?, status=?, updated_at=?
-        WHERE id=? AND created_by=?
+        UPDATE tracs_moms
+        SET title=?, objective=?, participants=?, type=?, status=?, updated_at=?, updated_by=?
+        WHERE id=?
       ");
-      $stmt->bind_param('ssssssii', $title, $objective, $participants, $type, $status, $now, $mom_id, $this->uid);
+      $stmt->bind_param('ssssssii', $title, $objective, $participants, $type, $status, $now, $this->uid, $mom_id);
     }
 
     if($stmt->execute()) {
@@ -427,20 +439,20 @@ class MOMController {
     if(!$mom) return false;
     
     $stmt = $this->conn->prepare("
-      UPDATE tracs_moms 
-      SET status='completed', completed_at=?, updated_at=?
-      WHERE id=? AND created_by=?
+      UPDATE tracs_moms
+      SET status='completed', completed_at=?, updated_at=?, updated_by=?
+      WHERE id=?
     ");
-    $stmt->bind_param('ssii', $now, $now, $mom_id, $this->uid);
+    $stmt->bind_param('ssii', $now, $now, $this->uid, $mom_id);
     if($stmt->execute()) {
       if(!empty($mom['ops_status_id'])) {
         $this->updateOpsStatus((int)$mom['ops_status_id'], "Meeting completed: " . ($mom['title'] ?? "MOM #$mom_id"), 'solved', 0);
       }
       if(!empty($mom['scheduled_reminder_id'])) {
-        $rem = $this->conn->prepare("UPDATE tracs_reminders SET is_completed=1, updated_at=NOW() WHERE id=? AND user_id=?");
+        $rem = $this->conn->prepare("UPDATE tracs_reminders SET is_completed=1, updated_at=NOW() WHERE id=?");
         if($rem) {
           $rid = (int)$mom['scheduled_reminder_id'];
-          $rem->bind_param('ii', $rid, $this->uid);
+          $rem->bind_param('i', $rid);
           $rem->execute();
         }
       }
@@ -508,6 +520,8 @@ class MOMController {
       'created_by' => $mom['created_by']??null,
       'created_by_name' => $mom['created_by_name']??null,
       'creator_name' => $mom['creator_name']??null,
+      'updated_by' => $mom['updated_by']??null,
+      'updated_by_name' => $mom['updated_by_name']??null,
     ];
   }
 
@@ -522,14 +536,14 @@ class MOMController {
     $mom = $this->getMOM($mom_id);
     if(!$mom) return false;
     $now = date('Y-m-d H:i:s');
-    $stmt = $this->conn->prepare("UPDATE tracs_moms SET status='ongoing', started_at=COALESCE(started_at,?), updated_at=? WHERE id=? AND created_by=?");
-    $stmt->bind_param('ssii', $now, $now, $mom_id, $this->uid);
+    $stmt = $this->conn->prepare("UPDATE tracs_moms SET status='ongoing', started_at=COALESCE(started_at,?), updated_at=?, updated_by=? WHERE id=?");
+    $stmt->bind_param('ssii', $now, $now, $this->uid, $mom_id);
     if(!$stmt->execute()) return false;
     if(!empty($mom['scheduled_reminder_id'])) {
       $rid = (int)$mom['scheduled_reminder_id'];
-      $rem = $this->conn->prepare("UPDATE tracs_reminders SET is_completed=1, updated_at=NOW() WHERE id=? AND user_id=?");
+      $rem = $this->conn->prepare("UPDATE tracs_reminders SET is_completed=1, updated_at=NOW() WHERE id=?");
       if($rem) {
-        $rem->bind_param('ii', $rid, $this->uid);
+        $rem->bind_param('i', $rid);
         $rem->execute();
       }
     }
@@ -545,14 +559,14 @@ class MOMController {
     $mom = $this->getMOM($mom_id);
     if(!$mom) return false;
     $now = date('Y-m-d H:i:s');
-    $stmt = $this->conn->prepare("UPDATE tracs_moms SET status='cancelled', cancelled_at=?, updated_at=? WHERE id=? AND created_by=?");
-    $stmt->bind_param('ssii', $now, $now, $mom_id, $this->uid);
+    $stmt = $this->conn->prepare("UPDATE tracs_moms SET status='cancelled', cancelled_at=?, updated_at=?, updated_by=? WHERE id=?");
+    $stmt->bind_param('ssii', $now, $now, $this->uid, $mom_id);
     if(!$stmt->execute()) return false;
     if(!empty($mom['scheduled_reminder_id'])) {
       $rid = (int)$mom['scheduled_reminder_id'];
-      $rem = $this->conn->prepare("UPDATE tracs_reminders SET is_completed=1, updated_at=NOW() WHERE id=? AND user_id=?");
+      $rem = $this->conn->prepare("UPDATE tracs_reminders SET is_completed=1, updated_at=NOW() WHERE id=?");
       if($rem) {
-        $rem->bind_param('ii', $rid, $this->uid);
+        $rem->bind_param('i', $rid);
         $rem->execute();
       }
     }
@@ -565,8 +579,8 @@ class MOMController {
   public function saveSummary($mom_id, $summary) {
     $mom_id = (int)$mom_id;
     if(!$this->getMOM($mom_id)) return false;
-    $stmt = $this->conn->prepare("UPDATE tracs_moms SET summary=?, updated_at=NOW() WHERE id=? AND created_by=?");
-    $stmt->bind_param('sii', $summary, $mom_id, $this->uid);
+    $stmt = $this->conn->prepare("UPDATE tracs_moms SET summary=?, updated_at=NOW(), updated_by=? WHERE id=?");
+    $stmt->bind_param('sii', $summary, $this->uid, $mom_id);
     $ok = $stmt->execute();
     if($ok) $this->logMOMActivity('mom_summary_saved', "Saved MOM summary #$mom_id", $mom_id);
     return $ok;
@@ -601,14 +615,14 @@ class MOMController {
     $item_id = (int)$item_id;
     $stmt = $this->conn->prepare("
       UPDATE tracs_mom_agenda a
-      INNER JOIN tracs_moms m ON m.id=a.mom_id AND m.created_by=?
+      INNER JOIN tracs_moms m ON m.id=a.mom_id
       SET
         a.topic=CASE WHEN ?='' THEN a.topic ELSE ? END,
         a.notes=CASE WHEN ?='' THEN a.notes ELSE ? END,
         a.status=?
       WHERE a.id=?
     ");
-    $stmt->bind_param('isssssi', $this->uid, $topic, $topic, $notes, $notes, $status, $item_id);
+    $stmt->bind_param('sssssi', $topic, $topic, $notes, $notes, $status, $item_id);
     return $stmt->execute() && $stmt->affected_rows > 0;
   }
 
@@ -616,10 +630,10 @@ class MOMController {
     $item_id = (int)$item_id;
     $stmt = $this->conn->prepare("
       DELETE a FROM tracs_mom_agenda a
-      INNER JOIN tracs_moms m ON m.id=a.mom_id AND m.created_by=?
+      INNER JOIN tracs_moms m ON m.id=a.mom_id
       WHERE a.id=?
     ");
-    $stmt->bind_param('ii', $this->uid, $item_id);
+    $stmt->bind_param('i', $item_id);
     return $stmt->execute() && $stmt->affected_rows > 0;
   }
 
@@ -658,10 +672,10 @@ class MOMController {
     $note_id = (int)$note_id;
     $stmt = $this->conn->prepare("
       DELETE n FROM tracs_mom_notes n
-      INNER JOIN tracs_moms m ON m.id=n.mom_id AND m.created_by=?
+      INNER JOIN tracs_moms m ON m.id=n.mom_id
       WHERE n.id=?
     ");
-    $stmt->bind_param('ii', $this->uid, $note_id);
+    $stmt->bind_param('i', $note_id);
     return $stmt->execute() && $stmt->affected_rows > 0;
   }
 
@@ -703,10 +717,10 @@ class MOMController {
     $decision_id = (int)$decision_id;
     $stmt = $this->conn->prepare("
       DELETE d FROM tracs_mom_decisions d
-      INNER JOIN tracs_moms m ON m.id=d.mom_id AND m.created_by=?
+      INNER JOIN tracs_moms m ON m.id=d.mom_id
       WHERE d.id=?
     ");
-    $stmt->bind_param('ii', $this->uid, $decision_id);
+    $stmt->bind_param('i', $decision_id);
     return $stmt->execute() && $stmt->affected_rows > 0;
   }
 
@@ -750,10 +764,10 @@ class MOMController {
       SELECT a.*
       FROM tracs_mom_actions a
       INNER JOIN tracs_moms m ON m.id=a.mom_id
-      WHERE a.id=? AND m.created_by=?
+      WHERE a.id=?
       LIMIT 1
     ");
-    $stmt->bind_param('ii', $action_id, $this->uid);
+    $stmt->bind_param('i', $action_id);
     $stmt->execute();
     return $stmt->get_result()->fetch_assoc();
   }
@@ -765,22 +779,22 @@ class MOMController {
 
     $stmt = $this->conn->prepare("
       UPDATE tracs_mom_actions a
-      INNER JOIN tracs_moms m ON m.id=a.mom_id AND m.created_by=?
+      INNER JOIN tracs_moms m ON m.id=a.mom_id
       SET a.title=?, a.description=?, a.assigned_to=?, a.priority=?, a.due_date=?, a.updated_at=?
       WHERE a.id=?
     ");
-    $stmt->bind_param('issssssi', $this->uid, $title, $description, $assigned_to, $priority, $due_date, $now, $action_id);
+    $stmt->bind_param('sssssi', $title, $description, $assigned_to, $priority, $due_date, $now, $action_id);
     $ok = $stmt->execute();
     if($ok) {
       $desc = "Action Item from MOM: " . $description;
       $rem = $this->conn->prepare("
         UPDATE tracs_reminders r
         INNER JOIN tracs_mom_actions a ON a.linked_reminder_id=r.id
-        INNER JOIN tracs_moms m ON m.id=a.mom_id AND m.created_by=?
+        INNER JOIN tracs_moms m ON m.id=a.mom_id
         SET r.title=?, r.description=?, r.priority=?, r.due_date=COALESCE(?, r.due_date), r.updated_at=NOW()
-        WHERE a.id=? AND r.user_id=?
+        WHERE a.id=?
       ");
-      $rem->bind_param('issssii', $this->uid, $title, $desc, $priority, $due_date, $action_id, $this->uid);
+      $rem->bind_param('ssssi', $title, $desc, $priority, $due_date, $action_id);
       $rem->execute();
     }
     return $ok;
@@ -793,22 +807,22 @@ class MOMController {
 
     $stmt = $this->conn->prepare("
       UPDATE tracs_mom_actions a
-      INNER JOIN tracs_moms m ON m.id=a.mom_id AND m.created_by=?
+      INNER JOIN tracs_moms m ON m.id=a.mom_id
       SET a.status=?, a.updated_at=?
       WHERE a.id=?
     ");
-    $stmt->bind_param('issi', $this->uid, $status, $now, $action_id);
+    $stmt->bind_param('ssi', $status, $now, $action_id);
     $ok = $stmt->execute();
     if($ok) {
       $done = $completed ? 1 : 0;
       $rem = $this->conn->prepare("
         UPDATE tracs_reminders r
         INNER JOIN tracs_mom_actions a ON a.linked_reminder_id=r.id
-        INNER JOIN tracs_moms m ON m.id=a.mom_id AND m.created_by=?
+        INNER JOIN tracs_moms m ON m.id=a.mom_id
         SET r.is_completed=?, r.updated_at=NOW()
-        WHERE a.id=? AND r.user_id=?
+        WHERE a.id=?
       ");
-      $rem->bind_param('iiii', $this->uid, $done, $action_id, $this->uid);
+      $rem->bind_param('ii', $done, $action_id);
       $rem->execute();
       $this->logMOMActivity($completed ? 'action_completed' : 'action_reopened', ($completed ? 'Completed' : 'Reopened') . " action #$action_id", $action_id);
     }
@@ -820,18 +834,18 @@ class MOMController {
     $rem = $this->conn->prepare("
       DELETE r FROM tracs_reminders r
       INNER JOIN tracs_mom_actions a ON a.linked_reminder_id=r.id
-      INNER JOIN tracs_moms m ON m.id=a.mom_id AND m.created_by=?
-      WHERE a.id=? AND r.user_id=?
+      INNER JOIN tracs_moms m ON m.id=a.mom_id
+      WHERE a.id=?
     ");
-    $rem->bind_param('iii', $this->uid, $action_id, $this->uid);
+    $rem->bind_param('i', $action_id);
     $rem->execute();
 
     $stmt = $this->conn->prepare("
       DELETE a FROM tracs_mom_actions a
-      INNER JOIN tracs_moms m ON m.id=a.mom_id AND m.created_by=?
+      INNER JOIN tracs_moms m ON m.id=a.mom_id
       WHERE a.id=?
     ");
-    $stmt->bind_param('ii', $this->uid, $action_id);
+    $stmt->bind_param('i', $action_id);
     return $stmt->execute() && $stmt->affected_rows > 0;
   }
 
@@ -859,24 +873,28 @@ class MOMController {
     $case_id = (int)$case_id;
     $stmt = $this->conn->prepare("
       DELETE ml FROM tracs_mom_case_links ml
-      INNER JOIN tracs_moms m ON m.id=ml.mom_id AND m.created_by=?
+      INNER JOIN tracs_moms m ON m.id=ml.mom_id
       WHERE ml.mom_id=? AND ml.case_id=?
     ");
-    $stmt->bind_param('iii', $this->uid, $mom_id, $case_id);
+    $stmt->bind_param('ii', $mom_id, $case_id);
     return $stmt->execute();
   }
 
+  // Case Management ownership (c.user_id) is intentionally left untouched
+  // here: this only surfaces cases the current viewer already owns, even
+  // when viewing a MoM created by someone else. Broadening case visibility
+  // is out of scope for this MoM permission revision.
   public function getRelatedCases($mom_id) {
     $mom_id = (int)$mom_id;
     $stmt = $this->conn->prepare("
-      SELECT c.* 
+      SELECT c.*
       FROM tracs_cases c
       INNER JOIN tracs_mom_case_links ml ON c.id=ml.case_id
       INNER JOIN tracs_moms m ON m.id=ml.mom_id
-      WHERE ml.mom_id=? AND m.created_by=? AND c.user_id=?
+      WHERE ml.mom_id=? AND c.user_id=?
       ORDER BY ml.linked_at DESC
     ");
-    $stmt->bind_param('iii', $mom_id, $this->uid, $this->uid);
+    $stmt->bind_param('ii', $mom_id, $this->uid);
     $stmt->execute();
     return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
   }
@@ -987,16 +1005,17 @@ class MOMController {
     $has_scheduled = $this->hasColumn('tracs_moms', 'scheduled_reminder_id');
     
     $scheduledSql = $has_scheduled ? 'r.id=m.scheduled_reminder_id OR ' : '';
+    // Reminders are fully public, so related reminders are not filtered by
+    // r.user_id here anymore.
     $stmt = $this->conn->prepare("
       SELECT DISTINCT r.*
       FROM tracs_reminders r
-      INNER JOIN tracs_moms m ON m.id=? AND m.created_by=?
+      INNER JOIN tracs_moms m ON m.id=?
       LEFT JOIN tracs_mom_actions ma ON ma.mom_id=m.id AND ma.linked_reminder_id=r.id
-      WHERE r.user_id=?
-        AND ($scheduledSql ma.id IS NOT NULL)
+      WHERE ($scheduledSql ma.id IS NOT NULL)
       ORDER BY r.due_date ASC
     ");
-    $stmt->bind_param('iii', $mom_id, $this->uid, $this->uid);
+    $stmt->bind_param('i', $mom_id);
     $stmt->execute();
     return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
   }
@@ -1084,11 +1103,11 @@ class MOMController {
     $mom_id = (int)$mom_id;
     $stmt = $this->conn->prepare("
       SELECT s.* FROM tracs_mom_screenshots s
-      INNER JOIN tracs_moms m ON m.id=s.mom_id AND m.created_by=?
+      INNER JOIN tracs_moms m ON m.id=s.mom_id
       WHERE s.mom_id=?
       ORDER BY s.uploaded_at DESC
     ");
-    $stmt->bind_param('ii', $this->uid, $mom_id);
+    $stmt->bind_param('i', $mom_id);
     $stmt->execute();
     return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
   }
@@ -1098,11 +1117,11 @@ class MOMController {
     $stmt = $this->conn->prepare("
       SELECT s.filename
       FROM tracs_mom_screenshots s
-      INNER JOIN tracs_moms m ON m.id=s.mom_id AND m.created_by=?
+      INNER JOIN tracs_moms m ON m.id=s.mom_id
       WHERE s.id=?
       LIMIT 1
     ");
-    $stmt->bind_param('ii', $this->uid, $screenshot_id);
+    $stmt->bind_param('i', $screenshot_id);
     $stmt->execute();
     $shot = $stmt->get_result()->fetch_assoc();
     if(!$shot) return false;

@@ -1463,7 +1463,9 @@ include 'includes/header.php';
                     </div>
                     <div class="task-acts">
                       <button class="btn btn-ghost btn-icon" onclick="openEditTask(<?=$tid?>)" title="Edit" aria-label="Edit checklist item"><i data-lucide="pencil" class="icon-sm"></i></button>
+                      <?php if((int)($t['created_by']??0)===(int)$uid): ?>
                       <button class="btn btn-danger btn-icon" onclick="deleteTask(<?=$tid?>,this)" title="Delete" aria-label="Delete checklist item"><i data-lucide="trash-2" class="icon-sm"></i></button>
+                      <?php endif; ?>
                     </div>
                   </div>
                   <?php endforeach; ?>
