@@ -4,6 +4,56 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Task Monitoring CRUD + Assign UX + Checklist Live-Sync + Drag Board (2026-07-01 ~22:40 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch `feat/task-monitoring-mom-permission-revision`,
+commit `e980ef3` (full branch state).
+
+Ships Parts 1/2/4 of the Task Monitoring + Checklist work, plus the previously
+committed-but-undeployed Workflow Board drag & drop (its frontend shares
+tracs.js/css, so it went out in the same pass):
+
+- **Part 1** Task item CRUD parity (`monitoring.php`): Edit / Reassign / Delete
+  added beside Details + Update + history. `updateTask` cascades to linked
+  checklist items + reminders; `deleteTask` cascades (assignments, checklist,
+  reminders, logs); `addAssignees` reassigns, skipping existing. Creator-or-
+  monitor gated.
+- **Part 2** Create Task modal: grouped "Task details" + highlighted "Assign to"
+  section, per-field icons, required markers, and an opt-in searchable
+  dropdown (`data-searchable`) on the shared tracs-select.
+- **Part 4** Checklist real-time sync: `checklist-sync.php` returns a cheap
+  change signature; `checklist.php` polls every 15s and swaps a fresh
+  server-rendered fragment only when idle (no pending toggle / open menu /
+  modal / focused input) — drift-free, no manual refresh.
+- **Workflow Board drag & drop** (`cases.php`): pointer-based, board_order
+  column (self-healing), `case-reorder.php`, `case-status.php` relaxed to
+  `cases.view`. Backend verified; drag *feel* still needs a browser eyeball.
+
+What was applied:
+
+- 16 app files (file-copy; backup `/opt/tracs/backups/fullparts-20260701-223946/`):
+  `core/creator_tracking.php`, `modules/case/{controller,model}.php`,
+  `modules/checklist/{controller,model}.php`,
+  `modules/task-management/{controller,model}.php`,
+  `public/api/{_bootstrap,case-reorder,case-status,checklist-sync}.php`,
+  `public/{cases,checklist,monitoring}.php`, `public/assets/tracs.{js,css}`.
+  Ownership `vickry:www-data`; `php8.3-fpm` reloaded.
+- DB: `board_order` column added to `tracs_cases` via self-healing helper (no
+  other schema change).
+
+Verification on production:
+
+- All 16 files sha256 local↔prod match; `php -l` clean; `board_order` present.
+- Checklist global visibility holds (two ids → identical list); signature
+  endpoint returns; task-management `updateTask/reassign/deleteTask` present.
+- Full task CRUD lifecycle tested over authenticated HTTP on staging (local
+  docker): create→edit→reassign→delete with zero orphans.
+- HTTP: `/login.php` 200; `/checklist.php` `/monitoring.php` `/cases.php`
+  `/index.php` 302→login; `checklist-sync` + `case-reorder` 401 unauth. No 500s.
+
+Deployed via key auth (`~/.ssh/tracs_deploy_ed25519`); no password used.
+
 ## Deployed — Checklist Global Visibility Fix (2026-07-01 ~22:14 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
