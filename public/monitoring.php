@@ -283,12 +283,12 @@ include __DIR__ . '/includes/header.php';
       <?php else: ?>
       <div class="table-wrap">
         <table class="tracs-table tm-table">
-          <thead><tr><th>Task</th><th>Assigned To</th><th>Priority</th><th>Due</th><th>Status</th><th>Time Left / Overdue</th><th>Completion Time</th><th>Last Update</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Task</th><th>Assigned To</th><th>Priority</th><th>Due</th><th>Status</th><th>Time Left / Overdue</th><th>Last Update</th><th>Actions</th></tr></thead>
           <tbody>
           <?php foreach($tasks as $task):
             $delta = tm_time_delta($task['due_at'] ?? null, (string)$task['assignment_status']);
             $tm_can_edit = $can_monitor || (int)($task['created_by'] ?? 0) === $uid;
-            $tm_due_dt = !empty($task['due_at']) ? strtotime($task['due_at']) : 0;
+            $tm_is_done = in_array((string)$task['assignment_status'], ['completed_on_time','completed_late','reviewed','cancelled'], true);
           ?>
             <tr>
               <td><strong><?=esc($task['title'])?></strong><?php if(!empty($task['description'])): ?><span><?=esc($task['description'])?></span><?php endif; ?></td>
@@ -297,31 +297,15 @@ include __DIR__ . '/includes/header.php';
               <td><?=!empty($task['due_at']) ? esc(date('d M Y, H:i', strtotime($task['due_at']))) : '—'?></td>
               <td><span class="badge <?=tm_badge_class($task['assignment_status'])?>"><?=esc(tm_label($task['assignment_status']))?></span></td>
               <td><span class="<?=esc($delta['class'])?>"><?=esc($delta['label'])?></span></td>
-              <td><?=tm_duration(isset($task['completion_seconds']) ? (int)$task['completion_seconds'] : null)?></td>
               <td><?=!empty($task['assignment_updated_at']) ? esc(date('d M Y, H:i', strtotime($task['assignment_updated_at']))) : '—'?></td>
               <td>
                 <div class="tm-row-actions">
-                  <a class="btn btn-ghost btn-sm" href="?<?=http_build_query(array_merge($_GET, ['assignment_id' => (int)$task['assignment_id']]))?>"><i data-lucide="eye" class="icon-xs"></i>Details</a>
-                  <button type="button" class="btn btn-ghost btn-sm" onclick="tmOpenUpdate(<?=$task['assignment_id']?>,'<?=esc($task['stored_status'] ?: $task['assignment_status'])?>')"><i data-lucide="pencil" class="icon-xs"></i>Update</button>
+                  <a class="btn btn-ghost btn-icon btn-sm" href="?<?=http_build_query(array_merge($_GET, ['assignment_id' => (int)$task['assignment_id']]))?>" title="View details" aria-label="View task details"><i data-lucide="eye" class="icon-xs"></i></a>
+                  <?php if(!$tm_is_done): ?>
+                  <button type="button" class="btn btn-ghost btn-icon btn-sm" title="Mark done" aria-label="Mark task done" data-assignment-id="<?=(int)$task['assignment_id']?>" onclick="tmMarkDone(this)"><i data-lucide="check-circle" class="icon-xs"></i></button>
+                  <?php endif; ?>
                   <?php if($tm_can_edit): ?>
-                  <details class="row-action-menu tm-row-menu" onclick="event.stopPropagation()">
-                    <summary class="btn btn-ghost btn-icon btn-sm" title="More actions" aria-label="More task actions"><i data-lucide="more-vertical" class="icon-xs"></i></summary>
-                    <div class="row-action-popover">
-                      <button type="button" class="btn btn-ghost btn-sm"
-                        data-task-id="<?=(int)$task['task_id']?>"
-                        data-title="<?=esc($task['title'])?>"
-                        data-category="<?=esc($task['category'])?>"
-                        data-desc="<?=esc($task['description'] ?? '')?>"
-                        data-priority="<?=esc($task['priority'])?>"
-                        data-due="<?=$tm_due_dt ? date('Y-m-d', $tm_due_dt) : ''?>"
-                        data-time="<?=$tm_due_dt ? date('H:i', $tm_due_dt) : ''?>"
-                        data-url="<?=esc($task['reference_url'] ?? '')?>"
-                        data-review="<?=!empty($task['requires_review']) ? '1' : '0'?>"
-                        onclick="tmOpenEdit(this)"><i data-lucide="pencil-line" class="icon-xs"></i>Edit task</button>
-                      <button type="button" class="btn btn-ghost btn-sm" onclick="tmOpenReassign(<?=(int)$task['task_id']?>,this)" data-title="<?=esc($task['title'])?>"><i data-lucide="user-plus" class="icon-xs"></i>Reassign</button>
-                      <button type="button" class="btn btn-danger btn-sm" data-task-id="<?=(int)$task['task_id']?>" data-title="<?=esc($task['title'])?>" onclick="tmDeleteTask(this)"><i data-lucide="trash-2" class="icon-xs"></i>Delete task</button>
-                    </div>
-                  </details>
+                  <button type="button" class="btn btn-danger btn-icon btn-sm" title="Delete task" aria-label="Delete task" data-task-id="<?=(int)$task['task_id']?>" data-title="<?=esc($task['title'])?>" onclick="tmDeleteTask(this)"><i data-lucide="trash-2" class="icon-xs"></i></button>
                   <?php endif; ?>
                 </div>
               </td>
@@ -336,9 +320,31 @@ include __DIR__ . '/includes/header.php';
       <div class="panel-head"><span class="panel-title">Task Timing Insight</span></div>
       <?php if(!$selected_task): ?>
         <div class="um-empty-state um-empty-compact"><div class="empty-t">Select or create a task to see SLA timing, reminder, and review details.</div></div>
-      <?php else: $delta = tm_time_delta($selected_task['due_at'] ?? null, (string)$selected_task['assignment_status']); ?>
+      <?php else:
+        $delta = tm_time_delta($selected_task['due_at'] ?? null, (string)$selected_task['assignment_status']);
+        $tm_detail_can_edit = $can_monitor || (int)($selected_task['created_by'] ?? 0) === $uid;
+        $tm_detail_due_dt = !empty($selected_task['due_at']) ? strtotime($selected_task['due_at']) : 0;
+      ?>
       <div class="tm-detail-body">
         <div class="tm-detail-title"><strong><?=esc($selected_task['title'])?></strong><span><?=esc($selected_task['assignee_name'])?> · <?=esc(tm_label($selected_task['category']))?></span></div>
+        <div class="tm-detail-actions">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="tmOpenUpdate(<?=(int)$selected_task['assignment_id']?>,'<?=esc($selected_task['stored_status'] ?: $selected_task['assignment_status'])?>')"><i data-lucide="pencil" class="icon-xs"></i>Update Status</button>
+          <?php if($tm_detail_can_edit): ?>
+          <button type="button" class="btn btn-ghost btn-sm"
+            data-task-id="<?=(int)$selected_task['task_id']?>"
+            data-title="<?=esc($selected_task['title'])?>"
+            data-category="<?=esc($selected_task['category'])?>"
+            data-desc="<?=esc($selected_task['description'] ?? '')?>"
+            data-priority="<?=esc($selected_task['priority'])?>"
+            data-due="<?=$tm_detail_due_dt ? date('Y-m-d', $tm_detail_due_dt) : ''?>"
+            data-time="<?=$tm_detail_due_dt ? date('H:i', $tm_detail_due_dt) : ''?>"
+            data-url="<?=esc($selected_task['reference_url'] ?? '')?>"
+            data-review="<?=!empty($selected_task['requires_review']) ? '1' : '0'?>"
+            onclick="tmOpenEdit(this)"><i data-lucide="pencil-line" class="icon-xs"></i>Edit</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-title="<?=esc($selected_task['title'])?>" onclick="tmOpenReassign(<?=(int)$selected_task['task_id']?>,this)"><i data-lucide="user-plus" class="icon-xs"></i>Reassign</button>
+          <button type="button" class="btn btn-danger btn-sm" data-task-id="<?=(int)$selected_task['task_id']?>" data-title="<?=esc($selected_task['title'])?>" onclick="tmDeleteTask(this)"><i data-lucide="trash-2" class="icon-xs"></i>Delete</button>
+          <?php endif; ?>
+        </div>
         <div class="tm-detail-grid">
           <div><span>Created</span><strong><?=!empty($selected_task['created_at']) ? esc(date('d M Y, H:i', strtotime($selected_task['created_at']))) : '-'?></strong></div>
           <div><span>Assigned by</span><strong><?=esc($selected_task['assigned_by_name'] ?? $selected_task['created_by_name'] ?? 'System')?></strong></div>
@@ -454,6 +460,11 @@ function tmOpenUpdate(id,status){document.getElementById('tmAssignmentId').value
 <form method="post" id="tmDeleteForm" class="hidden" data-tracs-modal-ajax>
   <?=csrf_input()?><input type="hidden" name="action" value="delete_task"><input type="hidden" name="task_id" id="tmDeleteTaskId"><input type="hidden" name="return_tab" value="<?=esc($tab)?>">
 </form>
+
+<!-- MARK DONE (hidden form, one-click quick action) -->
+<form method="post" id="tmMarkDoneForm" class="hidden" data-tracs-modal-ajax>
+  <?=csrf_input()?><input type="hidden" name="action" value="update_assignment"><input type="hidden" name="status" value="completed"><input type="hidden" name="assignment_id" id="tmMarkDoneAssignmentId"><input type="hidden" name="progress_note" value=""><input type="hidden" name="return_tab" value="<?=esc($tab)?>">
+</form>
 <script>
 function tmOpenEdit(btn){
   const d=btn.dataset;
@@ -485,6 +496,10 @@ function tmDeleteTask(btn){
     document.getElementById('tmDeleteTaskId').value=id;
     document.getElementById('tmDeleteForm').requestSubmit();
   });
+}
+function tmMarkDone(btn){
+  document.getElementById('tmMarkDoneAssignmentId').value=btn.dataset.assignmentId||'';
+  document.getElementById('tmMarkDoneForm').requestSubmit();
 }
 </script>
 <?php endif; ?>

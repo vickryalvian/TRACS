@@ -1044,7 +1044,11 @@ const TRACSDropdowns = (() => {
     const minWidth = Math.max(rect.width, 128);
     instance.menu.style.minWidth = `${minWidth}px`;
     instance.menu.style.maxWidth = `${Math.max(minWidth, Math.min(360, window.innerWidth - viewportGap * 2))}px`;
-    const menuHeight = Math.min(instance.menu.scrollHeight || 260, Math.max(160, window.innerHeight - viewportGap * 2));
+    // Cap at a comfortable ~9-row height regardless of option count (long lists
+    // like the task Assign-To people picker used to stretch to near-full
+    // viewport height); only shrink further on genuinely small viewports.
+    const preferredMaxHeight = 300;
+    const menuHeight = Math.min(instance.menu.scrollHeight || 260, preferredMaxHeight, Math.max(160, window.innerHeight - viewportGap * 2));
     const hasRoomBelow = rect.bottom + menuHeight + viewportGap <= window.innerHeight;
     const top = hasRoomBelow ? rect.bottom + 4 : Math.max(viewportGap, rect.top - menuHeight - 4);
     const left = Math.min(Math.max(viewportGap, rect.left), window.innerWidth - minWidth - viewportGap);
