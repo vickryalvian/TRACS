@@ -4283,6 +4283,8 @@ async function captureScreenshot() {
 
   if (btn) btn.disabled = true;
   if (label) label.textContent = 'Capturing…';
+  const statStrip = document.querySelector('.dashboard-stat-strip');
+  statStrip?.classList.add('is-scanning');
   try {
     if (region === 'all') {
       await captureAllRegions(raw);
@@ -4292,6 +4294,7 @@ async function captureScreenshot() {
   } finally {
     if (btn) btn.disabled = false;
     if (label) label.textContent = 'Capture';
+    statStrip?.classList.remove('is-scanning');
   }
 }
 

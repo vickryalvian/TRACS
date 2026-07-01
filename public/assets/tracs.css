@@ -1147,6 +1147,34 @@ input, select, textarea { font-family: inherit }
   box-shadow: 0 12px 28px rgba(17,24,39,.085);
   transform: translateY(-1px);
 }
+
+/* Radar-sweep loading state while a screenshot is capturing (reuses the
+   ticker/login-button radarSweep keyframes for visual consistency). */
+.dashboard-stat-strip.is-scanning .stat-card::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -35%;
+  width: 35%;
+  height: 100%;
+  background: linear-gradient(to right,
+    transparent,
+    color-mix(in srgb, var(--blue) 8%, transparent) 50%,
+    color-mix(in srgb, var(--blue) 32%, transparent) 95%,
+    var(--blue) 100%
+  );
+  border-right: 1px solid var(--blue);
+  animation: radarSweep 2.35s cubic-bezier(.42, 0, .18, 1) infinite;
+  pointer-events: none;
+  z-index: 5;
+}
+.dashboard-stat-strip.is-scanning .stat-card:nth-child(2)::after { animation-delay: .12s }
+.dashboard-stat-strip.is-scanning .stat-card:nth-child(3)::after { animation-delay: .24s }
+.dashboard-stat-strip.is-scanning .stat-card:nth-child(4)::after { animation-delay: .36s }
+.dashboard-stat-strip.is-scanning .stat-card:nth-child(5)::after { animation-delay: .48s }
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-stat-strip.is-scanning .stat-card::after { animation: none; display: none }
+}
 [data-theme="dark"] .stat-card {
   background:
     radial-gradient(circle at 22px 20px, color-mix(in srgb, var(--stat-accent) 12%, transparent), transparent 44%),
@@ -3369,8 +3397,11 @@ input, select, textarea { font-family: inherit }
   color: var(--tracs-status-critical, #d84c4c);
 }
 
-/* Result modal (reuses the .case-image-modal frame/backdrop for design consistency) */
-.screenshot-result-frame {
+/* Result modal (reuses the .case-image-modal frame/backdrop for design consistency).
+   Selector combines both classes so it reliably beats .case-image-frame's fixed
+   height/rows regardless of source order — same specificity tier, single-class
+   selectors were losing this override to whichever rule came later in the file. */
+.case-image-frame.screenshot-result-frame {
   width: min(720px, 92vw);
   height: auto;
   max-height: min(620px, 88vh);
@@ -3385,6 +3416,7 @@ input, select, textarea { font-family: inherit }
   background: var(--s3);
 }
 .screenshot-result-body .screenshot-preview {
+  position: relative;
   display: block;
   width: 100%;
   padding: 0;
@@ -3406,6 +3438,34 @@ input, select, textarea { font-family: inherit }
 }
 .screenshot-result-body .screenshot-preview img[hidden] {
   display: none;
+}
+
+/* Radar-sweep while a preview is still loading (img not yet shown) — same
+   sweep language as the dashboard-stat-strip scanning state, scoped to the
+   card so it disappears the instant the real image is set. */
+.screenshot-result-body .screenshot-preview:has(img[hidden]) {
+  min-height: 120px;
+  max-height: 150px;
+}
+.screenshot-result-body .screenshot-preview:has(img[hidden])::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -35%;
+  width: 35%;
+  height: 100%;
+  background: linear-gradient(to right,
+    transparent,
+    color-mix(in srgb, var(--blue) 10%, transparent) 50%,
+    color-mix(in srgb, var(--blue) 34%, transparent) 95%,
+    var(--blue) 100%
+  );
+  border-right: 1px solid var(--blue);
+  animation: radarSweep 1.6s cubic-bezier(.42, 0, .18, 1) infinite;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .screenshot-result-body .screenshot-preview:has(img[hidden])::before { animation: none; display: none }
 }
 .screenshot-toolbar {
   display: flex;
