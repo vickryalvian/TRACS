@@ -4,6 +4,41 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Checklist Global Visibility Fix (2026-07-01 ~22:14 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch `feat/task-monitoring-mom-permission-revision`,
+commit `1142bd5`.
+
+Production-critical bug: the Operational Checklist was not shared. Every read in
+`modules/checklist/model.php` scoped by `WHERE t.user_id = ?`, so a checklist
+item created by one user was invisible to everyone else (permissions were
+already open, but the query filtered by owner). Fixed by removing owner scoping
+from all reads (list / by-id / incomplete / logs) and from the status update;
+delete stays creator-only (`task-delete.php` via `created_by`), and note logs
+still record which user acted.
+
+What was applied:
+
+- Single file (file-copy deploy; prior version backed up under
+  `/opt/tracs/backups/checklist-visibility-20260701-221440/`):
+  `modules/checklist/model.php`. Ownership preserved; `php8.3-fpm` reloaded.
+
+Verification on production:
+
+- sha256 local ↔ prod match.
+- Real prod DB: two different user ids return the **identical** 146-item list
+  (was owner-scoped before).
+- `/checklist.php` and `/index.php` → 302 to login (healthy), `/login.php` →
+  200, `/api/task-toggle.php` unauth → 401. No 500s.
+
+NOT deployed in this pass (committed + pushed, awaiting verification/approval):
+the Trello-like Workflow Board drag & drop (`5448956`) — it carries a DB
+migration (`board_order`) and a case-status permission relaxation and has not
+been browser-verified, so it was deliberately held back from this deploy.
+
+Deployed via key auth (`~/.ssh/tracs_deploy_ed25519`); no password used.
+
 ## Deployed — Full Custom Error-Page Suite (2026-07-01 ~16:30 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
