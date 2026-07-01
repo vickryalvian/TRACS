@@ -2660,19 +2660,26 @@ function sortBoardColumn(items,mode='manual'){
   return list;
 }
 // FLIP: capture card positions before a DOM re-order, then animate the delta so
-// auto-sorts and drop settling glide instead of snapping. Skips when the user
-// prefers reduced motion or nothing actually moved.
-function caseFlipCapture(){
+// neighbours glide into place instead of snapping. Keyed by case id so it also
+// survives full innerHTML re-renders; scope to specific column lists to keep the
+// per-frame cost flat on large boards. Skips under prefers-reduced-motion.
+const CASE_FLIP_LISTS=()=>[...document.querySelectorAll('.case-kanban [data-case-dropzone]')];
+const CASE_FLIP_EASE='cubic-bezier(.2,0,0,1)';   // fast, decelerating, no overshoot
+function caseFlipCards(lists){
+  const scope=(lists&&lists.length)?lists:CASE_FLIP_LISTS();
+  const cards=[];
+  scope.forEach(el=>{ if(el)cards.push(...el.querySelectorAll('.case-kanban-card:not(.is-dragging-source)')); });
+  return cards;
+}
+function caseFlipCapture(lists){
   if(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)return null;
   const map=new Map();
-  document.querySelectorAll('.case-kanban .case-kanban-card').forEach(card=>{
-    map.set(card.dataset.cid,card.getBoundingClientRect());
-  });
+  caseFlipCards(lists).forEach(card=>map.set(card.dataset.cid,card.getBoundingClientRect()));
   return map;
 }
-function caseFlipPlay(before){
+function caseFlipPlay(before,lists){
   if(!before)return;
-  document.querySelectorAll('.case-kanban .case-kanban-card').forEach(card=>{
+  caseFlipCards(lists).forEach(card=>{
     const prev=before.get(card.dataset.cid);
     if(!prev)return;
     const next=card.getBoundingClientRect();
@@ -2681,11 +2688,12 @@ function caseFlipPlay(before){
     if(Math.abs(dx)<1 && Math.abs(dy)<1)return;
     card.style.transition='none';
     card.style.transform=`translate(${dx}px, ${dy}px)`;
+    card.style.willChange='transform';
     requestAnimationFrame(()=>{
-      card.style.transition='transform .32s cubic-bezier(.22,.68,.32,1.4)';
+      card.style.transition=`transform .18s ${CASE_FLIP_EASE}`;
       card.style.transform='';
     });
-    card.addEventListener('transitionend',()=>{card.style.transition='';card.style.transform='';},{once:true});
+    card.addEventListener('transitionend',()=>{card.style.transition='';card.style.transform='';card.style.willChange='';},{once:true});
   });
 }
 function caseFiltersActive(){
@@ -3159,9 +3167,9 @@ function applyBoardOrder(mode){
  * order (case-reorder.php) + status change (case-status.php); on failure the
  * previous arrangement is restored and a toast is shown. */
 const caseDrag={active:false,pointerId:null,card:null,id:0,clone:null,placeholder:null,
-  fromColumn:null,startX:0,startY:0,lastX:0,offsetX:0,offsetY:0,width:0,height:0,
-  pointerX:0,pointerY:0,lastRef:undefined,lastColumn:null,autoScrollRAF:0,moved:false,
-  suppressClickUntil:0};
+  fromColumn:null,startX:0,startY:0,offsetX:0,offsetY:0,width:0,height:0,
+  pointerX:0,pointerY:0,frameDx:0,tilt:0,pointerMoved:false,
+  lastRef:undefined,lastColumn:null,autoScrollRAF:0,moved:false,suppressClickUntil:0};
 const CASE_DRAG_THRESHOLD=6;
 
 function initCaseBoardDrag(workspace){
@@ -3188,8 +3196,8 @@ function onCasePointerDown(event){
   caseDrag.card=card;
   caseDrag.id=Number(card.dataset.cid)||0;
   caseDrag.pointerId=event.pointerId;
-  caseDrag.startX=caseDrag.lastX=event.clientX;
-  caseDrag.startY=event.clientY;
+  caseDrag.startX=caseDrag.pointerX=event.clientX;
+  caseDrag.startY=caseDrag.pointerY=event.clientY;
   caseDrag.moved=false;
   window.addEventListener('pointermove',onCasePointerMove,{passive:false});
   window.addEventListener('pointerup',onCasePointerUp);
@@ -3209,6 +3217,9 @@ function beginCaseDrag(event){
   caseDrag.pointerY=event.clientY;
   caseDrag.lastRef=undefined;
   caseDrag.lastColumn=null;
+  caseDrag.frameDx=0;
+  caseDrag.tilt=0;
+  caseDrag.pointerMoved=true;
 
   // Floating clone that tracks the pointer.
   const clone=card.cloneNode(true);
@@ -3229,13 +3240,16 @@ function beginCaseDrag(event){
   card.setAttribute('aria-grabbed','true');
   document.body.classList.add('case-drag-active');
   positionCaseClone(event.clientX,event.clientY,0);
-  startCaseAutoScroll();
+  startCaseDragFrame();
 }
 function positionCaseClone(x,y,tilt){
   const c=caseDrag.clone;
   if(!c)return;
   c.style.transform=`translate(${x-caseDrag.offsetX}px, ${y-caseDrag.offsetY}px) rotate(${tilt}deg) scale(1.03)`;
 }
+// Pointer move only records state — no DOM reads/writes here. The rAF frame
+// (caseDragFrame) does all positioning, hit-testing and scrolling once per
+// frame, so high-frequency pointers never trigger sync reflows.
 function onCasePointerMove(event){
   if(!caseDrag.card)return;
   if(!caseDrag.active){
@@ -3243,62 +3257,82 @@ function onCasePointerMove(event){
     beginCaseDrag(event);
   }
   event.preventDefault();
-  const dx=event.clientX-caseDrag.lastX;
-  caseDrag.lastX=event.clientX;
-  const tilt=Math.max(-7,Math.min(7,dx*0.9));
-  positionCaseClone(event.clientX,event.clientY,tilt);
+  caseDrag.frameDx+=event.clientX-caseDrag.pointerX;
   caseDrag.pointerX=event.clientX;
   caseDrag.pointerY=event.clientY;
-  updateCaseDropTarget(event.clientX,event.clientY);
+  caseDrag.pointerMoved=true;
 }
 function updateCaseDropTarget(x,y){
   const el=document.elementFromPoint(x,y);
   const column=el?.closest?.('.case-kanban-column');
-  document.querySelectorAll('.case-kanban-column.is-drag-over').forEach(c=>{if(c!==column)c.classList.remove('is-drag-over');});
-  if(!column)return;
+  if(caseDrag.lastColumn && caseDrag.lastColumn!==column)caseDrag.lastColumn.classList.remove('is-drag-over');
+  if(!column)return;                 // outside any column: hold current slot
   column.classList.add('is-drag-over');
   const list=column.querySelector('[data-case-dropzone]');
   if(!list)return;
-  const cards=[...list.querySelectorAll('.case-kanban-card:not(.is-dragging-source)')];
+  const cards=list.querySelectorAll('.case-kanban-card:not(.is-dragging-source)');
   let ref=null;
   for(const card of cards){
     const r=card.getBoundingClientRect();
     if(y < r.top + r.height/2){ ref=card; break; }
   }
-  // Only reflow + FLIP when the drop slot actually changes — keeps drag cheap
-  // even with hundreds of cards (elementFromPoint runs every move, this doesn't).
+  // Only reflow + FLIP when the drop slot actually changes.
   if(column===caseDrag.lastColumn && ref===caseDrag.lastRef)return;
+  const prevList=caseDrag.lastColumn?.querySelector('[data-case-dropzone]');
+  const scope=(prevList && prevList!==list)?[prevList,list]:[list];   // only affected columns
   caseDrag.lastColumn=column;
   caseDrag.lastRef=ref;
-  const before=caseFlipCapture();
+  const before=caseFlipCapture(scope);
   const empty=list.querySelector('[data-column-empty]');
   if(empty)empty.remove();
   if(ref)list.insertBefore(caseDrag.placeholder,ref);
   else list.appendChild(caseDrag.placeholder);
-  requestAnimationFrame(()=>caseFlipPlay(before));
+  caseFlipPlay(before,scope);        // already inside a rAF frame — play immediately
 }
-function startCaseAutoScroll(){
+// One rAF loop drives the whole drag: smooth the tilt, position the clone,
+// hit-test for the drop slot, and edge-scroll — all reads batched after the
+// single clone write, capped at one pass per frame (60fps).
+function startCaseDragFrame(){
   const board=document.querySelector('.case-kanban');
-  const step=()=>{
+  const frame=()=>{
     if(!caseDrag.active){caseDrag.autoScrollRAF=0;return;}
-    const x=caseDrag.pointerX,y=caseDrag.pointerY;
-    if(board){
-      const b=board.getBoundingClientRect();
-      const edge=64;
-      if(x<b.left+edge)board.scrollLeft-=Math.ceil((b.left+edge-x)/6);
-      else if(x>b.right-edge)board.scrollLeft+=Math.ceil((x-(b.right-edge))/6);
+    // Velocity-based tilt that eases toward the drag direction and relaxes to
+    // upright when the pointer pauses — natural, not jittery.
+    const targetTilt=Math.max(-6,Math.min(6,caseDrag.frameDx*0.5));
+    caseDrag.frameDx=0;
+    caseDrag.tilt+=(targetTilt-caseDrag.tilt)*0.3;
+    if(Math.abs(caseDrag.tilt)<0.04)caseDrag.tilt=0;
+    positionCaseClone(caseDrag.pointerX,caseDrag.pointerY,caseDrag.tilt);
+    // Auto-scroll first; if it moved the viewport, re-hit-test even when the
+    // pointer is stationary so the placeholder keeps following the content.
+    if(caseAutoScrollStep(board))caseDrag.pointerMoved=true;
+    if(caseDrag.pointerMoved){
+      updateCaseDropTarget(caseDrag.pointerX,caseDrag.pointerY);
+      caseDrag.pointerMoved=false;
     }
-    const overCol=document.elementFromPoint(x,y)?.closest?.('.case-kanban-column');
-    const list=overCol?.querySelector('[data-case-dropzone]');
-    if(list){
-      const r=list.getBoundingClientRect();
-      const edge=48;
-      if(y<r.top+edge)list.scrollTop-=Math.ceil((r.top+edge-y)/5);
-      else if(y>r.bottom-edge)list.scrollTop+=Math.ceil((y-(r.bottom-edge))/5);
-    }
-    caseDrag.autoScrollRAF=requestAnimationFrame(step);
+    caseDrag.autoScrollRAF=requestAnimationFrame(frame);
   };
-  caseDrag.autoScrollRAF=requestAnimationFrame(step);
+  caseDrag.autoScrollRAF=requestAnimationFrame(frame);
+}
+function caseAutoScrollStep(board){
+  const x=caseDrag.pointerX,y=caseDrag.pointerY;
+  let scrolled=false;
+  if(board){
+    const b=board.getBoundingClientRect();
+    const edge=64,before=board.scrollLeft;
+    if(x<b.left+edge)board.scrollLeft-=Math.ceil((b.left+edge-x)/6);
+    else if(x>b.right-edge)board.scrollLeft+=Math.ceil((x-(b.right-edge))/6);
+    if(board.scrollLeft!==before)scrolled=true;
+  }
+  const list=caseDrag.lastColumn?.querySelector('[data-case-dropzone]');  // reuse hit-tested column
+  if(list){
+    const r=list.getBoundingClientRect();
+    const edge=48,before=list.scrollTop;
+    if(y<r.top+edge)list.scrollTop-=Math.ceil((r.top+edge-y)/5);
+    else if(y>r.bottom-edge)list.scrollTop+=Math.ceil((y-(r.bottom-edge))/5);
+    if(list.scrollTop!==before)scrolled=true;
+  }
+  return scrolled;
 }
 function onCasePointerUp(event){
   window.removeEventListener('pointermove',onCasePointerMove);
@@ -3318,7 +3352,7 @@ function onCasePointerUp(event){
     let done=false;
     const settle=()=>{if(done)return;done=true;finish();};
     clone.addEventListener('transitionend',settle,{once:true});
-    setTimeout(settle,260);
+    setTimeout(settle,180);
   }else finish();
 }
 function commitCaseDrag(targetColumn){
@@ -3356,7 +3390,11 @@ function commitCaseDrag(targetColumn){
   });
   caseBoardState.boardOrder='manual';
   document.querySelectorAll('#caseReorderMenu [data-board-order]').forEach(b=>b.classList.toggle('is-active',b.dataset.boardOrder==='manual'));
+  // FLIP the settle: neighbours slide into their final slots instead of
+  // snapping when the placeholder/clone are replaced by the real re-render.
+  const flipBefore=caseFlipCapture();
   renderCaseWorkspace();
+  requestAnimationFrame(()=>caseFlipPlay(flipBefore));
 
   persistCaseBoardOrder(targetStatus,orderedIds,statusChanged,id,snapshot,fromKey,targetKey);
 }
@@ -3377,9 +3415,11 @@ async function persistCaseBoardOrder(status,orderedIds,statusChanged,id,snapshot
     }
     showToast(statusChanged?'Case moved and order saved.':'Board order saved.','success',{context:'page'});
   }catch(error){
-    // Roll back to the pre-drag arrangement.
+    // Roll back to the pre-drag arrangement (FLIP so it slides back too).
     snapshot.forEach(s=>{const item=caseBoardState.rawCases.find(c=>Number(c.id)===Number(s.id));if(item){item.status=s.status;item.board_order=s.board_order;item.overdue=s.overdue;}});
+    const flipBefore=caseFlipCapture();
     renderCaseWorkspace();
+    requestAnimationFrame(()=>caseFlipPlay(flipBefore));
     handleRequestError(error,'page','The board order could not be saved. Your changes were reverted.');
   }
 }
@@ -3391,7 +3431,7 @@ function resetCaseDrag(){
   caseDrag.card?.setAttribute('aria-grabbed','false');
   document.querySelectorAll('.case-kanban-column.is-drag-over').forEach(c=>c.classList.remove('is-drag-over'));
   document.body.classList.remove('case-drag-active');
-  Object.assign(caseDrag,{active:false,pointerId:null,card:null,id:0,clone:null,placeholder:null,fromColumn:null,moved:false,autoScrollRAF:0});
+  Object.assign(caseDrag,{active:false,pointerId:null,card:null,id:0,clone:null,placeholder:null,fromColumn:null,moved:false,autoScrollRAF:0,frameDx:0,tilt:0,pointerMoved:false,lastRef:undefined,lastColumn:null});
 }
 async function resolveCaseFromTicket(){
   const id=currentCaseTicketId;

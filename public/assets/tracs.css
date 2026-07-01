@@ -5452,10 +5452,10 @@ input, select, textarea { font-family: inherit }
 .case-kanban-card[data-case-draggable="true"] {
   touch-action: pan-y;   /* let the board own horizontal drags on touch */
 }
-/* Original card while its clone is being dragged */
+/* Original card while its clone is being dragged: removed from flow so only the
+   placeholder reserves space (no lingering gap at the origin during reorder). */
 .case-kanban-card.is-dragging-source {
-  opacity: 0;
-  pointer-events: none;
+  display: none;
 }
 /* Prevent accidental text selection / native image drag mid-drag */
 body.case-drag-active {
@@ -5488,7 +5488,7 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
   transform-origin: center center;
 }
 .case-drag-clone.is-dropping {
-  transition: transform .22s cubic-bezier(.22,.68,.32,1.35);
+  transition: transform .16s cubic-bezier(.2,0,0,1);
 }
 .case-drag-clone .case-card-menu { display: none; }
 [data-theme="dark"] .case-drag-clone {
