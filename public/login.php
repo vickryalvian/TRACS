@@ -69,11 +69,11 @@ window.TRACS_BUILD_INFO = <?=json_encode($tracs_build_info, JSON_UNESCAPED_SLASH
         <?= csrf_input() ?>
         <div class="form-group">
           <label class="form-label">Email or Username</label>
-          <input type="text" name="email" class="form-input" placeholder="operator@idcloudhost.com" value="<?=htmlspecialchars((string)$identifier, ENT_QUOTES, 'UTF-8')?>" autocomplete="username" required autofocus>
+          <input type="text" name="email" class="form-input" value="<?=htmlspecialchars((string)$identifier, ENT_QUOTES, 'UTF-8')?>" autocomplete="username" required autofocus>
         </div>
         <div class="form-group">
           <label class="form-label">Password</label>
-          <input type="password" name="password" class="form-input" placeholder="••••••••" autocomplete="current-password" required>
+          <input type="password" name="password" class="form-input" autocomplete="current-password" required>
         </div>
         <?php if($show_captcha): ?>
           <div class="login-captcha" aria-label="Login verification">

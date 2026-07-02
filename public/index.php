@@ -1381,7 +1381,7 @@ include 'includes/header.php';
         <div class="panel-head">
           <span class="panel-title">Website Screenshot</span>
           <div class="panel-right">
-            <select id="screenshot-region" class="form-select" aria-label="Capture region">
+            <select id="screenshot-region" class="form-select" aria-label="Capture region" data-unsaved-ignore>
               <option value="">Auto region</option>
               <option value="id-1">🇮🇩 ID — Jakarta</option>
               <option value="us-1">🇺🇸 US — Oregon</option>
@@ -1391,7 +1391,7 @@ include 'includes/header.php';
         </div>
         <div class="screenshot-body">
           <div class="screenshot-input-row">
-            <input type="text" id="screenshot-url" class="form-input" placeholder="Enter domain, URL, or IP — e.g. example.com" autocomplete="off" spellcheck="false">
+            <input type="text" id="screenshot-url" class="form-input" placeholder="Enter domain, URL, or IP — e.g. example.com" autocomplete="off" spellcheck="false" data-unsaved-ignore>
             <button type="button" class="btn btn-primary" id="screenshot-btn">
               <i data-lucide="camera" class="icon-sm"></i> <span class="screenshot-btn-label">Capture</span>
             </button>
@@ -1634,19 +1634,19 @@ include 'includes/header.php';
         </div>
         <div class="currency-body">
           <div class="currency-row">
-            <select id="currency-from" class="form-select">
+            <select id="currency-from" class="form-select" data-unsaved-ignore>
               <option value="IDR">IDR</option>
               <option value="USD">USD</option>
               <option value="SGD">SGD</option>
             </select>
             <button type="button" class="btn btn-ghost btn-icon" id="swap-currency" style="width:30px;height:30px;"><i data-lucide="arrow-right-left" class="icon-sm"></i></button>
-            <select id="currency-to" class="form-select">
+            <select id="currency-to" class="form-select" data-unsaved-ignore>
               <option value="USD">USD</option>
               <option value="IDR">IDR</option>
               <option value="SGD">SGD</option>
             </select>
           </div>
-          <input type="number" id="currency-amount" class="form-input" placeholder="Transfer amount" value="1000000">
+          <input type="number" id="currency-amount" class="form-input" placeholder="Transfer amount" data-unsaved-ignore>
           <button type="button" class="btn btn-primary" id="convert-btn" style="width:100%">Convert</button>
           <div class="currency-result">
             <div id="currency-result">—</div>

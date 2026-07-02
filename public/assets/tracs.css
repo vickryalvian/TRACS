@@ -2789,7 +2789,7 @@ input, select, textarea { font-family: inherit }
       color-mix(in srgb, var(--blue) 14%, transparent) 100%
     );
   color:#dbeafe;
-  border:1px solid color-mix(in srgb, var(--blue) 18%, white);
+  border:1px solid color-mix(in srgb, var(--blue) 45%, transparent);
   box-shadow:
     0 4px 12px color-mix(in srgb, var(--blue) 18%, transparent);
 }
@@ -2802,7 +2802,7 @@ input, select, textarea { font-family: inherit }
       color-mix(in srgb, var(--blue) 18%, transparent) 100%
     );
   border-color:
-    color-mix(in srgb, var(--blue) 28%, white);
+    color-mix(in srgb, var(--blue) 60%, transparent);
   box-shadow:
     0 8px 20px color-mix(in srgb, var(--blue) 24%, transparent);
 }
