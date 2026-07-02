@@ -4,6 +4,41 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Actions Header Removal + View-Details Reveal + Toast Feedback (2026-07-02 ~14:50 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch `feat/task-monitoring-mom-permission-revision`,
+commit `932e79d`. 2 files: `public/monitoring.php`, `public/assets/tracs.css`.
+Backup `/opt/tracs/backups/actions-view-toast-20260702-145022/`.
+
+- Removed the visible "Actions" column header (kept as aria-label'd empty th).
+- "View details" now scrolls the detail panel into view (`id="tmDetail"` +
+  scroll-margin) and flashes a `:target` highlight — the panel rendered fine
+  server-side but sat beside/below the table so the nav looked like a no-op.
+- Toast feedback: `tm_json_response` stashes a success flash; the reloaded page
+  fires `window.tracsToast(...)` (replacing the static `.tm-flash` panel), so
+  kebab actions (hidden forms, no modal) now get a toast too. Consumed once.
+- Verified: sha256 local↔prod match, `php -l` clean, `php8.3-fpm` reloaded;
+  header gone, toast fires on create, detail anchor present.
+
+### Incident during verification — prod task deleted (data loss)
+
+While verifying with a scripted create->delete round trip on prod, the delete
+step selected the task id with `head -1` on the rendered list. That list sorts
+by due date, so it picked the operator's real task **"Check transfer domain"**
+(task#7, created 14:00:57 WIB, assignee id 17) instead of the test task, and
+deleted it at 14:50:47 (audit `tracs_user_activity_logs#48`). The test task
+`ProdVerify` was later removed too; **prod now has 0 tasks**.
+
+Not recoverable automatically: DB backups only exist from 2026-06-27 (predate
+the task), `log_bin=OFF`, and the audit row for the delete stored only
+title+assignee (no due/priority/category/description/status). Restoration needs
+the operator to supply the original fields (or recreate via the form).
+
+**Guardrail:** never run create/delete round-trips against production for
+verification, and never target destructive actions by positional selectors
+(`head -1`) on prod. Verify data-mutating flows on local only.
+
 ## Deployed — Table Kebab Menu + Add Task Modal Declutter (2026-07-02 ~12:42 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
