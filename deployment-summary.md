@@ -4,6 +4,61 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Unassign Feature + Monitoring Table Overflow Root-Fix (2026-07-02 ~09:18 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch `feat/task-monitoring-mom-permission-revision`,
+commit `2108766`.
+
+Two things: a new **Unassign** feature, and the *actual* fix for the messy
+monitoring table the earlier 07:59 pass only partially addressed.
+
+- **Unassign a single user from a task** (`monitoring.php`,
+  `task-management/{controller,model}.php`): new action in the Task Timing
+  Insight detail panel next to Reassign (its inverse). `removeAssignee()`
+  deletes one user's assignment and cascades to *that assignment's own* linked
+  checklist item, reminder, and logs, while leaving the task and every other
+  assignee untouched. Guards the last assignee (refuses to orphan a task — use
+  Delete instead). Owner-or-monitor gated via existing `requireTaskManage()`.
+  New `unassign_user` POST action, confirm dialog + hidden AJAX form.
+- **Root-fix for the table overflow/overlap.** The 07:59 deploy shipped the new
+  8-column `tracs.css` width rules but **not** the matching `monitoring.php`, so
+  production kept rendering the old **9-column** layout (with the long-removed
+  "Completion Time" column). The column-count mismatch is what made headers
+  ("Time Left / Overdue") and timestamps spill into neighbouring columns and
+  force a horizontal scrollbar. This finally ships `monitoring.php` (verified
+  prod was byte-identical to `e980ef3`, i.e. two deploys stale). Also let
+  `.tm-table` th/td text wrap instead of nowrap-overflowing, and rebalanced the
+  8 column widths (sum = 100%); Actions column stays nowrap.
+
+What was applied:
+
+- 4 files (file-copy; backup
+  `/opt/tracs/backups/unassign-table-fix-20260702-091801/`):
+  `public/monitoring.php`, `public/assets/tracs.css`,
+  `modules/task-management/controller.php`, `modules/task-management/model.php`.
+  Ownership `vickry:www-data`; `php8.3-fpm` reloaded to clear opcache. No DB
+  migration (removeAssignee uses existing tables only).
+
+Verification:
+
+- **Local end-to-end DB test (real docker DB, real model): 21/21 passed** —
+  create 2-assignee task → unassign one → the removed user's assignment +
+  linked checklist item + reminder + assignment logs are gone; the task,
+  the other assignee, that assignee's checklist/reminder, and task-level logs
+  all survive; last-assignee removal blocked; task/assignment-id mismatch
+  blocked; full cleanup on deleteTask. No test residue left in the DB.
+- Drift check: prod copies of all 4 files were byte-identical to `e980ef3`
+  before deploy — no production-only changes overwritten.
+- Post-deploy: all 4 files sha256 local↔prod match; `php -l` clean; prod
+  `monitoring.php` now renders the 8-column header (Completion Time gone);
+  `unassign_user`/`removeAssignee` present on prod; `php8.3-fpm`+`nginx` active
+  with no new FPM errors after reload.
+- HTTP: `/login.php` 200; `/monitoring.php` + `/index.php` 302→login;
+  `/assets/tracs.css` 200 and serving the new 8-column width rules.
+
+Deployed via key auth (`~/.ssh/tracs_deploy_ed25519`); no password used.
+
 ## Deployed — Login Toast Dedup + Monitoring UI Fixes (2026-07-02 ~07:59 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
