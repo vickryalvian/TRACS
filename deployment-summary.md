@@ -4,6 +4,34 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Table Kebab Menu + Add Task Modal Declutter (2026-07-02 ~12:42 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch `feat/task-monitoring-mom-permission-revision`,
+commit `413c36f`. 2 files: `public/monitoring.php`, `public/assets/tracs.css`.
+
+- **Table row actions → kebab.** The three inline icon buttons kept reading as
+  cramped, so per the operator's request they now collapse into the app-standard
+  kebab (`<details class="row-action-menu">` inside `.row-action-group`, trigger
+  inline, popover drops as a menu — same pattern as reminders/mom). Popover has
+  View details / Mark done / Delete.
+- **Add Task modal "Assign to" declutter.** Dropped the fake stepper numbering
+  ("1 ·" / "2 ·") to plain section labels; replaced the heavy blue-tinted box
+  with a subtle top-border divider; collapsed the enhanced multiselects
+  (People/Roles/Divisions) from the global `.is-multiple` 112px chip-area
+  min-height to a 38px single-line control — they only render "N selected" text,
+  so the tall boxes were dead space. Height override scoped to
+  `.tm-assign-section` so other pages' multiselects are unchanged.
+
+Verification:
+
+- Drift check clean; post-deploy sha256 local↔prod match; `php -l` clean;
+  `php8.3-fpm` reloaded. Backup
+  `/opt/tracs/backups/kebab-assignmodal-20260702-124217/`.
+- Prod create → delete round trip (self-cleaning): the row kebab renders with a
+  real `data-task-id`, the popover Delete works, prod left with 0 tasks.
+  Modal renders plain labels (no "1 ·/2 ·"), 0 PHP errors.
+
 ## Deployed — Task-Action 422 Fix + Dashboard Reminder Icon + nginx JS Deny Fix (2026-07-02 ~12:13 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
