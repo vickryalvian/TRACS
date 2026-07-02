@@ -4,6 +4,57 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Monitoring Page Redesign (2026-07-02 ~11:53 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch `feat/task-monitoring-mom-permission-revision`,
+commit `7d18d19`.
+
+Full monitoring.php UI/UX redesign from the audit (P0–P2):
+
+- **Merged Status + "Time Left / Overdue" columns** into one "Status & SLA"
+  cell (8→7 columns, rewidthed) — resolves the header/row/button collisions.
+  Overdue duration now renders (`tm_time_delta` passes `abs()` so
+  `tm_duration`'s `<=0` guard stops swallowing negative deltas).
+- **Ticker right-edge fade mask** so scrolling items fade instead of clipping
+  mid-glyph (global header CSS — affects all pages).
+- **KPI clustering** into Workload / Risk / Performance; Risk cluster is
+  red-tinted with larger numbers when active.
+- **Persistent overdue pill** in the topbar, separate from the ticker.
+- **Filter progressive disclosure**: User/Status/Date always visible, the rest
+  behind a "More filters" drawer (auto-opens + count when active); active
+  filters render as removable chips + Clear all.
+- **Detail panel**: Timing detail and Activity log are collapsible sections.
+- **Labeling**: single-sample timing stats suppressed (n<2), every rate
+  annotated with its denominator. Adds `completed_count` +
+  `timing_sample_size` to `model.php`'s `summary()`.
+
+What was applied:
+
+- 3 files (file-copy; backup
+  `/opt/tracs/backups/monitoring-redesign-20260702-115245/`):
+  `public/monitoring.php`, `public/assets/tracs.css`,
+  `modules/task-management/model.php`. Ownership `vickry:www-data`;
+  `php8.3-fpm` reloaded to clear opcache. No DB migration.
+
+Verification:
+
+- Drift check: prod copies of all 3 files were byte-identical to `8a4b418`
+  before deploy — no production-only changes overwritten.
+- Post-deploy: all 3 files sha256 local↔prod match; `php -l` clean;
+  `php8.3-fpm` + `nginx` active after reload.
+- HTTP: `/login.php` 200; `/monitoring.php` + `/index.php` 302→login;
+  `/assets/tracs.css` 200 and serving the new cluster/pill/filter rules.
+- Local end-to-end (authenticated, real docker DB): 0 PHP errors; KPI
+  clusters, overdue pill, filter chips, merged Status & SLA cell (e.g.
+  "Overdue 5h 7m"), and single-sample suppression all render correctly.
+
+Ops note: `admin@tracs.local` password was rotated on both the production and
+local DBs (bcrypt, cost 12) at the operator's request — value not recorded
+here. Prod admin has no 2FA (password alone logs in); local admin still has
+2FA enabled (`two_factor_enabled=1`), so the local login also needs its 2FA
+code.
+
 ## Deployed — Monitoring Action-Button Cramping Fix (2026-07-02 ~09:34 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
