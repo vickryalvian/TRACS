@@ -40,6 +40,12 @@ function tm_is_ajax_request(): bool {
 }
 function tm_json_response(bool $success, string $message, string $tab = 'my', int $status = 200): never {
     $base = str_ends_with((string)($_SERVER['SCRIPT_NAME'] ?? ''), '/tasks.php') ? '/tasks.php' : '/monitoring.php';
+    // On success the client reloads the page; stash a flash so the reloaded
+    // page can surface it as a toast. Errors stay in the modal (no reload), so
+    // don't queue those.
+    if ($success) {
+        $_SESSION['tracs_flash'] = ['type' => 'success', 'message' => $message];
+    }
     http_response_code($status);
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode([
@@ -197,7 +203,14 @@ include __DIR__ . '/includes/header.php';
     </div>
   </div>
 
-  <?php if($flash): ?><div class="panel tm-flash tm-flash-<?=esc($flash['type'])?>"><?=esc($flash['message'])?></div><?php endif; ?>
+  <?php if($flash): ?>
+  <script>
+    (function(){
+      var fire=function(){ if(window.tracsToast) window.tracsToast(<?=json_encode($flash['type']==='error'?'error':'success')?>, '', <?=json_encode($flash['message'])?>); };
+      if(document.readyState!=='loading') fire(); else document.addEventListener('DOMContentLoaded', fire);
+    })();
+  </script>
+  <?php endif; ?>
 
   <?php if(!$schema_ready): ?>
     <div class="panel"><div class="um-empty-state"><div class="empty-ic"><i data-lucide="database"></i></div><div class="empty-t">Task Management schema is not installed yet</div><div class="empty-sub">Run <code>config/migrations/2026_05_18_task_management.sql</code>, then reload this page.</div></div></div>
@@ -372,7 +385,7 @@ include __DIR__ . '/includes/header.php';
       <?php else: ?>
       <div class="table-wrap">
         <table class="tracs-table tm-table">
-          <thead><tr><th>Task</th><th>Assigned To</th><th>Priority</th><th>Due</th><th>Status &amp; SLA</th><th>Last Update</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Task</th><th>Assigned To</th><th>Priority</th><th>Due</th><th>Status &amp; SLA</th><th>Last Update</th><th aria-label="Actions"></th></tr></thead>
           <tbody>
           <?php foreach($tasks as $task):
             $delta = tm_time_delta($task['due_at'] ?? null, (string)$task['assignment_status']);
@@ -394,7 +407,7 @@ include __DIR__ . '/includes/header.php';
                   <details class="row-action-menu">
                     <summary class="btn btn-ghost btn-icon btn-sm" title="Actions" aria-label="Row actions"><i data-lucide="more-vertical" class="icon-xs"></i></summary>
                     <div class="row-action-popover">
-                      <a class="btn btn-ghost btn-sm" href="?<?=http_build_query(array_merge($_GET, ['assignment_id' => (int)$task['assignment_id']]))?>"><i data-lucide="eye" class="icon-xs"></i>View details</a>
+                      <a class="btn btn-ghost btn-sm" href="?<?=http_build_query(array_merge($_GET, ['assignment_id' => (int)$task['assignment_id']]))?>#tmDetail"><i data-lucide="eye" class="icon-xs"></i>View details</a>
                       <?php if(!$tm_is_done): ?>
                       <button type="button" class="btn btn-ghost btn-sm" data-assignment-id="<?=(int)$task['assignment_id']?>" onclick="tmMarkDone(this)"><i data-lucide="check-circle" class="icon-xs"></i>Mark done</button>
                       <?php endif; ?>
@@ -412,7 +425,7 @@ include __DIR__ . '/includes/header.php';
       </div>
       <?php endif; ?>
     </div>
-    <aside class="panel tm-detail-panel">
+    <aside class="panel tm-detail-panel" id="tmDetail">
       <div class="panel-head"><span class="panel-title">Task Timing Insight</span></div>
       <?php if(!$selected_task): ?>
         <div class="um-empty-state um-empty-compact"><div class="empty-t">Select or create a task to see SLA timing, reminder, and review details.</div></div>

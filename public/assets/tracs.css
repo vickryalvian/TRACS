@@ -11345,6 +11345,17 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
   position: static;
   overflow: visible;
   box-shadow: none;
+  /* Clear the sticky topbar/ticker when "View details" jumps to #tmDetail. */
+  scroll-margin-top: 76px;
+}
+/* Briefly highlight the detail panel when reached via the View-details anchor,
+   so the update is obvious even when it sits beside/below the table. */
+.tm-detail-panel:target {
+  animation: tmDetailFlash 1.4s ease;
+}
+@keyframes tmDetailFlash {
+  0%, 100% { box-shadow: none; }
+  20%, 40% { box-shadow: 0 0 0 2px var(--blue), 0 8px 24px rgba(59,130,246,.18); }
 }
 .tm-table td {
   vertical-align: top;
