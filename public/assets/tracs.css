@@ -12541,6 +12541,14 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
   display: none !important;
 }
 
+/* The guard hides "Save now" via the hidden attribute when the dirty scope
+   has no save handler (e.g. a real-time-saved control outside any <form>),
+   but .btn's own `display` rule outranks the bare [hidden] UA default —
+   without this it stayed visible and did nothing when clicked. */
+.tracs-unsaved-bar__actions .btn[hidden] {
+  display: none !important;
+}
+
 .tracs-unsaved-bar__message,
 .tracs-unsaved-bar__actions {
   display: flex;

@@ -3695,7 +3695,13 @@ async function toggleReminder(id,checkedOrSource,sourceElement=null){
     refreshTaskMonitoringCounters();
     _updateProgress();
   }finally{
-    rows.forEach(item=>setCheckablePending(item,false));
+    rows.forEach(item=>{
+      setCheckablePending(item,false);
+      // Same reasoning as toggleTask(): this saves via AJAX on change, not a
+      // form submit, so tell the unsaved-changes guard explicitly or it keeps
+      // showing "unsaved changes" for a toggle that already succeeded.
+      window.TRACSUnsavedChanges?.markSaved(item);
+    });
     tracsReminderTogglePending.delete(requestKey);
   }
 }
@@ -3813,7 +3819,14 @@ async function toggleTask(id,checkboxOrChecked,sourceElement=null){
     rows.forEach(item=>moveCheckableRow(item,checked));
     _updateProgress();
   }finally{
-    rows.forEach(item=>setCheckablePending(item,false));
+    rows.forEach(item=>{
+      setCheckablePending(item,false);
+      // This checkbox saves via AJAX on change, not a form submit, so the
+      // unsaved-changes guard (which watches every editable control) never
+      // hears about it otherwise and keeps showing "unsaved changes" even
+      // though the toggle already succeeded (or was correctly reverted).
+      window.TRACSUnsavedChanges?.markSaved(item);
+    });
     tracsTaskTogglePending.delete(requestKey);
   }
 }
