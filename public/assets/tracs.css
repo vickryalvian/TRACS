@@ -11518,19 +11518,20 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
   color: var(--tx3);
 }
 .tm-req { color: var(--tracs-status-critical, #d84c4c); font-weight: 700; }
-/* Highlighted "Assign to" grouping so it can't be missed */
+/* "Assign to" grouping — a plain section separated by a divider, not a heavy
+   tinted box. */
 .tm-assign-section {
-  padding: 12px;
-  border: 1px solid var(--blue-bd);
-  border-radius: var(--r2);
-  background: color-mix(in srgb, var(--blue-lt) 34%, var(--s1));
+  padding-top: 14px;
+  border-top: 1px solid var(--bd1);
 }
-.tm-assign-section .tm-section-label { color: var(--blue-dk); }
-[data-theme="dark"] .tm-assign-section {
-  background: rgba(59,130,246,.08);
-  border-color: rgba(96,165,250,.28);
+/* Compact the enhanced multiselects here. The control only renders "N selected"
+   text (no inline chips), so the global .is-multiple 112px chip-area min-height
+   is dead vertical space in this modal — collapse it to a single-line control. */
+.tm-assign-section .tracs-select.is-multiple .tracs-select-trigger {
+  min-height: 38px;
+  align-items: center;
+  padding: 8px 10px;
 }
-[data-theme="dark"] .tm-assign-section .tm-section-label { color: #93c5fd; }
 .tm-assign-hint {
   display: flex;
   align-items: flex-start;

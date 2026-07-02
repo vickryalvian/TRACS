@@ -390,14 +390,19 @@ include __DIR__ . '/includes/header.php';
               </td>
               <td><?=!empty($task['assignment_updated_at']) ? esc(date('d M Y, H:i', strtotime($task['assignment_updated_at']))) : '—'?></td>
               <td>
-                <div class="tm-row-actions">
-                  <a class="btn btn-ghost btn-icon btn-sm" href="?<?=http_build_query(array_merge($_GET, ['assignment_id' => (int)$task['assignment_id']]))?>" title="View details" aria-label="View task details"><i data-lucide="eye" class="icon-xs"></i></a>
-                  <?php if(!$tm_is_done): ?>
-                  <button type="button" class="btn btn-ghost btn-icon btn-sm" title="Mark done" aria-label="Mark task done" data-assignment-id="<?=(int)$task['assignment_id']?>" onclick="tmMarkDone(this)"><i data-lucide="check-circle" class="icon-xs"></i></button>
-                  <?php endif; ?>
-                  <?php if($tm_can_edit): ?>
-                  <button type="button" class="btn btn-danger btn-icon btn-sm" title="Delete task" aria-label="Delete task" data-task-id="<?=(int)$task['task_id']?>" data-title="<?=esc($task['title'])?>" onclick="tmDeleteTask(this)"><i data-lucide="trash-2" class="icon-xs"></i></button>
-                  <?php endif; ?>
+                <div class="row-action-group tm-actions">
+                  <details class="row-action-menu">
+                    <summary class="btn btn-ghost btn-icon btn-sm" title="Actions" aria-label="Row actions"><i data-lucide="more-vertical" class="icon-xs"></i></summary>
+                    <div class="row-action-popover">
+                      <a class="btn btn-ghost btn-sm" href="?<?=http_build_query(array_merge($_GET, ['assignment_id' => (int)$task['assignment_id']]))?>"><i data-lucide="eye" class="icon-xs"></i>View details</a>
+                      <?php if(!$tm_is_done): ?>
+                      <button type="button" class="btn btn-ghost btn-sm" data-assignment-id="<?=(int)$task['assignment_id']?>" onclick="tmMarkDone(this)"><i data-lucide="check-circle" class="icon-xs"></i>Mark done</button>
+                      <?php endif; ?>
+                      <?php if($tm_can_edit): ?>
+                      <button type="button" class="btn btn-danger btn-sm" data-task-id="<?=(int)$task['task_id']?>" data-title="<?=esc($task['title'])?>" onclick="tmDeleteTask(this)"><i data-lucide="trash-2" class="icon-xs"></i>Delete</button>
+                      <?php endif; ?>
+                    </div>
+                  </details>
                 </div>
               </td>
             </tr>
@@ -486,7 +491,7 @@ include __DIR__ . '/includes/header.php';
     <div class="modal-head"><div><div class="modal-title">Add Task Assignment</div><div class="modal-sub">Assign once or daily, with checklist and reminder sync.</div></div><button type="button" class="modal-close" onclick="closeModal('tmTask')"><i data-lucide="x"></i></button></div>
     <div class="modal-body tm-form">
       <div class="tm-form-section">
-        <div class="tm-section-label">1 · Task details</div>
+        <div class="tm-section-label">Task details</div>
         <div class="form-row"><div class="form-group"><label class="form-label">Task Title <span class="tm-req">*</span></label><input class="form-input" name="title" required></div><div class="form-group"><label class="form-label">Category</label><select class="form-select" name="category"><?php foreach(['daily_checklist','case_follow_up','domain_transfer','balance_transfer','finance_log_mutasi','ssl_check','mom_follow_up','training_task','intern_task','custom'] as $c): ?><option value="<?=$c?>" <?=$c==='custom'?'selected':''?>><?=tm_label($c)?></option><?php endforeach; ?></select></div></div>
         <div class="form-group"><label class="form-label">Instruction</label><textarea class="form-textarea" name="description" rows="3" placeholder="What needs to be done?"></textarea></div>
         <div class="form-row"><div class="form-group"><label class="form-label">Priority</label><select class="form-select" name="priority"><option value="normal" selected>Normal</option><option value="low">Low</option><option value="high">High</option><option value="urgent">Urgent</option></select></div><div class="form-group"><label class="form-label">Reference URL</label><input class="form-input" type="url" name="reference_url" placeholder="https://..."></div></div>
@@ -494,7 +499,7 @@ include __DIR__ . '/includes/header.php';
         <div class="form-row"><label class="tm-check"><input type="checkbox" name="is_recurring" value="1"><span>Daily recurring task</span></label><label class="tm-check"><input type="checkbox" name="requires_review" value="1"><span>Require review after completion</span></label></div>
       </div>
       <div class="tm-form-section tm-assign-section">
-        <div class="tm-section-label">2 · Assign to <span class="tm-req">*</span></div>
+        <div class="tm-section-label">Assign to <span class="tm-req">*</span></div>
         <p class="tm-assign-hint"><i data-lucide="info" class="icon-xs"></i>Pick any combination of people, roles, or divisions. Everyone selected gets their own checklist entry and (if a due time is set) a reminder.</p>
         <div class="form-group"><label class="form-label"><i data-lucide="user-round" class="icon-xs"></i> People</label><select class="form-select tm-assignee-select" name="assignee_user_ids[]" multiple data-searchable="true" data-placeholder="Search &amp; select people…"><?php foreach($users as $u): ?><option value="<?=$u['id']?>"><?=esc($u['display_name'])?></option><?php endforeach; ?></select></div>
         <div class="form-row">
