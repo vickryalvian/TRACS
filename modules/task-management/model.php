@@ -532,6 +532,8 @@ class TaskManagementModel {
               SUM(ta.status NOT IN ('completed_on_time','completed_late','reviewed','cancelled') AND t.due_at IS NOT NULL AND t.due_at < NOW()) AS overdue_tasks,
               SUM(ta.status='completed_late') AS completed_late,
               SUM(ta.status='need_review') AS need_review,
+              SUM(ta.status IN ('completed_on_time','completed_late','reviewed')) AS completed_count,
+              SUM(ta.completion_seconds > 0) AS timing_sample_size,
               SUM(r.slug='intern' AND ta.status NOT IN ('completed_on_time','completed_late','reviewed','cancelled')) AS intern_tasks,
               AVG(NULLIF(ta.completion_seconds,0)) AS avg_completion_seconds,
               MIN(NULLIF(ta.completion_seconds,0)) AS fastest_completion_seconds,

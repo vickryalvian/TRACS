@@ -773,7 +773,12 @@ input, select, textarea { font-family: inherit }
   0%, 100% { opacity: 1; transform: scale(1); } 
   50% { opacity: 0.4; transform: scale(0.8); } 
 }
-.ticker-track  { flex: 1; min-width: 0; overflow: hidden; display: flex; align-items: center; margin-left: 4px }
+.ticker-track  { flex: 1; min-width: 0; overflow: hidden; display: flex; align-items: center; margin-left: 4px;
+  /* Soften the right edge so scrolling items fade out instead of being cut
+     flush against the boundary (which read as a broken/truncated glyph). */
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 12px, #000 calc(100% - 28px), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 12px, #000 calc(100% - 28px), transparent 100%);
+}
 .ticker-scroll { display: inline-flex; min-width: max-content; white-space: nowrap; transform: translate3d(0,0,0); animation: tick 120s linear infinite; will-change: transform }
 .ticker-scroll:hover { animation-play-state: paused }
 @keyframes tick { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
@@ -11234,14 +11239,84 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
 }
 .tm-filter {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
-  gap: 8px;
+  gap: 10px;
   padding: 10px;
   box-shadow: none;
+}
+.tm-filter-primary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 8px;
+  align-items: center;
 }
 .tm-filter .btn {
   min-height: 36px;
 }
+/* Progressive disclosure: low-frequency filters tuck behind a drawer. */
+.tm-more-filters > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  padding: 5px 9px;
+  border: 1px solid var(--bd2);
+  border-radius: var(--r2);
+  color: var(--tx2);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.tm-more-filters > summary::-webkit-details-marker { display: none; }
+.tm-more-filters > summary:hover { background: var(--s3); border-color: var(--bd3); }
+.tm-more-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--blue);
+  color: #fff;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 800;
+}
+.tm-more-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 8px;
+  align-items: center;
+  margin-top: 9px;
+}
+.tm-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.tm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 5px 3px 9px;
+  border: 1px solid var(--bd2);
+  border-radius: 999px;
+  background: var(--s2);
+  color: var(--tx2);
+  font-size: 10.5px;
+  text-decoration: none;
+}
+.tm-chip:hover { border-color: var(--red-bd); color: var(--red); }
+.tm-chip .lucide { width: 12px; height: 12px; opacity: .7; }
+.tm-chip-clear {
+  padding: 3px 10px;
+  color: var(--tx3);
+  font-weight: 600;
+}
+.tm-chip-clear:hover { color: var(--tx1); border-color: var(--bd3); }
 .tm-check {
   min-height: 36px;
   display: inline-flex;
@@ -11316,14 +11391,23 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
   top: auto;
   z-index: auto;
 }
-.tm-table th:nth-child(1), .tm-table td:nth-child(1) { width: 19%; }
-.tm-table th:nth-child(2), .tm-table td:nth-child(2) { width: 13%; }
-.tm-table th:nth-child(3), .tm-table td:nth-child(3) { width: 7%; }
-.tm-table th:nth-child(4), .tm-table td:nth-child(4) { width: 13%; }
-.tm-table th:nth-child(5), .tm-table td:nth-child(5) { width: 9%; }
-.tm-table th:nth-child(6), .tm-table td:nth-child(6) { width: 12%; }
-.tm-table th:nth-child(7), .tm-table td:nth-child(7) { width: 13%; }
-.tm-table th:nth-child(8), .tm-table td:nth-child(8) { width: 14%; white-space: nowrap; }
+/* 7 columns after merging Status + Time Left/Overdue into one Status & SLA cell. */
+.tm-table th:nth-child(1), .tm-table td:nth-child(1) { width: 23%; }
+.tm-table th:nth-child(2), .tm-table td:nth-child(2) { width: 16%; }
+.tm-table th:nth-child(3), .tm-table td:nth-child(3) { width: 8%; }
+.tm-table th:nth-child(4), .tm-table td:nth-child(4) { width: 14%; }
+.tm-table th:nth-child(5), .tm-table td:nth-child(5) { width: 14%; }
+.tm-table th:nth-child(6), .tm-table td:nth-child(6) { width: 15%; }
+.tm-table th:nth-child(7), .tm-table td:nth-child(7) { width: 10%; white-space: nowrap; }
+/* Merged Status & SLA cell: status pill with subordinate overdue/time-left caption. */
+.tm-status-cell { white-space: normal; }
+.tm-status-cell .tm-sla {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  white-space: nowrap;
+}
 /* .tm-table uses inline .tm-row-actions buttons, not the absolute
    .row-action-menu trigger, so it doesn't need the ~48px of reserved
    right padding the generic .tracs-table td:last-child sets aside for that
@@ -11573,6 +11657,135 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
 .tm-flash-success { border-color: var(--green-bd); background: var(--green-lt); }
 .tm-flash-error { border-color: var(--red-bd); background: var(--red-lt); }
 
+/* Topbar: persistent overdue counter, always visible (not in the scrolling ticker). */
+.tm-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.tm-overdue-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  border: 1px solid var(--red-bd);
+  border-radius: 999px;
+  background: var(--red-lt);
+  color: var(--red);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.tm-overdue-pill strong { font-size: 13px; font-weight: 800; }
+.tm-overdue-pill:hover { border-color: var(--red); }
+.tm-overdue-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--red);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--red) 60%, transparent);
+  animation: tmPulse 1.8s ease-out infinite;
+}
+@keyframes tmPulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--red) 55%, transparent); }
+  70%  { box-shadow: 0 0 0 6px color-mix(in srgb, var(--red) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--red) 0%, transparent); }
+}
+
+/* KPI clusters: Workload / Risk / Performance, each labeled; Risk is emphasized. */
+.tm-kpi-clusters {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 3fr) minmax(0, 6fr);
+  gap: var(--page-section-gap);
+  align-items: stretch;
+}
+.tm-cluster {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  border: 1px solid var(--bd1);
+  border-radius: var(--r2);
+  background: var(--s1);
+  overflow: hidden;
+}
+.tm-cluster-head {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--bd1);
+  color: var(--tx3);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+.tm-cluster-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
+}
+.tm-kpi {
+  display: grid;
+  gap: 3px;
+  align-content: start;
+  padding: 11px 12px;
+  border-right: 1px solid var(--bd1);
+  border-top: 1px solid var(--bd1);
+}
+.tm-cluster-body .tm-kpi:nth-child(-n+3) { border-top: 0; }
+.tm-kpi span {
+  color: var(--tx3);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+.tm-kpi strong { color: var(--tx1); font-size: 16px; line-height: 1.1; }
+.tm-kpi-note {
+  color: var(--tx4);
+  font-family: var(--mono);
+  font-size: 8.5px;
+  font-style: normal;
+}
+.tm-kpi-muted strong { color: var(--tx4); }
+/* Risk cluster: the actionable one — red accent + larger numbers. */
+.tm-cluster-risk.is-active {
+  border-color: var(--red-bd);
+  background: var(--red-lt);
+}
+.tm-cluster-risk.is-active .tm-cluster-head {
+  border-bottom-color: var(--red-bd);
+  color: var(--red);
+}
+.tm-cluster-risk.is-active .tm-kpi { border-color: var(--red-bd); }
+.tm-cluster-risk .tm-kpi strong { font-size: 22px; }
+.tm-cluster-risk.is-active .tm-kpi strong { color: var(--red); }
+
+/* Detail panel: collapsible sections (progressive disclosure). */
+.tm-detail-section > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0;
+  border-top: 1px solid var(--bd1);
+  color: var(--tx2);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.tm-detail-section > summary::-webkit-details-marker { display: none; }
+.tm-detail-section .tm-caret { transition: transform .15s ease; color: var(--tx3); }
+.tm-detail-section[open] > summary .tm-caret { transform: rotate(90deg); }
+.tm-detail-section .tm-detail-grid,
+.tm-detail-section .tm-history { padding-top: 4px; padding-bottom: 8px; }
+
+@media (max-width: 1100px) {
+  .tm-kpi-clusters { grid-template-columns: 1fr 1fr; }
+  .tm-kpi-clusters .tm-cluster:last-child { grid-column: 1 / -1; }
+}
+
 @media (max-width: 960px) {
   .tm-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -11592,11 +11805,16 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
 
 @media (max-width: 720px) {
   .tm-summary-grid,
-  .tm-filter,
   .tm-metrics-strip,
   .tm-rate-strip,
   .tm-split-layout {
     grid-template-columns: 1fr;
+  }
+  .tm-kpi-clusters {
+    grid-template-columns: 1fr;
+  }
+  .tm-kpi-clusters .tm-cluster:last-child {
+    grid-column: auto;
   }
   .tm-detail-panel {
     position: static;
