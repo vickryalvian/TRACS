@@ -4,6 +4,64 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Task-Action 422 Fix + Dashboard Reminder Icon + nginx JS Deny Fix (2026-07-02 ~12:13 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch `feat/task-monitoring-mom-permission-revision`,
+commit `6777b82`.
+
+Three reported prod issues:
+
+- **Delete/edit/reassign/unassign failing with HTTP 422 "Task not specified".**
+  Root cause: `model.php::tasks()` selected `t.*, ta.id AS assignment_id` but
+  never `ta.task_id`, and `tracs_tasks`' PK is `id` (there is no `task_id`
+  column), so `$task['task_id']` was undefined → the view rendered
+  `data-task-id="0"` for every task action in both the table row and the Task
+  Timing Insight detail panel. Fix: add `ta.task_id` to the SELECT. Verified
+  end-to-end on local (create → delete → row + cascades gone) and on prod
+  (`data-task-id` now renders the real id).
+- **Dashboard Task Monitoring widget — remove the leading icon** from each
+  Reminder List item; dropped the now-empty `30px` grid column in
+  `.tm-reminder-list-item` (mirrors the existing icon-less `type-holiday`
+  variant). Removed the now-unused `$icon` local.
+- **`/assets/unsaved-changes-guard.js` returned 403 (MIME text/html).** Not a
+  missing file — the nginx backup-file deny rule
+  (`sites-available/tracs` line 41) matched the substring "save" inside
+  "un**save**d". Tightened the regex so backup tokens
+  (`backup|bak|old|orig|save|copy`) only match as whole words
+  (`(?<![a-zA-Z])…(?![a-zA-Z])`) instead of anywhere in the name. This is a
+  **server-only nginx change** (not in the repo); backups at
+  `sites-available/tracs.bak-jsdeny-*` and `…bak-jsdeny2-*`. `nginx -t` clean,
+  `nginx` reloaded.
+
+What was applied:
+
+- 3 app files (file-copy; backup
+  `/opt/tracs/backups/taskaction-reminicon-20260702-121313/`):
+  `modules/task-management/model.php`, `public/assets/tracs.css`,
+  `public/index.php`. Ownership `vickry:www-data`; `php8.3-fpm` reloaded.
+  No DB migration.
+
+Verification:
+
+- Drift check: prod copies of all 3 files were byte-identical to the prior
+  deploy baseline before copy. Post-deploy sha256 local↔prod match; `php -l`
+  clean; `php8.3-fpm` reloaded.
+- Prod HTTP (authenticated): `/monitoring.php` renders non-zero
+  `data-task-id`; `/index.php` reminder items carry no `tm-reminder-list-icon`
+  (14 items still render), 0 PHP errors.
+- nginx: `unsaved-changes-guard.js` + `tracs.js` → 200
+  `application/javascript`; real backup names (`x.bak.js`, `styles-backup.css`,
+  `app.old.js`) → 403; legit words (`copyright-notice.js`, `oldstyles.css`) →
+  404 (pass the deny rule).
+
+Ops note (local dev only): `admin@tracs.local` had 2FA enabled on the local
+Docker DB, which blocked login with the newly-set password. Disabled 2FA on
+the **local** account (`two_factor_enabled=0`, secret cleared,
+`reset_required=0`) and cleared its stale login-attempt lockout so the password
+logs in for dev. **Production `admin@tracs.local` was not touched** (it has no
+2FA and already accepts the new password).
+
 ## Deployed — Monitoring Page Redesign (2026-07-02 ~11:53 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
