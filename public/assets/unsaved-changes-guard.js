@@ -422,11 +422,33 @@
 
   function autoRegisterEditablePage() {
     const page = document.body?.dataset.tracsPage || '';
+    // Only pages with genuine standalone editable content — fields that live
+    // outside any <form> and persist solely via an explicit, separate save
+    // action — belong here. A real <form method="post"> is already protected
+    // page-wide by autoRegisterForms() without needing this. Pages whose only
+    // "editable" controls are real-time-saved (checklist/reminder checkboxes,
+    // etc.) must NOT be in this list: this scope doesn't cause that class of
+    // bug by itself (dirty-tracking is global, not scope-gated — see the
+    // `data-unsaved-ignore` opt-out on those controls instead), but listing
+    // pages here without a real editable surface just adds noise. Audited
+    // 2026-07-02 against every editablePages page previously listed:
+    //   mom               — agenda topic/decision fields, plain divs (no <form>)
+    //   domain_price_crosscheck — price matrix grid (has its own dedicated
+    //                       register() too; also listed here per product ask)
+    //   domains           — #dtModal edit-transfer fields, plain div (no <form>)
+    //   finance           — #btModal edit-transfer fields, plain div (no <form>)
+    //   feedback          — inline quick-add feedback fields, no <form> wrapper
+    //   infrastructure-pulse — add-server form lacks a method attribute, so
+    //                       autoRegisterForms() treats it as GET and skips it
+    //   shifting-assignment — already self-manages via its own markSaved() calls
+    // Everything else audited (cases, shift-reports, activity, dashboard,
+    // checklist, reminders, user-management, profile, monitoring,
+    // intern-management) had zero standalone editable content: either no
+    // forms/modals at all, or all editing already flows through a real
+    // <form method="post"> that autoRegisterForms() covers independently.
     const editablePages = new Set([
-      'cases', 'case', 'shift-reports', 'shift_report', 'mom', 'checklist', 'reminders',
-      'finance', 'domains', 'activity', 'user-management', 'infrastructure-pulse',
-      'cancellation-feedback', 'feedback', 'settings', 'profile', 'domain_price_crosscheck',
-      'shifting-assignment', 'dashboard', 'intern-management', 'monitoring'
+      'mom', 'domain_price_crosscheck', 'domains', 'finance', 'feedback',
+      'infrastructure-pulse', 'shifting-assignment'
     ]);
     const root = document.querySelector('.main-inner');
     if (!root || !editablePages.has(page)) return;

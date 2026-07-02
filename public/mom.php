@@ -174,7 +174,7 @@ include 'includes/header.php';
           $aidone=($aist==='completed');
         ?>
           <div class="agenda-item agenda-item-<?=$aist?>" data-agenda-id="<?=intval($ai['id']??0)?>">
-            <input type="checkbox" class="agenda-check" <?=$aidone?'checked':''?> onchange="toggleAgendaItem(<?=intval($ai['id']??0)?>,this.checked)">
+            <input type="checkbox" class="agenda-check" data-unsaved-ignore <?=$aidone?'checked':''?> onchange="toggleAgendaItem(<?=intval($ai['id']??0)?>,this.checked)">
             <div class="agenda-content">
               <div class="agenda-topic"><?=esc($ai['topic']??'')?></div>
               <?php if($ai['notes']??null): ?>

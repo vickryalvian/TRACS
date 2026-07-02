@@ -1476,7 +1476,7 @@ include 'includes/header.php';
                     data-completed="<?=$tdone?'1':'0'?>"
                     data-title="<?=esc($t['title']??'')?>"
                     data-desc="<?=esc($t['description']??'')?>">
-                    <input type="checkbox" class="rem-check task-chk" <?=$tdone?'checked':''?> onchange="toggleTask(<?=$tid?>,this)">
+                    <input type="checkbox" class="rem-check task-chk" data-unsaved-ignore <?=$tdone?'checked':''?> onchange="toggleTask(<?=$tid?>,this)">
                     <div class="flex1">
                       <div class="task-title <?=$tdone?'done':''?>"><?=$ttit?></div>
                       <?php if($tdesc): ?><div class="task-sub"><?=$tdesc?></div><?php endif; ?>
