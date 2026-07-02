@@ -178,12 +178,13 @@ window.TRACS_BUILD_INFO = <?=json_encode($_tracs_build_info, JSON_UNESCAPED_SLAS
 <!-- TICKER -->
 <div class="ticker-bar">
   <div class="ticker-live"><span class="ticker-dot"></span>LIVE</div>
-  <div class="ticker-track"><div class="ticker-scroll"><?=$_th?></div></div>
+  <div class="ticker-track"><div class="ticker-scroll" id="tickerScroll"><?=$_th?></div></div>
   <button class="ticker-btn" onclick="openModal('ticker')">
     <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/></svg>
     MANAGE
   </button>
 </div>
+<script>window.__TRACS_TICKER_ITEMS__ = <?=json_encode(array_map(fn($t)=>['text'=>(string)($t['text']??''),'class'=>(string)($t['class']??'normal')], $_ti))?>;</script>
 
 <div class="body-row">
 

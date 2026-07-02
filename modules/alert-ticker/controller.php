@@ -23,7 +23,7 @@ class AlertTickerController {
         ];
     }
 
-    /** Get custom user-defined ticker messages */
+    /** Get custom announcement messages (shared public feed, not per-user) */
     public function getCustomMessages(): array {
         // Auto-create table if not exists
         $this->conn->query("CREATE TABLE IF NOT EXISTS tracs_ticker_messages (
@@ -35,8 +35,7 @@ class AlertTickerController {
             created_at DATETIME DEFAULT NOW(),
             INDEX(user_id)
         )");
-        $uid = (int)$this->user_id;
-        $res = $this->conn->query("SELECT id,text,class FROM tracs_ticker_messages WHERE user_id=$uid AND enabled=1 ORDER BY created_at DESC");
+        $res = $this->conn->query("SELECT id,text,class FROM tracs_ticker_messages WHERE enabled=1 ORDER BY created_at ASC, id ASC");
         if (!$res) return [];
         $rows = [];
         while ($r = $res->fetch_assoc()) $rows[] = $r;

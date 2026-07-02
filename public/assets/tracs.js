@@ -78,7 +78,8 @@ const API = {
   TICKER: {
     CREATE : API_BASE + 'ticker-create.php',
     DELETE : API_BASE + 'ticker-delete.php',
-    LIST   : API_BASE + 'ticker-list.php'
+    LIST   : API_BASE + 'ticker-list.php',
+    FEED   : API_BASE + 'ticker-feed.php'
   },
 
   SHIFT: {
@@ -4353,6 +4354,7 @@ async function archiveTickerMsg(id){
         toast('Announcement archived','success');
 
         removeRow(`#tmgr-${id}`);
+        refreshTickerBar();
 
       } else {
 
@@ -4362,6 +4364,44 @@ async function archiveTickerMsg(id){
     },
     'Archive Message'
   );
+}
+
+/* ── TICKER LIVE SYNC ─────────────────────────────────────
+   The ticker bar is a shared public feed (announcements + operational
+   signals): every connected user must see the same content, and new/edited/
+   deleted items must show up without a page reload. We poll the merged feed
+   and only touch the DOM when the content actually changed, so the CSS
+   marquee animation isn't restarted on every poll tick. */
+const TICKER_POLL_MS = 20000;
+let _tickerLastSignature = null;
+
+function _tickerHolidayClass(text) {
+  return /\b(holiday|public holiday|hari libur|hari raya|waisak|vesak|idul|eid|nyepi|imlek|natal)\b/i.test(text) ? ' holiday' : '';
+}
+function _tickerSignature(items) {
+  return items.map(t => `${String(t.class || 'normal').trim()}|${t.text || ''}`).join('');
+}
+function _renderTickerBar(items) {
+  const track = document.getElementById('tickerScroll');
+  if (!track) return;
+  const list = items.length ? items : [{ text: 'All systems operational', class: 'normal' }];
+  const html = list.map(t => {
+    const cls = escapeHtml(String(t.class || 'normal').trim()) + _tickerHolidayClass(String(t.text || ''));
+    return `<span class="ticker-item ${cls}">${escapeHtml(String(t.text || ''))}</span>`;
+  }).join('');
+  track.innerHTML = html + html;
+}
+async function refreshTickerBar() {
+  const d = await api(API.TICKER.FEED, {});
+  if (!d || !d.success || !Array.isArray(d.data)) return;
+  const signature = _tickerSignature(d.data);
+  if (signature === _tickerLastSignature) return;
+  _tickerLastSignature = signature;
+  _renderTickerBar(d.data);
+}
+if (document.getElementById('tickerScroll')) {
+  _tickerLastSignature = _tickerSignature(window.__TRACS_TICKER_ITEMS__ || []);
+  setInterval(refreshTickerBar, TICKER_POLL_MS);
 }
 
 /* ── SHIFT REPORT CRUD ────────────────────────────────── */

@@ -30,17 +30,31 @@ class SmartTickerEngine {
         $items = array_merge($items, $this->shiftReportItems());
         $items = array_merge($items, $this->shiftingAssignmentItems());
         $items = array_merge($items, $this->tickerEventItems());
-        $items = array_merge($items, $this->customMessageItems());
+
+        $custom = $this->customMessageItems();
+        $items = array_merge($items, $custom);
 
         $items = $this->dedupe($items);
         $items = $this->groupLowPriority($items);
 
-        usort($items, function($a, $b) {
+        $sorter = function($a, $b) {
             $pa = $a['sort_weight'] ?? 99;
             $pb = $b['sort_weight'] ?? 99;
             if ($pa !== $pb) return $pa <=> $pb;
             return strtotime($b['created_at'] ?? 'now') <=> strtotime($a['created_at'] ?? 'now');
-        });
+        };
+        usort($items, $sorter);
+
+        if (count($items) > self::MAX_ITEMS) {
+            // Public announcements must never be silently crowded out by a
+            // single user's volume of personal reminders/checklist/case
+            // items, so they're guaranteed a slot before the cap is applied.
+            $customIds = array_flip(array_filter(array_map(fn($i) => $i['id'] ?? null, $custom)));
+            $announced = array_values(array_filter($items, fn($i) => isset($customIds[$i['id'] ?? null])));
+            $others = array_values(array_filter($items, fn($i) => !isset($customIds[$i['id'] ?? null])));
+            $items = array_merge($announced, array_slice($others, 0, max(0, self::MAX_ITEMS - count($announced))));
+            usort($items, $sorter);
+        }
 
         return array_slice($items, 0, self::MAX_ITEMS);
     }
@@ -431,15 +445,18 @@ class SmartTickerEngine {
     private function customMessageItems(): array {
         if (!$this->tableExists('tracs_ticker_messages')) return [];
 
+        // Manual announcements are public operational information: every user
+        // must see the same messages in the same order, so this is
+        // intentionally not scoped by user_id (unlike the personal work-queue
+        // signals above, e.g. reminders/checklist/cases).
         $stmt = $this->conn->prepare("
             SELECT id, text, class, created_at
             FROM tracs_ticker_messages
-            WHERE user_id=? AND enabled=1
-            ORDER BY created_at DESC
+            WHERE enabled=1
+            ORDER BY created_at ASC, id ASC
             LIMIT 8
         ");
         if (!$stmt) return [];
-        $stmt->bind_param('i', $this->uid);
         $stmt->execute();
         $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
         $stmt->close();
