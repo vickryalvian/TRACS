@@ -4,6 +4,47 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Kebab Trim, Title-Link, Single-Row Filter Bar, Admin Rename (2026-07-02 ~18:24 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch `fix/monitoring-actions-filter-row-admin-rename`
+(new branch, not `feat/task-monitoring-mom-permission-revision`), commit
+`f67697d`. 2 files: `public/monitoring.php`,
+`public/assets/tracs.css`. Backup
+`/opt/tracs/backups/actions-filterrow-rename-20260702-182416/`.
+
+- **Task title is now the "view details" link** (`?assignment_id=X#tmDetail`,
+  same click-to-open convention as `.um-user-name` in user-management). The
+  row kebab dropped its own redundant "View details" entry and now holds only
+  **Mark done** and **Delete**, per the operator's request.
+- **"Actions" header text removed** (kept an aria-label'd empty `th`).
+- **Filter bar collapsed to one row.** Reference: `user-management.php`'s
+  `.um-user-filter` (search + fieldset + actions as siblings in one flex/grid
+  row). User/Status/Date, the "More filters" trigger, and Apply are now
+  siblings in a single `.tm-filter-row` flex container. The advanced-filter
+  drawer (Role/Division/Priority/Category/Intern-only) is now a floating
+  popover (`position:absolute`) anchored under its trigger instead of an
+  in-flow block, so opening it can never push the row to a second line.
+  `.tm-filter` needed `overflow: visible` added (base `.panel` clips by
+  default) so the popover isn't cut off at the panel edge.
+- **Admin display name**: `tracs_users.name` for `admin@tracs.local` changed
+  from "TRACS Super Admin" to "Vickry" on **both** local Docker DB and
+  production, via a prepared statement targeted by exact email (not a
+  positional selector — see the incident above).
+
+Verification:
+
+- Local: full round trip (create → check title-link/kebab/header/filter
+  markup → delete), all correct, DB left clean.
+- Prod: **read-only checks only** against the operator's real live task
+  ("Check domain", id 9) — 0 PHP errors, title renders as a link to
+  `#tmDetail`, kebab popover contains only Mark done + Delete, "Actions"
+  header gone, filter form's elements confirmed as siblings in submission
+  order (User → Status → Date → More-filters `<details>` → Apply). No
+  create/delete actions were run against prod for this verification.
+- sha256 local↔prod match on both files; `php -l` clean; `php8.3-fpm`
+  reloaded.
+
 ## Deployed — Actions Header Removal + View-Details Reveal + Toast Feedback (2026-07-02 ~14:50 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
