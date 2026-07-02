@@ -500,6 +500,7 @@ function tracsCloseModalElement(modal,options={}){
   }
   const trigger=target._tracsModalTrigger;
   if(trigger?.isConnected)requestAnimationFrame(()=>trigger.focus({preventScroll:true}));
+  window.TRACSDropdowns?.closeActive();
 }
 function tracsOpenModalElement(modal,options={}){
   const target=tracsResolveModal(modal);
@@ -1277,6 +1278,14 @@ const TRACSDropdowns = (() => {
     if (active.root.contains(event.target) || active.menu.contains(event.target)) return;
     close(active);
   });
+  // Capture-phase backstop: fires before any descendant's own click handler
+  // can call stopPropagation(), so an open dropdown always closes on outside
+  // interaction site-wide, regardless of what else is listening on the page.
+  document.addEventListener('pointerdown', event => {
+    if (!active) return;
+    if (active.root.contains(event.target) || active.menu.contains(event.target)) return;
+    close(active);
+  }, true);
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape' && active) close(active);
   });
@@ -1294,7 +1303,14 @@ const TRACSDropdowns = (() => {
     bodyObserver.observe(document.body, { childList: true, subtree: true });
   });
 
-  return { init, syncAll, syncSelect: select => instances.get(select) && syncInstance(instances.get(select)) };
+  return {
+    init, syncAll,
+    syncSelect: select => instances.get(select) && syncInstance(instances.get(select)),
+    // Force-close whatever custom dropdown is open, if any. Used as a safety
+    // net when a modal closes, so a floating menu can never be left orphaned
+    // on screen (which would otherwise look like "the dropdown won't close").
+    closeActive: () => { if (active) close(active); }
+  };
 })();
 window.TRACSDropdowns = TRACSDropdowns;
 

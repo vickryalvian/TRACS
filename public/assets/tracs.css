@@ -11251,8 +11251,11 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
   align-items: start;
 }
 .tm-detail-panel {
-  position: sticky;
-  top: 42px;
+  /* Was position:sticky; top:42px — disabled defensively. Sticky items inside
+     a CSS grid row with align-items:start have documented cross-browser
+     quirks around containing-block/width resolution; ruling it out entirely
+     while the header-overlap report is investigated further. */
+  position: static;
   overflow: visible;
   box-shadow: none;
 }
