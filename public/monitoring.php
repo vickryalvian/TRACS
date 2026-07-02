@@ -302,26 +302,26 @@ include __DIR__ . '/includes/header.php';
     ?>
     <form method="get" class="tm-filter panel">
       <input type="hidden" name="tab" value="<?=esc($tab)?>">
-      <div class="tm-filter-primary">
+      <div class="tm-filter-row">
         <?php if($can_monitor): ?>
         <select class="form-select compact-select" name="user_id" aria-label="User"><option value="">All Users</option><?php foreach($users as $u): ?><option value="<?=$u['id']?>" <?=((string)($_GET['user_id'] ?? '')===(string)$u['id'])?'selected':''?>><?=esc($u['display_name'])?></option><?php endforeach; ?></select>
         <?php endif; ?>
         <select class="form-select compact-select" name="status" aria-label="Status"><option value="">Any Status</option><?php foreach(['assigned','not_started','in_progress','completed_on_time','completed_late','overdue','need_review','reviewed','cancelled','reassigned'] as $s): ?><option value="<?=$s?>" <?=($_GET['status'] ?? '')===$s?'selected':''?>><?=tm_label($s)?></option><?php endforeach; ?></select>
         <input class="form-input" type="date" name="due_date" value="<?=esc($_GET['due_date'] ?? '')?>" aria-label="Due date">
+        <details class="tm-more-filters"<?=(!empty($adv_active) || ($can_monitor && !empty($_GET['intern_only']))) ? ' open' : ''?>>
+          <summary><i data-lucide="sliders-horizontal" class="icon-xs"></i>More filters<?php if($adv_active): ?> <span class="tm-more-count"><?=count($adv_active)?></span><?php endif; ?></summary>
+          <div class="tm-more-grid">
+            <?php if($can_monitor): ?>
+            <select class="form-select compact-select" name="role_id" aria-label="Role"><option value="">All Roles</option><?php foreach($roles as $r): ?><option value="<?=$r['id']?>" <?=((string)($_GET['role_id'] ?? '')===(string)$r['id'])?'selected':''?>><?=esc($r['name'])?></option><?php endforeach; ?></select>
+            <select class="form-select compact-select" name="division_id" aria-label="Division"><option value="">All Divisions</option><?php foreach($divisions as $d): ?><option value="<?=$d['id']?>" <?=((string)($_GET['division_id'] ?? '')===(string)$d['id'])?'selected':''?>><?=esc($d['name'])?></option><?php endforeach; ?></select>
+            <?php endif; ?>
+            <select class="form-select compact-select" name="priority" aria-label="Priority"><option value="">Any Priority</option><?php foreach(['low','normal','high','urgent'] as $p): ?><option value="<?=$p?>" <?=($_GET['priority'] ?? '')===$p?'selected':''?>><?=tm_label($p)?></option><?php endforeach; ?></select>
+            <select class="form-select compact-select" name="category" aria-label="Category"><option value="">Any Category</option><?php foreach(['daily_checklist','case_follow_up','domain_transfer','balance_transfer','finance_log_mutasi','ssl_check','mom_follow_up','training_task','intern_task','custom'] as $c): ?><option value="<?=$c?>" <?=($_GET['category'] ?? '')===$c?'selected':''?>><?=tm_label($c)?></option><?php endforeach; ?></select>
+            <?php if($can_monitor && $tab !== 'interns'): ?><label class="tm-check"><input type="checkbox" name="intern_only" value="1" <?=!empty($_GET['intern_only'])?'checked':''?>><span>Intern only</span></label><?php endif; ?>
+          </div>
+        </details>
         <button class="btn btn-primary" type="submit"><i data-lucide="filter" class="icon-sm"></i>Apply</button>
       </div>
-      <details class="tm-more-filters"<?=(!empty($adv_active) || ($can_monitor && !empty($_GET['intern_only']))) ? ' open' : ''?>>
-        <summary><i data-lucide="sliders-horizontal" class="icon-xs"></i>More filters<?php if($adv_active): ?> <span class="tm-more-count"><?=count($adv_active)?></span><?php endif; ?></summary>
-        <div class="tm-more-grid">
-          <?php if($can_monitor): ?>
-          <select class="form-select compact-select" name="role_id" aria-label="Role"><option value="">All Roles</option><?php foreach($roles as $r): ?><option value="<?=$r['id']?>" <?=((string)($_GET['role_id'] ?? '')===(string)$r['id'])?'selected':''?>><?=esc($r['name'])?></option><?php endforeach; ?></select>
-          <select class="form-select compact-select" name="division_id" aria-label="Division"><option value="">All Divisions</option><?php foreach($divisions as $d): ?><option value="<?=$d['id']?>" <?=((string)($_GET['division_id'] ?? '')===(string)$d['id'])?'selected':''?>><?=esc($d['name'])?></option><?php endforeach; ?></select>
-          <?php endif; ?>
-          <select class="form-select compact-select" name="priority" aria-label="Priority"><option value="">Any Priority</option><?php foreach(['low','normal','high','urgent'] as $p): ?><option value="<?=$p?>" <?=($_GET['priority'] ?? '')===$p?'selected':''?>><?=tm_label($p)?></option><?php endforeach; ?></select>
-          <select class="form-select compact-select" name="category" aria-label="Category"><option value="">Any Category</option><?php foreach(['daily_checklist','case_follow_up','domain_transfer','balance_transfer','finance_log_mutasi','ssl_check','mom_follow_up','training_task','intern_task','custom'] as $c): ?><option value="<?=$c?>" <?=($_GET['category'] ?? '')===$c?'selected':''?>><?=tm_label($c)?></option><?php endforeach; ?></select>
-          <?php if($can_monitor && $tab !== 'interns'): ?><label class="tm-check"><input type="checkbox" name="intern_only" value="1" <?=!empty($_GET['intern_only'])?'checked':''?>><span>Intern only</span></label><?php endif; ?>
-        </div>
-      </details>
     </form>
     <?php if($chips): ?>
     <div class="tm-filter-chips">
@@ -393,7 +393,7 @@ include __DIR__ . '/includes/header.php';
             $tm_is_done = in_array((string)$task['assignment_status'], ['completed_on_time','completed_late','reviewed','cancelled'], true);
           ?>
             <tr>
-              <td><strong><?=esc($task['title'])?></strong><?php if(!empty($task['description'])): ?><span><?=esc($task['description'])?></span><?php endif; ?></td>
+              <td><a class="tm-task-title-link" href="?<?=http_build_query(array_merge($_GET, ['assignment_id' => (int)$task['assignment_id']]))?>#tmDetail" title="View task details"><?=esc($task['title'])?></a><?php if(!empty($task['description'])): ?><span><?=esc($task['description'])?></span><?php endif; ?></td>
               <td><?=esc($task['assignee_name'])?><span><?=esc($task['role_name'] ?? '')?> · <?=esc($task['division_name'] ?? 'No division')?></span></td>
               <td><span class="badge <?=tm_badge_class($task['priority'], 'priority')?>"><?=esc(tm_label($task['priority']))?></span></td>
               <td><?=!empty($task['due_at']) ? esc(date('d M Y, H:i', strtotime($task['due_at']))) : '—'?></td>
@@ -407,7 +407,6 @@ include __DIR__ . '/includes/header.php';
                   <details class="row-action-menu">
                     <summary class="btn btn-ghost btn-icon btn-sm" title="Actions" aria-label="Row actions"><i data-lucide="more-vertical" class="icon-xs"></i></summary>
                     <div class="row-action-popover">
-                      <a class="btn btn-ghost btn-sm" href="?<?=http_build_query(array_merge($_GET, ['assignment_id' => (int)$task['assignment_id']]))?>#tmDetail"><i data-lucide="eye" class="icon-xs"></i>View details</a>
                       <?php if(!$tm_is_done): ?>
                       <button type="button" class="btn btn-ghost btn-sm" data-assignment-id="<?=(int)$task['assignment_id']?>" onclick="tmMarkDone(this)"><i data-lucide="check-circle" class="icon-xs"></i>Mark done</button>
                       <?php endif; ?>

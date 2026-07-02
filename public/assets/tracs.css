@@ -11242,22 +11242,44 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
   gap: 10px;
   padding: 10px;
   box-shadow: none;
+  /* .panel clips overflow by default; the More-filters dropdown below is an
+     absolutely-positioned popover that must be allowed to escape the panel
+     bounds instead of being clipped at its bottom edge. */
+  overflow: visible;
 }
-.tm-filter-primary {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
-  gap: 8px;
+/* Single-row filter bar: primary fields, the More-filters trigger, and Apply
+   all sit inline. The trigger only expands a floating dropdown (position:
+   absolute below), so opening it never pushes this row to a second line. */
+.tm-filter-row {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  gap: 8px;
+}
+.tm-filter-row .form-select,
+.tm-filter-row .form-input {
+  flex: 1 1 132px;
+  min-width: 110px;
+}
+.tm-filter-row .btn {
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 .tm-filter .btn {
   min-height: 36px;
 }
-/* Progressive disclosure: low-frequency filters tuck behind a drawer. */
+/* Progressive disclosure: low-frequency filters tuck behind a floating drawer
+   anchored to the trigger, so it never affects the row's height. */
+.tm-more-filters {
+  position: relative;
+  flex: 0 0 auto;
+}
 .tm-more-filters > summary {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   width: fit-content;
+  height: 36px;
   padding: 5px 9px;
   border: 1px solid var(--bd2);
   border-radius: var(--r2);
@@ -11270,6 +11292,11 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
 }
 .tm-more-filters > summary::-webkit-details-marker { display: none; }
 .tm-more-filters > summary:hover { background: var(--s3); border-color: var(--bd3); }
+.tm-more-filters[open] > summary {
+  color: var(--blue-dk);
+  background: var(--blue-lt);
+  border-color: var(--blue-bd);
+}
 .tm-more-count {
   display: inline-flex;
   align-items: center;
@@ -11286,10 +11313,20 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
 }
 .tm-more-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  grid-template-columns: repeat(2, minmax(150px, 1fr));
   gap: 8px;
   align-items: center;
-  margin-top: 9px;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 60;
+  width: max-content;
+  max-width: min(420px, 90vw);
+  padding: 10px;
+  background: var(--s1);
+  border: 1px solid var(--bd2);
+  border-radius: var(--r2);
+  box-shadow: 0 14px 28px rgba(17,24,39,.12);
 }
 .tm-filter-chips {
   display: flex;
@@ -11378,6 +11415,17 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
   font-size: 12px;
   font-weight: 700;
 }
+/* Task title doubles as the "view details" action (kebab dropped its own
+   entry for this — click the title instead, same pattern as .um-user-name). */
+.tm-task-title-link {
+  display: block;
+  color: var(--tx1);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+.tm-task-title-link:hover { color: var(--blue); text-decoration: underline; }
 .tm-table td span {
   display: block;
   margin-top: 3px;
