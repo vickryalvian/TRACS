@@ -4,6 +4,55 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Fix False "Unsaved Changes" Banner on Checklist/Reminder Toggles (2026-07-02 ~19:19 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch `fix/checklist-unsaved-changes-false-positive`
+(new branch), commit `c12752c`. 3 files: `public/assets/tracs.js`,
+`public/assets/tracs.css`, `public/.htaccess`. No PHP changed — static-asset
+deploy only, no `php8.3-fpm` reload needed. Backup
+`/opt/tracs/backups/unsaved-guard-fix-20260702-191942/`.
+
+Root cause: `unsaved-changes-guard.js`'s `autoRegisterEditablePage()` registers
+the whole `.main-inner` content area as a tracked "form scope" on the
+dashboard (and other pages) with no dedicated `<form>` around the checklist/
+reminder checkboxes. `toggleTask()`/`toggleReminder()` (tracs.js) save via
+AJAX on change and update the UI, but never told the guard the change was
+already persisted — so the guard's document-level `change` listener flagged
+the checkbox dirty and the "You have unsaved changes" bar stuck around
+indefinitely, even though the item saved instantly.
+
+- `toggleTask()`/`toggleReminder()` now call the guard's own public
+  `window.TRACSUnsavedChanges.markSaved(item)` after the toggle settles
+  (success or a reverted failure) — same pattern already used elsewhere in
+  this file for modal saves.
+- CSS: `.tracs-unsaved-bar__actions .btn[hidden] { display:none !important }`
+  — the guard hides "Save now" via the `hidden` attribute when the dirty
+  scope has no save handler (exactly the checklist's case), but `.btn`'s own
+  `display` rule outranked the bare `[hidden]` UA default, so the button
+  stayed visible and silently did nothing when clicked.
+- `public/.htaccess`: the backup-file deny rule matched the substring "save"
+  inside `unsaved-changes-guard.js` itself — the same false-positive class of
+  bug already fixed on production's nginx config for this exact file, just
+  the local Apache/dev-container equivalent this time. Tightened to a
+  word-boundary match. (Prod runs nginx, not Apache, so this file is inert
+  there — deployed anyway to keep the tracked file in sync with local.)
+
+Verification:
+
+- Local: full round trip against the real DB — confirmed the guard JS/CSS
+  changes are syntactically valid (`node --check`), confirmed
+  `unsaved-changes-guard.js` now serves 200 locally (was 403 due to the same
+  `.htaccess` bug pattern, which is what let this investigation happen),
+  confirmed real backup filenames are still blocked (no regression), and
+  round-tripped the actual `task-toggle.php` AJAX endpoint via curl
+  (toggle → revert, both `success:true`) to confirm the backend is untouched
+  and correct.
+- Prod: **read-only checks only** — both changed files serve correctly
+  (200), `nginx -t` clean (config untouched, expected), sha256 local↔prod
+  match on all 3 files, `node --check` on the server confirms `tracs.js`
+  syntax is valid.
+
 ## Deployed — Kebab Trim, Title-Link, Single-Row Filter Bar, Admin Rename (2026-07-02 ~18:24 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
