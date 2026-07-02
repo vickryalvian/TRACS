@@ -4,6 +4,65 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Opt Real-Time Toggles Out + Scope Unsaved-Changes Guard to Pages That Need It (2026-07-02 ~19:39 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Same branch as the prior entry,
+`fix/checklist-unsaved-changes-false-positive`, commit `31dba8f`. 5 files:
+`public/assets/unsaved-changes-guard.js`, `public/checklist.php`,
+`public/index.php`, `public/mom.php`, `public/reminders.php`. Backup
+`/opt/tracs/backups/unsaved-guard-scope-20260702-193932/`.
+
+Follow-up correction to the ~19:19 entry: calling `markSaved()` after the
+toggle settles was necessary but **not sufficient** on its own. The guard's
+dirty-tracking runs off document-level `change`/`input`/`focusin` listeners
+that are entirely global — independent of any scope registration — so a
+checkbox is flagged dirty the instant the user clicks it, regardless of
+whether its page is in `autoRegisterEditablePage`'s list. Pruning that list
+alone (which was also requested — scope the feature to only the pages that
+need it) would not by itself have stopped the false-positive banner.
+
+- Added `data-unsaved-ignore` directly to every real-time-saved toggle
+  checkbox — `.task-chk` (`index.php`, `checklist.php`), `.rem-check`
+  (`index.php`, `reminders.php`), `.agenda-check` (`mom.php`). This is the
+  guard's own documented opt-out: these controls are now never tracked at
+  all, regardless of page or any future code path that might forget to call
+  `markSaved()`.
+- Audited every page previously in `autoRegisterEditablePage`'s
+  `editablePages` set (checked each for real `<form method="post">` coverage
+  — already independently handled by `autoRegisterForms()` — vs. genuine
+  standalone/non-form editable content vs. real-time-only toggles) and
+  pruned the set from 20 entries down to the 7 that actually have
+  unprotected standalone editable surface: `mom`, `domain_price_crosscheck`,
+  `domains` (`domain-transfer.php`'s `#dtModal`, a plain `<div>` not a
+  `<form>`), `finance` (`#btModal`, same pattern), `feedback`
+  (`cancellation_feedback.php`'s inline quick-add fields, no form wrapper),
+  `infrastructure-pulse` (its add-server form has no `method` attribute, so
+  `autoRegisterForms()` treats it as GET and skips it), `shifting-assignment`
+  (already self-manages via its own `markSaved()` calls). Full per-page
+  rationale is in the code comment in `unsaved-changes-guard.js`. Removed:
+  `dashboard`, `checklist`, `reminders`, `cases`, `case`, `shift-reports`,
+  `shift_report`, `activity`, `user-management`, `profile`, `monitoring`,
+  `intern-management`, `settings`, and the dead `cancellation-feedback` alias
+  (the real `data-tracs-page` value is `feedback`) — none had standalone
+  editable content.
+
+Verification:
+
+- Local: full round trip against the real DB — created a throwaway reminder,
+  confirmed `data-unsaved-ignore` renders on the checkbox, confirmed
+  `checklist.php`/`reminders.php`/`index.php`/`mom.php` all carry the
+  attribute, deleted the test reminder. `php -l` and `node --check` clean on
+  all files.
+- Prod: **read-only** — confirmed `data-unsaved-ignore` renders on the live
+  checklist checkbox, confirmed the served `unsaved-changes-guard.js` carries
+  the pruned 7-page allowlist, 0 PHP errors, sha256 local↔prod match on all
+  5 files, `php -l` clean, `php8.3-fpm` reloaded (PHP files changed this
+  time, unlike the prior JS/CSS-only entry). Did **not** toggle any of the
+  operator's real checklist items on prod to further verify — even a
+  toggle-then-revert would create real audit-log and notification side
+  effects on live data, which is out of scope for a verification step.
+
 ## Deployed — Fix False "Unsaved Changes" Banner on Checklist/Reminder Toggles (2026-07-02 ~19:19 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
