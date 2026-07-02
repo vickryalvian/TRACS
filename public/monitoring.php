@@ -106,6 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'update_assignment' => $TM->updateAssignment($_POST),
             'update_task' => $TM->updateTask($_POST),
             'reassign_task' => $TM->reassign($_POST, tracs_current_user_display($conn)),
+            'unassign_user' => $TM->unassignUser($_POST),
             'delete_task' => $TM->deleteTask($_POST),
             default => throw new InvalidArgumentException('Unknown task action.'),
         };
@@ -342,6 +343,7 @@ include __DIR__ . '/includes/header.php';
             data-review="<?=!empty($selected_task['requires_review']) ? '1' : '0'?>"
             onclick="tmOpenEdit(this)"><i data-lucide="pencil-line" class="icon-xs"></i>Edit</button>
           <button type="button" class="btn btn-ghost btn-sm" data-title="<?=esc($selected_task['title'])?>" onclick="tmOpenReassign(<?=(int)$selected_task['task_id']?>,this)"><i data-lucide="user-plus" class="icon-xs"></i>Reassign</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-task-id="<?=(int)$selected_task['task_id']?>" data-assignment-id="<?=(int)$selected_task['assignment_id']?>" data-assignee="<?=esc($selected_task['assignee_name'])?>" onclick="tmUnassign(this)"><i data-lucide="user-minus" class="icon-xs"></i>Unassign</button>
           <button type="button" class="btn btn-danger btn-sm" data-task-id="<?=(int)$selected_task['task_id']?>" data-title="<?=esc($selected_task['title'])?>" onclick="tmDeleteTask(this)"><i data-lucide="trash-2" class="icon-xs"></i>Delete</button>
           <?php endif; ?>
         </div>
@@ -461,6 +463,11 @@ function tmOpenUpdate(id,status){document.getElementById('tmAssignmentId').value
   <?=csrf_input()?><input type="hidden" name="action" value="delete_task"><input type="hidden" name="task_id" id="tmDeleteTaskId"><input type="hidden" name="return_tab" value="<?=esc($tab)?>">
 </form>
 
+<!-- UNASSIGN USER (hidden form posted after confirm) -->
+<form method="post" id="tmUnassignForm" class="hidden" data-tracs-modal-ajax>
+  <?=csrf_input()?><input type="hidden" name="action" value="unassign_user"><input type="hidden" name="task_id" id="tmUnassignTaskId"><input type="hidden" name="assignment_id" id="tmUnassignAssignmentId"><input type="hidden" name="return_tab" value="<?=esc($tab)?>">
+</form>
+
 <!-- MARK DONE (hidden form, one-click quick action) -->
 <form method="post" id="tmMarkDoneForm" class="hidden" data-tracs-modal-ajax>
   <?=csrf_input()?><input type="hidden" name="action" value="update_assignment"><input type="hidden" name="status" value="completed"><input type="hidden" name="assignment_id" id="tmMarkDoneAssignmentId"><input type="hidden" name="progress_note" value=""><input type="hidden" name="return_tab" value="<?=esc($tab)?>">
@@ -495,6 +502,15 @@ function tmDeleteTask(btn){
   tracsConfirm('Delete "'+title+'"? This removes the task, its assignments, and the linked checklist items and reminders. This cannot be undone.', ()=>{
     document.getElementById('tmDeleteTaskId').value=id;
     document.getElementById('tmDeleteForm').requestSubmit();
+  });
+}
+function tmUnassign(btn){
+  const taskId=btn.dataset.taskId, assignmentId=btn.dataset.assignmentId, who=btn.dataset.assignee||'this user';
+  btn.closest('details')?.removeAttribute('open');
+  tracsConfirm('Unassign '+who+' from this task? Their checklist entry and reminder for it are removed. The task and any other assignees stay.', ()=>{
+    document.getElementById('tmUnassignTaskId').value=taskId;
+    document.getElementById('tmUnassignAssignmentId').value=assignmentId;
+    document.getElementById('tmUnassignForm').requestSubmit();
   });
 }
 function tmMarkDone(btn){

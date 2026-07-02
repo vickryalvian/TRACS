@@ -338,6 +338,67 @@ class TaskManagementModel {
     }
 
     /**
+     * Remove a single user's assignment from a task, cascading to that
+     * assignment's own linked checklist item (+ its logs), its linked reminder,
+     * and that assignment's task logs — while leaving the task itself and every
+     * other assignee untouched. This is the inverse of addAssignees().
+     *
+     * Refuses to remove the final assignee: a task nobody is assigned to should
+     * be removed with deleteTask() instead, so the caller is forced to make that
+     * choice explicitly rather than silently orphaning the task.
+     *
+     * @return array{user_id:int, assignee_name:string}
+     */
+    public function removeAssignee(int $taskId, int $assignmentId): array {
+        $stmt = $this->conn->prepare("
+            SELECT ta.id, ta.user_id, ta.linked_checklist_task_id, ta.linked_reminder_id,
+                   COALESCE(NULLIF(u.name,''), u.email, 'User') AS assignee_name
+            FROM tracs_task_assignments ta
+            LEFT JOIN tracs_users u ON u.id = ta.user_id
+            WHERE ta.id = ? AND ta.task_id = ? LIMIT 1
+        ");
+        if (!$stmt) throw new RuntimeException('Database error.');
+        $stmt->bind_param('ii', $assignmentId, $taskId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$row) throw new RuntimeException('That assignment was not found for this task.');
+
+        $count = 0;
+        $res = $this->conn->query("SELECT COUNT(*) AS c FROM tracs_task_assignments WHERE task_id = " . (int)$taskId);
+        if ($res && ($r = $res->fetch_assoc())) $count = (int)$r['c'];
+        if ($count <= 1) {
+            throw new RuntimeException('This is the only assignee. Delete the whole task instead of unassigning the last person.');
+        }
+
+        $cid = (int)($row['linked_checklist_task_id'] ?? 0);
+        $rid = (int)($row['linked_reminder_id'] ?? 0);
+        $this->conn->begin_transaction();
+        try {
+            if ($cid > 0) {
+                $this->conn->query("DELETE FROM tracs_side_task_logs WHERE task_id = " . $cid);
+                $this->conn->query("DELETE FROM tracs_side_tasks WHERE id = " . $cid);
+            }
+            if ($rid > 0) {
+                $this->conn->query("DELETE FROM tracs_reminders WHERE id = " . $rid);
+            }
+            // Only this assignment's own logs; task-level logs (assignment_id
+            // NULL) stay attached to the surviving task.
+            $this->conn->query("DELETE FROM tracs_task_logs WHERE assignment_id = " . (int)$assignmentId);
+            $stmt = $this->conn->prepare("DELETE FROM tracs_task_assignments WHERE id = ? AND task_id = ?");
+            $stmt->bind_param('ii', $assignmentId, $taskId);
+            $ok = $stmt->execute() && $stmt->affected_rows > 0;
+            $stmt->close();
+            if (!$ok) throw new RuntimeException('Assignment could not be removed.');
+            $this->conn->commit();
+        } catch (Throwable $e) {
+            $this->conn->rollback();
+            throw $e;
+        }
+        return ['user_id' => (int)$row['user_id'], 'assignee_name' => (string)$row['assignee_name']];
+    }
+
+    /**
      * Delete a task and everything it spawned: linked checklist items (+ their
      * logs), linked reminders, task logs, and all assignments. Children first so
      * foreign keys stay satisfied regardless of cascade config.

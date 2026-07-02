@@ -202,6 +202,16 @@ class TaskManagementController {
         return ['message' => $added > 0 ? ($added . ' assignee(s) added.') : 'Those users are already assigned.'];
     }
 
+    public function unassignUser(array $input): array {
+        $taskId = (int)($input['task_id'] ?? 0);
+        $assignmentId = (int)($input['assignment_id'] ?? 0);
+        if ($taskId <= 0 || $assignmentId <= 0) throw new InvalidArgumentException('Task or assignment not specified.');
+        $this->requireTaskManage($taskId);
+        $removed = $this->model->removeAssignee($taskId, $assignmentId);
+        tracs_log_user_event($this->conn, $this->actorId, 'task_unassigned', 'task', $taskId, null, ['assignment_id' => $assignmentId, 'user_id' => $removed['user_id']]);
+        return ['message' => $removed['assignee_name'] . ' was unassigned from this task.'];
+    }
+
     public function deleteTask(array $input): array {
         $taskId = (int)($input['task_id'] ?? 0);
         if ($taskId <= 0) throw new InvalidArgumentException('Task not specified.');

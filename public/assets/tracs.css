@@ -11268,6 +11268,16 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
 }
 .tm-table td {
   vertical-align: top;
+  white-space: normal;
+}
+/* Base .tracs-table th forces white-space:nowrap sitewide, which combined
+   with table-layout:fixed's narrow % columns made long headers ("Time Left /
+   Overdue", "Last Update") and long cell values (full date/time strings)
+   overflow their column and visually collide with the neighboring column.
+   Let both wrap onto a second line instead; the Actions column (icon
+   buttons only) stays nowrap via the more specific nth-child(8) rule below. */
+.tm-table th {
+  white-space: normal;
 }
 .tm-table td strong,
 .tm-user-snapshot strong,
@@ -11301,14 +11311,14 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
   top: auto;
   z-index: auto;
 }
-.tm-table th:nth-child(1), .tm-table td:nth-child(1) { width: 24%; }
-.tm-table th:nth-child(2), .tm-table td:nth-child(2) { width: 15%; }
-.tm-table th:nth-child(3), .tm-table td:nth-child(3) { width: 8%; }
-.tm-table th:nth-child(4), .tm-table td:nth-child(4) { width: 12%; }
-.tm-table th:nth-child(5), .tm-table td:nth-child(5) { width: 10%; }
-.tm-table th:nth-child(6), .tm-table td:nth-child(6) { width: 10%; }
-.tm-table th:nth-child(7), .tm-table td:nth-child(7) { width: 11%; }
-.tm-table th:nth-child(8), .tm-table td:nth-child(8) { width: 10%; white-space: nowrap; }
+.tm-table th:nth-child(1), .tm-table td:nth-child(1) { width: 22%; }
+.tm-table th:nth-child(2), .tm-table td:nth-child(2) { width: 13%; }
+.tm-table th:nth-child(3), .tm-table td:nth-child(3) { width: 7%; }
+.tm-table th:nth-child(4), .tm-table td:nth-child(4) { width: 13%; }
+.tm-table th:nth-child(5), .tm-table td:nth-child(5) { width: 9%; }
+.tm-table th:nth-child(6), .tm-table td:nth-child(6) { width: 12%; }
+.tm-table th:nth-child(7), .tm-table td:nth-child(7) { width: 13%; }
+.tm-table th:nth-child(8), .tm-table td:nth-child(8) { width: 11%; white-space: nowrap; }
 .tm-table td:nth-child(1) strong,
 .tm-table td:nth-child(1) span,
 .tm-table td:nth-child(2) span {
