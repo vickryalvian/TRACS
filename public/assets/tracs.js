@@ -5274,16 +5274,6 @@ document.addEventListener('DOMContentLoaded', () => {
   bindSidebarTooltips();
   initShiftReportReminders();
 
-  const loginError=document.querySelector('.login-card .err-box');
-  if(loginError?.textContent.trim()){
-    showToast(loginError.textContent.trim(),'error',{
-      context:'page',
-      persistent:true,
-      closable:true,
-      priority:'critical'
-    });
-  }
-
   /* ── Currency Converter ───────────────────── */
 
   document.getElementById('convert-btn')
