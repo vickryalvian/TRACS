@@ -4,6 +4,55 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Login Toast Dedup + Monitoring UI Fixes (2026-07-02 ~07:59 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch `feat/task-monitoring-mom-permission-revision`,
+commit `c78fd73` (full branch state, closing the gap since the last deploy at
+`e980ef3`).
+
+Production was one deploy behind: three already-committed-and-pushed monitoring
+fixes (`ae93750`, `c28ddbf`, `8dea5be`) had never shipped, on top of the same two
+shared assets as this session's login fix — so all four went out together as one
+file-copy pass:
+
+- **Login page:** removed a duplicate error toast. The login form's inline
+  `.err-box` was already rendering the server-side error; JS additionally copied
+  that same text into a floating toast, which the client-side friendly-error
+  mapper reworded (e.g. "too many attempts" became "server is taking longer than
+  usual"), so the same failure showed twice with different wording. Dropped the
+  redundant toast entirely. Also added a `max-height`/`opacity` transition to the
+  login toast dock (`:has(.toast)`) so the login card eases into place instead of
+  snapping when a toast dock does still appear (`tracs.js`, `tracs.css`).
+- **Monitoring (already on branch, not yet deployed):** sticky-header/panel
+  overlap fix on short viewports, native `<select>` bleed-through fix, capped
+  Assign-To dropdown height, decluttered row actions to View/Mark done/Delete,
+  removed Completion Time column, fixed table horizontal overflow, and hardened
+  click-outside-to-close sitewide with a capture-phase backstop.
+
+What was applied:
+
+- 2 files (file-copy; backup
+  `/opt/tracs/backups/login-toast-monitoring-fixes-20260702-075926/`):
+  `public/assets/tracs.js`, `public/assets/tracs.css`. Ownership preserved
+  `vickry:www-data`. No PHP changed, so no `php8.3-fpm` reload needed.
+
+Verification on production:
+
+- Both files sha256 local↔prod match exactly.
+- Drift check: pre-deploy production copies were byte-identical to commit
+  `e980ef3` (the last actually-deployed state) — no production-only changes were
+  overwritten.
+- HTTP: `/login.php` 200; `/assets/tracs.js` and `/assets/tracs.css` 200;
+  `/index.php` and `/monitoring.php` 302→login (unauthenticated, expected).
+- Deployed content confirmed live: duplicate-toast block absent from served
+  `tracs.js`; new `.toast-dock--login:has(.toast)` rule present in served
+  `tracs.css`.
+- `php8.3-fpm` and `nginx` error logs show nothing new post-deploy (only
+  pre-existing, unrelated bot-scan noise for `.env`/`.git` probing).
+
+Deployed via key auth (`~/.ssh/tracs_deploy_ed25519`); no password used.
+
 ## Deployed — Task Monitoring CRUD + Assign UX + Checklist Live-Sync + Drag Board (2026-07-01 ~22:40 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
