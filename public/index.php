@@ -821,7 +821,6 @@ function dashboard_monitor_reminder_status(array $item): array {
 function dashboard_monitor_reminder_item_html(array $item): string {
   $status = dashboard_monitor_reminder_status($item);
   $priority = strtolower((string)($item['priority'] ?? 'low'));
-  $icon = trim((string)($item['icon'] ?? 'bell'));
   $typeClass = dashboard_monitor_type_class((string)($item['type'] ?? 'Reminder'));
   $href = trim((string)($item['href'] ?? ''));
   $tag = ($href !== '' && $href !== '#') ? 'a' : 'div';
@@ -833,7 +832,6 @@ function dashboard_monitor_reminder_item_html(array $item): string {
   ob_start();
   ?>
   <<?=$tag?> class="tm-reminder-list-item is-<?=esc($status['key'])?> type-<?=esc($typeClass)?>" <?=$tag === 'a' ? 'href="'.esc($href).'"' : ''?><?=$source_attr?>>
-    <?php if($icon !== ''): ?><span class="tm-reminder-list-icon"><i data-lucide="<?=esc($icon)?>" class="icon-sm"></i></span><?php endif; ?>
     <span class="tm-reminder-list-main">
       <span class="tm-reminder-list-line"><span class="tm-type-badge"><?=esc($item['type'] ?? 'Reminder')?></span><span class="tm-reminder-list-title"><?=esc($item['title'] ?? 'Untitled reminder')?></span></span>
       <span class="tm-reminder-list-meta"><?=esc($item['due_label'] ?? 'No schedule')?></span>

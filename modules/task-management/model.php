@@ -480,7 +480,7 @@ class TaskManagementModel {
             $params[] = (string)$filters['due_date'];
         }
         $stmt = $this->conn->prepare("
-            SELECT t.*, ta.id AS assignment_id, ta.user_id, ta.status AS stored_status,
+            SELECT t.*, ta.id AS assignment_id, ta.task_id, ta.user_id, ta.status AS stored_status,
                    CASE
                      WHEN ta.status IN ('completed_on_time','completed_late','reviewed','cancelled','reassigned') THEN ta.status
                      WHEN t.due_at IS NOT NULL AND t.due_at < NOW() THEN 'overdue'
