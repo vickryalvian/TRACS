@@ -147,6 +147,9 @@ $_show_task_monitoring = !empty(array_filter($_task_monitoring_items, fn($item) 
 <?php endif; ?>
 <link rel="icon" type="image/png" href="assets/images/task-monitoring-tab-icon.png">
 <link rel="manifest" href="manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <link rel="stylesheet" href="assets/tracs.css?v=<?=$_css_v?>">
 <link rel="stylesheet" href="assets/tracs-date-range-picker.css?v=<?=$_date_range_css_v?>">

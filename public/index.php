@@ -1418,7 +1418,7 @@ include 'includes/header.php';
             </div>
           </div>
           <div class="panel-right task-monitoring-actions">
-            <a href="checklist.php" class="btn btn-ghost btn-sm" data-task-monitor-all>All</a>
+            <a href="checklist.php" class="btn btn-ghost btn-sm" data-task-monitor-all>All →</a>
           </div>
         </div>
 
@@ -1514,7 +1514,7 @@ include 'includes/header.php';
                 <div class="tm-column-head">
                   <div><span>Task Assignments</span><strong><?=$task_monitor_active_assignment_count?> active</strong></div>
                   <div class="tm-column-actions">
-                    <a href="monitoring.php" class="btn btn-ghost btn-sm">All</a>
+                    <a href="monitoring.php" class="btn btn-ghost btn-sm">All →</a>
                     <?php if($task_assignment_can_create): ?>
                     <a href="monitoring.php?tab=assigned&amp;add=1" class="btn btn-primary btn-sm btn-add-reveal tm-column-add" title="Add task assignment" aria-label="Add task assignment">
                       <i data-lucide="plus" class="icon-sm"></i><span class="btn-add-label">Add</span>
@@ -1603,10 +1603,13 @@ include 'includes/header.php';
               data-date="<?=esc($sr['active_date'] ?? '')?>"
               data-resolution-note="<?=esc($sr['resolution_note'] ?? '')?>"
               data-resolved-at="<?=esc($sr['resolved_at'] ?? '')?>"
-              onclick="openEditShiftReport(<?=$srid?>)">
+              role="button"
+              tabindex="0"
+              onclick="openEditShiftReport(<?=$srid?>)"
+              onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openEditShiftReport(<?=$srid?>)}">
               <div class="shift-priority <?=$pclass?>"></div>
               <div class="shift-text"><?=$srtit?><?=tracs_creator_meta($sr, $sr['created_at'] ?? null, false)?></div>
-              <span class="badge <?=$statusBadge?>" style="transform:scale(0.8)"><?=esc($statusText)?></span>
+              <span class="badge badge-sm <?=$statusBadge?>"><?=esc($statusText)?></span>
             </div>
               <?php endforeach; ?>
             </div>
@@ -1693,10 +1696,10 @@ include 'includes/header.php';
     </div><!-- /col-activity -->
 
     <!-- Dobby easter egg — fills the blank space below the utility row -->
-    <div class="dobby-egg" aria-hidden="true" title="Dobby says hi 🐾">
-      <span class="dobby-egg-cat">🐈‍⬛</span>
+    <div class="dobby-egg" aria-hidden="true" title="Dobby says hi">
+      <span class="dobby-egg-cat"><i data-lucide="cat" class="icon-xs"></i></span>
       <span class="dobby-egg-text">Dobby is working on something more<span class="dobby-egg-dots"><span>.</span><span>.</span><span>.</span></span></span>
-      <span class="dobby-egg-paw">🐾</span>
+      <span class="dobby-egg-paw"><i data-lucide="footprints" class="icon-xs"></i></span>
     </div>
 
     </div><!-- /dashboard-workspace -->
