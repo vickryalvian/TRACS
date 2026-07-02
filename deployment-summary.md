@@ -4,6 +4,27 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Monitoring Action-Button Cramping Fix (2026-07-02 ~09:34 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch `feat/task-monitoring-mom-permission-revision`,
+commit `8380f21`. Single file: `public/assets/tracs.css`.
+
+Follow-up polish after the table root-fix: the three row action icons (View /
+Mark done / Delete) were cramped against the panel edge on a default ~1280px
+macOS viewport. Cause: `.tm-table`'s Actions cell inherited
+`padding-right: calc(sp-3 + 36px)` (~48px) from the generic
+`.tracs-table td:last-child` rule, which reserves room for the absolute
+`.row-action-menu` dropdown trigger that `.tm-table` doesn't use. Reclaimed that
+padding (8px each side), laid the buttons out as a right-aligned nowrap flex
+row, and widened the Actions column 11%→14% (Task 22%→19%) so the ~108px of
+buttons fit the ~112px column even at 1280px.
+
+- Backup `/opt/tracs/backups/tm-actions-btn-20260702-093444/`. Drift check: prod
+  css was identical to the prior deploy (`2108766`) beforehand. Post-deploy
+  sha256 local↔prod match; served CSS confirmed carrying the 14% width + 8px
+  padding; `/assets/tracs.css` 200. No FPM reload (static asset).
+
 ## Deployed — Unassign Feature + Monitoring Table Overflow Root-Fix (2026-07-02 ~09:18 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
