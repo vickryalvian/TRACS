@@ -4,6 +4,59 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Infrastructure Pulse Real ICMP Checks + Pending-Node Stat Fix (2026-07-03 ~08:53 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch `design/ui-consistency-audit`, commit
+`9895ebf`. 4 files: `public/assets/infrastructure-pulse-data.js`,
+`public/assets/infrastructure-pulse.js` (updated), `core/infrastructure_ping.php`,
+`public/api/infrastructure-ping.php` (new). Backup
+`/opt/tracs/backups/infra-ping-feature-20260703-085323/` (pre-existing files
+only; the two new files had nothing to back up). The Dockerfile change
+(`iputils-ping` for local dev parity) is dev-only and was not deployed here.
+
+Two changes, both requested during manual feature testing on this page:
+
+- **Pending-node stat display fix.** A real "Network Ping" target added but
+  never checked showed `0ms` latency and `100.000%` uptime — misleadingly
+  implying a measured, healthy result. `infrastructure-pulse.js` now renders
+  `--` for latency/loss/uptime while a node's status is `pending`. Also fixed
+  a related correctness bug found in the same code path:
+  `infrastructure-pulse-data.js`'s `computeSummary()`/`regionSummary()` were
+  averaging every node's latency/uptime including unmeasured pending nodes
+  (latency=0, uptime=100 defaults), silently skewing the page's "Average
+  Latency" and "30D Uptime" stats. Both now exclude pending nodes from those
+  averages.
+- **Real ICMP checks.** Real "Network Ping" targets no longer stay stuck at
+  "Awaiting Backend" forever. `core/infrastructure_ping.php` validates the
+  host (IP literal or RFC-1123 hostname only — rejects anything else,
+  verified against `; rm -rf /`, `$(whoami)`, backticks, path traversal,
+  empty/oversized input, all `422`) and runs the system `ping` binary via
+  `proc_open` with an **argv array** (no shell string interpolation is
+  possible regardless of host content), bounded packet count/timeout, and a
+  hard wall-clock kill switch — mirroring the conservative, fixed-input
+  posture already established in `core/server_monitoring.php` for
+  `server-health.php`. `public/api/infrastructure-ping.php` gates this behind
+  the standard session + CSRF + `dashboard.view` permission bootstrap and
+  rate-limits to one check per host per 10 seconds (429 + `Retry-After`).
+  `infrastructure-pulse.js` fires an immediate check when a real Network Ping
+  server is added, then re-checks on its configured interval (min 30s) while
+  the tab stays open. TCP/HTTP methods remain "Awaiting Backend" — only
+  Network Ping got a live backend this pass.
+
+Verified against a real internal server (IDCloudHost SGP01,
+`103.250.11.175`) before deploying: added via the UI, got back a real
+`healthy / 49ms / 0% loss` result with a real timestamp, correctly reflected
+across the report panel, metrics list, and server registry. Also verified
+the unreachable-host path (real `critical / 100% loss` result, no crash) and
+confirmed `www-data` already has `cap_net_raw` on `/usr/bin/ping` on this
+VPS (pre-existing, unaffected by this deploy) — no server-side capability
+changes were needed. Drift-checked clean before copying, `php -l` passed on
+both new PHP files, `php8.3-fpm` reloaded, post-deploy sha256 matched local
+on all 4 files, and HTTP checks came back as expected
+(`infrastructure-pulse.php` 302 login redirect, both JS assets 200, and the
+new ping endpoint correctly 401s without authentication).
+
 ## Deployed — Infrastructure Pulse Accessibility Audit Fixes (2026-07-03 ~08:08 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
