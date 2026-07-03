@@ -368,6 +368,11 @@
     return values.reduce((sum, value) => sum + Number(value || 0), 0) / values.length;
   }
 
+  function measuredOnly(nodes) {
+    const measured = nodes.filter((node) => node.status !== 'pending');
+    return measured.length ? measured : nodes;
+  }
+
   function regionSummary(nodes, country) {
     const regionNodes = nodes.filter((node) => node.country === country);
     const worst = regionNodes.reduce((acc, node) => (statusRank(node.status) > statusRank(acc.status) ? node : acc), { status: 'healthy' });
@@ -375,7 +380,7 @@
       country,
       status: worst.status,
       label: statusLabel(worst.status),
-      latency: Math.round(average(regionNodes.map((node) => node.latency))),
+      latency: Math.round(average(measuredOnly(regionNodes).map((node) => node.latency))),
       incidents: regionNodes.filter((node) => ['critical', 'warning', 'degraded', 'maintenance'].includes(node.status)).length,
     };
   }
@@ -390,8 +395,8 @@
       globalStatus,
       globalStatusLabel: globalStatus === 'critical' ? 'Degraded' : statusLabel(globalStatus),
       activeIncidents,
-      averageLatency: Math.round(average(nodes.map((node) => node.latency))),
-      uptime30d: Number(average(nodes.map((node) => node.uptime)).toFixed(3)),
+      averageLatency: Math.round(average(measuredOnly(nodes).map((node) => node.latency))),
+      uptime30d: Number(average(measuredOnly(nodes).map((node) => node.uptime)).toFixed(3)),
       indonesia: regionSummary(nodes, 'Indonesia'),
       singapore: regionSummary(nodes, 'Singapore'),
       worstAffected: activeIncidents > 0 ? {

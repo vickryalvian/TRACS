@@ -8,6 +8,8 @@
     selectedCode: 'NDS',
     lastEventKey: '',
     store: null,
+    pendingChecks: new Set(),
+    realCheckTimer: null,
   };
 
   function esc(value) {
@@ -26,6 +28,12 @@
 
   function ms(value) {
     return `${Math.round(Number(value || 0))} ms`;
+  }
+
+  // Nodes awaiting a first real check have no measured data yet; showing
+  // 0ms/0%/100% would misrepresent them as measured and healthy.
+  function statText(node, formatted) {
+    return node?.status === 'pending' ? '--' : formatted;
   }
 
   function statusClass(status) {
@@ -254,10 +262,10 @@
           </div>
           <p>${esc(node.region || node.city || '--')} / ${esc(node.provider || node.facility || '--')}</p>
           <div class="infra-report-node-grid">
-            <div><span>Latency</span><b>${esc(ms(node.latency))}</b></div>
-            <div><span>Loss</span><b>${esc(Number(node.packetLoss || 0).toFixed(2))}%</b></div>
-            <div><span>Uptime</span><b>${esc(pct(node.uptime))}</b></div>
-            <div><span>Checked</span><b>${esc(Infra.formatTime(node.lastChecked))}</b></div>
+            <div><span>Latency</span><b>${esc(statText(node, ms(node.latency)))}</b></div>
+            <div><span>Loss</span><b>${esc(statText(node, `${Number(node.packetLoss || 0).toFixed(2)}%`))}</b></div>
+            <div><span>Uptime</span><b>${esc(statText(node, pct(node.uptime)))}</b></div>
+            <div><span>Checked</span><b>${esc(node.lastChecked ? Infra.formatTime(node.lastChecked) : 'Not checked')}</b></div>
           </div>
         ` : '<p>No selected server.</p>'}
       </aside>
@@ -268,7 +276,7 @@
             <button type="button" class="infra-report-row ${statusClass(item.status)}" data-infra-select="${esc(item.code)}">
               <span>${esc(item.code)}</span>
               <strong>${esc(item.name)}</strong>
-              <em>${esc(Infra.statusLabel(item.status))} / ${esc(ms(item.latency))}</em>
+              <em>${esc(Infra.statusLabel(item.status))} / ${esc(statText(item, ms(item.latency)))}</em>
             </button>
           `).join('') : '<p class="infra-empty-line">No degraded, critical, maintenance, or recovery servers.</p>'}
         </section>
@@ -327,9 +335,9 @@
         chip.className = `infra-status-chip ${statusClass(node.status)}`;
         chip.textContent = Infra.statusLabel(node.status);
       }
-      row.querySelector('[data-field="latency"]').textContent = ms(node.latency);
-      row.querySelector('[data-field="loss"]').textContent = `${Number(node.packetLoss).toFixed(2)}% loss`;
-      row.querySelector('[data-field="uptime"]').textContent = pct(node.uptime);
+      row.querySelector('[data-field="latency"]').textContent = statText(node, ms(node.latency));
+      row.querySelector('[data-field="loss"]').textContent = statText(node, `${Number(node.packetLoss).toFixed(2)}% loss`);
+      row.querySelector('[data-field="uptime"]').textContent = statText(node, pct(node.uptime));
       const line = row.querySelector('[data-field="spark-line"]');
       const area = row.querySelector('[data-field="spark-area"]');
       const linePath = Infra.sparklinePath(node.history?.latency || []);
@@ -513,7 +521,7 @@
           <article class="${statusClass(node.status)}">
             <strong>${esc(node.code)}</strong>
             <span>${esc(node.name)}</span>
-            <b>${esc(ms(node.latency))}</b>
+            <b>${esc(statText(node, ms(node.latency)))}</b>
           </article>
         `).join('') : '<p>All datacenters are inside the normal band.</p>'}
       </div>
@@ -631,6 +639,75 @@
     };
   }
 
+  // Live ICMP check for real Network Ping targets. Runs server-side
+  // (public/api/infrastructure-ping.php) — the browser never probes hosts
+  // itself, only asks the TRACS backend to run a bounded ping and report back.
+  async function fetchIcmpCheck(node) {
+    const response = await fetch('/api/infrastructure-ping.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        host: node.target_host || node.target_ip,
+        count: node.packet_count || 4,
+        timeout: node.timeout_seconds || 5,
+      }),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload || payload.success === false) return null;
+    return payload.data;
+  }
+
+  async function runIcmpCheck(node, store) {
+    if (!node || state.pendingChecks.has(node.code)) return;
+    state.pendingChecks.add(node.code);
+    try {
+      const result = await fetchIcmpCheck(node);
+      if (!result) return;
+      const snapshot = store.getSnapshot();
+      const current = snapshot.nodes.find((item) => item.code === node.code);
+      if (!current) return;
+      const latency = result.latency_ms != null ? Math.round(Number(result.latency_ms)) : current.latency;
+      const packetLoss = result.packet_loss_percent != null ? Number(result.packet_loss_percent) : current.packetLoss;
+      const updated = {
+        ...current,
+        status: result.status || 'critical',
+        latency,
+        packetLoss,
+        lastChecked: result.checked_at || new Date().toISOString(),
+        history: {
+          ...current.history,
+          latency: [...(current.history?.latency || []).slice(-35), latency],
+          packetLoss: [...(current.history?.packetLoss || []).slice(-35), packetLoss],
+        },
+      };
+      const nodes = snapshot.nodes.map((item) => (item.code === node.code ? updated : item));
+      store.ingest({ ...snapshot, nodes });
+    } catch (error) {
+      // Backend/network failure: leave the node at its last known state
+      // rather than showing an incorrect result.
+    } finally {
+      state.pendingChecks.delete(node.code);
+    }
+  }
+
+  function dueRealIcmpNodes(store) {
+    const now = Date.now();
+    return store.getSnapshot().nodes.filter((node) => {
+      if (node.mode !== 'real' || node.method !== 'icmp') return false;
+      if (!(node.target_host || node.target_ip)) return false;
+      const intervalMs = Math.max(30, Number(node.interval_seconds) || 60) * 1000;
+      const lastMs = node.lastChecked ? new Date(node.lastChecked).getTime() : 0;
+      return (now - lastMs) >= intervalMs;
+    });
+  }
+
+  function startRealChecks(store) {
+    if (state.realCheckTimer) return;
+    const tick = () => dueRealIcmpNodes(store).forEach((node) => runIcmpCheck(node, store));
+    tick();
+    state.realCheckTimer = window.setInterval(tick, 5000);
+  }
+
   function requiredFieldsFor(method) {
     const base = ['name', 'code', 'region', 'country', 'provider'];
     if (method === 'icmp') return [...base, 'target_host'];
@@ -676,7 +753,9 @@
       validation.classList.remove('is-error');
       validation.textContent = method === 'mock'
         ? 'Mock entries update the current session only and remain separate from real monitoring targets.'
-        : 'Real targets are registered as awaiting backend checks. TRACS will display results after VPS-side monitoring is wired.';
+        : method === 'icmp'
+          ? 'Network Ping targets get a live ICMP check from the TRACS backend as soon as they are added.'
+          : 'Real targets are registered as awaiting backend checks. TRACS will display results after VPS-side monitoring for this method is wired.';
     }
   }
 
@@ -714,13 +793,14 @@
             </div>
             <em>${esc(node.region || '--')} / ${esc(node.country || '--')} / ${esc(node.provider || '--')}</em>
             <small>${esc(methodLabel(node.method))}: ${esc(monitoringTarget(node))}</small>
-            ${node.mode === 'real' ? '<small class="infra-server-registry__backend">Awaiting VPS backend worker results. No real browser probing is active.</small>' : ''}
+            ${node.mode === 'real' && node.method === 'icmp' ? '<small class="infra-server-registry__backend">Live ICMP check runs from the TRACS backend while this tab stays open.</small>' : ''}
+            ${node.mode === 'real' && node.method !== 'icmp' ? '<small class="infra-server-registry__backend">Awaiting VPS backend worker results. Only Network Ping runs live checks today.</small>' : ''}
           </div>
           <div class="infra-server-registry__quick">
             ${statusChip(node.status)}
-            <span>${esc(ms(node.latency))}</span>
-            <span>${esc(Number(node.packetLoss || 0).toFixed(2))}% loss</span>
-            <span>${esc(pct(node.uptime))}</span>
+            <span>${esc(statText(node, ms(node.latency)))}</span>
+            <span>${esc(statText(node, `${Number(node.packetLoss || 0).toFixed(2)}% loss`))}</span>
+            <span>${esc(statText(node, pct(node.uptime)))}</span>
             <time>${esc(node.lastChecked ? Infra.formatTime(node.lastChecked) : 'Not checked')}</time>
           </div>
           <div class="infra-server-registry__remove" data-infra-remove-wrap="${esc(node.code)}">
@@ -859,6 +939,7 @@
         onAfterClose:()=>{
           state.selectedCode = node.code;
           store.ingest({ ...snapshot, nodes });
+          if (node.mode === 'real' && node.method === 'icmp') runIcmpCheck(node, store);
           form.reset();
           form.elements.method.value = 'icmp';
           form.elements.status.value = 'healthy';
@@ -899,7 +980,14 @@
         if (window.lucide) window.lucide.createIcons();
       });
       store.start();
-      window.addEventListener('pagehide', () => store.stop(), { once: true });
+      startRealChecks(store);
+      window.addEventListener('pagehide', () => {
+        store.stop();
+        if (state.realCheckTimer) {
+          window.clearInterval(state.realCheckTimer);
+          state.realCheckTimer = null;
+        }
+      }, { once: true });
       return store;
     };
 
