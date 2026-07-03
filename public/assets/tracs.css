@@ -219,9 +219,6 @@
 
 }
 
-/* Dark mode: restore red LIVE badge */
-[data-theme="dark"] .ticker-live { background: var(--red) }
-
 /* Dark mode: keep toast surfaces filled and readable. */
 [data-theme="dark"] .toast {
   --toast-surface: color-mix(in srgb, var(--s2) 94%, var(--toast-accent) 6%);
@@ -314,71 +311,13 @@
   color: var(--tx1);
 }
 
-/* ── Theme Toggle Button ── */
-.theme-menu-wrap {
-  position: relative;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-}
-.theme-toggle {
-  width: auto; height: var(--sb-row-h);
-  margin: 1px var(--sb-gutter);
-  display: flex;
-  align-items: center;
-  gap: var(--sb-gap);
-  padding: 0 10px 0 var(--sb-pad);
-  border-radius: var(--sb-radius);
-  color: var(--tx3);
-  border: 1px solid transparent;
-  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease);
-  cursor: pointer;
-  background: none;
-  position: relative;
-}
-.theme-toggle:hover {
-  background: var(--s3);
-  border-color: var(--bd2);
-  color: var(--tx2);
-}
-.theme-menu-wrap.is-open .theme-toggle,
-.theme-toggle[aria-expanded="true"] {
-  background: var(--blue-lt);
-  border-color: var(--blue-bd);
-  color: var(--blue);
-}
-.theme-toggle svg { width: var(--sb-icon); height: var(--sb-icon); stroke-width: 1.8 }
-.theme-icon-slot { position: relative }
-.theme-toggle .ic-sun  { position: absolute; transition: opacity .15s, transform .2s var(--ease) }
-.theme-toggle .ic-moon { position: absolute; transition: opacity .15s, transform .2s var(--ease) }
-/* The icon reflects the currently applied theme. */
+/* ── Theme icon cross-fade (shared: sidebar profile menu + TV Mode) ── */
 .ic-sun  { opacity: 1; transform: none }
 .ic-moon { opacity: 0; transform: rotate(30deg) scale(.8) }
 [data-theme="dark"] .ic-sun  { opacity: 0; transform: rotate(-30deg) scale(.8) }
 [data-theme="dark"] .ic-moon { opacity: 1; transform: none }
-.theme-menu {
-  position: fixed;
-  left: calc(var(--sb-w) + 10px);
-  bottom: 44px;
-  min-width: 178px;
-  padding: 6px;
-  border: 1px solid var(--bd2);
-  border-radius: var(--r);
-  background: var(--s1);
-  box-shadow: var(--shadow);
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(4px) scale(.98);
-  transform-origin: left bottom;
-  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease), visibility var(--dur);
-  z-index: 5100;
-}
-.theme-menu-wrap.is-open .theme-menu {
-  opacity: 1;
-  visibility: visible;
-  transform: translateY(0) scale(1);
-}
+
+/* ── Theme option rows (used inside the sidebar profile dropdown) ── */
 .theme-option {
   width: 100%;
   min-height: 32px;
@@ -418,11 +357,6 @@
   color: var(--blue);
 }
 .theme-option.is-active .theme-option-check { opacity: 1 }
-[data-theme="dark"] .theme-menu {
-  background: var(--s2);
-  border-color: var(--bd3);
-  box-shadow: 0 18px 42px rgba(0,0,0,.48), 0 1px 0 rgba(255,255,255,.025) inset;
-}
 [data-theme="dark"] .theme-option:hover,
 [data-theme="dark"] .theme-option:focus-visible {
   background: var(--s4);
@@ -491,7 +425,9 @@ input, select, textarea { font-family: inherit }
   flex-direction: column;
   align-items: stretch;
   overflow: hidden;
-  z-index: 40;
+  /* Above .ticker-bar's z-index:100 always, so the sidebar never renders
+     underneath the ticker even at the shared edge/seam. */
+  z-index: 150;
   transition: width var(--sb-dur) var(--ease), box-shadow var(--sb-dur) var(--ease);
 }
 .sidebar:focus-within .sidebar-flyout {
@@ -846,57 +782,7 @@ input, select, textarea { font-family: inherit }
   z-index: 100;
   position: relative;
 }
-.ticker-live {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  width: 48px;
-  padding: 0;
-  background: var(--red);
-  color: #fff;
-  font-family: var(--mono);
-  font-size: 8.5px;
-  font-weight: 700;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  flex-shrink: 0;
-  position: relative;
-  overflow: hidden;
-  isolation: isolate;
-}
-.ticker-live::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 38%;
-  height: 100%;
-  background: linear-gradient(
-    to right,
-    transparent,
-    rgba(255,255,255,.08) 46%,
-    rgba(255,255,255,.34) 94%,
-    rgba(255,255,255,.72) 100%
-  );
-  border-right: 1px solid rgba(255,255,255,.55);
-  animation: radarSweep 2s linear infinite;
-  pointer-events: none;
-  z-index: 0;
-}
-.ticker-dot {
-  width: 4px; height: 4px;
-  border-radius: 50%;
-  background: #fff;
-  opacity: .9;
-  animation: tdot 1.6s ease infinite;
-  position: relative;
-}
-@keyframes tdot { 
-  0%, 100% { opacity: 1; transform: scale(1); } 
-  50% { opacity: 0.4; transform: scale(0.8); } 
-}
-.ticker-track  { flex: 1; min-width: 0; overflow: hidden; display: flex; align-items: center; margin-left: 4px;
+.ticker-track  { flex: 1; min-width: 0; overflow: hidden; display: flex; align-items: center; margin-left: 10px;
   /* Soften the right edge so scrolling items fade out instead of being cut
      flush against the boundary (which read as a broken/truncated glyph). */
   -webkit-mask-image: linear-gradient(to right, transparent 0, #000 12px, #000 calc(100% - 28px), transparent 100%);
@@ -7590,16 +7476,19 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
   .sidebar { width: 100%; height: 46px }
   .sidebar-flyout { position: static; width: 100% !important; height: 100%; flex-direction: row; border-right: none; border-bottom: 1px solid var(--bd1); box-shadow: none !important }
   .sidebar-logo { width: 46px; height: 100%; border-bottom: none; border-right: 1px solid var(--bd1) }
-  .sidebar-nav { flex-direction: row; align-items: center; padding: 0 var(--sp-2); overflow-x: auto; overflow-y: visible }
+  /* flex-shrink stays default (1) with min-width:0 so this is the one that
+     yields space and scrolls internally -- .sidebar-bottom below is
+     flex-shrink:0 so the avatar/profile menu is never pushed off-screen. */
+  .sidebar-nav { flex: 1; min-width: 0; flex-direction: row; align-items: center; padding: 0 var(--sp-2); overflow-x: auto; overflow-y: visible }
   .sidebar-nav::-webkit-scrollbar { display: none }
-  .nav-group { flex-direction: row; align-items: center }
+  .nav-group { flex-direction: row; align-items: center; flex-shrink: 0 }
   .nav-group-label, .nav-favorites, .nav-pin, .nav-chevron { display: none !important }
-  .nav-item-wrap { width: auto }
-  .nav-item, .theme-toggle, .user-menu-row { width: 36px; height: 36px; margin: 0 2px; padding: 0; gap: 0; justify-content: center; border-radius: var(--r) }
+  .nav-item-wrap { width: auto; flex-shrink: 0 }
+  .nav-item, .user-menu-row { width: 36px; height: 36px; margin: 0 2px; padding: 0; gap: 0; justify-content: center; border-radius: var(--r); flex-shrink: 0 }
   .nav-item.active::before { left: 0; right: 0; top: auto; bottom: -1px; width: auto; height: 2px; transform: none; border-radius: 0 }
   .nav-label { display: none }
   .nav-submenu { padding-left: 10px }
-  .sidebar-bottom { flex-direction: row; align-items: center; border-top: none; border-left: 1px solid var(--bd1); padding: 0 var(--sp-2) }
+  .sidebar-bottom { width: auto; flex-direction: row; flex-shrink: 0; align-items: center; border-top: none; border-left: 1px solid var(--bd1); padding: 0 var(--sp-2) }
   .dashboard-stat-strip { grid-template-columns: 1fr }
   .stat-group-grid,
   .case-stat-strip .stat-group-grid {
@@ -9540,9 +9429,15 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
 }
 .user-menu-wrap summary::-webkit-details-marker { display: none }
 .user-menu {
-  position: absolute;
-  left: calc(100% + 10px);
-  bottom: 0;
+  /* Fixed (not absolute): .sidebar-flyout has overflow:hidden for the
+     collapsed-rail clip animation, which would otherwise clip this panel
+     since it renders outside the flyout's own box. Positioned relative to
+     the viewport instead, anchored past the sidebar's expanded edge --
+     the flyout is expanded whenever this can be opened, since opening it
+     requires the pointer to be over the sidebar in the first place. */
+  position: fixed;
+  left: calc(var(--sb-w-open) + 10px);
+  bottom: 12px;
   z-index: 6000;
   width: 218px;
   display: grid;
@@ -9567,6 +9462,13 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
+}
+@media (max-width: 640px) {
+  /* Below 640px the sidebar itself becomes a horizontal top bar (see the
+     sidebar mobile block above), so the profile dropdown drops down from
+     the avatar instead of flying out to the right of a rail that no
+     longer exists in that position. */
+  .user-menu { left: auto; right: 8px; top: 54px; bottom: auto }
 }
 .user-menu-head {
   display: grid;
@@ -9613,6 +9515,15 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
 .user-menu-logout button.danger:hover {
   background: var(--red-lt);
   color: var(--red);
+}
+.user-menu-divider { height: 1px; background: var(--bd1); margin: 2px 2px }
+.user-menu-section-label {
+  padding: 4px 8px 2px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--tx4);
 }
 [data-theme="dark"] .user-menu {
   background: var(--s2);
@@ -11137,11 +11048,6 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
   .profile-readonly-grid,
   .um-summary-list {
     grid-template-columns: 1fr;
-  }
-  .user-menu {
-    left: auto;
-    right: 0;
-    bottom: calc(100% + 8px);
   }
 }
 

@@ -181,7 +181,6 @@ window.TRACS_BUILD_INFO = <?=json_encode($_tracs_build_info, JSON_UNESCAPED_SLAS
 
 <!-- TICKER -->
 <div class="ticker-bar">
-  <div class="ticker-live"><span class="ticker-dot"></span>LIVE</div>
   <div class="ticker-track"><div class="ticker-scroll" id="tickerScroll"><?=$_th?></div></div>
   <button class="ticker-btn" onclick="openModal('ticker')">
     <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/></svg>
@@ -377,21 +376,8 @@ window.TRACS_BUILD_INFO = <?=json_encode($_tracs_build_info, JSON_UNESCAPED_SLAS
         <a href="profile.php?section=profile" role="menuitem"><i data-lucide="user" class="icon-sm"></i>Profile / Account</a>
         <a href="profile.php?section=preferences" role="menuitem"><i data-lucide="settings" class="icon-sm"></i>Settings</a>
         <a href="profile.php?section=security" role="menuitem"><i data-lucide="lock-keyhole" class="icon-sm"></i>Change Password</a>
-        <form action="/auth/logout.php" method="post" class="user-menu-logout">
-          <?=csrf_input()?>
-          <button type="submit" role="menuitem" class="danger"><i data-lucide="log-out" class="icon-sm"></i>Logout</button>
-        </form>
-      </div>
-    </details>
-    <div class="theme-menu-wrap" id="themeMenuWrap">
-      <button class="theme-toggle" id="themeToggle" type="button" title="Theme" aria-label="Theme" aria-haspopup="menu" aria-expanded="false">
-        <span class="nav-icon theme-icon-slot">
-          <i data-lucide="sun" class="icon-md ic-sun"></i>
-          <i data-lucide="moon" class="icon-md ic-moon"></i>
-        </span>
-        <span class="nav-label" style="white-space:nowrap" id="themeTip">Theme</span>
-      </button>
-      <div class="theme-menu" id="themeMenu" role="menu" aria-label="Theme preference">
+        <div class="user-menu-divider"></div>
+        <div class="user-menu-section-label">Theme</div>
         <button type="button" class="theme-option" role="menuitemradio" aria-checked="false" data-theme-choice="light">
           <i data-lucide="sun" class="icon-sm"></i>
           <span>Light Mode</span>
@@ -407,8 +393,13 @@ window.TRACS_BUILD_INFO = <?=json_encode($_tracs_build_info, JSON_UNESCAPED_SLAS
           <span>System Default</span>
           <i data-lucide="check" class="icon-sm theme-option-check"></i>
         </button>
+        <div class="user-menu-divider"></div>
+        <form action="/auth/logout.php" method="post" class="user-menu-logout">
+          <?=csrf_input()?>
+          <button type="submit" role="menuitem" class="danger"><i data-lucide="log-out" class="icon-sm"></i>Logout</button>
+        </form>
       </div>
-    </div>
+    </details>
   </div>
 
 </div><!-- /sidebar-flyout -->

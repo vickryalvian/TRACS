@@ -1322,7 +1322,7 @@ const TRACS_POPUP_DETAILS_SELECTOR = [
   '.report-export-menu',
   '.row-action-menu'
 ].join(',');
-const TRACS_CUSTOM_POPUP_SELECTOR = '.theme-menu-wrap, .notif-bell-btn';
+const TRACS_CUSTOM_POPUP_SELECTOR = '.notif-bell-btn';
 
 function tracsClosestPopup(target) {
   return target instanceof Element
@@ -1333,11 +1333,7 @@ function tracsClosestPopup(target) {
 function tracsSetCustomPopupOpen(host, open) {
   if (!host) return;
   host.classList.toggle('is-open', open);
-  const toggle = host.matches('.theme-menu-wrap')
-    ? host.querySelector('#themeToggle, .theme-toggle')
-    : host.matches('.notif-bell-btn')
-      ? host
-      : null;
+  const toggle = host.matches('.notif-bell-btn') ? host : null;
   toggle?.setAttribute('aria-expanded', open ? 'true' : 'false');
 }
 
@@ -5930,19 +5926,6 @@ function tracsSetVisualThemePreference(preference) {
 
 function tracsSyncThemeMenu(preference = tracsGetThemePreference(), applied = tracsResolveTheme(preference)) {
   const selected = preference || '';
-  const tip = document.getElementById('themeTip');
-  const toggle = document.getElementById('themeToggle');
-  const label = selected === 'auto'
-    ? `Theme: Auto (${applied === 'dark' ? 'Dark' : 'Light'})`
-    : selected === 'dark'
-      ? 'Theme: Dark'
-      : selected === 'light'
-        ? 'Theme: Light'
-        : `Theme: Browser (${applied === 'dark' ? 'Dark' : 'Light'})`;
-
-  if (tip) tip.textContent = label;
-  if (toggle) toggle.setAttribute('aria-label', label);
-
   document.querySelectorAll('[data-theme-choice]').forEach(option => {
     const isActive = option.getAttribute('data-theme-choice') === selected;
     option.classList.toggle('is-active', isActive);
@@ -5950,57 +5933,18 @@ function tracsSyncThemeMenu(preference = tracsGetThemePreference(), applied = tr
   });
 }
 
-function tracsOpenThemeMenu() {
-  const wrap = document.getElementById('themeMenuWrap');
-  const toggle = document.getElementById('themeToggle');
-  if (!wrap || !toggle) return;
-  tracsCloseIconPopups?.(wrap);
-  tracsSetCustomPopupOpen?.(wrap, true);
-}
-
-function tracsCloseThemeMenu() {
-  const wrap = document.getElementById('themeMenuWrap');
-  const toggle = document.getElementById('themeToggle');
-  if (!wrap || !toggle) return;
-  tracsSetCustomPopupOpen?.(wrap, false);
-}
-
-function tracsToggleThemeMenu() {
-  const wrap = document.getElementById('themeMenuWrap');
-  if (wrap?.classList.contains('is-open')) tracsCloseThemeMenu();
-  else tracsOpenThemeMenu();
-}
-
-function tracsToggleTheme() {
-  tracsToggleThemeMenu();
-}
-
 function tracsInitThemeMemory() {
   tracsApplyTheme();
   tracsApplyVisualTheme();
 
-  const toggle = document.getElementById('themeToggle');
-  const wrap = document.getElementById('themeMenuWrap');
-  const menu = document.getElementById('themeMenu');
-
-  toggle?.addEventListener('click', event => {
-    event.stopPropagation();
-    tracsToggleThemeMenu();
-  });
-
-  menu?.addEventListener('click', event => {
+  // Theme options now live inline inside the sidebar's profile dropdown
+  // (.user-menu), not a separate popup -- picking one just applies the
+  // theme; bindSidebarMenus() already closes the dropdown on any button
+  // click inside it.
+  document.addEventListener('click', event => {
     const option = event.target.closest('[data-theme-choice]');
     if (!option) return;
     tracsSetThemePreference(option.getAttribute('data-theme-choice'));
-    tracsCloseThemeMenu();
-  });
-
-  document.addEventListener('click', event => {
-    if (wrap && !wrap.contains(event.target)) tracsCloseThemeMenu();
-  });
-
-  document.addEventListener('keydown', event => {
-    if (event.key === 'Escape') tracsCloseThemeMenu();
   });
 
   setInterval(() => {
