@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, CalendarPlus, ChevronLeft, ChevronRight, LocateFixed } from 'lucide-react';
+import { CalendarPlus, ChevronLeft, ChevronRight, LocateFixed } from 'lucide-react';
 import { TracsButton } from './CalendarPrimitives';
 
 const views = ['Year', 'Month', 'Week', 'Day', 'Agenda'];
@@ -17,13 +17,6 @@ export function CalendarHeader({
     <header className="calendar-sticky-header cal:sticky cal:top-0 cal:z-30 cal:-mx-4 cal:border-b cal:border-tracs-border cal:bg-tracs-page/95 cal:px-4 cal:pb-3 cal:pt-3 cal:backdrop-blur-md">
       <div className="cal:flex cal:flex-col cal:gap-3 cal:xl:flex-row cal:xl:items-center cal:xl:justify-between">
         <div className="cal:flex cal:min-w-0 cal:items-center cal:gap-3">
-          <a
-            href="index.php"
-            className="cal:flex cal:size-9 cal:shrink-0 cal:items-center cal:justify-center cal:rounded-tracs cal:border cal:border-tracs-border cal:bg-tracs-surface-2 cal:text-tracs-secondary cal:transition hover:cal:bg-tracs-surface-3 hover:cal:text-tracs-primary focus-visible:cal:outline-none focus-visible:cal:ring-2 focus-visible:cal:ring-tracs-accent"
-            aria-label="Back to dashboard"
-          >
-            <ArrowLeft className="cal:size-4" />
-          </a>
           <div className="cal:min-w-0">
             <h1 className="cal:text-xl cal:font-semibold cal:tracking-[-.02em] cal:text-tracs-primary">Calendar</h1>
             <p className="cal:truncate cal:font-mono cal:text-[10px] cal:text-tracs-muted">Holidays, cases, shifts, meetings, reminders & schedules</p>
