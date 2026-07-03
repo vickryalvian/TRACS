@@ -4,6 +4,29 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Sidebar Submenu Label Shortened (2026-07-03 ~18:19 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch `design/sidebar-hover-expand`, commit
+`b878332`. 1 file: `public/includes/header.php`. Backup
+`/opt/tracs/backups/sidebar-label-fix-20260703-181947/`.
+
+Design feedback: "Domain Pricing Crosscheck" ran flush against the
+Tasks & Monitoring submenu's right edge with no breathing room. Shortened
+to "Domain Pricing" in the `$_task_monitoring_items` array — that label
+string is only used in the sidebar nav, so page titles/breadcrumbs on
+`domain-price-crosscheck.php` itself are unaffected.
+
+Verification: no drift on prod before deploy; `php -l` clean; post-deploy
+sha256 matches local byte-for-byte; `login.php` returns **200**,
+unauthenticated `index.php` returns **302** (routing/session intact);
+`nginx`/`php8.3-fpm` active. Pre-deploy verified against the docker dev
+stack logged in as `admin@tracs.local` — submenu opened, "Domain Pricing"
+now has clear trailing space, no console errors.
+
+Branch remains pushed for review/PR. Production tracks the working tree via
+file-copy deploy (not a `main` pull).
+
 ## Deployed — Sidebar Icon Scale Reduction (2026-07-03 ~15:41 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
