@@ -348,7 +348,7 @@
   border-color: var(--blue-bd);
   color: var(--blue);
 }
-.theme-toggle svg { width: 13px; height: 13px; stroke-width: 1.8 }
+.theme-toggle svg { width: var(--sb-icon); height: var(--sb-icon); stroke-width: 1.8 }
 .theme-icon-slot { position: relative }
 .theme-toggle .ic-sun  { position: absolute; transition: opacity .15s, transform .2s var(--ease) }
 .theme-toggle .ic-moon { position: absolute; transition: opacity .15s, transform .2s var(--ease) }
@@ -470,12 +470,12 @@ input, select, textarea { font-family: inherit }
   /* Shared row geometry — keeps every item, submenu row, group label,
      avatar and theme toggle on one consistent rhythm. The icon glyph
      lands dead-centre of the 64px collapsed rail:
-     gutter(8) + pad(14) + icon(20)/2 = 32 = 64/2. */
+     gutter(8) + pad(16) + icon(16)/2 = 32 = 64/2. */
   --sb-gutter: 8px;
-  --sb-pad: 14px;
-  --sb-icon: 20px;
-  --sb-gap: 12px;
-  --sb-row-h: 40px;
+  --sb-pad: 16px;
+  --sb-icon: 16px;
+  --sb-gap: 10px;
+  --sb-row-h: 36px;
   --sb-radius: var(--r3);
   width: var(--sb-w);
   flex-shrink: 0;
@@ -639,7 +639,7 @@ input, select, textarea { font-family: inherit }
   content: '';
   position: absolute;
   left: -1px; top: 50%;
-  width: 3px; height: 18px;
+  width: 3px; height: 16px;
   transform: translateY(-50%);
   background: var(--blue);
   border-radius: 0 3px 3px 0;
@@ -656,7 +656,7 @@ input, select, textarea { font-family: inherit }
 .nav-label {
   flex: 1;
   min-width: 0;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
@@ -669,7 +669,7 @@ input, select, textarea { font-family: inherit }
 .nav-chevron {
   margin-left: auto;
   flex-shrink: 0;
-  width: 14px; height: 14px;
+  width: 13px; height: 13px;
   opacity: 0;
   transition: opacity var(--sb-dur) var(--ease), transform var(--sb-dur) var(--ease);
 }
@@ -680,12 +680,12 @@ input, select, textarea { font-family: inherit }
 /* Badge sits neatly on the icon corner in both states. */
 .nav-badge {
   position: absolute;
-  top: -5px; right: -7px;
-  min-width: 15px; height: 15px;
-  border-radius: 8px;
+  top: -4px; right: -6px;
+  min-width: 14px; height: 14px;
+  border-radius: 7px;
   background: var(--red);
   color: #fff;
-  font-size: 8.5px;
+  font-size: 8px;
   font-weight: 700;
   font-family: var(--mono);
   display: flex;
@@ -716,7 +716,7 @@ input, select, textarea { font-family: inherit }
 .nav-pin:focus-visible,
 .nav-pin.is-pinned { opacity: 1 }
 .nav-pin:hover { background: var(--s4); color: var(--tx2) }
-.nav-pin svg { width: 13px; height: 13px; stroke-width: 1.8 }
+.nav-pin svg { width: 12px; height: 12px; stroke-width: 1.8 }
 .nav-pin.is-pinned { color: var(--amber) }
 .nav-pin.is-pinned svg { fill: currentColor }
 .nav-favorites-list .nav-pin.is-pinned { opacity: 1 }
@@ -771,8 +771,8 @@ input, select, textarea { font-family: inherit }
   color: var(--blue);
 }
 .nav-submenu a svg {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
   flex-shrink: 0;
 }
 
