@@ -4,6 +4,39 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Infrastructure Pulse Accessibility Audit Fixes (2026-07-03 ~08:08 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch `design/ui-consistency-audit`, commit
+`e4696a8`. 2 files: `public/infrastructure-pulse.php`,
+`public/assets/infrastructure-pulse.js`. Backup
+`/opt/tracs/backups/infra-pulse-a11y-focus-20260703-080849/`.
+
+Full-page audit of Infrastructure Pulse per its documented
+mock/session-only scope (AI_MEMORY.md — no real backend, DB tables, or
+CSRF-relevant mutations exist for this page yet, so most backend-audit
+categories don't apply). Three real bugs fixed:
+
+- The report panel (`renderReport`) fully replaced its `innerHTML` on every
+  4s auto-refresh tick, silently dropping keyboard focus to `<body>` if a
+  user had focused a "Needs Attention"/"Stable Nodes" row. Now captures the
+  focused node's code before the swap and restores focus to it afterward.
+- The Server Registry modal's tabs (`role="tab"`) had no matching
+  `role="tabpanel"` / `aria-controls` / `aria-labelledby` wiring on their
+  panes, so screen readers couldn't associate tab and content. Added the
+  missing ids/attributes; no visual change (existing `display:none` /
+  `.is-active` CSS already hides inactive panes).
+- The inline "Remove server" confirmation had no focus management: opening
+  it left focus wherever it was, and Cancel didn't return focus to the
+  trigger. Now focuses Cancel on open, returns focus to the original Remove
+  button on Cancel, and focuses the registry container on confirmed removal.
+
+Drift-checked clean (prod sha256 matched the pre-fix commit exactly) before
+copying. `php -l` passed, `php8.3-fpm` reloaded, post-deploy sha256 matched
+local, and both URLs returned expected HTTP status
+(`infrastructure-pulse.php` 302 to login when unauthenticated,
+`assets/infrastructure-pulse.js` 200).
+
 ## Deployed — Opt Real-Time Toggles Out + Scope Unsaved-Changes Guard to Pages That Need It (2026-07-02 ~19:39 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
