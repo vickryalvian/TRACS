@@ -149,6 +149,7 @@ $requested_tab = (string)($_GET['tab'] ?? 'my');
 $tab = in_array($requested_tab, $allowed_tabs, true) ? $requested_tab : 'my';
 
 if ($schema_ready) {
+    $TM->refreshRecurringTasks();
     $TM->refreshOverdueStatuses();
 }
 $summary = $schema_ready ? $TM->summary() : [];
@@ -448,6 +449,8 @@ include __DIR__ . '/includes/header.php';
             data-time="<?=$tm_detail_due_dt ? date('H:i', $tm_detail_due_dt) : ''?>"
             data-url="<?=esc($selected_task['reference_url'] ?? '')?>"
             data-review="<?=!empty($selected_task['requires_review']) ? '1' : '0'?>"
+            data-recurring="<?=(($selected_task['recurrence_type'] ?? 'none') !== 'none') ? '1' : '0'?>"
+            data-interval="<?=(int)($selected_task['recurrence_interval_days'] ?? 1)?>"
             onclick="tmOpenEdit(this)"><i data-lucide="pencil-line" class="icon-xs"></i>Edit</button>
           <button type="button" class="btn btn-ghost btn-sm" data-title="<?=esc($selected_task['title'])?>" onclick="tmOpenReassign(<?=(int)$selected_task['task_id']?>,this)"><i data-lucide="user-plus" class="icon-xs"></i>Reassign</button>
           <button type="button" class="btn btn-ghost btn-sm" data-task-id="<?=(int)$selected_task['task_id']?>" data-assignment-id="<?=(int)$selected_task['assignment_id']?>" data-assignee="<?=esc($selected_task['assignee_name'])?>" onclick="tmUnassign(this)"><i data-lucide="user-minus" class="icon-xs"></i>Unassign</button>
@@ -459,6 +462,7 @@ include __DIR__ . '/includes/header.php';
           <div><span>SLA status</span><strong class="<?=esc($delta['class'])?>"><?=esc($delta['label'] === '-' ? '—' : $delta['label'])?></strong></div>
           <div><span>Due</span><strong><?=!empty($selected_task['due_at']) ? esc(date('d M Y, H:i', strtotime($selected_task['due_at']))) : '-'?></strong></div>
           <div><span>Assigned by</span><strong><?=esc($selected_task['assigned_by_name'] ?? $selected_task['created_by_name'] ?? 'System')?></strong></div>
+          <div><span>Cadence</span><strong><?=(($selected_task['recurrence_type'] ?? 'none') !== 'none') ? 'Recurring · every ' . (int)($selected_task['recurrence_interval_days'] ?? 1) . ' day(s)' : 'One-time'?></strong></div>
         </div>
         <div class="tm-detail-notes"><span>Instruction / notes</span><strong><?=esc($selected_task['description'] ?: 'No instruction provided.')?></strong></div>
         <details class="tm-detail-section">
@@ -507,8 +511,33 @@ include __DIR__ . '/includes/header.php';
         <div class="form-row"><div class="form-group"><label class="form-label">Task Title <span class="tm-req">*</span></label><input class="form-input" name="title" required></div><div class="form-group"><label class="form-label">Category</label><select class="form-select" name="category"><?php foreach(['daily_checklist','case_follow_up','domain_transfer','balance_transfer','finance_log_mutasi','ssl_check','mom_follow_up','training_task','intern_task','custom'] as $c): ?><option value="<?=$c?>" <?=$c==='custom'?'selected':''?>><?=tm_label($c)?></option><?php endforeach; ?></select></div></div>
         <div class="form-group"><label class="form-label">Instruction</label><textarea class="form-textarea" name="description" rows="3" placeholder="What needs to be done?"></textarea></div>
         <div class="form-row"><div class="form-group"><label class="form-label">Priority</label><select class="form-select" name="priority"><option value="normal" selected>Normal</option><option value="low">Low</option><option value="high">High</option><option value="urgent">Urgent</option></select></div><div class="form-group"><label class="form-label">Reference URL</label><input class="form-input" type="url" name="reference_url" placeholder="https://..."></div></div>
-        <div class="form-row"><div class="form-group"><label class="form-label">Due Date</label><input class="form-input" type="date" name="due_date"></div><div class="form-group"><label class="form-label">Due Time</label><input class="form-input" type="time" name="due_time"></div></div>
-        <div class="form-row"><label class="tm-check"><input type="checkbox" name="is_recurring" value="1"><span>Daily recurring task</span></label><label class="tm-check"><input type="checkbox" name="requires_review" value="1"><span>Require review after completion</span></label></div>
+        <label class="tm-check"><input type="checkbox" name="requires_review" value="1"><span>Require review after completion</span></label>
+      </div>
+      <div class="tm-form-section">
+        <div class="tm-section-label">Schedule</div>
+        <div class="form-group">
+          <label class="form-label">Cadence <span class="tm-req">*</span></label>
+          <div class="tm-cadence-toggle" role="group" aria-label="Task cadence">
+            <button type="button" class="tm-cadence-btn active" data-cadence="none" onclick="tmSetCadence(this,'tm')">One-time</button>
+            <button type="button" class="tm-cadence-btn" data-cadence="daily" onclick="tmSetCadence(this,'tm')">Recurring</button>
+          </div>
+          <input type="hidden" name="is_recurring" id="tmIsRecurring" value="0">
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label" id="tmDueLabel">Due Date</label><input class="form-input" type="date" name="due_date" id="tmDue"></div>
+          <div class="form-group"><label class="form-label">Due Time</label><input class="form-input" type="time" name="due_time"></div>
+        </div>
+        <p class="tm-due-hint hidden" id="tmDueHint"><i data-lucide="repeat" class="icon-xs"></i>This is the first cycle's due date/time — it repeats automatically from here.</p>
+        <div class="tm-recur-panel hidden" id="tmRecurDetail">
+          <label class="form-label">Repeat every</label>
+          <div class="tm-recur-chips">
+            <button type="button" class="tm-recur-chip active" data-days="1" onclick="tmSetInterval(this,'tm')">Daily</button>
+            <button type="button" class="tm-recur-chip" data-days="2" onclick="tmSetInterval(this,'tm')">2 days</button>
+            <button type="button" class="tm-recur-chip" data-days="3" onclick="tmSetInterval(this,'tm')">3 days</button>
+            <button type="button" class="tm-recur-chip" data-days="5" onclick="tmSetInterval(this,'tm')">5 days</button>
+          </div>
+          <div class="tm-recur-custom"><input type="number" min="1" max="90" class="form-input" name="recurrence_interval_days" id="tmRecurDays" value="1" oninput="tmSyncIntervalChips(this,'tm')"><span>day(s)</span></div>
+        </div>
       </div>
       <div class="tm-form-section tm-assign-section">
         <div class="tm-section-label">Assign to <span class="tm-req">*</span></div>
@@ -553,8 +582,33 @@ function tmOpenUpdate(id,status){document.getElementById('tmAssignmentId').value
       <div class="form-row"><div class="form-group"><label class="form-label">Task Title</label><input class="form-input" name="title" id="tmEditTitle" required></div><div class="form-group"><label class="form-label">Category</label><select class="form-select" name="category" id="tmEditCategory"><?php foreach(['daily_checklist','case_follow_up','domain_transfer','balance_transfer','finance_log_mutasi','ssl_check','mom_follow_up','training_task','intern_task','custom'] as $c): ?><option value="<?=$c?>"><?=tm_label($c)?></option><?php endforeach; ?></select></div></div>
       <div class="form-group"><label class="form-label">Instruction</label><textarea class="form-textarea" name="description" id="tmEditDesc" rows="4"></textarea></div>
       <div class="form-row"><div class="form-group"><label class="form-label">Priority</label><select class="form-select" name="priority" id="tmEditPriority"><option value="normal">Normal</option><option value="low">Low</option><option value="high">High</option><option value="urgent">Urgent</option></select></div><div class="form-group"><label class="form-label">Reference URL</label><input class="form-input" type="url" name="reference_url" id="tmEditUrl" placeholder="https://..."></div></div>
-      <div class="form-row"><div class="form-group"><label class="form-label">Due Date</label><input class="form-input" type="date" name="due_date" id="tmEditDue"></div><div class="form-group"><label class="form-label">Due Time</label><input class="form-input" type="time" name="due_time" id="tmEditTime"></div></div>
-      <div class="form-row"><label class="tm-check"><input type="checkbox" name="requires_review" id="tmEditReview" value="1"><span>Require review after completion</span></label></div>
+      <label class="tm-check"><input type="checkbox" name="requires_review" id="tmEditReview" value="1"><span>Require review after completion</span></label>
+      <div class="tm-form-section">
+        <div class="tm-section-label">Schedule</div>
+        <div class="form-group">
+          <label class="form-label">Cadence <span class="tm-req">*</span></label>
+          <div class="tm-cadence-toggle" role="group" aria-label="Task cadence" id="tmEditCadence">
+            <button type="button" class="tm-cadence-btn active" data-cadence="none" onclick="tmSetCadence(this,'tmEdit')">One-time</button>
+            <button type="button" class="tm-cadence-btn" data-cadence="daily" onclick="tmSetCadence(this,'tmEdit')">Recurring</button>
+          </div>
+          <input type="hidden" name="is_recurring" id="tmEditIsRecurring" value="0">
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label" id="tmEditDueLabel">Due Date</label><input class="form-input" type="date" name="due_date" id="tmEditDue"></div>
+          <div class="form-group"><label class="form-label">Due Time</label><input class="form-input" type="time" name="due_time" id="tmEditTime"></div>
+        </div>
+        <p class="tm-due-hint hidden" id="tmEditDueHint"><i data-lucide="repeat" class="icon-xs"></i>This is the current cycle's due date/time — it repeats automatically from here.</p>
+        <div class="tm-recur-panel hidden" id="tmEditRecurDetail">
+          <label class="form-label">Repeat every</label>
+          <div class="tm-recur-chips">
+            <button type="button" class="tm-recur-chip active" data-days="1" onclick="tmSetInterval(this,'tmEdit')">Daily</button>
+            <button type="button" class="tm-recur-chip" data-days="2" onclick="tmSetInterval(this,'tmEdit')">2 days</button>
+            <button type="button" class="tm-recur-chip" data-days="3" onclick="tmSetInterval(this,'tmEdit')">3 days</button>
+            <button type="button" class="tm-recur-chip" data-days="5" onclick="tmSetInterval(this,'tmEdit')">5 days</button>
+          </div>
+          <div class="tm-recur-custom"><input type="number" min="1" max="90" class="form-input" name="recurrence_interval_days" id="tmEditRecurDays" value="1" oninput="tmSyncIntervalChips(this,'tmEdit')"><span>day(s)</span></div>
+        </div>
+      </div>
     </div>
     <div class="modal-foot"><button type="button" class="btn btn-ghost" onclick="closeModal('tmEdit')">Cancel</button><button type="submit" class="btn btn-primary"><i data-lucide="save" class="icon-sm"></i>Save Changes</button></div>
   </form>
@@ -587,6 +641,33 @@ function tmOpenUpdate(id,status){document.getElementById('tmAssignmentId').value
   <?=csrf_input()?><input type="hidden" name="action" value="update_assignment"><input type="hidden" name="status" value="completed"><input type="hidden" name="assignment_id" id="tmMarkDoneAssignmentId"><input type="hidden" name="progress_note" value=""><input type="hidden" name="return_tab" value="<?=esc($tab)?>">
 </form>
 <script>
+// Cadence toggle shared by the Add Task and Edit Task modals (prefix 'tm' / 'tmEdit').
+// Segmented "One-time / Recurring" control instead of a bare checkbox, so the
+// choice reads as a question with an answer rather than one item in a checklist.
+function tmSetCadence(btn,prefix){
+  btn.parentElement.querySelectorAll('.tm-cadence-btn').forEach(b=>b.classList.toggle('active', b===btn));
+  const isRecurring=btn.dataset.cadence==='daily';
+  const hidden=document.getElementById(prefix+'IsRecurring');
+  if(hidden) hidden.value=isRecurring?'1':'0';
+  const panel=document.getElementById(prefix+'RecurDetail');
+  if(panel) panel.classList.toggle('hidden', !isRecurring);
+  const hint=document.getElementById(prefix+'DueHint');
+  if(hint) hint.classList.toggle('hidden', !isRecurring);
+  const label=document.getElementById(prefix+'DueLabel');
+  if(label) label.textContent=isRecurring?'Starts On':'Due Date';
+  const dueInput=document.getElementById(prefix+'Due');
+  if(dueInput) dueInput.required=isRecurring;
+}
+function tmSetInterval(btn,prefix){
+  btn.parentElement.querySelectorAll('.tm-recur-chip').forEach(b=>b.classList.toggle('active', b===btn));
+  const input=document.getElementById(prefix+'RecurDays');
+  if(input) input.value=btn.dataset.days;
+}
+function tmSyncIntervalChips(input,prefix){
+  const panel=document.getElementById(prefix+'RecurDetail');
+  if(!panel) return;
+  panel.querySelectorAll('.tm-recur-chip').forEach(b=>b.classList.toggle('active', b.dataset.days===input.value));
+}
 function tmOpenEdit(btn){
   const d=btn.dataset;
   document.getElementById('tmEditTaskId').value=d.taskId||'';
@@ -598,6 +679,16 @@ function tmOpenEdit(btn){
   document.getElementById('tmEditDue').value=d.due||'';
   document.getElementById('tmEditTime').value=d.time||'';
   document.getElementById('tmEditReview').checked=(d.review==='1');
+  const isRecurring=d.recurring==='1';
+  const days=d.interval||'1';
+  document.getElementById('tmEditIsRecurring').value=isRecurring?'1':'0';
+  document.querySelectorAll('#tmEditCadence .tm-cadence-btn').forEach(b=>b.classList.toggle('active', (b.dataset.cadence==='daily')===isRecurring));
+  document.getElementById('tmEditRecurDetail').classList.toggle('hidden', !isRecurring);
+  document.getElementById('tmEditDueHint').classList.toggle('hidden', !isRecurring);
+  document.getElementById('tmEditDueLabel').textContent=isRecurring?'Starts On':'Due Date';
+  document.getElementById('tmEditDue').required=isRecurring;
+  document.getElementById('tmEditRecurDays').value=days;
+  document.querySelectorAll('#tmEditRecurDetail .tm-recur-chip').forEach(b=>b.classList.toggle('active', b.dataset.days===days));
   btn.closest('details')?.removeAttribute('open');
   openModal('tmEdit');window.TRACSDropdowns?.syncAll();
 }

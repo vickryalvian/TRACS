@@ -35,6 +35,7 @@ class TaskManagementController {
     public function breakdowns(): array { return $this->model->breakdowns($this->canMonitor(), $this->actorId); }
     public function taskLogs(int $assignmentId): array { return $this->model->taskLogs($assignmentId); }
     public function refreshOverdueStatuses(): int { return $this->model->refreshOverdueStatuses($this->actorId); }
+    public function refreshRecurringTasks(): int { return $this->model->refreshRecurringTasks($this->actorId); }
 
     private function cleanText(mixed $value, int $max = 255): string {
         $value = trim((string)($value ?? ''));
@@ -52,6 +53,16 @@ class TaskManagementController {
         return array_values(array_unique(array_filter(array_map('intval', $values), fn($id) => $id > 0)));
     }
 
+    /** @return array{0: string, 1: int} [recurrence_type, recurrence_interval_days] */
+    private function parseRecurrence(array $input): array {
+        $isRecurring = !empty($input['is_recurring']);
+        if (!$isRecurring) {
+            return ['none', 1];
+        }
+        $days = max(1, min(90, (int)($input['recurrence_interval_days'] ?? 1)));
+        return ['daily', $days];
+    }
+
     public function create(array $input, string $actorName): array {
         tracs_require_permission($this->conn, 'tasks.create');
         $title = $this->cleanText($input['title'] ?? '', 180);
@@ -67,7 +78,7 @@ class TaskManagementController {
         if (!in_array($priority, ['low','normal','high','urgent'], true)) {
             throw new InvalidArgumentException('Invalid task priority.');
         }
-        $recurrence = !empty($input['is_recurring']) ? 'daily' : 'none';
+        [$recurrence, $intervalDays] = $this->parseRecurrence($input);
         $dueDate = trim((string)($input['due_date'] ?? ''));
         $dueTime = trim((string)($input['due_time'] ?? ''));
         $dueAt = null;
@@ -79,6 +90,9 @@ class TaskManagementController {
                 throw new InvalidArgumentException('Invalid due time.');
             }
             $dueAt = date('Y-m-d H:i:s', strtotime($dueDate . ' ' . ($dueTime ?: '23:59')));
+        }
+        if ($recurrence === 'daily' && $dueAt === null) {
+            throw new InvalidArgumentException('Recurring tasks need a due date to anchor the repeat cycle.');
         }
         $url = trim((string)($input['reference_url'] ?? ''));
         if ($url !== '' && !filter_var($url, FILTER_VALIDATE_URL)) {
@@ -101,6 +115,7 @@ class TaskManagementController {
             'assignment_scope' => $scope,
             'due_at' => $dueAt,
             'recurrence_type' => $recurrence,
+            'recurrence_interval_days' => $intervalDays,
             'reference_url' => $url ?: null,
             'requires_review' => !empty($input['requires_review']) ? 1 : 0,
         ], $assigneeIds, $this->actorId, $actorName);
@@ -151,6 +166,7 @@ class TaskManagementController {
         if (!in_array($category, $allowedCategories, true)) throw new InvalidArgumentException('Invalid task category.');
         $priority = (string)($input['priority'] ?? 'normal');
         if (!in_array($priority, ['low','normal','high','urgent'], true)) throw new InvalidArgumentException('Invalid task priority.');
+        [$recurrence, $intervalDays] = $this->parseRecurrence($input);
         $dueDate = trim((string)($input['due_date'] ?? ''));
         $dueTime = trim((string)($input['due_time'] ?? ''));
         $dueAt = null;
@@ -158,6 +174,9 @@ class TaskManagementController {
             if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dueDate) || !strtotime($dueDate)) throw new InvalidArgumentException('Invalid due date.');
             if ($dueTime !== '' && !preg_match('/^\d{2}:\d{2}$/', $dueTime)) throw new InvalidArgumentException('Invalid due time.');
             $dueAt = date('Y-m-d H:i:s', strtotime($dueDate . ' ' . ($dueTime ?: '23:59')));
+        }
+        if ($recurrence === 'daily' && $dueAt === null) {
+            throw new InvalidArgumentException('Recurring tasks need a due date to anchor the repeat cycle.');
         }
         $url = trim((string)($input['reference_url'] ?? ''));
         if ($url !== '' && !filter_var($url, FILTER_VALIDATE_URL)) throw new InvalidArgumentException('Reference URL must be a valid URL.');
@@ -167,6 +186,8 @@ class TaskManagementController {
             'category' => $category,
             'priority' => $priority,
             'due_at' => $dueAt,
+            'recurrence_type' => $recurrence,
+            'recurrence_interval_days' => $intervalDays,
             'reference_url' => $url ?: null,
             'requires_review' => !empty($input['requires_review']) ? 1 : 0,
         ];

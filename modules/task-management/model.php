@@ -126,17 +126,99 @@ class TaskManagementModel {
         return $count;
     }
 
+    /**
+     * Lazy recurrence engine: there's no system cron in this app, so — same
+     * pattern as refreshOverdueStatuses() — this runs on page load. Any
+     * recurring task whose due_at has passed gets its due_at rolled forward
+     * by recurrence_interval_days (looping past any cycles missed while the
+     * app wasn't loaded), and every non-cancelled assignment on it is reset
+     * to a fresh 'assigned' cycle. The prior cycle's outcome is preserved in
+     * tracs_task_logs rather than being silently overwritten.
+     */
+    public function refreshRecurringTasks(?int $actorId = null): int {
+        $actorId = $actorId ?: 0;
+        $res = $this->conn->query("
+            SELECT id, due_at, recurrence_interval_days
+            FROM tracs_tasks
+            WHERE recurrence_type = 'daily' AND due_at IS NOT NULL AND due_at <= NOW()
+            LIMIT 100
+        ");
+        $tasks = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
+        $rolled = 0;
+        foreach ($tasks as $task) {
+            $taskId = (int)$task['id'];
+            $intervalDays = max(1, (int)$task['recurrence_interval_days']);
+            $due = strtotime((string)$task['due_at']);
+            if ($due === false) {
+                continue;
+            }
+            do {
+                $due += $intervalDays * 86400;
+            } while ($due <= time());
+            $newDueAt = date('Y-m-d H:i:s', $due);
+
+            $this->conn->begin_transaction();
+            try {
+                $assignRes = $this->conn->query("
+                    SELECT id, status, linked_checklist_task_id, linked_reminder_id
+                    FROM tracs_task_assignments WHERE task_id = " . $taskId . "
+                ");
+                $assignments = $assignRes ? $assignRes->fetch_all(MYSQLI_ASSOC) : [];
+                foreach ($assignments as $a) {
+                    if ($a['status'] === 'cancelled') {
+                        continue;
+                    }
+                    $assignmentId = (int)$a['id'];
+                    $priorStatus = (string)$a['status'];
+                    $upd = $this->conn->prepare("
+                        UPDATE tracs_task_assignments
+                        SET status = 'assigned', progress_note = NULL, completion_note = NULL, review_note = NULL,
+                            assigned_at = NOW(), started_at = NULL, completed_at = NULL, reviewed_at = NULL,
+                            completion_seconds = NULL, overdue_seconds = 0, start_delay_seconds = NULL,
+                            updated_by = ?, updated_at = NOW()
+                        WHERE id = ?
+                    ");
+                    $upd->bind_param('ii', $actorId, $assignmentId);
+                    $upd->execute();
+                    $upd->close();
+
+                    $cid = (int)($a['linked_checklist_task_id'] ?? 0);
+                    if ($cid > 0) {
+                        $this->conn->query("UPDATE tracs_side_tasks SET is_completed = 0, updated_at = NOW() WHERE id = " . $cid);
+                    }
+                    $rid = (int)($a['linked_reminder_id'] ?? 0);
+                    if ($rid > 0) {
+                        $rstmt = $this->conn->prepare("UPDATE tracs_reminders SET due_date = ?, is_completed = 0, updated_at = NOW() WHERE id = ?");
+                        $rstmt->bind_param('si', $newDueAt, $rid);
+                        $rstmt->execute();
+                        $rstmt->close();
+                    }
+                    $this->log($taskId, $assignmentId, $actorId, 'recurrence_reset', 'New cycle started (previous cycle closed as ' . $priorStatus . '). Next due ' . $newDueAt . '.');
+                }
+                $tstmt = $this->conn->prepare("UPDATE tracs_tasks SET due_at = ?, updated_at = NOW() WHERE id = ?");
+                $tstmt->bind_param('si', $newDueAt, $taskId);
+                $tstmt->execute();
+                $tstmt->close();
+                $this->conn->commit();
+                $rolled++;
+            } catch (Throwable $e) {
+                $this->conn->rollback();
+            }
+        }
+        return $rolled;
+    }
+
     public function createTask(array $data, array $assigneeIds, int $actorId, string $actorName): int {
         tracs_notifications_ensure_schema($this->conn);
         $this->conn->begin_transaction();
         try {
             $stmt = $this->conn->prepare("
                 INSERT INTO tracs_tasks
-                  (title, description, category, priority, assignment_scope, due_at, recurrence_type, reference_url, requires_review, created_by, assigned_by, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+                  (title, description, category, priority, assignment_scope, due_at, recurrence_type, recurrence_interval_days, reference_url, requires_review, created_by, assigned_by, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
             ");
             $stmt->bind_param(
-                'ssssssssiii',
+                'sssssssisiii',
                 $data['title'],
                 $data['description'],
                 $data['category'],
@@ -144,6 +226,7 @@ class TaskManagementModel {
                 $data['assignment_scope'],
                 $data['due_at'],
                 $data['recurrence_type'],
+                $data['recurrence_interval_days'],
                 $data['reference_url'],
                 $data['requires_review'],
                 $actorId,
@@ -278,10 +361,10 @@ class TaskManagementModel {
         try {
             $stmt = $this->conn->prepare("
                 UPDATE tracs_tasks
-                SET title=?, description=?, category=?, priority=?, due_at=?, reference_url=?, requires_review=?, updated_at=NOW()
+                SET title=?, description=?, category=?, priority=?, due_at=?, recurrence_type=?, recurrence_interval_days=?, reference_url=?, requires_review=?, updated_at=NOW()
                 WHERE id=?
             ");
-            $stmt->bind_param('ssssssii', $data['title'], $data['description'], $data['category'], $data['priority'], $data['due_at'], $data['reference_url'], $data['requires_review'], $taskId);
+            $stmt->bind_param('ssssssisii', $data['title'], $data['description'], $data['category'], $data['priority'], $data['due_at'], $data['recurrence_type'], $data['recurrence_interval_days'], $data['reference_url'], $data['requires_review'], $taskId);
             if (!$stmt->execute()) { $stmt->close(); throw new RuntimeException('Task update failed.'); }
             $stmt->close();
 

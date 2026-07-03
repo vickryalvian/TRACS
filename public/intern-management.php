@@ -175,7 +175,9 @@ include __DIR__ . '/includes/header.php';
           <div><span>Pending review</span><strong><?=esc($task['review_tasks'] ?? 0)?></strong></div>
         </div>
         <div class="im-notes"><span>Special notes</span><strong><?=esc($selected['special_notes'] ?: 'No special notes recorded.')?></strong></div>
+        <?php if(tracs_user_can($conn, 'tasks.monitor')): ?>
         <a class="btn btn-ghost" href="/monitoring.php?tab=interns&user_id=<?=$selected['id']?>"><i data-lucide="kanban-square" class="icon-sm"></i>Open Task Monitoring</a>
+        <?php endif; ?>
       </div>
       <?php endif; ?>
     </aside>

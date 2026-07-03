@@ -48,6 +48,7 @@ $AC = new ActivityLogController($conn,$uid);
 $SC = new ShiftReportController($conn,$uid);
 $MC = new MOMController($conn,$uid);
 $TM = new TaskManagementController($conn,$uid);
+$task_monitor_base_href = tracs_user_can($conn, 'tasks.monitor') ? 'monitoring.php' : 'tasks.php';
 
 $opsStatus = getOpsStatus($conn);
 $shift_reports = $SC->getDashboardByShift();
@@ -79,6 +80,7 @@ try {
   $task_assignment_schema_ready = $TM->schemaReady();
   if($task_assignment_schema_ready){
     $task_assignment_can_create = $TM->canCreate();
+    $TM->refreshRecurringTasks();
     $TM->refreshOverdueStatuses();
     $stmt = $conn->prepare("
       SELECT t.*, ta.id AS assignment_id, ta.user_id, ta.status AS stored_status,
@@ -894,11 +896,11 @@ function dashboard_assignment_active(array $assignment): bool {
   return $status['key'] !== 'done';
 }
 
-function dashboard_assignment_row_html(array $assignment): string {
+function dashboard_assignment_row_html(array $assignment, string $baseHref = 'monitoring.php'): string {
   $status = dashboard_assignment_status_meta($assignment);
   $priority = dashboard_assignment_priority($assignment);
   $aid = (int)($assignment['assignment_id'] ?? 0);
-  $href = $aid > 0 ? 'monitoring.php?assignment_id='.$aid : 'monitoring.php';
+  $href = $aid > 0 ? $baseHref.'?assignment_id='.$aid : $baseHref;
   ob_start();
   ?>
   <a class="tm-assignment-row is-<?=esc($status['key'])?>" href="<?=esc($href)?>">
@@ -963,7 +965,7 @@ foreach($task_assignment_rows as $assignment){
     dashboard_assignment_priority($assignment),
     $status['label'],
     !empty($assignment['assignee_name']) ? 'For '.$assignment['assignee_name'] : '',
-    $aid > 0 ? 'monitoring.php?assignment_id='.$aid : 'monitoring.php',
+    $aid > 0 ? $task_monitor_base_href.'?assignment_id='.$aid : $task_monitor_base_href,
     false,
     'assignment',
     $aid
@@ -1428,7 +1430,7 @@ include 'includes/header.php';
 
         <div class="task-monitoring-tabs" role="tablist" aria-label="Task Monitoring">
           <button type="button" class="task-monitoring-tab active" role="tab" aria-selected="true" aria-controls="tm-pane-checklist" data-task-monitor-tab="checklist" data-all-href="checklist.php"><i data-lucide="list-checks" class="icon-xs"></i>Checklist and Reminder</button>
-          <button type="button" class="task-monitoring-tab" role="tab" aria-selected="false" aria-controls="tm-pane-assignments" data-task-monitor-tab="assignments" data-all-href="monitoring.php"><i data-lucide="user-check" class="icon-xs"></i>Assignments<?php if($task_monitor_active_assignment_count > 0): ?><span class="tm-tab-count"><?=esc($task_monitor_active_assignment_count)?></span><?php endif; ?></button>
+          <button type="button" class="task-monitoring-tab" role="tab" aria-selected="false" aria-controls="tm-pane-assignments" data-task-monitor-tab="assignments" data-all-href="<?=esc($task_monitor_base_href)?>"><i data-lucide="user-check" class="icon-xs"></i>Assignments<?php if($task_monitor_active_assignment_count > 0): ?><span class="tm-tab-count"><?=esc($task_monitor_active_assignment_count)?></span><?php endif; ?></button>
         </div>
 
         <div class="task-monitoring-viewport">
@@ -1457,7 +1459,7 @@ include 'includes/header.php';
                     $status = dashboard_assignment_status_meta($assignment);
                     $aid = (int)($assignment['assignment_id'] ?? 0);
                   ?>
-                  <button type="button" class="tm-assignment-awareness-item is-<?=esc($status['key'])?>" data-task-monitor-switch="assignments" data-assignment-href="<?=esc($aid > 0 ? 'monitoring.php?assignment_id='.$aid : 'monitoring.php')?>">
+                  <button type="button" class="tm-assignment-awareness-item is-<?=esc($status['key'])?>" data-task-monitor-switch="assignments" data-assignment-href="<?=esc($aid > 0 ? $task_monitor_base_href.'?assignment_id='.$aid : $task_monitor_base_href)?>">
                     <span class="tm-type-badge">Assigned</span>
                     <span>New assigned task: <?=esc($assignment['title'] ?? 'Untitled assignment')?></span>
                     <i data-lucide="arrow-right" class="icon-xs"></i>
@@ -1518,9 +1520,9 @@ include 'includes/header.php';
                 <div class="tm-column-head">
                   <div><span>Task Assignments</span><strong><?=$task_monitor_active_assignment_count?> active</strong></div>
                   <div class="tm-column-actions">
-                    <a href="monitoring.php" class="btn btn-ghost btn-sm">All →</a>
+                    <a href="<?=esc($task_monitor_base_href)?>" class="btn btn-ghost btn-sm">All →</a>
                     <?php if($task_assignment_can_create): ?>
-                    <a href="monitoring.php?tab=assigned&amp;add=1" class="btn btn-primary btn-sm btn-add-reveal tm-column-add" title="Add task assignment" aria-label="Add task assignment">
+                    <a href="<?=esc($task_monitor_base_href)?>?tab=assigned&amp;add=1" class="btn btn-primary btn-sm btn-add-reveal tm-column-add" title="Add task assignment" aria-label="Add task assignment">
                       <i data-lucide="plus" class="icon-sm"></i><span class="btn-add-label">Add</span>
                     </a>
                     <?php endif; ?>
@@ -1532,7 +1534,7 @@ include 'includes/header.php';
                 <div class="tm-empty"><i data-lucide="user-check" class="icon-sm"></i><span>No task assignments</span></div>
                 <?php else: ?>
                 <div class="tm-scroll tm-assignment-list">
-                  <?php foreach($task_assignment_rows as $assignment): ?><?=dashboard_assignment_row_html($assignment)?><?php endforeach; ?>
+                  <?php foreach($task_assignment_rows as $assignment): ?><?=dashboard_assignment_row_html($assignment, $task_monitor_base_href)?><?php endforeach; ?>
                 </div>
                 <?php endif; ?>
               </div>
