@@ -4,6 +4,30 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Icon-Only Edit/Remove Buttons in Server Registry (2026-07-03 ~10:38 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch `design/ui-consistency-audit`, commit
+`65cd0fd`. 2 files: `public/assets/infrastructure-pulse.css`,
+`public/assets/infrastructure-pulse.js`. Backup
+`/opt/tracs/backups/infra-icon-buttons-20260703-103829/`.
+
+User feedback: the Edit/Remove buttons in the Server Registry list used
+text labels, inconsistent with the icon-only `.btn-icon` pattern used
+elsewhere in TRACS (e.g. the modal close button, `.um-row-actions`).
+Switched both to icon-only (`.btn btn-ghost btn-icon`, 28×28px, matching the
+existing standard), stacked vertically per the user's suggestion — edit on
+top, remove below — via `.infra-server-registry__remove { flex-direction:
+column }`. Added `title`/`aria-label` on both buttons since the visible text
+label is gone. No JS logic changes — click handling is keyed on the
+`data-infra-edit-server`/`data-infra-remove-server` attributes, unaffected
+by the markup change.
+
+Verified on local Docker: both buttons render at the correct 28px size,
+Edit still opens the pre-filled edit form correctly, no console errors.
+Drift-checked clean before deploying, post-deploy sha256 matched local on
+both files, HTTP checks 200.
+
 ## Deployed — Persist Demo-Datacenter Removal + Server Edit Feature (2026-07-03 ~10:28–10:30 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
