@@ -4,6 +4,80 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Continuous Background ICMP Monitoring + History (2026-07-03 ~11:22–13:02 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch `design/ui-consistency-audit`, commit
+`4381a89`. 7 files: `config/migrations/2026_07_03_infrastructure_monitoring_results.sql`
+(new, applied), `core/infrastructure_monitor.php` (new),
+`bin/tracs-infrastructure-monitor.php` (new),
+`public/api/infrastructure-server-{list,history}.php` (new),
+`core/infrastructure_servers.php`, `public/assets/infrastructure-pulse.js`
+(updated). Backup `/opt/tracs/backups/infra-continuous-monitor-20260703-112228/`.
+`AI_MEMORY.md` and `README.md` were **not** deployed this round — both had
+drifted on prod independently of this feature (see below).
+
+User asked whether the tab-driven ICMP check was "okay or needed rework...
+like Grafana monitoring." Answer was: it needed rework for that. Built the
+real thing:
+
+- New `infrastructure_monitoring_results` table stores every check as a
+  historical sample (30-day retention, pruned every worker run via
+  `tracs_infra_prune_history()`), replacing the client-fabricated sine-wave
+  history that real nodes were silently using for their trend graphs before
+  this deploy.
+- `core/infrastructure_monitor.php` + `bin/tracs-infrastructure-monitor.php`:
+  a cron/systemd-timer worker that checks every real ICMP target whose
+  configured interval has elapsed, independent of any browser tab.
+  MySQL `GET_LOCK('tracs_infrastructure_monitor', 0)`-guarded so an
+  overlapping run is a no-op, mirroring `core/notifications.php`'s existing
+  scheduler pattern exactly.
+- **Installed as a systemd service + timer** (`tracs-infrastructure-monitor.service`/`.timer`
+  in `/etc/systemd/system/`), matching how `tracs-notification-worker` is
+  already scheduled on this host — there is no crontab on this server for
+  either worker, both run via systemd timers (`OnUnitActiveSec=1min`).
+  `systemctl daemon-reload`, `enable`, and `start` run; confirmed active via
+  `systemctl list-timers`.
+- `public/api/infrastructure-server-list.php` / `-history.php`: new
+  session/CSRF/`dashboard.view`-gated read endpoints. The frontend polls
+  both every 15s to show the latest persisted state and trend data — the
+  same way a Grafana panel polls a datasource — replacing the old
+  tab-driven recurring-check timer entirely. The one-off immediate check
+  right after adding/editing a real server is unchanged (still useful ahead
+  of the next worker tick).
+- Documented in `AI_MEMORY.md`'s Infrastructure Pulse section and
+  `README.md`'s cron/deploy-checklist (not yet deployed — see below).
+
+**Drift note:** `AI_MEMORY.md` and `README.md` differed from prod
+independently of this feature. `AI_MEMORY.md`'s diff was a clean superset
+(this branch has an entire "Multi-Machine Git Workflow" section prod
+lacks) — low risk, but skipped anyway since it's pure documentation with
+zero runtime effect. `README.md`'s diff was messy/reordered (~163 added,
+~174 removed, ~39 modified lines) rather than a clean superset, meaning
+prod's copy may have content this branch doesn't — did not attempt a
+surgical merge given no functional stakes. Both are a known gap for a
+future session to reconcile deliberately, not urgent.
+
+Verified on local Docker first: `bin/tracs-infrastructure-monitor.php` run
+manually confirmed it only checks servers whose interval has elapsed
+(second run immediately after reported `checked=0`), wrote a real history
+row, and the frontend's `node.history.latency` reflected real DB samples
+(`[27, 36, 29]`) instead of the fabricated wave. Precisely measured the
+frontend's poll cadence via `performance.now()` timestamps in the browser
+(not the noisy cumulative network log, which had made it look like a
+runaway timer from repeated page reloads earlier in the session) — confirmed
+exactly ~15000ms between polls, no duplication.
+
+**Verified in production after deploy**: `systemctl list-timers` showed
+the new timer active and already fired; `logs/infrastructure-monitor.log`
+showed `checked SGP01 (103.250.11.175) -> healthy 16.2ms` from a run with
+zero browser tabs open; confirmed the matching row landed in
+`infrastructure_monitoring_results`. `php -l` passed on all 5 PHP files,
+`php8.3-fpm` reloaded cleanly, post-deploy sha256 matched local on all 7
+files, HTTP checks came back as expected (401 unauthenticated on both new
+endpoints, 302 login redirect on the page), and the PHP-FPM error log was
+checked post-deploy — clean.
+
 ## Deployed — Icon-Only Edit/Remove Buttons in Server Registry (2026-07-03 ~10:38 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
