@@ -4,6 +4,58 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Sidebar Visual Polish: Glass Blur, Group Spacing, Logo Alignment, Fixed Accordion Animation (2026-07-03 ~20:01 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch `design/sidebar-hover-expand`, commits
+`d445eea` + `f35ae9d`. 2 files: `public/includes/header.php`,
+`public/assets/tracs.css`. Backup
+`/opt/tracs/backups/sidebar-polish-20260703-200141/`.
+
+Two rounds of design feedback, deployed together:
+
+- **Glass blur**: `.sidebar-flyout` background now uses `backdrop-filter:
+  blur(14px) saturate(150%)` with a translucent `--s1` tint, gated behind
+  `@supports` so browsers without backdrop-filter keep the solid
+  fallback.
+- **Group labels → minimal lines**: removed the uppercase "OVERVIEW" /
+  "OPERATIONS" / etc. text entirely; group separators are now a plain
+  hairline. Group names moved to `role="group" aria-label="..."` on the
+  wrapper so screen readers aren't worse off.
+- **Dashboard icon aligned with the TRACS wordmark**: `.sidebar-nav`
+  top padding tuned (6px → 10px) so the icon's centre lines up with
+  `.page-title-logo` on the dashboard page (verified via
+  `getBoundingClientRect`: 2px off).
+- **Faster motion**: `--sb-dur` 180ms → 130ms, driving expand/collapse,
+  label reveal, chevron rotation, and the submenu accordion from one
+  token.
+- **More group spacing**: divider height 9px → 18px (half the 36px row
+  height, a proportional relationship).
+- **Submenu accordion animation was actually broken, not just slow**: it
+  animated `max-height: 0 → 320px` regardless of real content, so a short
+  submenu (User Management, ~73px) only had visible motion in the last
+  ~23% of the transition — at 130ms that's ~30ms, effectively a snap.
+  Replaced with the `grid-template-rows: 0fr → 1fr` technique (wrapped
+  each submenu's links in a new `.nav-submenu-track` container). Verified
+  via `getBoundingClientRect`: Tasks & Monitoring (6 items) resolves to
+  207.5px against 208px of real content; User Management (2 items) to
+  72.5px against 73px — both animate smoothly regardless of item count
+  now, no magic-number tuning needed if items are added later.
+
+Verification: drift-checked clean on both files before deploy (matched the
+`cbfc345` baseline exactly); `php -l` clean; post-deploy sha256 matches
+local byte-for-byte on both; `login.php` returns **200**; deployed CSS
+confirmed to contain `nav-submenu-track`, the `blur(14px)` rule, and the
+`18px` group-label height; `nginx`/`php8.3-fpm` active. Pre-deploy verified
+live against the docker dev stack as `admin@tracs.local` in both themes:
+group spacing, glass blur (confirmed via computed `backdrop-filter`, not
+just visual read), logo/icon alignment, and both accordions (measured
+open-state track height against real content height for both the 6-item
+and 2-item submenu) — no console errors.
+
+Branch remains pushed for review/PR. Production tracks the working tree via
+file-copy deploy (not a `main` pull).
+
 ## Deployed — Sidebar Bug Fixes: Ticker, Z-Index, Profile Menu, Theme-in-Profile (2026-07-03 ~19:24 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
