@@ -4,6 +4,55 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Hover-to-Expand Sidebar Navigation (2026-07-03 ~13:51 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch `design/sidebar-hover-expand`, commit
+`549ef8c`. 3 files: `public/includes/header.php`, `public/assets/tracs.css`,
+`public/assets/tracs.js`. Backup
+`/opt/tracs/backups/sidebar-hover-expand-20260703-135157/`.
+
+Sidebar redesign: stays icon-only (64px) and expands to ~212px on
+hover/focus as an absolutely-positioned overlay flyout (the flex layout box
+never resizes, so page content never shifts). Items are grouped into
+Overview / Operations / Communication / Admin with uppercase labels shown
+only while expanded; the active page gets a 3px blue left-edge bar plus
+tinted background; a favorites section (localStorage-backed pin toggle, up
+to 4 pages) sits above the groups. Tasks & Monitoring / User Management
+submenus became inline accordions instead of floating flyouts. The old
+JS-computed floating-tooltip mechanism (`bindSidebarTooltips`) was retired
+in favor of pure-CSS inline label reveals. Mobile (`≤640px`) keeps the
+original icon-only horizontal bar unchanged; hover-expand is gated behind
+`(hover: hover) and (pointer: fine)` so touch devices are unaffected.
+
+What was applied:
+
+- Code (file-copy deploy; prior versions backed up as above): the 3 files
+  listed. No migrations, no config/env changes.
+- Drift-check before deploy: sha256 of all 3 files on prod matched the
+  `design/ui-consistency-audit` baseline (commit `4381a89`, the last thing
+  deployed) exactly — no untracked prod drift.
+- `sudo systemctl reload php8.3-fpm` to clear opcache.
+
+Verification on production:
+
+- `php -l` clean on the deployed `header.php`.
+- sha256 of all 3 files matches byte-for-byte between the local working tree
+  and `/opt/tracs` post-deploy.
+- `https://tracs.vickry.id/login.php` returns **200** and renders; deployed
+  `tracs.css`/`tracs.js` both return **200** and contain the new sidebar
+  markers (`sb-w-open`, `bindSidebarFavorites`).
+- `nginx` and `php8.3-fpm` both `active`; no new entries in php-fpm/nginx
+  error logs referencing the deployed files.
+- Pre-deploy: verified locally against the docker dev stack (login, hover
+  expand, active-state accent bar, pin/favorites, inline submenu accordion,
+  light/dark theme tokens, mobile breakpoint) — no console/PHP errors. A
+  throwaway test user used for that login was deleted afterward; no existing
+  data touched.
+
+Branch remains pushed for review/PR. Production tracks the working tree via
+file-copy deploy (not a `main` pull).
+
 ## Deployed — Continuous Background ICMP Monitoring + History (2026-07-03 ~11:22–13:02 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
