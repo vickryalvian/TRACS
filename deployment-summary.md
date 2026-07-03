@@ -4,6 +4,115 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Task Assignment 404 Fix + Recurring-Task Modal Rework (2026-07-04 ~00:12 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch
+`fix/monitoring-task-assignment-routing-and-modal`, commit `904bbbc`.
+7 files: `public/monitoring.php`, `public/index.php`,
+`public/intern-management.php`, `modules/task-management/controller.php`,
+`modules/task-management/model.php`, `public/assets/tracs.css`,
+`config/migrations/2026_07_03_task_recurrence_interval.sql` (new, applied).
+Backup `/opt/tracs/backups/task-assignment-recurrence-20260704-001128/`.
+
+User reported: assigning a task to someone left that person unable to view
+it — clicking through gave a 404. Also flagged the Add Task modal's
+"Daily recurring task" checkbox sitting next to "Require review after
+completion" as ambiguous, since they read as related options in a
+checklist when they're actually unrelated (cadence vs. governance).
+
+- **404 root cause**: `monitoring.php`/`tasks.php` are the same script,
+  gated by which URL was requested — `tasks.monitor`-less users must land
+  on `tasks.php` or they 404 (correct, existing behavior). But
+  `index.php`'s dashboard and `intern-management.php` had every assignment
+  link hardcoded to `monitoring.php`, so any assignee without
+  `tasks.monitor` (or a `tasks.create`-only user clicking "Add") always
+  404'd. Fixed by computing `$task_monitor_base_href` once
+  (`tracs_user_can($conn,'tasks.monitor') ? 'monitoring.php' :
+  'tasks.php'`) and routing every dashboard link through it, mirroring the
+  pattern `header.php`'s nav link already used.
+- **Modal rework**: replaced the checkbox with a One-time/Recurring
+  segmented toggle in the Add and Edit Task modals, plus a real interval
+  picker (quick-pick chips for 1/2/3/5 days or a free-entry day count).
+  "Require review" moved out of that row into Task Details, since it's an
+  unrelated axis. Edit Task previously couldn't change recurrence at all
+  after creation — now it can. Added a Cadence line to the task detail
+  panel so the setting is visible without reopening Edit.
+- **Recurrence made functional**: `recurrence_type` was written on create
+  but nothing ever read it — no cron, no reset job, anywhere in the
+  codebase. Added `tracs_tasks.recurrence_interval_days` (migration) and
+  `TaskManagementModel::refreshRecurringTasks()`, a lazy on-page-load
+  rollover — same pattern this app already uses for overdue-status
+  refresh, since there's no system cron. Once a recurring task's `due_at`
+  passes, its assignments reset to a fresh `assigned` cycle (progress/
+  completion cleared, linked checklist item and reminder reset/rescheduled)
+  and `due_at` advances by the interval, self-healing across any missed
+  cycles. The prior cycle's outcome is preserved as a `recurrence_reset`
+  entry in the task's activity log rather than silently overwritten.
+  Wired into both `monitoring.php` and `index.php`'s existing
+  `refreshOverdueStatuses()` call site.
+
+**Bug caught during verification, fixed before deploy**: the reset query
+tried to set `overdue_seconds = NULL`, but that column is
+`NOT NULL DEFAULT 0` — every rollover was silently failing (caught by the
+per-task try/catch, rolled back, no visible error). Found via an isolated
+dry-run scoped to a throwaway test task (never committed), fixed to
+`overdue_seconds = 0`, re-verified the same way before trusting it against
+real data.
+
+Verified pre-deploy against the docker dev stack using two real sessions —
+`admin@tracs.local` (super_admin) and `test@tracs.local` (agent), both
+temporarily password-reset then restored to their original hashes
+immediately after:
+
+- Agent hitting `monitoring.php?assignment_id=X` directly → 404 (correct,
+  unchanged access control). Agent hitting `tasks.php?assignment_id=X` →
+  200, full detail renders. Agent's dashboard link now points at
+  `tasks.php?assignment_id=X` instead of the old hardcoded `monitoring.php`
+  — this was the actual fix.
+- Superadmin created a 3-day-interval recurring task assigned to the
+  agent; `recurrence_interval_days=3` persisted correctly; agent's detail
+  panel showed "Cadence: Recurring · every 3 day(s)".
+- Rollover logic verified via an isolated, always-rolled-back dry run
+  scoped to the throwaway test task only — deliberately did **not**
+  re-trigger the live shared rollover in dev, since it processes every
+  qualifying recurring task system-wide and a real task
+  (`Check Transfer Domain`, id 14, created concurrently by the actual user
+  during this session) was also overdue-and-recurring at the time; verified
+  its `updated_at` was untouched throughout. Test task and its linked
+  checklist/reminder rows fully deleted afterward via the app's own
+  `delete_task` action (cascade confirmed via DB).
+
+Migration applied on production via `sudo mysql` (root, unix-socket auth)
+rather than the `tracs_app` DB user — `tracs_app` correctly lacks
+`ALTER ROUTINE`/`CREATE ROUTINE` privileges (least-privilege, as expected),
+so the guarded-procedure migration pattern needs the more privileged path
+on this host, same as it must have for the original
+`2026_05_18_task_management.sql` migration.
+
+Verification on production:
+
+- `php -l` clean on all 5 deployed PHP files.
+- Migration applied cleanly; `DESCRIBE tracs_tasks` confirms
+  `recurrence_interval_days int(10) unsigned NOT NULL DEFAULT 1`.
+- sha256 of all 7 files matches byte-for-byte between the local working
+  tree and `/opt/tracs` post-deploy.
+- Drift-check before deploy: sha256 of all files-to-be-touched on prod
+  matched the branch's parent commit (`e0cb038`) exactly — no untracked
+  prod drift.
+- `sudo systemctl reload php8.3-fpm` (opcache cleared); `nginx` and
+  `php8.3-fpm` both `active`; no new entries in php-fpm/nginx error logs.
+- `https://tracs.vickry.id/login.php` → 200; `/monitoring.php`,
+  `/index.php`, `/tasks.php` (unauthenticated) → 302 to login, as expected.
+- Did **not** trigger `refreshRecurringTasks()` against real data as part
+  of prod verification beyond the ordinary page loads above — it will fire
+  naturally on the next real page view, which is the intended behavior
+  going forward (including for the real `Check Transfer Domain` task,
+  which is overdue and due to roll to its next cycle).
+
+Branch remains pushed for review/PR. Production tracks the working tree via
+file-copy deploy (not a `main` pull).
+
 ## Deployed — Sidebar Visual Polish: Glass Blur, Group Spacing, Logo Alignment, Fixed Accordion Animation (2026-07-03 ~20:01 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
