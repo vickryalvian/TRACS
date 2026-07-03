@@ -5196,54 +5196,74 @@ function setQuickTime(type, sourceBtn = null) {
 
 window.setQuickTime = setQuickTime;
 
-function bindSidebarTooltips() {
-  const hosts = document.querySelectorAll('.sidebar .nav-item, .sidebar .user-avatar, .sidebar .theme-toggle');
-  if (!hosts.length) return;
+const TRACS_SIDEBAR_PIN_KEY = 'tracs_sidebar_pins';
+const TRACS_SIDEBAR_PIN_MAX = 4;
 
-  const placeTip = (host) => {
-    if (!host) return;
-    const tip = host.querySelector('.nav-tip');
-    const sidebar = host.closest('.sidebar');
-    if (!sidebar) return;
+function tracsGetSidebarPins() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(TRACS_SIDEBAR_PIN_KEY) || '[]');
+    return Array.isArray(raw) ? raw.filter(v => typeof v === 'string') : [];
+  } catch (e) {
+    return [];
+  }
+}
 
-    const hostRect = host.getBoundingClientRect();
-    const sideRect = sidebar.getBoundingClientRect();
-    if (tip) {
-      tip.style.setProperty('--nav-tip-left', `${sideRect.right + 10}px`);
-      tip.style.setProperty('--nav-tip-top', `${hostRect.top + hostRect.height / 2}px`);
-    }
+function tracsSetSidebarPins(pins) {
+  try { localStorage.setItem(TRACS_SIDEBAR_PIN_KEY, JSON.stringify(pins)); } catch (e) {}
+}
 
-    const submenu = host.closest('.nav-menu-wrap')?.querySelector('.nav-submenu');
-    if (submenu) {
-      submenu.style.setProperty('--nav-submenu-left', `${sideRect.right + 10}px`);
-      submenu.style.setProperty('--nav-submenu-top', `${hostRect.top + hostRect.height / 2}px`);
-    }
-  };
+function bindSidebarFavorites() {
+  const sidebar = document.querySelector('.sidebar');
+  const favSection = document.getElementById('navFavorites');
+  const favList = document.getElementById('navFavoritesList');
+  if (!sidebar || !favSection || !favList) return;
 
-  const placeOpenSubmenus = () => {
-    document.querySelectorAll('.sidebar .nav-menu-wrap[open] > .nav-item').forEach(host => placeTip(host));
-  };
-
-  hosts.forEach((host) => {
-    host.addEventListener('mouseenter', () => placeTip(host));
-    host.addEventListener('focusin', () => placeTip(host));
-    if (host.closest('.nav-menu-wrap')) {
-      host.addEventListener('click', () => placeTip(host));
-      host.addEventListener('keydown', event => {
-        if (event.key === 'Enter' || event.key === ' ') placeTip(host);
-      });
-    }
-  });
-
-  document.querySelectorAll('.sidebar .nav-menu-wrap').forEach(menu => {
-    menu.addEventListener('toggle', () => {
-      if (menu.open) placeTip(menu.querySelector('summary.nav-item'));
+  const syncPinButtons = () => {
+    const pins = tracsGetSidebarPins();
+    sidebar.querySelectorAll('[data-pin-toggle]').forEach(btn => {
+      const pinned = pins.includes(btn.dataset.pinKey);
+      btn.classList.toggle('is-pinned', pinned);
+      btn.setAttribute('aria-pressed', pinned ? 'true' : 'false');
+      btn.title = pinned ? `Unpin ${btn.dataset.pinLabel}` : `Pin ${btn.dataset.pinLabel} to favorites`;
     });
+  };
+
+  const renderFavorites = () => {
+    const pins = tracsGetSidebarPins();
+    favList.innerHTML = '';
+    pins.forEach(key => {
+      const source = sidebar.querySelector(`.sidebar-nav > .nav-group .nav-item-wrap[data-nav-key="${key}"]`);
+      if (!source) return;
+      const clone = source.cloneNode(true);
+      clone.querySelectorAll('[id]').forEach(node => node.removeAttribute('id'));
+      favList.appendChild(clone);
+    });
+    favSection.hidden = pins.length === 0;
+    tracsRefreshIcons(favList);
+    syncPinButtons();
+  };
+
+  const togglePin = (key) => {
+    if (!key) return;
+    let pins = tracsGetSidebarPins();
+    if (pins.includes(key)) {
+      pins = pins.filter(k => k !== key);
+    } else {
+      if (pins.length >= TRACS_SIDEBAR_PIN_MAX) return;
+      pins = [...pins, key];
+    }
+    tracsSetSidebarPins(pins);
+    renderFavorites();
+  };
+
+  sidebar.addEventListener('click', event => {
+    const btn = event.target.closest('[data-pin-toggle]');
+    if (!btn) return;
+    event.preventDefault();
+    togglePin(btn.dataset.pinKey);
   });
 
-  window.addEventListener('resize', placeOpenSubmenus);
-  window.addEventListener('scroll', placeOpenSubmenus, true);
-  requestAnimationFrame(placeOpenSubmenus);
+  renderFavorites();
 }
 
 function bindSidebarMenus() {
@@ -5324,7 +5344,7 @@ document.addEventListener('DOMContentLoaded', () => {
   bindQuickDatetimeInputs();
   bindOpsStatusControls();
   bindSidebarMenus();
-  bindSidebarTooltips();
+  bindSidebarFavorites();
   initShiftReportReminders();
 
   /* ── Currency Converter ───────────────────── */
