@@ -4,6 +4,76 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Infrastructure Pulse Real Server Registry Persistence (2026-07-03 ~09:12 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch `design/ui-consistency-audit`, commit
+`02d7679`. 8 files: `config/migrations/2026_07_03_infrastructure_servers.sql`
+(new, applied), `core/infrastructure_servers.php` (new),
+`public/api/infrastructure-server-create.php` (new),
+`public/api/infrastructure-server-delete.php` (new),
+`public/api/infrastructure-ping.php`, `public/assets/infrastructure-pulse-data.js`,
+`public/assets/infrastructure-pulse.js`, `public/infrastructure-pulse.php`
+(updated). Backup `/opt/tracs/backups/infra-persistence-20260703-091202/`.
+
+Reported by the user testing the previous deploy: adding a real server (e.g.
+`CloudVPS-SGP01`, `103.250.11.175`) worked and got live-checked correctly,
+but disappeared on page refresh — the Server Registry had never been
+persisted anywhere, only held in an in-memory JS object rebuilt from scratch
+on every page load. Mock/demo entries stay intentionally session-only by
+design; this only applies to real targets.
+
+- New `infrastructure_servers` table (soft-delete via `deleted_at`, matching
+  the non-destructive-removal pattern used elsewhere in TRACS). Migration
+  applied via the app's own `config/database.php` connection over SSH
+  (no `MYSQL_LOGIN_PATH`/`~/.my.cnf` configured on this host yet), verified
+  with a read-only `DESCRIBE` afterward.
+- `infrastructure-server-create.php` / `-delete.php`: session + CSRF +
+  `dashboard.view`-gated, upsert-by-code (re-adding an existing code
+  reactivates/overwrites it, including a previously soft-deleted row),
+  server-side re-validates everything the client already validates (host
+  format, HTTP method requires `http(s)://`, TCP port range, required
+  fields) rather than trusting client-side checks alone.
+  Verified 401 unauthenticated, 422 on bad code chars / missing fields /
+  injection host / bad URL scheme / bad port.
+- `infrastructure-pulse.php` now loads active real servers server-side and
+  exposes them as `window.TRACS_INFRA_REAL_SERVERS` (safe JSON encoding,
+  `JSON_HEX_*` flags matching the existing ticker-items pattern in
+  `header.php`); `infrastructure-pulse.js` hydrates them into the store on
+  load, and the periodic ICMP check (from the previous deploy) now also
+  writes its result back to the row via `infrastructure-ping.php`'s new
+  optional `code` parameter, so a refreshed page shows the last known real
+  result immediately, not a reset "Awaiting Backend" pending state.
+- Also fixed a real bug found while building this: `tracs_infra_server_upsert`'s
+  hand-counted `mysqli` `bind_param()` type strings were misaligned by one
+  position, silently int-casting `target_host` (`"103.250.11.175"` stored as
+  `103`). Caught by inspecting the DB row after the first local test, not by
+  code review. Replaced with an ordered `[type, value]` pair binder
+  (`tracs_infra_bind_execute()`) that derives the type string from the pairs
+  themselves, removing that whole class of bug for this file.
+- Also fixed: real (non-mock) nodes were showing a fabricated `100.000%` 30D
+  uptime after a single successful check — a single ping proves current
+  reachability, not 30-day history, which TRACS doesn't aggregate yet. Added
+  an `uptimeTracked` flag (true only for mock nodes) and a dedicated
+  `uptimeText()` helper so real nodes show `--` for uptime specifically,
+  independent of the existing pending-state `--` handling.
+
+Verified end-to-end on local Docker before deploying: added
+`CloudVPS-SGP01` / `103.250.11.175`, confirmed the DB row (target_host
+correct after the bind_param fix, live check result cached), reloaded the
+page and confirmed the server survived with its cached status intact,
+removed it and confirmed soft-delete (row preserved, `deleted_at` set, does
+not reappear on refresh), then re-added it as the final state. Drift-checked
+clean before deploying, `php -l` passed on all 5 PHP files, `php8.3-fpm`
+reloaded, post-deploy sha256 matched local on all 8 files, and HTTP checks
+came back as expected (302 login redirect, all three new/updated API
+endpoints correctly 401 without authentication).
+
+**Note for the user:** the `CloudVPS-SGP01` entry added to production before
+this deploy was in-memory only and did not carry over (nothing to migrate —
+it was never stored anywhere). Add it once more via Manage Servers on
+production; from this deploy onward it will persist across refreshes.
+
 ## Deployed — Infrastructure Pulse Real ICMP Checks + Pending-Node Stat Fix (2026-07-03 ~08:53 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
