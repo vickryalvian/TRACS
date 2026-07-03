@@ -227,6 +227,9 @@
       .filter((item) => item.status !== 'healthy')
       .sort((a, b) => Infra.statusRank(b.status) - Infra.statusRank(a.status));
     const healthy = snapshot.nodes.filter((item) => item.status === 'healthy');
+    const focusedSelect = container.contains(document.activeElement)
+      ? document.activeElement.closest('[data-infra-select]')?.getAttribute('data-infra-select')
+      : null;
     container.innerHTML = `
       <div class="infra-report-main ${statusClass(snapshot.summary.globalStatus)}">
         <div class="infra-report-head">
@@ -281,6 +284,9 @@
         </section>
       </div>
     `;
+    if (focusedSelect) {
+      container.querySelector(`[data-infra-select="${CSS.escape(focusedSelect)}"]`)?.focus();
+    }
   }
 
   function ensureMetricRows(container, nodes) {
@@ -782,7 +788,9 @@
       const cancelRemove = event.target.closest('[data-infra-cancel-remove]');
       const confirmRemove = event.target.closest('[data-infra-confirm-remove]');
       if (cancelRemove) {
+        const code = cancelRemove.getAttribute('data-infra-cancel-remove');
         renderServerRegistry(modal, store);
+        if (code) modal.querySelector(`[data-infra-remove-server="${CSS.escape(code)}"]`)?.focus();
         return;
       }
       if (confirmRemove) {
@@ -793,6 +801,7 @@
         if (state.selectedCode === code) state.selectedCode = nodes[0]?.code || '';
         store.ingest({ ...snapshot, nodes });
         renderServerRegistry(modal, store);
+        modal.querySelector('[data-infra-server-registry]')?.focus();
         showToast('Server removed from monitoring.','success',{context:'modal',position:'modal-center',modal});
         return;
       }
@@ -807,11 +816,12 @@
           <strong>Remove this server from monitoring?</strong>
           <p>This will remove ${esc(node.name)} / ${esc(node.code)} from the server registry. Historical monitoring data should not be deleted unless explicitly requested.</p>
           <div>
-            <button type="button" class="btn btn-ghost btn-sm" data-infra-cancel-remove>Cancel</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-infra-cancel-remove="${esc(node.code)}">Cancel</button>
             <button type="button" class="btn btn-danger btn-sm" data-infra-confirm-remove="${esc(node.code)}">Remove Server</button>
           </div>
         </div>
       `;
+      wrap.querySelector('[data-infra-cancel-remove]')?.focus();
       if (window.lucide) window.lucide.createIcons();
     });
     form?.addEventListener('submit', (event) => {

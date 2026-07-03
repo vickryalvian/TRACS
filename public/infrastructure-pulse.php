@@ -106,12 +106,12 @@ $infra_js_v = @filemtime(__DIR__ . '/assets/infrastructure-pulse.js') ?: time();
       <button type="button" class="btn btn-ghost btn-icon" data-infra-manage-close aria-label="Close"><i data-lucide="x" class="icon-sm"></i></button>
     </div>
     <div class="infra-modal__tabs" role="tablist" aria-label="Server registry sections">
-      <button type="button" class="is-active" data-infra-modal-tab="add" role="tab" aria-selected="true">Add Server</button>
-      <button type="button" data-infra-modal-tab="servers" role="tab" aria-selected="false">Current Servers</button>
-      <button type="button" data-infra-modal-tab="settings" role="tab" aria-selected="false">Monitoring Settings</button>
+      <button type="button" class="is-active" data-infra-modal-tab="add" role="tab" id="infraModalTabAdd" aria-selected="true" aria-controls="infraModalPaneAdd">Add Server</button>
+      <button type="button" data-infra-modal-tab="servers" role="tab" id="infraModalTabServers" aria-selected="false" aria-controls="infraModalPaneServers">Current Servers</button>
+      <button type="button" data-infra-modal-tab="settings" role="tab" id="infraModalTabSettings" aria-selected="false" aria-controls="infraModalPaneSettings">Monitoring Settings</button>
     </div>
     <div class="infra-modal__body">
-      <section class="infra-modal__pane is-active" data-infra-modal-pane="add">
+      <section class="infra-modal__pane is-active" data-infra-modal-pane="add" id="infraModalPaneAdd" role="tabpanel" aria-labelledby="infraModalTabAdd">
         <form class="infra-server-form" data-infra-server-form novalidate>
           <div class="infra-method-grid" role="radiogroup" aria-label="Monitoring method">
             <label class="infra-method-card is-active" data-infra-method-card="icmp">
@@ -199,11 +199,11 @@ $infra_js_v = @filemtime(__DIR__ . '/assets/infrastructure-pulse.js') ?: time();
         </form>
       </section>
 
-      <section class="infra-modal__pane" data-infra-modal-pane="servers">
-        <div class="infra-server-registry" data-infra-server-registry></div>
+      <section class="infra-modal__pane" data-infra-modal-pane="servers" id="infraModalPaneServers" role="tabpanel" aria-labelledby="infraModalTabServers">
+        <div class="infra-server-registry" data-infra-server-registry tabindex="-1"></div>
       </section>
 
-      <section class="infra-modal__pane" data-infra-modal-pane="settings">
+      <section class="infra-modal__pane" data-infra-modal-pane="settings" id="infraModalPaneSettings" role="tabpanel" aria-labelledby="infraModalTabSettings">
         <div class="infra-settings-grid">
           <article>
             <i data-lucide="server-cog" class="icon-sm"></i>
