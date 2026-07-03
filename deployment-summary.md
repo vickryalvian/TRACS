@@ -4,6 +4,92 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Production Drift Correction: Full Catch-Up on 22 Un-Deployed Files (2026-07-03 ~09:41–09:54 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch `design/ui-consistency-audit`, HEAD at
+deploy time `d1d1b87` (no new commits — every file deployed here already
+existed in git; the gap was purely "committed but never shipped"). Backups
+`/opt/tracs/backups/index-css-drift-correction-20260703-094105/` and
+`/opt/tracs/backups/full-catchup-20260703-094739/`.
+
+**Read this before the next deploy on this branch — there is a two-part
+story here and I got the first part wrong before correcting it.**
+
+**Part 1 — a mistake, corrected.** The previous entry in this log
+("Connect Dashboard/TV Widgets...") found `public/index.php` and
+`public/assets/infrastructure-pulse.css` didn't match this branch's
+last-deployed baseline, and — following the "never revert unrelated
+changes" rule — preserved prod's differing content instead of overwriting
+it, assuming prod had legitimate independent changes. **That assumption was
+wrong.** Checking the actual commits (`2acfa3a`, `4e6686c`, `7973a5e`)
+showed prod's "different" content was strictly *older*: a stray
+`value="1000000"` Currency Converter prefill that `2acfa3a` had already
+removed, a `style="transform:scale(0.8)"` badge hack that `4e6686c` had
+already replaced with a real `.badge-sm` class, a raw 🐈‍⬛/🐾 emoji dobby
+easter egg that `4e6686c` had already replaced with Lucide icons,
+`font-weight: 850`/`650` that `7973a5e` had already normalized to `800`/`600`
+for a documented Windows-rendering bug, and missing `data-unsaved-ignore`
+attributes that were the actual fix for the false unsaved-changes-banner
+incidents logged earlier in this file. The "surgical merge" from the
+previous entry kept all of these bugs live on production. Re-deployed the
+full, correct branch HEAD for both files here to fix that.
+
+**Part 2 — the same root cause, much bigger than 2 files.** Checking further
+found the underlying problem: commits `2acfa3a`, `4e6686c`, and `7973a5e`
+were committed to git but **never actually deployed** — no entry for any of
+them exists earlier in this log. Scanning every file those three commits
+touched against production found 20 more stale files, plus a migration
+file that had never been copied to `config/migrations/` on the server (the
+migration itself — `2026_07_01_case_board_order.sql` — had already been
+applied to the DB directly at some point, confirmed via a read-only
+`SHOW COLUMNS` check, so only the file was missing, not the schema):
+
+- `modules/alert-ticker/SmartTickerEngine.php`, `modules/alert-ticker/controller.php`,
+  `public/api/ticker-delete.php`, `public/api/ticker-list.php` — and
+  `public/api/ticker-feed.php`, which didn't exist on prod **at all**. This
+  is the endpoint that powers `7216bdd`'s "shared public feed with live
+  sync" ticker feature — production had never had that feature's backend,
+  only whatever `header.php` shipped before it.
+- `public/api/case-attachment-lib.php`, `case-delete.php`, `case-get.php`,
+  `case-resolve.php`, `case-update.php`, `export-cases.php` (696/60/88/62/
+  160/110 changed lines respectively — case management on prod was running
+  a meaningfully older codebase).
+- `public/user-management.php` — **2722 changed lines**, `public/server-health.php`
+  — 310 changed lines. Before touching either (super_admin-only, security
+  scope on `server-health.php` per `AI_MEMORY.md`), verified the DB schema
+  those files expect already existed on prod (`tracs_users.archived_email`,
+  `tracs_users.removed_at`, `tracs_user_notes`, `tracs_cases.board_order` —
+  all present), so this was purely a stale-code gap, not a schema mismatch
+  that would have caused fatal errors.
+- `public/login.php`, `public/includes/header.php`,
+  `public/assets/{tracs.css,tracs.js,domain-price-crosscheck.css,shifting-assignment.css,tracs-date-range-picker.css,calendar-dist/assets/calendar-CQ8MUmL1.css}`.
+
+Given the scope (a security-sensitive page, thousands of changed lines,
+and a previously-undeployed live feature), stopped and got explicit
+confirmation before proceeding rather than pushing through
+unilaterally — see the conversation for the drift-scope question and
+"Full catch-up now" answer.
+
+Deployed all 22 files (21 code files + the migration file), verified DB
+schema compatibility first, backed up every existing file before
+overwriting, `php -l` passed on all 15 PHP files (both locally and on the
+server after copy), `php8.3-fpm` reloaded, post-deploy sha256 matched local
+on all 22 files, HTTP checks came back as expected (`login.php` 200,
+`user-management.php`/`server-health.php`/`index.php` 302 login redirects,
+`ticker-feed.php`/`case-get.php` 401 without auth), and both
+`php8.3-fpm` and nginx error logs were checked post-deploy — clean, only
+unrelated pre-existing bot-scanning noise already blocked by nginx rules.
+
+**Open question for a future session:** why did `2acfa3a`/`4e6686c`/
+`7973a5e` never get deployed despite being committed over 24h ago? Worth
+checking whether other commits on this branch have the same gap before
+assuming the next `git push` + deploy cycle is fully caught up — the
+drift-check step (fetch prod hashes, compare to the last commit *this
+session* believes was deployed) only catches drift relative to what this
+log claims was deployed, not silent gaps like this one where a commit was
+simply never actioned.
+
 ## Deployed — Connect Dashboard/TV Widgets to Real Server Data + Reorder Slider (2026-07-03 ~09:31 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
