@@ -1447,13 +1447,13 @@
   transform-origin: center;
 }
 
-.dashboard-widget-slider:not([data-widget-slide]) .dashboard-widget-slide:first-child .infra-dashboard-widget .dashboard-widget-main-icon,
-.dashboard-widget-slider[data-widget-slide="0"] .dashboard-widget-slide:first-child .infra-dashboard-widget .dashboard-widget-main-icon {
-  animation: dashboardWidgetRadarShow .82s cubic-bezier(.22, 1, .36, 1);
+.dashboard-widget-slider:not([data-widget-slide]) .dashboard-widget-slide:first-child .shift-dashboard-widget .dashboard-widget-main-icon,
+.dashboard-widget-slider[data-widget-slide="0"] .dashboard-widget-slide:first-child .shift-dashboard-widget .dashboard-widget-main-icon {
+  animation: dashboardWidgetShiftShow .82s cubic-bezier(.22, 1, .36, 1);
 }
 
-.dashboard-widget-slider[data-widget-slide="1"] .dashboard-widget-slide:nth-child(2) .shift-dashboard-widget .dashboard-widget-main-icon {
-  animation: dashboardWidgetShiftShow .82s cubic-bezier(.22, 1, .36, 1);
+.dashboard-widget-slider[data-widget-slide="1"] .dashboard-widget-slide:nth-child(2) .infra-dashboard-widget .dashboard-widget-main-icon {
+  animation: dashboardWidgetRadarShow .82s cubic-bezier(.22, 1, .36, 1);
 }
 
 @keyframes dashboardWidgetRadarShow {

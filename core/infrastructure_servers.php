@@ -38,6 +38,50 @@ function tracs_infra_server_list_active(mysqli $conn): array {
     return $rows;
 }
 
+function tracs_infra_iso(?string $mysqlDatetime): ?string {
+    if (!$mysqlDatetime) {
+        return null;
+    }
+    try {
+        return (new DateTime($mysqlDatetime))->format(DateTime::ATOM);
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+/**
+ * Shared by every surface that renders real servers client-side
+ * (public/infrastructure-pulse.php, public/index.php dashboard widget,
+ * public/tv-mode.php) so the registry, dashboard widget, and TV Mode widget
+ * all read from the same persisted rows instead of drifting independently.
+ */
+function tracs_infra_server_list_active_for_json(mysqli $conn): array {
+    return array_map(static function (array $row): array {
+        return [
+            'code' => $row['code'],
+            'name' => $row['name'],
+            'region' => $row['region'],
+            'country' => $row['country'],
+            'provider' => $row['provider'],
+            'method' => $row['method'],
+            'target_host' => $row['target_host'],
+            'target_port' => $row['target_port'],
+            'health_url' => $row['health_url'],
+            'expected_status' => $row['expected_status'],
+            'expected_keyword' => $row['expected_keyword'],
+            'packet_count' => $row['packet_count'],
+            'timeout_seconds' => $row['timeout_seconds'],
+            'interval_seconds' => $row['interval_seconds'],
+            'last_status' => $row['last_status'],
+            'last_latency_ms' => $row['last_latency_ms'] !== null ? (float)$row['last_latency_ms'] : null,
+            'last_packet_loss_percent' => $row['last_packet_loss_percent'] !== null ? (float)$row['last_packet_loss_percent'] : null,
+            'last_checked_at' => tracs_infra_iso($row['last_checked_at']),
+            'created_at' => tracs_infra_iso($row['created_at']),
+            'updated_at' => tracs_infra_iso($row['updated_at']),
+        ];
+    }, tracs_infra_server_list_active($conn));
+}
+
 /**
  * Inserts a new active row, or reactivates/overwrites an existing row with
  * the same code (including a previously soft-deleted one), matching the

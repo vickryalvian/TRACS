@@ -6,12 +6,14 @@ tracs_start_session();
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/auth/auth_check.php';
 require_once __DIR__ . '/../core/access_control.php';
+require_once __DIR__ . '/../core/infrastructure_servers.php';
 
 $tv_user = tracs_get_user_by_id($conn, (int)($_SESSION['user_id'] ?? 0));
 if (!$tv_user || !in_array((string)($tv_user['role_slug'] ?? ''), ['super_admin', 'admin', 'supervisor'], true)) {
     tracs_abort_404();
 }
 $_tracs_visual_theme_preference = tracs_normalize_visual_theme(tracs_get_user_preference($conn, (int)($_SESSION['user_id'] ?? 0), 'visual_theme', 'default'));
+$infra_real_servers = tracs_infra_server_list_active_for_json($conn);
 
 $css_v = @filemtime(__DIR__ . '/assets/tracs.css') ?: time();
 $tv_css_v = @filemtime(__DIR__ . '/assets/tv-mode.css') ?: time();
@@ -166,6 +168,7 @@ window.TRACS_BUILD_INFO = <?=json_encode($tracs_build_info, JSON_UNESCAPED_SLASH
   </section>
 </main>
 
+<script>window.TRACS_INFRA_REAL_SERVERS = <?=json_encode($infra_real_servers, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)?>;</script>
 <script src="assets/infrastructure-pulse-data.js?v=<?=$infra_data_v?>"></script>
 <script src="assets/infrastructure-pulse.js?v=<?=$infra_js_v?>"></script>
 <script src="assets/tv-mode.js?v=<?=$tv_js_v?>"></script>

@@ -22,8 +22,11 @@ require_once __DIR__.'/../modules/shift-reports/controller.php';
 require_once __DIR__.'/../modules/mom/controller.php';
 require_once __DIR__.'/../modules/task-management/controller.php';
 require_once __DIR__.'/../core/notifications.php';
+require_once __DIR__.'/../core/infrastructure_servers.php';
 
 require_once __DIR__.'/includes/page_helpers.php';
+
+$infra_real_servers = tracs_infra_server_list_active_for_json($conn);
 
 // TRACS Operations System: first-deployment dashboard direction by Vickry.
 $uid        = (int)($_SESSION['user_id']??0);
@@ -1217,17 +1220,6 @@ include 'includes/header.php';
       <div class="dashboard-widget-slider" aria-label="Operations summary widgets">
         <div class="dashboard-widget-track">
           <div class="dashboard-widget-slide">
-            <a class="panel infra-dashboard-widget" href="infrastructure-pulse.php" data-infra-dashboard-widget>
-              <div class="infra-dashboard-widget__head">
-                <div>
-                  <span>Infrastructure Pulse</span>
-                  <strong>Loading</strong>
-                </div>
-                <i data-lucide="radar" class="dashboard-widget-main-icon"></i>
-              </div>
-            </a>
-          </div>
-          <div class="dashboard-widget-slide">
             <a class="panel shift-dashboard-widget is-<?=esc($shift_summary_status)?>" href="shift-reports.php"
               data-shift-report-reminder
               data-shift-end-time="<?=esc($shift_end_iso)?>"
@@ -1274,6 +1266,17 @@ include 'includes/header.php';
                     <?php endfor; ?>
                   </div>
                 </div>
+              </div>
+            </a>
+          </div>
+          <div class="dashboard-widget-slide">
+            <a class="panel infra-dashboard-widget" href="infrastructure-pulse.php" data-infra-dashboard-widget>
+              <div class="infra-dashboard-widget__head">
+                <div>
+                  <span>Infrastructure Pulse</span>
+                  <strong>Loading</strong>
+                </div>
+                <i data-lucide="radar" class="dashboard-widget-main-icon"></i>
               </div>
             </a>
           </div>
@@ -1712,6 +1715,7 @@ include 'includes/header.php';
 <?php include __DIR__.'/../modules/ops-status/modal.php'; ?>
 <?php $_infra_data_v = @filemtime(__DIR__.'/assets/infrastructure-pulse-data.js') ?: time(); ?>
 <?php $_infra_js_v = @filemtime(__DIR__.'/assets/infrastructure-pulse.js') ?: time(); ?>
+<script>window.TRACS_INFRA_REAL_SERVERS = <?=json_encode($infra_real_servers, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)?>;</script>
 <script src="assets/infrastructure-pulse-data.js?v=<?=$_infra_data_v?>"></script>
 <script src="assets/infrastructure-pulse.js?v=<?=$_infra_js_v?>"></script>
 <?php include 'includes/footer.php'; ?>
