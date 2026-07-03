@@ -326,6 +326,8 @@
       const packetLoss = Number(node.packetLoss ?? node.packet_loss_percent ?? 0);
       const uptime = Number(node.uptime ?? node.uptime_30d ?? 0);
       const incidentCount = Number(node.incidentCount ?? node.incident_count ?? 0);
+      const mode = node.mode || (node.method && node.method !== 'mock' ? 'real' : 'mock');
+      const status = node.status || 'healthy';
       return {
         ...node,
         id: node.id || code.toLowerCase(),
@@ -337,7 +339,7 @@
         country: node.country || 'Unknown',
         city: node.city || node.region || 'Unknown',
         region: node.region || node.city || 'Unknown',
-        mode: node.mode || (node.method && node.method !== 'mock' ? 'real' : 'mock'),
+        mode,
         method: node.method || 'mock',
         target_host: node.target_host || node.targetHost || '',
         target_ip: node.target_ip || node.targetIp || '',
@@ -350,14 +352,20 @@
         is_active: node.is_active ?? true,
         created_at: node.created_at || node.createdAt || nowIso(),
         updated_at: node.updated_at || node.updatedAt || nowIso(),
-        status: node.status || 'healthy',
+        status,
         latency,
         uptime,
+        // 30D uptime is only meaningful with real historical aggregation
+        // (infrastructure_monitoring_results, not yet implemented). Mock
+        // nodes fabricate it for the prototype; real nodes only get it once
+        // that aggregation exists, so the UI shows "--" instead of a
+        // fabricated figure in the meantime.
+        uptimeTracked: node.uptimeTracked ?? (mode !== 'real'),
         packetLoss,
         incidentCount,
         latitude: Number(node.latitude),
         longitude: Number(node.longitude),
-        lastChecked: node.lastChecked || node.last_checked || nowIso(),
+        lastChecked: node.lastChecked || node.last_checked || (status === 'pending' ? null : nowIso()),
         history: node.history || makeHistory(latency, index, packetLoss, uptime, incidentCount),
       };
     });
@@ -423,8 +431,8 @@
     }));
   }
 
-  function createSnapshot() {
-    const nodes = withHistories(clone(DATACENTERS));
+  function createSnapshot(extraNodes = []) {
+    const nodes = withHistories([...clone(DATACENTERS), ...clone(extraNodes)]);
     return {
       generatedAt: nowIso(),
       endpoints: { ...API_ENDPOINTS },
@@ -539,7 +547,7 @@
   }
 
   function createMockStore(options = {}) {
-    let snapshot = createSnapshot();
+    let snapshot = createSnapshot(options.extraNodes || []);
     let timer = null;
     let tick = 0;
     const intervalMs = Number(options.intervalMs || 1000);

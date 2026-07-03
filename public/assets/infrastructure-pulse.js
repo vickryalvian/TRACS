@@ -36,6 +36,14 @@
     return node?.status === 'pending' ? '--' : formatted;
   }
 
+  // 30D uptime additionally requires historical aggregation that real
+  // targets don't have yet (a single check only proves current reachability).
+  function uptimeText(node, formatted) {
+    if (node?.status === 'pending') return '--';
+    if (node?.mode === 'real' && !node?.uptimeTracked) return '--';
+    return formatted;
+  }
+
   function statusClass(status) {
     return `is-${esc(status || 'healthy')}`;
   }
@@ -264,7 +272,7 @@
           <div class="infra-report-node-grid">
             <div><span>Latency</span><b>${esc(statText(node, ms(node.latency)))}</b></div>
             <div><span>Loss</span><b>${esc(statText(node, `${Number(node.packetLoss || 0).toFixed(2)}%`))}</b></div>
-            <div><span>Uptime</span><b>${esc(statText(node, pct(node.uptime)))}</b></div>
+            <div><span>Uptime</span><b>${esc(uptimeText(node, pct(node.uptime)))}</b></div>
             <div><span>Checked</span><b>${esc(node.lastChecked ? Infra.formatTime(node.lastChecked) : 'Not checked')}</b></div>
           </div>
         ` : '<p>No selected server.</p>'}
@@ -286,7 +294,7 @@
             <button type="button" class="infra-report-row is-healthy" data-infra-select="${esc(item.code)}">
               <span>${esc(item.code)}</span>
               <strong>${esc(item.name)}</strong>
-              <em>${esc(ms(item.latency))} / ${esc(pct(item.uptime))}</em>
+              <em>${esc(ms(item.latency))} / ${esc(uptimeText(item, pct(item.uptime)))}</em>
             </button>
           `).join('') : '<p class="infra-empty-line">No healthy servers in this snapshot.</p>'}
         </section>
@@ -337,7 +345,7 @@
       }
       row.querySelector('[data-field="latency"]').textContent = statText(node, ms(node.latency));
       row.querySelector('[data-field="loss"]').textContent = statText(node, `${Number(node.packetLoss).toFixed(2)}% loss`);
-      row.querySelector('[data-field="uptime"]').textContent = statText(node, pct(node.uptime));
+      row.querySelector('[data-field="uptime"]').textContent = uptimeText(node, pct(node.uptime));
       const line = row.querySelector('[data-field="spark-line"]');
       const area = row.querySelector('[data-field="spark-area"]');
       const linePath = Infra.sparklinePath(node.history?.latency || []);
@@ -639,6 +647,48 @@
     };
   }
 
+  // Converts a persisted infrastructure_servers row (loaded server-side into
+  // window.TRACS_INFRA_REAL_SERVERS) into the node shape the store expects.
+  function dbRowToNode(row) {
+    const code = String(row.code || '').toUpperCase();
+    const latency = row.last_latency_ms != null ? Math.round(Number(row.last_latency_ms)) : 0;
+    const packetLoss = row.last_packet_loss_percent != null ? Number(row.last_packet_loss_percent) : 0;
+    return {
+      id: `db-${code.toLowerCase()}`,
+      code,
+      shortCode: code,
+      name: row.name || code,
+      region: row.region || '',
+      country: row.country || '',
+      city: row.region || '',
+      provider: row.provider || '',
+      facility: row.provider || '',
+      mode: 'real',
+      method: row.method || 'icmp',
+      target_host: row.target_host || '',
+      target_ip: row.target_host || '',
+      target_port: row.target_port || '',
+      health_url: row.health_url || '',
+      expected_status: row.expected_status || '',
+      expected_keyword: row.expected_keyword || '',
+      packet_count: row.packet_count || 4,
+      interval_seconds: row.interval_seconds || 60,
+      timeout_seconds: row.timeout_seconds || 5,
+      is_active: true,
+      status: row.last_status || 'pending',
+      latency,
+      packetLoss,
+      uptime: 0,
+      uptimeTracked: false,
+      incidentCount: 0,
+      latitude: 0,
+      longitude: 0,
+      lastChecked: row.last_checked_at || null,
+      created_at: row.created_at || new Date().toISOString(),
+      updated_at: row.updated_at || new Date().toISOString(),
+    };
+  }
+
   // Live ICMP check for real Network Ping targets. Runs server-side
   // (public/api/infrastructure-ping.php) — the browser never probes hosts
   // itself, only asks the TRACS backend to run a bounded ping and report back.
@@ -650,6 +700,7 @@
         host: node.target_host || node.target_ip,
         count: node.packet_count || 4,
         timeout: node.timeout_seconds || 5,
+        code: node.code,
       }),
     });
     const payload = await response.json().catch(() => null);
@@ -800,7 +851,7 @@
             ${statusChip(node.status)}
             <span>${esc(statText(node, ms(node.latency)))}</span>
             <span>${esc(statText(node, `${Number(node.packetLoss || 0).toFixed(2)}% loss`))}</span>
-            <span>${esc(statText(node, pct(node.uptime)))}</span>
+            <span>${esc(uptimeText(node, pct(node.uptime)))}</span>
             <time>${esc(node.lastChecked ? Infra.formatTime(node.lastChecked) : 'Not checked')}</time>
           </div>
           <div class="infra-server-registry__remove" data-infra-remove-wrap="${esc(node.code)}">
@@ -863,7 +914,7 @@
       form.elements.interval_seconds.value = '60';
       updateMethodUi(modal);
     });
-    modal.addEventListener('click', (event) => {
+    modal.addEventListener('click', async (event) => {
       const remove = event.target.closest('[data-infra-remove-server]');
       const cancelRemove = event.target.closest('[data-infra-cancel-remove]');
       const confirmRemove = event.target.closest('[data-infra-confirm-remove]');
@@ -876,7 +927,27 @@
       if (confirmRemove) {
         const code = confirmRemove.getAttribute('data-infra-confirm-remove');
         const snapshot = store.getSnapshot();
-        // TODO(soft delete): deactivate this target through the backend API once persisted monitoring history exists.
+        const target = snapshot.nodes.find((item) => item.code === code);
+        if (target?.mode === 'real') {
+          confirmRemove.disabled = true;
+          try {
+            const response = await fetch('/api/infrastructure-server-delete.php', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ code }),
+            });
+            const payload = await response.json().catch(() => null);
+            if (!response.ok || !payload || payload.success === false) {
+              confirmRemove.disabled = false;
+              showToast(payload?.message || 'The server could not be removed. Please try again.', 'error', { context: 'modal', position: 'modal-center', modal });
+              return;
+            }
+          } catch (error) {
+            confirmRemove.disabled = false;
+            showToast('The server could not be removed. Please check your connection and try again.', 'error', { context: 'modal', position: 'modal-center', modal });
+            return;
+          }
+        }
         const nodes = snapshot.nodes.filter((node) => node.code !== code);
         if (state.selectedCode === code) state.selectedCode = nodes[0]?.code || '';
         store.ingest({ ...snapshot, nodes });
@@ -904,7 +975,7 @@
       wrap.querySelector('[data-infra-cancel-remove]')?.focus();
       if (window.lucide) window.lucide.createIcons();
     });
-    form?.addEventListener('submit', (event) => {
+    form?.addEventListener('submit', async (event) => {
       event.preventDefault();
       const result = validateServerForm(form);
       const validation = modal.querySelector('[data-infra-server-validation]');
@@ -927,19 +998,57 @@
         handleModalError({modal,message:'The server details could not be prepared. Please review the form and try again.'});
         return;
       }
-      const snapshot = store.getSnapshot();
-      const nodes = [node, ...snapshot.nodes.filter((item) => item.code !== node.code)];
       const button=event.submitter || form.querySelector('button[type="submit"]');
       if(button && !setButtonLoading(button,'Saving...'))return;
+
+      let finalNode = node;
+      if (node.mode === 'real') {
+        try {
+          const response = await fetch('/api/infrastructure-server-create.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              code: node.code,
+              name: node.name,
+              region: node.region,
+              country: node.country,
+              provider: node.provider,
+              method: node.method,
+              target_host: node.target_host,
+              target_port: node.target_port,
+              health_url: node.health_url,
+              expected_status: node.expected_status,
+              expected_keyword: node.expected_keyword,
+              packet_count: node.packet_count,
+              timeout_seconds: node.timeout_seconds,
+              interval_seconds: node.interval_seconds,
+            }),
+          });
+          const payload = await response.json().catch(() => null);
+          if (!response.ok || !payload || payload.success === false) {
+            resetButtonLoading(button);
+            handleModalError({ modal, message: payload?.message || 'The server could not be saved. Please try again.' });
+            return;
+          }
+          finalNode = dbRowToNode(payload.data);
+        } catch (error) {
+          resetButtonLoading(button);
+          handleModalError({ modal, message: 'The server could not be saved. Please check your connection and try again.' });
+          return;
+        }
+      }
+
+      const snapshot = store.getSnapshot();
+      const nodes = [finalNode, ...snapshot.nodes.filter((item) => item.code !== finalNode.code)];
       showModalSuccessAndClose({
         modal,
         button,
         message:'Server added to monitoring.',
         close:()=>closeModal(),
         onAfterClose:()=>{
-          state.selectedCode = node.code;
+          state.selectedCode = finalNode.code;
           store.ingest({ ...snapshot, nodes });
-          if (node.mode === 'real' && node.method === 'icmp') runIcmpCheck(node, store);
+          if (finalNode.mode === 'real' && finalNode.method === 'icmp') runIcmpCheck(finalNode, store);
           form.reset();
           form.elements.method.value = 'icmp';
           form.elements.status.value = 'healthy';
@@ -969,7 +1078,10 @@
     initDashboardWidgetSliders();
     const startStore = () => {
       if (state.store) return state.store;
-      const store = Infra.createSharedStore({ intervalMs: 4000 });
+      const persistedReal = Array.isArray(window.TRACS_INFRA_REAL_SERVERS)
+        ? window.TRACS_INFRA_REAL_SERVERS.map(dbRowToNode)
+        : [];
+      const store = Infra.createSharedStore({ intervalMs: 4000, extraNodes: persistedReal });
       state.store = store;
       bindPage(page, store);
       bindServerModal(store);

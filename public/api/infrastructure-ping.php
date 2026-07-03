@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/_bootstrap.php';
 require_once __DIR__ . '/../../core/infrastructure_ping.php';
+require_once __DIR__ . '/../../core/infrastructure_servers.php';
 
 api_require_permissions(['dashboard.view']);
 
@@ -17,6 +18,7 @@ if (!is_array($payload)) {
 $host = trim((string)($payload['host'] ?? ''));
 $count = (int)($payload['count'] ?? 4);
 $timeoutSeconds = (int)($payload['timeout'] ?? 5);
+$code = strtoupper(trim((string)($payload['code'] ?? '')));
 
 if (!tracs_infra_ping_host_is_valid($host)) {
     fail('Invalid host.', 422);
@@ -39,6 +41,16 @@ $_SESSION[$rateKey] = $now;
 
 try {
     $result = tracs_infra_ping_host($host, $count, $timeoutSeconds);
+    if ($code !== '' && mb_strlen($code) <= 8) {
+        tracs_infra_server_record_check(
+            $conn,
+            $code,
+            (string)$result['status'],
+            $result['latency_ms'] !== null ? (float)$result['latency_ms'] : null,
+            $result['packet_loss_percent'] !== null ? (float)$result['packet_loss_percent'] : null,
+            (string)$result['checked_at']
+        );
+    }
     ok($result);
 } catch (Throwable $error) {
     error_log('TRACS infrastructure ping failed: ' . $error->getMessage());
