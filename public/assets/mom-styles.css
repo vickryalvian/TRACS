@@ -53,7 +53,10 @@
   top: 0;
 }
 
-/* ── MOM Header ── */
+/* ── MOM Header ──
+   Sticky within .mom-main's own scroll box (not the page-level scroll
+   the global ticker/topbar live in), so title/status/quick actions stay
+   visible while working through a long meeting. */
 .mom-header {
   display: flex;
   align-items: flex-start;
@@ -63,6 +66,9 @@
   border-radius: var(--r3);
   padding: 16px;
   gap: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
 }
 
 .mom-header-left {
@@ -172,6 +178,20 @@
   display: flex;
   gap: 6px;
   flex-shrink: 0;
+}
+
+/* ── Section group labels ──
+   Groups Objective / Agenda+Discussion / Decisions+Actions into named
+   clusters (Overview, Discussion, Outcomes) so the workspace reads as
+   staged sections instead of a flat stack of identical cards. */
+.mom-group-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--tx3);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  padding: 0 2px;
+  margin-bottom: -12px;
 }
 
 /* ── MOM Sections ── */
@@ -1038,6 +1058,52 @@
   font-size: 13px;
 }
 
+/* ── Timeline (sidebar) ── */
+.mom-timeline {
+  display: grid;
+  gap: 2px;
+}
+
+.mom-timeline-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  color: var(--tx3);
+}
+
+.mom-timeline-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--s3);
+  border: 1px solid var(--bd2);
+  flex-shrink: 0;
+}
+
+.mom-timeline-step.is-done .mom-timeline-dot {
+  background: var(--green);
+  border-color: var(--green);
+}
+
+.mom-timeline-step.is-done {
+  color: var(--tx1);
+}
+
+.mom-timeline-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.mom-timeline-time {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--tx3);
+  white-space: nowrap;
+}
+
 /* ── MOM List Page ── */
 .mom-list-layout {
   display: grid;
@@ -1183,6 +1249,7 @@
 
 .mom-history-head {
   gap: 8px;
+  border-bottom: 1px solid var(--bd1);
 }
 
 .mom-history-title {
@@ -1456,7 +1523,9 @@
 }
 
 .mom-history-panel .mom-table .mom-preview-surface {
-  --mom-preview-bg: var(--s3);
+  /* Match the highlighted (.is-preview-open) row's own background so the
+     panel reads as a direct continuation of that row, not a separate block. */
+  --mom-preview-bg: var(--s2);
   display: table-row;
   background: var(--mom-preview-bg);
 }
@@ -1492,6 +1561,7 @@
 }
 
 .mom-history-panel .mom-table .mom-preview-surface > td {
+  height: auto;
   padding: 0;
   border-top: 0;
   border-bottom: 1px solid var(--bd1);
@@ -1533,7 +1603,6 @@
 
 .mom-preview-summary,
 .mom-preview-objective,
-.mom-preview-discussion,
 .mom-preview-participants,
 .mom-preview-meeting-link {
   grid-column: 1 / 2;
@@ -1551,8 +1620,17 @@
   grid-row: 1;
 }
 
+/* Discussion is normally the longest block — give it its own full-width
+   row below the compact metadata/agenda/decisions/actions rows instead of
+   squeezing it into a single 1/3-width column (that's what produced the
+   "wall of text" layout). Grid dense-packing backfills the shorter blocks
+   above it automatically. */
+.mom-preview-discussion {
+  grid-column: 1 / -1;
+}
+
 .mom-preview-label {
-  font-size: 8.5px;
+  font-size: 10px;
   font-weight: 700;
   color: var(--tx3);
   text-transform: uppercase;
@@ -1619,6 +1697,61 @@
   order: -1;
 }
 
+/* ── Discussion notes (full-width block) ── */
+.mom-preview-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mom-preview-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--bd1);
+  border-radius: var(--r2);
+  background: var(--s1);
+}
+
+.mom-preview-note-body {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 4px;
+}
+
+.mom-preview-note-text {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--tx2);
+  overflow-wrap: anywhere;
+}
+
+.mom-preview-note-text.is-clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.mom-preview-note-toggle {
+  align-self: start;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--blue);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mom-preview-note-toggle:hover,
+.mom-preview-note-toggle:focus-visible {
+  text-decoration: underline;
+  outline: none;
+}
+
 .mom-preview-shots {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
@@ -1651,7 +1784,6 @@
   }
   .mom-preview-summary,
   .mom-preview-objective,
-  .mom-preview-discussion,
   .mom-preview-participants,
   .mom-preview-meeting-link,
   .mom-preview-agenda,
@@ -1661,6 +1793,11 @@
   .mom-preview-screenshots {
     grid-column: auto;
     grid-row: auto;
+  }
+  /* Discussion keeps its full-width row even at the 2-column breakpoint —
+     only the metadata/agenda/decisions/actions blocks reflow to 2 columns. */
+  .mom-preview-discussion {
+    grid-column: 1 / -1;
   }
 }
 

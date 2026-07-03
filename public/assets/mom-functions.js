@@ -1173,6 +1173,13 @@ function openMOMPreviewRow(row, sourceRow) {
   refreshMOMPreviewButton(sourceRow, true);
 }
 
+function toggleMOMPreviewNote(noteId, button) {
+  const text = document.getElementById(noteId);
+  if(!text) return;
+  const collapsed = text.classList.toggle('is-clamped');
+  button.textContent = collapsed ? 'Show more' : 'Show less';
+}
+
 function toggleMOMPreview(mom_id, button) {
   if(button?.disabled) return;
   const row = document.getElementById(`momPreview${mom_id}`);
