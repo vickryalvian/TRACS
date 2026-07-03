@@ -196,13 +196,13 @@ window.TRACS_BUILD_INFO = <?=json_encode($_tracs_build_info, JSON_UNESCAPED_SLAS
 <div class="sidebar-flyout">
 
   <nav class="sidebar-nav">
-    <div class="nav-group nav-favorites" id="navFavorites" hidden>
-      <div class="nav-group-label"><span>Favorites</span></div>
+    <div class="nav-group nav-favorites" id="navFavorites" role="group" aria-label="Favorites" hidden>
+      <div class="nav-group-label"></div>
       <div class="nav-favorites-list" id="navFavoritesList"></div>
     </div>
 
-    <div class="nav-group">
-      <div class="nav-group-label"><span>Overview</span></div>
+    <div class="nav-group" role="group" aria-label="Overview">
+      <div class="nav-group-label"></div>
       <div class="nav-item-wrap" data-nav-key="dashboard">
         <a href="index.php" class="nav-item <?=$active_page==='dashboard'?'active':''?>">
           <span class="nav-icon">
@@ -217,8 +217,8 @@ window.TRACS_BUILD_INFO = <?=json_encode($_tracs_build_info, JSON_UNESCAPED_SLAS
       </div>
     </div>
 
-    <div class="nav-group">
-      <div class="nav-group-label"><span>Operations</span></div>
+    <div class="nav-group" role="group" aria-label="Operations">
+      <div class="nav-group-label"></div>
       <div class="nav-item-wrap" data-nav-key="cases">
         <a href="cases.php" class="nav-item <?=$active_page==='cases'?'active':''?>">
           <span class="nav-icon"><i data-lucide="briefcase" class="icon-md"></i></span>
@@ -278,8 +278,8 @@ window.TRACS_BUILD_INFO = <?=json_encode($_tracs_build_info, JSON_UNESCAPED_SLAS
       </div>
     </div>
 
-    <div class="nav-group">
-      <div class="nav-group-label"><span>Communication</span></div>
+    <div class="nav-group" role="group" aria-label="Communication">
+      <div class="nav-group-label"></div>
       <div class="nav-item-wrap" data-nav-key="reminders">
         <a href="reminders.php" class="nav-item <?=$active_page==='reminders'?'active':''?>">
           <span class="nav-icon"><i data-lucide="bell" class="icon-md"></i></span>
@@ -314,8 +314,8 @@ window.TRACS_BUILD_INFO = <?=json_encode($_tracs_build_info, JSON_UNESCAPED_SLAS
     </div>
 
     <?php if ($_show_admin_group): ?>
-    <div class="nav-group">
-      <div class="nav-group-label"><span>Admin</span></div>
+    <div class="nav-group" role="group" aria-label="Admin">
+      <div class="nav-group-label"></div>
       <?php if($_is_super_admin): ?>
       <div class="nav-item-wrap" data-nav-key="server-health">
         <a href="server-health.php" class="nav-item <?=$active_page==='server-health'?'active':''?>">

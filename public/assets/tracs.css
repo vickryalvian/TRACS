@@ -400,7 +400,7 @@ input, select, textarea { font-family: inherit }
 .sidebar {
   --sb-w: 64px;
   --sb-w-open: 244px;
-  --sb-dur: 180ms;
+  --sb-dur: 130ms;
   /* Shared row geometry — keeps every item, submenu row, group label,
      avatar and theme toggle on one consistent rhythm. The icon glyph
      lands dead-centre of the 64px collapsed rail:
@@ -429,6 +429,16 @@ input, select, textarea { font-family: inherit }
      underneath the ticker even at the shared edge/seam. */
   z-index: 150;
   transition: width var(--sb-dur) var(--ease), box-shadow var(--sb-dur) var(--ease);
+}
+/* Subtle glass effect -- only where backdrop-filter is actually supported,
+   so browsers without it keep the solid var(--s1) fallback above instead
+   of a too-sheer, unblurred tint. */
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .sidebar-flyout {
+    background: color-mix(in srgb, var(--s1) 82%, transparent);
+    -webkit-backdrop-filter: blur(14px) saturate(150%);
+    backdrop-filter: blur(14px) saturate(150%);
+  }
 }
 .sidebar:focus-within .sidebar-flyout {
   width: var(--sb-w-open);
@@ -492,7 +502,9 @@ input, select, textarea { font-family: inherit }
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  padding: 6px 0;
+  /* Top padding tuned so the Dashboard icon's centre lines up with the
+     TRACS wordmark in .page-logo-title on the dashboard page. */
+  padding: 10px 0 6px;
   width: 100%;
   overflow-y: auto;
   overflow-x: hidden;
@@ -505,9 +517,10 @@ input, select, textarea { font-family: inherit }
    Expanded: the hairline fades out and an uppercase label fades in,
    left-aligned with the icon column. */
 .nav-group { display: flex; flex-direction: column; align-items: stretch }
+/* Minimal separator: a plain hairline between groups, no caps label. Group
+   names live in aria-label on the .nav-group itself for screen readers. */
 .nav-group-label {
-  position: relative;
-  height: 26px;
+  height: 9px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -515,40 +528,15 @@ input, select, textarea { font-family: inherit }
 }
 .nav-group-label::before {
   content: '';
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 24px;
+  width: 100%;
   height: 1px;
-  background: var(--bd2);
-  transform: translate(-50%, -50%);
-  transition: opacity var(--sb-dur) var(--ease);
+  background: var(--bd1);
 }
 /* The first *visible* group carries no leading hairline. Favorites is always
    in the DOM (just [hidden]), so the group after a hidden favorites is the
    effective top when no pins exist. */
 .nav-group:first-child .nav-group-label,
-.nav-favorites[hidden] + .nav-group .nav-group-label { height: 20px }
-.nav-group:first-child .nav-group-label::before,
-.nav-favorites[hidden] + .nav-group .nav-group-label::before { opacity: 0 }
-.nav-group-label span {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: .07em;
-  text-transform: uppercase;
-  color: var(--tx4);
-  white-space: nowrap;
-  opacity: 0;
-  transform: translateX(-4px);
-  transition: opacity var(--sb-dur) var(--ease), transform var(--sb-dur) var(--ease);
-}
-.sidebar:hover .nav-group-label::before,
-.sidebar:focus-within .nav-group-label::before { opacity: 0 }
-.sidebar:hover .nav-group-label span,
-.sidebar:focus-within .nav-group-label span {
-  opacity: 1;
-  transform: translateX(0);
-}
+.nav-favorites[hidden] + .nav-group .nav-group-label { display: none }
 .nav-favorites[hidden] { display: none }
 .nav-favorites-list { display: flex; flex-direction: column; align-items: stretch }
 
