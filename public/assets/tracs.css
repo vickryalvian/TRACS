@@ -520,7 +520,9 @@ input, select, textarea { font-family: inherit }
 /* Minimal separator: a plain hairline between groups, no caps label. Group
    names live in aria-label on the .nav-group itself for screen readers. */
 .nav-group-label {
-  height: 9px;
+  /* Half the row height (--sb-row-h:36px) -- proportional breathing room
+     around the divider instead of a cramped 9px gap. */
+  height: 18px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -652,24 +654,34 @@ input, select, textarea { font-family: inherit }
   cursor: pointer;
 }
 .nav-menu-wrap > summary::-webkit-details-marker { display: none }
+/* grid-template-rows 0fr->1fr grows to fit whatever the real content
+   height is, unlike a max-height guess -- no mismatch between the
+   transition's declared range and the visible motion, so it stays
+   smooth for both a 2-item and a 6-item submenu instead of mostly
+   "idling" then snapping. */
+.nav-submenu-track {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--sb-dur) var(--ease);
+}
+.nav-menu-wrap[open] > .nav-submenu-track {
+  grid-template-rows: 1fr;
+}
 .nav-submenu {
   display: flex;
   flex-direction: column;
-  width: 100%;
-  padding: 0 var(--sb-gutter) 0 calc(var(--sb-gutter) + var(--sb-pad) + var(--sb-icon));
-  gap: 1px;
+  min-height: 0;
   overflow: hidden;
-  max-height: 0;
+  width: 100%;
+  padding: 2px var(--sb-gutter) 4px calc(var(--sb-gutter) + var(--sb-pad) + var(--sb-icon));
+  gap: 1px;
   opacity: 0;
   visibility: hidden;
-  transition: max-height var(--sb-dur) var(--ease), opacity var(--sb-dur) var(--ease), visibility 0s linear var(--sb-dur), padding var(--sb-dur) var(--ease);
+  transition: opacity var(--sb-dur) var(--ease), visibility 0s linear var(--sb-dur);
 }
-.nav-menu-wrap[open] > .nav-submenu {
-  max-height: 320px;
+.nav-menu-wrap[open] .nav-submenu {
   opacity: 1;
   visibility: visible;
-  padding-top: 2px;
-  padding-bottom: 4px;
   transition-delay: 0s;
 }
 .nav-submenu a {

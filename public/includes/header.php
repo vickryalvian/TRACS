@@ -253,8 +253,10 @@ window.TRACS_BUILD_INFO = <?=json_encode($_tracs_build_info, JSON_UNESCAPED_SLAS
           <span class="nav-label">Tasks & Monitoring</span>
           <i data-lucide="chevron-right" class="icon-xs nav-chevron"></i>
         </summary>
-        <div class="nav-submenu" role="menu" aria-label="Tasks & Monitoring">
-          <?php foreach ($_task_monitoring_items as $_task_monitoring_item) tracs_sidebar_link($_task_monitoring_item, $active_page ?? '', 'icon-sm'); ?>
+        <div class="nav-submenu-track">
+          <div class="nav-submenu" role="menu" aria-label="Tasks & Monitoring">
+            <?php foreach ($_task_monitoring_items as $_task_monitoring_item) tracs_sidebar_link($_task_monitoring_item, $active_page ?? '', 'icon-sm'); ?>
+          </div>
         </div>
       </details>
       <?php endif; ?>
@@ -345,15 +347,17 @@ window.TRACS_BUILD_INFO = <?=json_encode($_tracs_build_info, JSON_UNESCAPED_SLAS
           <span class="nav-label">User Management</span>
           <i data-lucide="chevron-right" class="icon-xs nav-chevron"></i>
         </summary>
-        <div class="nav-submenu" role="menu" aria-label="User Management">
-          <a href="user-management.php" role="menuitem" class="<?=$active_page==='user-management'?'active':''?>">
-            <i data-lucide="users-round" class="icon-sm"></i>
-            <span>User Management</span>
-          </a>
-          <a href="intern-management.php" role="menuitem" class="<?=$active_page==='intern-management'?'active':''?>">
-            <i data-lucide="graduation-cap" class="icon-sm"></i>
-            <span>Intern Management</span>
-          </a>
+        <div class="nav-submenu-track">
+          <div class="nav-submenu" role="menu" aria-label="User Management">
+            <a href="user-management.php" role="menuitem" class="<?=$active_page==='user-management'?'active':''?>">
+              <i data-lucide="users-round" class="icon-sm"></i>
+              <span>User Management</span>
+            </a>
+            <a href="intern-management.php" role="menuitem" class="<?=$active_page==='intern-management'?'active':''?>">
+              <i data-lucide="graduation-cap" class="icon-sm"></i>
+              <span>Intern Management</span>
+            </a>
+          </div>
         </div>
       </details>
       <?php endif; ?>
