@@ -4,6 +4,35 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Sidebar Icon Scale Reduction (2026-07-03 ~15:41 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch `design/sidebar-hover-expand`, commit
+`6825688`. 1 file: `public/assets/tracs.css`. Backup
+`/opt/tracs/backups/sidebar-icon-scale-20260703-154152/`.
+
+Design feedback: sidebar icons read too large. Dropped the shared
+row-geometry tokens (`--sb-icon` 20→16px, `--sb-row-h` 40→36px, `--sb-pad`
+14→16px to keep icons centred on the 64px collapsed rail), and scaled the
+label font (13→12.5px), active-bar, badge, pin, and submenu-icon sizes to
+match proportionally. Also fixed a real inconsistency found while doing
+this: the theme-toggle sun/moon icons were pinned to a stray `13px`
+override (independent of the nav-item icons, which were 20px) — both now
+read `var(--sb-icon)`, so every icon in the rail is the same size.
+Verified in-browser post-change: every icon (nav items + theme toggle)
+centres at the same x and renders at the same 16px, confirmed via
+`getBoundingClientRect()`, not just visual inspection.
+
+Verification: no drift on prod before deploy; post-deploy sha256 matches
+local byte-for-byte; `tracs.css`/`login.php` both return **200**; deployed
+CSS contains the new `--sb-icon: 16px` token; `nginx`/`php8.3-fpm` active.
+Pre-deploy verified against the docker dev stack logged in as
+`admin@tracs.local` (collapsed rail, expanded panel, submenu accordion,
+light/dark themes) — no console errors.
+
+Branch remains pushed for review/PR. Production tracks the working tree via
+file-copy deploy (not a `main` pull).
+
 ## Deployed — Sidebar Spacing Refinement (2026-07-03 ~14:15 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
