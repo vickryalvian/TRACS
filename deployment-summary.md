@@ -4,6 +4,46 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Sidebar Spacing Refinement (2026-07-03 ~14:15 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch `design/sidebar-hover-expand`, commit
+`09d3944`. 1 file: `public/assets/tracs.css`. Backup
+`/opt/tracs/backups/sidebar-refine-20260703-141513/`.
+
+Follow-up to the hover-to-expand deploy after design feedback that the
+expanded panel didn't match the design system and needed consistent
+icon/label margins (referenced Nolito + Intercom sidebars). CSS-only:
+
+- Introduced a shared row-geometry token set on `.sidebar`
+  (`--sb-gutter:8px`, `--sb-pad:14px`, `--sb-icon:20px`, `--sb-gap:12px`,
+  `--sb-row-h:40px`, `--sb-radius`) so nav items, submenu rows, group
+  labels, the user/avatar row and the theme toggle all share one rhythm.
+  Verified in-browser: every icon centres at x≈33 (dead-centre of the 64px
+  collapsed rail) and every expanded label starts at x=55 — identical
+  across nav items, theme toggle, and the 30px avatar row.
+- Items are now inset rounded pills (8px side gutters, `--r3` radius)
+  instead of full-bleed squares; hover/active read as clean pills matching
+  the references. Active keeps the tinted blue fill + a short rounded
+  left accent bar.
+- Group labels: short centred hairline divider when collapsed, fading to
+  uppercase text when expanded (removed the heavier full-width divider
+  lines). First visible group carries no leading hairline.
+- Notification badge repositioned onto the icon corner (was floating high
+  above the row on the old 36px icon slot).
+- Expanded width 212→244px for reference-matching roominess.
+
+Verification: no drift on prod before deploy (sha256 matched the prior
+`549ef8c` baseline); post-deploy sha256 matches local byte-for-byte;
+`tracs.css` and `login.php` both return **200**; deployed CSS contains the
+new `--sb-gutter` token; `nginx`/`php8.3-fpm` active. Pre-deploy the change
+was verified against the docker dev stack (collapsed + expanded, submenu
+accordion, favorites, light/dark themes, geometry measured) with no console
+errors; throwaway login user deleted after.
+
+Branch remains pushed for review/PR. Production tracks the working tree via
+file-copy deploy (not a `main` pull).
+
 ## Deployed — Hover-to-Expand Sidebar Navigation (2026-07-03 ~13:51 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
