@@ -27,6 +27,7 @@ require_once __DIR__.'/../core/infrastructure_servers.php';
 require_once __DIR__.'/includes/page_helpers.php';
 
 $infra_real_servers = tracs_infra_server_list_active_for_json($conn);
+$infra_hidden_seed_codes = tracs_infra_hidden_seed_codes($conn);
 
 // TRACS Operations System: first-deployment dashboard direction by Vickry.
 $uid        = (int)($_SESSION['user_id']??0);
@@ -1715,7 +1716,8 @@ include 'includes/header.php';
 <?php include __DIR__.'/../modules/ops-status/modal.php'; ?>
 <?php $_infra_data_v = @filemtime(__DIR__.'/assets/infrastructure-pulse-data.js') ?: time(); ?>
 <?php $_infra_js_v = @filemtime(__DIR__.'/assets/infrastructure-pulse.js') ?: time(); ?>
-<script>window.TRACS_INFRA_REAL_SERVERS = <?=json_encode($infra_real_servers, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)?>;</script>
+<script>window.TRACS_INFRA_REAL_SERVERS = <?=json_encode($infra_real_servers, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)?>;
+window.TRACS_INFRA_HIDDEN_SEED_CODES = <?=json_encode($infra_hidden_seed_codes, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)?>;</script>
 <script src="assets/infrastructure-pulse-data.js?v=<?=$_infra_data_v?>"></script>
 <script src="assets/infrastructure-pulse.js?v=<?=$_infra_js_v?>"></script>
 <?php include 'includes/footer.php'; ?>

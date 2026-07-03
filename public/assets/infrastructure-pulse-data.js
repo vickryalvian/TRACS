@@ -431,8 +431,21 @@
     }));
   }
 
-  function createSnapshot(extraNodes = []) {
-    const nodes = withHistories([...clone(DATACENTERS), ...clone(extraNodes)]);
+  function dedupeByCode(nodes) {
+    // Later entries win, so real/persisted servers (appended after the
+    // built-in seed list) override a seed with the same code.
+    const byCode = new Map();
+    nodes.forEach((node) => {
+      const code = String(node.code || node.shortCode || '').toUpperCase();
+      byCode.set(code, node);
+    });
+    return Array.from(byCode.values());
+  }
+
+  function createSnapshot(extraNodes = [], hiddenSeedCodes = []) {
+    const hidden = new Set((hiddenSeedCodes || []).map((code) => String(code).toUpperCase()));
+    const seeds = DATACENTERS.filter((node) => !hidden.has(node.code.toUpperCase()));
+    const nodes = withHistories(dedupeByCode([...clone(seeds), ...clone(extraNodes)]));
     return {
       generatedAt: nowIso(),
       endpoints: { ...API_ENDPOINTS },
@@ -547,7 +560,7 @@
   }
 
   function createMockStore(options = {}) {
-    let snapshot = createSnapshot(options.extraNodes || []);
+    let snapshot = createSnapshot(options.extraNodes || [], options.hiddenSeedCodes || []);
     let timer = null;
     let tick = 0;
     const intervalMs = Number(options.intervalMs || 1000);

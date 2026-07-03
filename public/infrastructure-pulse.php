@@ -34,6 +34,7 @@ $overdue_reminders = count(array_filter($reminders, fn($r) => ($r['status'] ?? '
 $critical_count = $critical_cases + $overdue_reminders;
 
 $infra_real_servers = tracs_infra_server_list_active_for_json($conn);
+$infra_hidden_seed_codes = tracs_infra_hidden_seed_codes($conn);
 
 $page_title = 'Infrastructure Pulse';
 $active_page = 'infrastructure-pulse';
@@ -116,6 +117,10 @@ $infra_js_v = @filemtime(__DIR__ . '/assets/infrastructure-pulse.js') ?: time();
     <div class="infra-modal__body">
       <section class="infra-modal__pane is-active" data-infra-modal-pane="add" id="infraModalPaneAdd" role="tabpanel" aria-labelledby="infraModalTabAdd">
         <form class="infra-server-form" data-infra-server-form novalidate>
+          <div class="infra-edit-banner" data-infra-edit-banner hidden role="status">
+            <span>Editing <strong data-infra-edit-code></strong></span>
+            <button type="button" class="btn btn-ghost btn-sm" data-infra-edit-cancel>Cancel edit</button>
+          </div>
           <div class="infra-method-grid" role="radiogroup" aria-label="Monitoring method">
             <label class="infra-method-card is-active" data-infra-method-card="icmp">
               <input type="radio" name="method" value="icmp" checked>
@@ -237,7 +242,8 @@ MonitoringService::checkHttp($url, $expectedStatus, $expectedKeyword)</code></pr
   </section>
 </div>
 
-<script>window.TRACS_INFRA_REAL_SERVERS = <?=json_encode($infra_real_servers, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)?>;</script>
+<script>window.TRACS_INFRA_REAL_SERVERS = <?=json_encode($infra_real_servers, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)?>;
+window.TRACS_INFRA_HIDDEN_SEED_CODES = <?=json_encode($infra_hidden_seed_codes, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)?>;</script>
 <script src="assets/infrastructure-pulse-data.js?v=<?=$infra_data_v?>"></script>
 <script src="assets/infrastructure-pulse.js?v=<?=$infra_js_v?>"></script>
 <?php include __DIR__ . '/includes/footer.php'; ?>

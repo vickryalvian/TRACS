@@ -8,6 +8,12 @@
 
 const TRACS_INFRA_SERVER_METHODS = ['icmp', 'tcp', 'http'];
 
+// The 9 built-in demo datacenters seeded client-side in
+// public/assets/infrastructure-pulse-data.js. Kept in sync manually — this
+// whitelist exists so infrastructure_hidden_seeds only ever stores codes
+// for the known seed list, not arbitrary ad-hoc "Demo Data" entries.
+const TRACS_INFRA_SEED_CODES = ['DCI', 'IDB', 'CY1', 'BCD', 'BTI', 'DR3', 'SG3', 'EGH', 'NDS'];
+
 /**
  * Binds an ordered list of [type_char, value] pairs and executes.
  * Avoids hand-counted bind_param() type strings, a real source of
@@ -196,6 +202,46 @@ function tracs_infra_server_find_by_code(mysqli $conn, string $code): array|fals
 
 function tracs_infra_server_soft_delete(mysqli $conn, string $code): bool {
     $stmt = $conn->prepare('UPDATE `infrastructure_servers` SET `deleted_at` = NOW() WHERE `code` = ? AND `deleted_at` IS NULL');
+    if (!$stmt) {
+        return false;
+    }
+    $stmt->bind_param('s', $code);
+    $ok = $stmt->execute();
+    $affected = $stmt->affected_rows;
+    $stmt->close();
+    return $ok && $affected > 0;
+}
+
+function tracs_infra_hidden_seed_codes(mysqli $conn): array {
+    $result = $conn->query('SELECT `code` FROM `infrastructure_hidden_seeds`');
+    if (!$result) {
+        return [];
+    }
+    $codes = [];
+    while ($row = $result->fetch_assoc()) {
+        $codes[] = $row['code'];
+    }
+    return $codes;
+}
+
+function tracs_infra_seed_hide(mysqli $conn, string $code, int $hiddenBy): bool {
+    if (!in_array($code, TRACS_INFRA_SEED_CODES, true)) {
+        return false;
+    }
+    $stmt = $conn->prepare('INSERT IGNORE INTO `infrastructure_hidden_seeds` (`code`, `hidden_by`) VALUES (?, ?)');
+    if (!$stmt) {
+        return false;
+    }
+    $ok = tracs_infra_bind_execute($stmt, [
+        ['s', $code],
+        ['i', $hiddenBy],
+    ]);
+    $stmt->close();
+    return $ok;
+}
+
+function tracs_infra_seed_unhide(mysqli $conn, string $code): bool {
+    $stmt = $conn->prepare('DELETE FROM `infrastructure_hidden_seeds` WHERE `code` = ?');
     if (!$stmt) {
         return false;
     }

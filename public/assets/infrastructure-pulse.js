@@ -4,12 +4,18 @@
   const Infra = window.TRACSInfrastructure;
   if (!Infra) return;
 
+  // Mirrors core/infrastructure_servers.php's TRACS_INFRA_SEED_CODES —
+  // removing one of these persists (hidden server-side); removing any other
+  // mock/"Demo Data" entry stays session-only, matching existing behavior.
+  const SEED_CODES = new Set(['DCI', 'IDB', 'CY1', 'BCD', 'BTI', 'DR3', 'SG3', 'EGH', 'NDS']);
+
   const state = {
     selectedCode: 'NDS',
     lastEventKey: '',
     store: null,
     pendingChecks: new Set(),
     realCheckTimer: null,
+    editingCode: null,
   };
 
   function esc(value) {
@@ -855,6 +861,9 @@
             <time>${esc(node.lastChecked ? Infra.formatTime(node.lastChecked) : 'Not checked')}</time>
           </div>
           <div class="infra-server-registry__remove" data-infra-remove-wrap="${esc(node.code)}">
+            <button type="button" class="btn btn-ghost btn-sm" data-infra-edit-server="${esc(node.code)}">
+              <i data-lucide="pencil" class="icon-sm"></i>Edit
+            </button>
             <button type="button" class="btn btn-ghost btn-sm" data-infra-remove-server="${esc(node.code)}">
               <i data-lucide="trash-2" class="icon-sm"></i>Remove
             </button>
@@ -868,6 +877,67 @@
         </div>
       `}
     `;
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  function setFieldValue(form, name, value) {
+    const field = form.elements[name];
+    if (field) field.value = value ?? '';
+  }
+
+  function enterEditMode(modal, node) {
+    const form = modal.querySelector('[data-infra-server-form]');
+    if (!form || !node) return;
+    state.editingCode = node.code;
+
+    const method = node.method || 'mock';
+    const methodRadio = form.querySelector(`input[name="method"][value="${CSS.escape(method)}"]`);
+    if (methodRadio) methodRadio.checked = true;
+
+    setFieldValue(form, 'name', node.name);
+    setFieldValue(form, 'code', node.code);
+    setFieldValue(form, 'region', node.region);
+    setFieldValue(form, 'country', node.country);
+    setFieldValue(form, 'provider', node.provider);
+    setFieldValue(form, 'target_host', node.target_host);
+    setFieldValue(form, 'target_port', node.target_port);
+    setFieldValue(form, 'health_url', node.health_url);
+    setFieldValue(form, 'expected_status', node.expected_status || 200);
+    setFieldValue(form, 'expected_keyword', node.expected_keyword);
+    setFieldValue(form, 'packet_count', node.packet_count || 4);
+    setFieldValue(form, 'timeout_seconds', node.timeout_seconds || 5);
+    setFieldValue(form, 'interval_seconds', node.interval_seconds || 60);
+    setFieldValue(form, 'status', ['healthy', 'recovery', 'degraded', 'critical', 'maintenance'].includes(node.status) ? node.status : 'healthy');
+    setFieldValue(form, 'latency', node.latency || 24);
+    setFieldValue(form, 'packetLoss', node.packetLoss || 0.02);
+    setFieldValue(form, 'uptime', node.uptime || 99.99);
+
+    const banner = modal.querySelector('[data-infra-edit-banner]');
+    if (banner) {
+      banner.hidden = false;
+      const codeEl = banner.querySelector('[data-infra-edit-code]');
+      if (codeEl) codeEl.textContent = node.code;
+    }
+    // Code is the upsert key server-side; keep it fixed during edit so a
+    // typo doesn't silently create a second entry alongside the original.
+    if (form.elements.code) form.elements.code.readOnly = true;
+    const submitButton = form.querySelector('button[type="submit"]');
+    if (submitButton) submitButton.innerHTML = '<i data-lucide="save" class="icon-sm"></i>Save Changes';
+    if (window.lucide) window.lucide.createIcons();
+
+    updateMethodUi(modal);
+    activateModalTab(modal, 'add');
+    form.querySelector('input[name="name"]')?.focus();
+  }
+
+  function exitEditMode(modal) {
+    state.editingCode = null;
+    const banner = modal.querySelector('[data-infra-edit-banner]');
+    if (banner) banner.hidden = true;
+    const form = modal.querySelector('[data-infra-server-form]');
+    if (form?.elements.code) form.elements.code.readOnly = false;
+    const submitButton = form?.querySelector('button[type="submit"]');
+    if (submitButton) submitButton.innerHTML = '<i data-lucide="plus" class="icon-sm"></i>Add Server';
     if (window.lucide) window.lucide.createIcons();
   }
 
@@ -887,6 +957,7 @@
 
     function closeModal() {
       tracsCloseModalElement(modal);
+      exitEditMode(modal);
     }
 
     document.querySelectorAll('[data-infra-manage-open]').forEach((button) => {
@@ -912,12 +983,30 @@
       form.elements.packet_count.value = '4';
       form.elements.timeout_seconds.value = '5';
       form.elements.interval_seconds.value = '60';
+      exitEditMode(modal);
+      updateMethodUi(modal);
+    });
+    modal.querySelector('[data-infra-edit-cancel]')?.addEventListener('click', () => {
+      form.reset();
+      form.elements.method.value = 'icmp';
+      form.elements.expected_status.value = '200';
+      form.elements.packet_count.value = '4';
+      form.elements.timeout_seconds.value = '5';
+      form.elements.interval_seconds.value = '60';
+      exitEditMode(modal);
       updateMethodUi(modal);
     });
     modal.addEventListener('click', async (event) => {
+      const edit = event.target.closest('[data-infra-edit-server]');
       const remove = event.target.closest('[data-infra-remove-server]');
       const cancelRemove = event.target.closest('[data-infra-cancel-remove]');
       const confirmRemove = event.target.closest('[data-infra-confirm-remove]');
+      if (edit) {
+        const code = edit.getAttribute('data-infra-edit-server');
+        const node = store.getSnapshot().nodes.find((item) => item.code === code);
+        if (node) enterEditMode(modal, node);
+        return;
+      }
       if (cancelRemove) {
         const code = cancelRemove.getAttribute('data-infra-cancel-remove');
         renderServerRegistry(modal, store);
@@ -928,7 +1017,7 @@
         const code = confirmRemove.getAttribute('data-infra-confirm-remove');
         const snapshot = store.getSnapshot();
         const target = snapshot.nodes.find((item) => item.code === code);
-        if (target?.mode === 'real') {
+        if (target?.mode === 'real' || SEED_CODES.has(code)) {
           confirmRemove.disabled = true;
           try {
             const response = await fetch('/api/infrastructure-server-delete.php', {
@@ -998,8 +1087,24 @@
         handleModalError({modal,message:'The server details could not be prepared. Please review the form and try again.'});
         return;
       }
+      const isEditing = !!state.editingCode;
+      const originalNode = isEditing ? store.getSnapshot().nodes.find((item) => item.code === state.editingCode) : null;
       const button=event.submitter || form.querySelector('button[type="submit"]');
-      if(button && !setButtonLoading(button,'Saving...'))return;
+      if(button && !setButtonLoading(button, isEditing ? 'Saving changes...' : 'Saving...'))return;
+
+      if (isEditing && originalNode?.mode === 'real' && node.mode !== 'real') {
+        // Downgrading a persisted real target back to Demo Data — drop the
+        // DB row so it doesn't keep getting live-checked in the background.
+        try {
+          await fetch('/api/infrastructure-server-delete.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: originalNode.code }),
+          });
+        } catch (error) {
+          // Best-effort: proceed with the local mock update either way.
+        }
+      }
 
       let finalNode = node;
       if (node.mode === 'real') {
@@ -1043,7 +1148,7 @@
       showModalSuccessAndClose({
         modal,
         button,
-        message:'Server added to monitoring.',
+        message: isEditing ? 'Server updated.' : 'Server added to monitoring.',
         close:()=>closeModal(),
         onAfterClose:()=>{
           state.selectedCode = finalNode.code;
@@ -1081,7 +1186,10 @@
       const persistedReal = Array.isArray(window.TRACS_INFRA_REAL_SERVERS)
         ? window.TRACS_INFRA_REAL_SERVERS.map(dbRowToNode)
         : [];
-      const store = Infra.createSharedStore({ intervalMs: 4000, extraNodes: persistedReal });
+      const hiddenSeedCodes = Array.isArray(window.TRACS_INFRA_HIDDEN_SEED_CODES)
+        ? window.TRACS_INFRA_HIDDEN_SEED_CODES
+        : [];
+      const store = Infra.createSharedStore({ intervalMs: 4000, extraNodes: persistedReal, hiddenSeedCodes });
       state.store = store;
       bindPage(page, store);
       bindServerModal(store);

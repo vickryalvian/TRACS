@@ -1013,6 +1013,23 @@
   line-height: 1.45;
 }
 
+.infra-edit-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  border: 1px solid color-mix(in srgb, var(--blue) 35%, var(--bd1));
+  border-radius: var(--r2);
+  background: color-mix(in srgb, var(--blue) 10%, var(--s2));
+  color: var(--tx1);
+  font-size: 12px;
+}
+
+.infra-edit-banner strong {
+  font-family: var(--mono);
+}
+
 .infra-server-form__actions {
   display: flex;
   gap: 12px;
