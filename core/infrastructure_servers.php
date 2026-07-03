@@ -280,4 +280,64 @@ function tracs_infra_server_record_check(
         ['s', $code],
     ]);
     $stmt->close();
+
+    $historyStmt = $conn->prepare(
+        'INSERT INTO `infrastructure_monitoring_results` (`server_code`, `status`, `latency_ms`, `packet_loss_percent`, `checked_at`)
+         VALUES (?, ?, ?, ?, ?)'
+    );
+    if ($historyStmt) {
+        tracs_infra_bind_execute($historyStmt, [
+            ['s', $code],
+            ['s', $status],
+            ['d', $latencyMs],
+            ['d', $packetLossPercent],
+            ['s', $checkedAtSql],
+        ]);
+        $historyStmt->close();
+    }
+}
+
+/**
+ * Most recent samples for one server, oldest first (chart-ready order).
+ */
+function tracs_infra_server_history(mysqli $conn, string $code, int $limit = 60): array {
+    $limit = max(1, min(500, $limit));
+    $stmt = $conn->prepare(
+        'SELECT `status`, `latency_ms`, `packet_loss_percent`, `checked_at`
+         FROM `infrastructure_monitoring_results`
+         WHERE `server_code` = ?
+         ORDER BY `checked_at` DESC, `id` DESC
+         LIMIT ?'
+    );
+    if (!$stmt) {
+        return [];
+    }
+    tracs_infra_bind_execute($stmt, [
+        ['s', $code],
+        ['i', $limit],
+    ]);
+    $result = $stmt->get_result();
+    $rows = [];
+    while ($row = $result->fetch_assoc()) {
+        $rows[] = $row;
+    }
+    $stmt->close();
+    return array_reverse($rows);
+}
+
+/**
+ * Deletes samples older than $days. Called from the cron worker so history
+ * doesn't grow unbounded; not needed from request-time code paths.
+ */
+function tracs_infra_prune_history(mysqli $conn, int $days = 30): int {
+    $days = max(1, $days);
+    $stmt = $conn->prepare('DELETE FROM `infrastructure_monitoring_results` WHERE `checked_at` < (NOW() - INTERVAL ? DAY)');
+    if (!$stmt) {
+        return 0;
+    }
+    $stmt->bind_param('i', $days);
+    $stmt->execute();
+    $deleted = $stmt->affected_rows;
+    $stmt->close();
+    return max(0, $deleted);
 }

@@ -747,22 +747,64 @@
     }
   }
 
-  function dueRealIcmpNodes(store) {
-    const now = Date.now();
-    return store.getSnapshot().nodes.filter((node) => {
-      if (node.mode !== 'real' || node.method !== 'icmp') return false;
-      if (!(node.target_host || node.target_ip)) return false;
-      const intervalMs = Math.max(30, Number(node.interval_seconds) || 60) * 1000;
-      const lastMs = node.lastChecked ? new Date(node.lastChecked).getTime() : 0;
-      return (now - lastMs) >= intervalMs;
-    });
+  // Recurring checks now run from bin/tracs-infrastructure-monitor.php (cron),
+  // independent of any browser tab — see core/infrastructure_monitor.php.
+  // The page's job is just to poll for the latest persisted state and
+  // historical samples, the same way a Grafana dashboard polls a datasource.
+  async function fetchRealServerList() {
+    const response = await fetch('/api/infrastructure-server-list.php');
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload || payload.success === false) return null;
+    return payload.data;
   }
 
-  function startRealChecks(store) {
+  async function fetchServerHistory(code) {
+    const response = await fetch(`/api/infrastructure-server-history.php?code=${encodeURIComponent(code)}&limit=60`);
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload || payload.success === false) return null;
+    return payload.data;
+  }
+
+  function historyToSeries(rows, fallbackLatency) {
+    if (!rows || !rows.length) return null;
+    const latency = rows.map((row) => (row.latency_ms != null ? Math.round(row.latency_ms) : fallbackLatency));
+    const packetLoss = rows.map((row) => (row.packet_loss_percent != null ? Number(row.packet_loss_percent) : 0));
+    return {
+      latency,
+      packetLoss,
+      // 30D uptime aggregation isn't tracked yet (see uptimeTracked in
+      // infrastructure-pulse-data.js) — this stays flat and unused by the UI.
+      uptime: latency.map(() => 100),
+      incidents: [],
+      p50: latency.map((value) => Math.round(value * 0.78)),
+      p95: latency.map((value) => Math.round(value * 1.24)),
+      p99: latency.map((value) => Math.round(value * 1.55)),
+    };
+  }
+
+  async function refreshRealServers(store) {
+    const rows = await fetchRealServerList();
+    if (!rows) return;
+    const freshReal = rows.map(dbRowToNode);
+    await Promise.all(freshReal.map(async (node) => {
+      const history = await fetchServerHistory(node.code);
+      const series = historyToSeries(history, node.latency);
+      if (series) node.history = series;
+    }));
+    const freshCodes = new Set(freshReal.map((node) => node.code));
+    const snapshot = store.getSnapshot();
+    const nodes = [
+      ...freshReal,
+      ...snapshot.nodes.filter((node) => node.mode !== 'real' && !freshCodes.has(node.code)),
+    ];
+    store.ingest({ ...snapshot, nodes });
+  }
+
+  function startRealServerRefresh(store) {
     if (state.realCheckTimer) return;
-    const tick = () => dueRealIcmpNodes(store).forEach((node) => runIcmpCheck(node, store));
+    const tick = () => refreshRealServers(store);
     tick();
-    state.realCheckTimer = window.setInterval(tick, 5000);
+    state.realCheckTimer = window.setInterval(tick, 15000);
   }
 
   function requiredFieldsFor(method) {
@@ -1200,7 +1242,7 @@
         if (window.lucide) window.lucide.createIcons();
       });
       store.start();
-      startRealChecks(store);
+      startRealServerRefresh(store);
       window.addEventListener('pagehide', () => {
         store.stop();
         if (state.realCheckTimer) {

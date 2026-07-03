@@ -172,6 +172,9 @@ docker compose up -d --build
 # Run notification scheduling once
 php bin/tracs-notification-worker.php
 
+# Run one Infrastructure Pulse monitoring pass (checks due real ICMP targets)
+php bin/tracs-infrastructure-monitor.php
+
 # Preview and apply the default CS schedule from the current month through year-end
 php bin/seed-default-shift-schedule.php
 php bin/seed-default-shift-schedule.php --apply
@@ -251,6 +254,7 @@ No deployed path uses `777`. See [VPS_SECURITY_CONFIGURATION.md](VPS_SECURITY_CO
 - Configure 2FA as needed with `TRACS_2FA_ISSUER`, `TRACS_2FA_TIMEOUT_MINUTES`, `TRACS_2FA_MAX_FAILED_ATTEMPTS`, `TRACS_2FA_LOCK_MINUTES`, `TRACS_2FA_VALID_WINDOW_STEPS`, and `TRACS_2FA_SECRET_KEY`. Production deployments should set `TRACS_2FA_SECRET_KEY` to a long random value and keep it stable across deploys.
 - Optional CAPTCHA: set `TRACS_CAPTCHA_PROVIDER=turnstile`, `TRACS_TURNSTILE_SITE_KEY`, and `TRACS_TURNSTILE_SECRET_KEY`. If unset, TRACS uses an internal challenge only after suspicious login behavior.
 - Run `bin/tracs-notification-worker.php` every minute from cron and rotate its log.
+- Run `bin/tracs-infrastructure-monitor.php` every minute from cron and rotate its log if any real Infrastructure Pulse targets are registered — without it, real servers only get checked when someone manually adds/edits one, not on their configured interval.
 - Verify login, 2FA, case ticket/resolve, reminder/checklist, task assignment sync, shift statuses, MoM, notifications, permissions, and exports.
 - Confirm `public/uploads/case_attachments`, `public/uploads/shift_report_attachments`, and `public/uploads/mom` are writable when image evidence is used. Protected case, shift, and MoM images must be served through their API endpoints.
 - Confirm protected case, shift, and MoM uploads return `403/404` when requested directly; avatars are the only intended direct-public upload.

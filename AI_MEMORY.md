@@ -113,7 +113,10 @@ font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Ro
 ## Infrastructure Pulse
 
 - **Partially Implemented:** full page, dashboard mini widget, and TV Mode widget share `public/assets/infrastructure-pulse-data.js`.
-- Current telemetry and server-registry changes are mock/session-only. No backend ping worker, monitoring tables, Redis, SSE, or WebSocket feed is implemented.
+- The 9 built-in demo datacenters (`DCI, IDB, CY1, BCD, BTI, DR3, SG3, EGH, NDS`) are hardcoded mock data re-seeded on every page load; removing one persists via `infrastructure_hidden_seeds` (see `TRACS_INFRA_SEED_CODES` in `core/infrastructure_servers.php`). Ad-hoc "Demo Data" entries added manually through the Add Server form remain intentionally session-only.
+- Real (Network Ping / ICMP) targets are persisted in `infrastructure_servers`, added/edited/removed through `public/api/infrastructure-server-{create,delete}.php` (upsert-by-code; editing reuses the create endpoint). TCP/HTTP methods can be registered but have no live check implemented yet.
+- **Real ICMP monitoring is a continuous background job**, not tab-driven: `bin/tracs-infrastructure-monitor.php` (suggested cron: every minute; see `core/infrastructure_monitor.php`) checks every real ICMP target whose configured interval has elapsed via `core/infrastructure_ping.php` (shells out to system `ping` through `proc_open` with an argv array — no shell interpolation, strict host validation), and writes each result to `infrastructure_monitoring_results` (history) plus the cached `last_*` columns on `infrastructure_servers`. The frontend never triggers recurring checks itself — it polls `public/api/infrastructure-server-list.php` and `infrastructure-server-history.php` every 15s to display the latest persisted state and trend graphs, the same way a Grafana panel polls a datasource. It still fires one immediate check via `infrastructure-ping.php` right after a real server is added/edited, for instant feedback ahead of the next cron tick.
+- History retention: `tracs_infra_prune_history()` deletes samples older than 30 days on every worker run. No rollup/downsampling yet — raw per-check samples only.
 - `tv-mode.php` includes an Infrastructure Pulse widget; there is no separate Infrastructure-only TV route.
 - Do not document mock incidents as live infrastructure alerts.
 
