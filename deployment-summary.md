@@ -4,6 +4,64 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Connect Dashboard/TV Widgets to Real Server Data + Reorder Slider (2026-07-03 ~09:31 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch `design/ui-consistency-audit`, commit
+`0b4240a`. 5 files: `core/infrastructure_servers.php`,
+`public/assets/infrastructure-pulse.css`, `public/index.php`,
+`public/infrastructure-pulse.php`, `public/tv-mode.php`. Backup
+`/opt/tracs/backups/infra-widget-connect-20260703-093117/`.
+
+**Drift found and handled before deploying — read this if touching
+`public/index.php` or `public/assets/infrastructure-pulse.css` again.**
+The pre-deploy drift check (now routine after the false-positive incident
+logged 2026-07-02) found prod's live copies of these two files did **not**
+match this branch's last-deployed baseline (commit `02d7679`):
+- `public/index.php` on prod already had unrelated fixes/tweaks not present
+  in this branch's history for that file: `data-unsaved-ignore` attributes
+  on the currency/screenshot fields, "All →" arrow link text, a `badge-sm`
+  class + keyboard-accessible (`role="button" tabindex="0" onkeydown`) shift
+  report cards, and a `🐈‍⬛`/`🐾` emoji dobby easter egg instead of Lucide
+  icons.
+- `public/assets/infrastructure-pulse.css` on prod had several
+  `font-weight` values bumped (800→850, 600→650) beyond what's in this
+  branch.
+  Per AI_MEMORY's "never revert unrelated changes" rule and the prior
+  documented incident, these were **not** overwritten. Instead: fetched
+  prod's actual live files via `scp` (not `ssh ... cat`, which contaminates
+  output with the login banner), applied only this deploy's specific edits
+  on top of that live content (verified with a full `diff` afterward showing
+  *only* the intended lines changed), then deployed the merged result. Every
+  prod-only difference listed above is still present on production.
+  `core/infrastructure_servers.php`, `public/infrastructure-pulse.php`, and
+  `public/tv-mode.php` had no drift and were deployed directly from this
+  branch.
+
+The actual feature: the dashboard mini-widget and TV Mode widget were
+missing persisted real servers (only `infrastructure-pulse.php` itself
+loaded them), so they showed a different node count/status than the full
+page — e.g. 9 nodes instead of 10 with `CloudVPS-SGP01` missing entirely.
+Both now expose `window.TRACS_INFRA_REAL_SERVERS` via the shared
+`tracs_infra_server_list_active_for_json()` helper (new in
+`core/infrastructure_servers.php`, deduplicating the row-mapping logic that
+previously lived only in `infrastructure-pulse.php`). Also reordered the
+dashboard's operations-summary slider to show Shift Summary first and
+Infrastructure Pulse second (was reversed), updating the two
+position-dependent CSS icon-entrance-animation rules that assumed the old
+order.
+
+Verified on local Docker before deploying: dashboard widget shows 10 nodes
+including `SGP01` with `mode: real`, matches the full page's node count;
+Shift Summary confirmed as the default-visible slide (opacity 1) immediately
+after page load via computed styles, Infrastructure Pulse slide 2; TV Mode
+also confirmed 10 nodes with `SGP01` present. Zero console errors across all
+three pages. `php -l` passed on all 4 PHP files, `php8.3-fpm` reloaded,
+post-deploy sha256 matched the deployed content on all 5 files (compared
+against the merged live copies for the 2 drifted files, and against this
+branch directly for the other 3), and HTTP checks came back as expected
+(302 login redirects, CSS 200).
+
 ## Deployed — Infrastructure Pulse Real Server Registry Persistence (2026-07-03 ~09:12 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
