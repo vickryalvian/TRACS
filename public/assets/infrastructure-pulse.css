@@ -1202,7 +1202,9 @@
 
 .infra-server-registry__remove {
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
 }
 
 .infra-remove-confirm {

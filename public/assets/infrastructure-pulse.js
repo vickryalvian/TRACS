@@ -861,11 +861,11 @@
             <time>${esc(node.lastChecked ? Infra.formatTime(node.lastChecked) : 'Not checked')}</time>
           </div>
           <div class="infra-server-registry__remove" data-infra-remove-wrap="${esc(node.code)}">
-            <button type="button" class="btn btn-ghost btn-sm" data-infra-edit-server="${esc(node.code)}">
-              <i data-lucide="pencil" class="icon-sm"></i>Edit
+            <button type="button" class="btn btn-ghost btn-icon" data-infra-edit-server="${esc(node.code)}" title="Edit" aria-label="Edit ${esc(node.name)}">
+              <i data-lucide="pencil" class="icon-sm"></i>
             </button>
-            <button type="button" class="btn btn-ghost btn-sm" data-infra-remove-server="${esc(node.code)}">
-              <i data-lucide="trash-2" class="icon-sm"></i>Remove
+            <button type="button" class="btn btn-ghost btn-icon" data-infra-remove-server="${esc(node.code)}" title="Remove" aria-label="Remove ${esc(node.name)}">
+              <i data-lucide="trash-2" class="icon-sm"></i>
             </button>
           </div>
         </article>
