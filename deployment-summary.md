@@ -4,6 +4,57 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Persist Demo-Datacenter Removal + Server Edit Feature (2026-07-03 ~10:28–10:30 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch `design/ui-consistency-audit`, commit
+`3d1b2f0`. 9 files: `config/migrations/2026_07_03_infrastructure_hidden_seeds.sql`
+(new, applied), `core/infrastructure_servers.php`,
+`public/api/infrastructure-server-delete.php`,
+`public/assets/infrastructure-pulse-{data.js,css,js}`, `public/index.php`,
+`public/infrastructure-pulse.php`, `public/tv-mode.php` (all updated).
+Backup `/opt/tracs/backups/infra-edit-persist-seeds-20260703-102826/`.
+
+User report: deleted all 9 built-in demo datacenters (DCI, IDB, CY1, BCD,
+BTI, DR3, SG3, EGH, NDS) via Manage Servers and "it still doesn't update
+anything" after a refresh. Confirmed via the prod DB that these were never
+persisted — they're hardcoded client-side mock data
+(`public/assets/infrastructure-pulse-data.js`'s `DATACENTERS` array),
+re-seeded fresh on every page load by design, so removal only ever worked
+for the current tab.
+
+- New `infrastructure_hidden_seeds` table (code + hidden_at + hidden_by)
+  makes removing one of the 9 seeds durable, matching how removal already
+  works for real targets. `infrastructure-server-delete.php` now tries a
+  real soft-delete first, then falls back to hiding a seed code (whitelisted
+  server-side against the known 9 codes, so ad-hoc "Demo Data" entries added
+  through the form can't pollute this table) — one endpoint handles both
+  cases. `infrastructure-pulse-data.js`'s `createSnapshot()` filters hidden
+  seed codes out of the built-in list before building the store, and dedupes
+  by code so a seed that's been edited into a real target doesn't render
+  twice.
+- New **Edit** action on every Server Registry row (feature request): opens
+  the existing Add Server form pre-filled with that server's current values,
+  locks the Code field (it's the upsert key server-side — editable would let
+  a typo silently create a duplicate entry instead of updating the original),
+  and reuses the same create/upsert endpoint on save so no new API surface
+  was needed for the "update an existing real server" case. Editing a mock
+  seed's method into a real target (icmp/tcp/http with a host) upgrades it to
+  a persisted, live-checked server; editing a real target back to Demo Data
+  soft-deletes its DB row so it stops being live-checked.
+
+Verified on local Docker before deploying: removed DCI, confirmed the row
+landed in `infrastructure_hidden_seeds`, reloaded, confirmed DCI stayed gone
+(9→8 nodes); edited SGP01's hostname from `103.250.11.175` to `1.1.1.1`,
+confirmed the DB row updated and a fresh live check ran against the new host
+automatically; edited CY1 (a seed) into a real ICMP target
+(`1.0.0.1`), confirmed it upgraded correctly with no duplicate node in the
+store; reverted all test changes back to the clean baseline before
+deploying. Drift-checked clean, `php -l` passed on all 5 PHP files,
+`php8.3-fpm` reloaded, post-deploy sha256 matched local on all 9 files, HTTP
+checks came back as expected, and the PHP-FPM error log was checked
+post-deploy — clean.
+
 ## Deployed — Production Drift Correction: Full Catch-Up on 22 Un-Deployed Files (2026-07-03 ~09:41–09:54 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
