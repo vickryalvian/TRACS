@@ -4,6 +4,69 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Sidebar Bug Fixes: Ticker, Z-Index, Profile Menu, Theme-in-Profile (2026-07-03 ~19:24 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch `design/sidebar-hover-expand`, commit
+`cbfc345`. 3 files: `public/includes/header.php`, `public/assets/tracs.css`,
+`public/assets/tracs.js`. Backup
+`/opt/tracs/backups/sidebar-bugfixes-20260703-192437/`.
+
+User-reported issues, all found to have real, verifiable root causes (not
+just visual tweaks):
+
+- **Ticker "LIVE" badge removed** (`.ticker-live`/`.ticker-dot` markup +
+  CSS + `@keyframes tdot` deleted; `radarSweep` keyframe kept, it's shared
+  with other components).
+- **Sidebar/ticker stacking**: sidebar's z-index (was 40 collapsed) sat
+  *below* the ticker bar's (100) — raised to 150 so the sidebar can never
+  render underneath the ticker at their shared edge.
+- **Profile menu "not working"**: root cause was `.sidebar-flyout`'s
+  `overflow:hidden` (added for the collapsed-rail clip animation)
+  silently clipping `.user-menu`, which was `position:absolute` and
+  rendered outside the flyout's own box — it toggled open (attribute-wise)
+  but was invisible. Switched to `position:fixed`, anchored past the
+  sidebar's expanded edge (confirmed via `getComputedStyle`: opens with
+  `opacity:1`/`visibility:visible` and lands fully on-screen).
+- **Theme toggle moved into the profile dropdown**: Light/Dark/System are
+  now inline options inside `.user-menu`, under a "Theme" section label,
+  above Logout. Removed the separate theme-toggle icon + its popup
+  (`.theme-menu-wrap`/`.theme-toggle`/`.theme-menu`) and the now-dead JS
+  (`tracsOpenThemeMenu`/`tracsCloseThemeMenu`/`tracsToggleThemeMenu`/
+  `tracsToggleTheme`); kept `.ic-sun`/`.ic-moon` (still used by TV Mode)
+  and `.theme-option` (reused in the new location).
+- **Mobile (≤640px) profile menu was unreachable**: the horizontal-bar
+  sidebar's nav-icon row and avatar row were fighting over width —
+  `overflow-x:auto`'s automatic `min-width:0` let `flex-shrink` crush the
+  icon row to ~0px in one attempt, and a leftover `width:100%` inherited
+  from the desktop column layout made the avatar row claim the *entire*
+  bar in another, pushing the other element off-screen and clipped by
+  `overflow:hidden` either way. Fixed by making the icon row the one that
+  yields space and scrolls internally (`flex:1; min-width:0`) while the
+  avatar row is protected (`flex-shrink:0; width:auto`) and never
+  displaced. Also found and removed a stale `@media(max-width:720px)
+  .user-menu` rule left over from the old `position:absolute` layout
+  (`bottom:calc(100%+8px)` sent the panel off-screen once positioning
+  became fixed) — replaced with a correctly-cascaded `≤640px` override
+  (placed *after* the base `.user-menu` rule, since equal-specificity
+  rules resolve by source order) that drops the panel down from the
+  avatar to match the horizontal top-bar layout.
+
+Verification: drift-checked clean on all 3 files before deploy; `php -l`
+clean; post-deploy sha256 matches local byte-for-byte on all 3; `login.php`
+returns **200**; deployed CSS/JS confirmed to contain the fixes and be free
+of the removed dead code; `nginx`/`php8.3-fpm` active. Pre-deploy verified
+live against the docker dev stack as `admin@tracs.local`: profile dropdown
+opens and is fully visible/interactive (screenshot-confirmed: name, email,
+Profile/Settings/Change Password, Theme section with working Light/Dark/
+System selection, Logout) at desktop width; mobile bar (375px and 345px)
+shows both the scrollable icon row *and* the avatar simultaneously with no
+clipping, and the dropdown drops down fully on-screen from there too. No
+console errors in either state.
+
+Branch remains pushed for review/PR. Production tracks the working tree via
+file-copy deploy (not a `main` pull).
+
 ## Deployed — Sidebar Submenu Label Shortened (2026-07-03 ~18:19 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
