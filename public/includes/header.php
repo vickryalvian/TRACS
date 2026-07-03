@@ -100,7 +100,7 @@ $_task_monitoring_items = [
     'visible' => $_can_domains,
   ],
   [
-    'label' => 'Domain Pricing Crosscheck',
+    'label' => 'Domain Pricing',
     'href' => 'domain-price-crosscheck.php',
     'icon' => 'trending-up',
     'active_page' => 'domain_price_crosscheck',
