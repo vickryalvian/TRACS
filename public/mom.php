@@ -345,16 +345,16 @@ include 'includes/header.php';
     </div>
 
     <?php if(($mom_details['status']??'')==='completed'): ?>
-    <div class="mom-card mom-screenshots-card" data-sidebar-edit="screenshots">
+    <div class="mom-card mom-screenshots-card" data-sidebar-edit="screenshots" data-mom-id="<?=$mom_id?>">
       <div class="card-head">
         <span class="card-title"><i data-lucide="image" class="icon-sm"></i>Screenshots</span>
         <button class="btn btn-ghost btn-icon btn-sm" onclick="toggleMOMSidebarEdit('screenshots')" title="Edit Screenshots" aria-label="Edit screenshots"><i data-lucide="edit-2" class="icon-sm"></i></button>
       </div>
       <div class="card-body">
         <div class="mom-sidebar-edit mom-shot-editbar">
-          <label class="btn btn-ghost btn-sm">
+          <label class="btn btn-ghost btn-sm" title="Click, drop, or paste an image">
             <i data-lucide="image-plus" class="icon-sm"></i>Add
-            <input type="file" accept="image/*" style="display:none" data-unsaved-ignore onchange="uploadMOMScreenshot(<?=$mom_id?>, this)">
+            <input type="file" accept="image/*" multiple style="display:none" data-unsaved-ignore onchange="uploadMOMScreenshot(<?=$mom_id?>, this)">
           </label>
           <button class="btn btn-primary btn-sm" onclick="saveMOMSidebarScreenshots(<?=$mom_id?>)">Save</button>
         </div>

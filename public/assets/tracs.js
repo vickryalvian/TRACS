@@ -4395,16 +4395,18 @@ if (document.getElementById('tickerScroll')) {
 }
 
 /* ── SHIFT REPORT CRUD ────────────────────────────────── */
-/* A shift handover is ONE report by one agent that bundles many cases (items).
-   The modal collects a header (date/shift/summary) + N item cards; create posts
-   them in a single call, then uploads per-item screenshots in a second pass that
-   reuses the existing shift-update attachment pipeline. Edit mode reuses the same
-   modal for a single existing item. */
+/* A shift handover is ONE report by one agent: a mandatory shift summary (with
+   its own shared screenshots) plus optional case items. Create posts the
+   summary + items in one multipart request (so shared screenshots ride along),
+   then uploads per-item screenshots in a second pass that reuses the existing
+   shift-update attachment pipeline. Edit mode reuses the same modal for a
+   single existing item. */
 const SHIFT_PRIORITIES=[['low','Low'],['medium','Medium'],['high','High'],['critical','Critical']];
 const SHIFT_STATUSES=[['active','Active / Need Handover'],['on_hold','On Hold'],['resolved','Resolved']];
 let shiftModalMode='create';   // 'create' | 'edit'
 let shiftItems=[];             // [{uid,title,details,priority,status,resolution_note,resolved_at}]
 let shiftItemFiles={};         // uid -> [{id,file,url}]
+let shiftSummaryFiles=[];      // [{id,file,url}] shared handover-level screenshots
 let shiftItemSeq=0;
 
 function shiftNewUid(){return 'it'+(++shiftItemSeq)+'_'+(crypto.randomUUID?.()||String(Date.now()+Math.random()).replace('.','' ));}
@@ -4422,7 +4424,7 @@ function shiftCardByUid(uid){return document.querySelector(`.shift-item-card[dat
 
 function shiftItemCardHtml(item,index,total){
   const uid=item.uid;
-  const removable=shiftModalMode==='create' && total>1;
+  const removable=shiftModalMode==='create';
   const prioOpts=SHIFT_PRIORITIES.map(([v,l])=>`<option value="${v}"${item.priority===v?' selected':''}>${l}</option>`).join('');
   const statOpts=SHIFT_STATUSES.map(([v,l])=>`<option value="${v}"${item.status===v?' selected':''}>${l}</option>`).join('');
   const resShown=item.status==='resolved';
@@ -4444,15 +4446,10 @@ function shiftItemCardHtml(item,index,total){
         <div class="form-group"><label class="form-label">Resolution Summary</label><input type="text" class="form-input shift-i-resolution-note" maxlength="255" value="${escHtml(item.resolution_note||'')}" placeholder="Short note for next shift visibility"></div>
       </div>
     </div>
-    <div class="form-group case-upload-group shift-item-upload">
+    <div class="shift-item-photos">
       <input class="case-upload-input" type="file" id="shiftFile_${uid}" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" multiple onchange="shiftItemAddFiles(${jsAttr(uid)},this.files)">
-      <label class="case-upload-drop shift-item-drop" for="shiftFile_${uid}">
-        <i data-lucide="image-plus" class="icon-sm"></i>
-        <span>Add screenshots</span>
-        <small>JPG, PNG, WEBP · Max 5MB</small>
-      </label>
-      <div class="case-upload-status shift-i-upstatus" aria-live="polite"></div>
-      <div class="case-attachment-grid shift-i-preview"></div>
+      <div class="shift-item-photo-list" id="shiftItemPhotos_${uid}"></div>
+      <label class="shift-item-photo-add" for="shiftFile_${uid}"><i data-lucide="image-plus" class="icon-xs"></i>Add photo</label>
     </div>
   </div>`;
 }
@@ -4489,10 +4486,16 @@ function shiftToggleItemResolution(sel){
 }
 function updateShiftItemsMeta(){
   const c=document.getElementById('shiftItemsCount');
-  if(!c)return;
-  if(shiftModalMode!=='create'){c.textContent='';return;}
+  const btn=document.getElementById('shiftAddItemBtn');
   const n=shiftItems.length;
-  c.textContent=`${n} item${n===1?'':'s'}`;
+  if(c)c.textContent=(shiftModalMode==='create')?`${n} item${n===1?'':'s'}`:'';
+  if(btn){
+    const label=btn.querySelector('span')||btn;
+    const text=n===0?'Add item':'Add another item';
+    if(btn.querySelector('span'))label.textContent=text;
+    else btn.innerHTML=`<i data-lucide="plus" class="icon-sm"></i><span>${text}</span>`;
+    tracsRefreshIcons(btn);
+  }
 }
 function addShiftItem(){
   syncShiftItemsFromDom();
@@ -4502,7 +4505,6 @@ function addShiftItem(){
   cards[cards.length-1]?.querySelector('.shift-i-title')?.focus();
 }
 function removeShiftItem(uid){
-  if(shiftItems.length<=1)return;
   syncShiftItemsFromDom();
   (shiftItemFiles[uid]||[]).forEach(x=>{try{URL.revokeObjectURL(x.url);}catch(e){}});
   delete shiftItemFiles[uid];
@@ -4520,11 +4522,7 @@ function shiftItemAddFiles(uid,files){
     if(!dup)list.push({id:crypto.randomUUID?.()||String(Date.now()+Math.random()),file,url:URL.createObjectURL(file)});
   });
   renderShiftItemFiles(uid);
-  const st=shiftCardByUid(uid)?.querySelector('.shift-i-upstatus');
-  if(st){
-    if(errors.length){st.textContent=errors[0];st.className='case-upload-status error';}
-    else{st.textContent=list.length?`${list.length} image${list.length===1?'':'s'} ready.`:'';st.className='case-upload-status ok';}
-  }
+  if(errors.length)toast(errors[0],'error');
 }
 function shiftItemRemoveFile(uid,fileId){
   const list=shiftItemFiles[uid]||[];
@@ -4534,29 +4532,132 @@ function shiftItemRemoveFile(uid,fileId){
   renderShiftItemFiles(uid);
 }
 function renderShiftItemFiles(uid){
-  const grid=shiftCardByUid(uid)?.querySelector('.shift-i-preview');
-  if(!grid)return;
   const list=shiftItemFiles[uid]||[];
-  grid.innerHTML=list.map(item=>`
-    <div class="case-attachment-tile">
-      <button class="case-attachment-thumb" type="button" onclick="openCaseImagePreview(${jsAttr(item.url)},${jsAttr(item.file.name)})"><img src="${item.url}" alt="${escHtml(item.file.name)}"></button>
-      <div class="case-attachment-meta"><span title="${escHtml(item.file.name)}">${escHtml(item.file.name)}</span><small>${formatBytes(item.file.size)}</small></div>
-      <button class="case-attachment-remove" type="button" onclick="shiftItemRemoveFile(${jsAttr(uid)},${jsAttr(item.id)})" aria-label="Remove selected image"><i data-lucide="x" class="icon-xs"></i></button>
-    </div>`).join('');
-  tracsRefreshIcons(grid);
+  const wrap=shiftCardByUid(uid)?.querySelector(`#shiftItemPhotos_${uid}`);
+  if(!wrap)return;
+  wrap.innerHTML=list.map(item=>`
+    <span class="shift-item-photo-chip" title="${escHtml(item.file.name)}">
+      <button type="button" onclick="openCaseImagePreview(${jsAttr(item.url)},${jsAttr(item.file.name)})"><img src="${item.url}" alt="${escHtml(item.file.name)}"></button>
+      <button type="button" class="shift-item-photo-remove" onclick="shiftItemRemoveFile(${jsAttr(uid)},${jsAttr(item.id)})" aria-label="Remove selected image"><i data-lucide="x" class="icon-xs"></i></button>
+    </span>`).join('');
+  tracsRefreshIcons(wrap);
 }
 function clearShiftAllFiles(){
   Object.values(shiftItemFiles).forEach(list=>list.forEach(x=>{try{URL.revokeObjectURL(x.url);}catch(e){}}));
   shiftItemFiles={};
 }
+function shiftSummaryAttachmentEls(){
+  return {
+    input: document.getElementById('shiftSummaryAttachments'),
+    drop: document.getElementById('shiftSummaryUploadDrop'),
+    status: document.getElementById('shiftSummaryUploadStatus'),
+    selected: document.getElementById('shiftSummaryAttachmentPreview')
+  };
+}
+function shiftSummaryAddFiles(files){
+  const incoming=Array.from(files||[]);
+  const errors=[];
+  incoming.forEach(file=>{
+    const err=shiftValidateAttachment(file);
+    if(err){errors.push(err);return;}
+    const dup=shiftSummaryFiles.some(x=>x.file.name===file.name && x.file.size===file.size && x.file.lastModified===file.lastModified);
+    if(!dup)shiftSummaryFiles.push({id:crypto.randomUUID?.()||String(Date.now()+Math.random()),file,url:URL.createObjectURL(file)});
+  });
+  renderShiftSummaryFiles();
+  const st=shiftSummaryAttachmentEls().status;
+  if(st){
+    if(errors.length){st.textContent=errors[0];st.className='case-upload-status error';}
+    else{st.textContent=shiftSummaryFiles.length?`${shiftSummaryFiles.length} image${shiftSummaryFiles.length===1?'':'s'} ready.`:'';st.className='case-upload-status ok';}
+  }
+}
+function shiftSummaryRemoveFile(fileId){
+  const f=shiftSummaryFiles.find(x=>x.id===fileId);
+  if(f){try{URL.revokeObjectURL(f.url);}catch(e){}}
+  shiftSummaryFiles=shiftSummaryFiles.filter(x=>x.id!==fileId);
+  renderShiftSummaryFiles();
+}
+function renderShiftSummaryFiles(){
+  const el=shiftSummaryAttachmentEls().selected;
+  if(!el)return;
+  el.innerHTML=shiftSummaryFiles.map(item=>`
+    <div class="case-attachment-tile">
+      <button class="case-attachment-thumb" type="button" onclick="openCaseImagePreview(${jsAttr(item.url)},${jsAttr(item.file.name)})"><img src="${item.url}" alt="${escHtml(item.file.name)}"></button>
+      <div class="case-attachment-meta"><span title="${escHtml(item.file.name)}">${escHtml(item.file.name)}</span><small>${formatBytes(item.file.size)}</small></div>
+      <button class="case-attachment-remove" type="button" onclick="shiftSummaryRemoveFile(${jsAttr(item.id)})" aria-label="Remove selected image"><i data-lucide="x" class="icon-xs"></i></button>
+    </div>`).join('');
+  tracsRefreshIcons(el);
+}
+function clearShiftSummaryFiles(){
+  shiftSummaryFiles.forEach(x=>{try{URL.revokeObjectURL(x.url);}catch(e){}});
+  shiftSummaryFiles=[];
+  const els=shiftSummaryAttachmentEls();
+  if(els.input)els.input.value='';
+  if(els.selected)els.selected.innerHTML='';
+  if(els.status){els.status.textContent='';els.status.className='case-upload-status';}
+}
+function shiftInitSummaryUploadDrop(){
+  const els=shiftSummaryAttachmentEls();
+  if(!els.drop||els.drop.dataset.ready)return;
+  els.drop.dataset.ready='1';
+  ['dragenter','dragover'].forEach(evt=>els.drop.addEventListener(evt,e=>{e.preventDefault();els.drop.classList.add('drag');}));
+  ['dragleave','drop'].forEach(evt=>els.drop.addEventListener(evt,e=>{e.preventDefault();els.drop.classList.remove('drag');}));
+  els.drop.addEventListener('drop',e=>shiftSummaryAddFiles(e.dataTransfer?.files));
+}
+/* Shared paste-to-upload: every screenshot/photo dropzone in the app (case
+   modal, shift handover summary, shift item chips) accepts a pasted image the
+   same way it accepts a click or a drag-drop. Whichever upload modal is open
+   wins; within the shift modal, a focused item card takes the paste over the
+   shared summary uploader. */
+function tracsExtractPastedImages(e){
+  const items=e.clipboardData?.items;
+  if(!items||!items.length)return[];
+  const files=[];
+  for(const it of items){
+    if(it.kind==='file' && it.type && it.type.startsWith('image/')){
+      const f=it.getAsFile();
+      if(f)files.push(f);
+    }
+  }
+  return files;
+}
+function tracsHandleImagePaste(e){
+  const shiftModal=document.getElementById('shiftModal');
+  const caseModal=document.getElementById('caseModal');
+  if(shiftModal && !shiftModal.classList.contains('hidden')){
+    const files=tracsExtractPastedImages(e);
+    if(!files.length)return;
+    e.preventDefault();
+    const card=document.activeElement?.closest?.('.shift-item-card');
+    if(card)shiftItemAddFiles(card.dataset.uid,files);
+    else shiftSummaryAddFiles(files);
+    return;
+  }
+  if(caseModal && !caseModal.classList.contains('hidden')){
+    const files=tracsExtractPastedImages(e);
+    if(!files.length)return;
+    e.preventDefault();
+    caseAddAttachmentFiles(files);
+    return;
+  }
+  const tmTaskModal=document.getElementById('tmTaskModal');
+  if(tmTaskModal && !tmTaskModal.classList.contains('hidden') && typeof tmTaskAddFiles === 'function'){
+    const files=tracsExtractPastedImages(e);
+    if(!files.length)return;
+    e.preventDefault();
+    tmTaskAddFiles(files);
+  }
+}
+document.addEventListener('paste',tracsHandleImagePaste);
 function applyShiftModalMode(){
   const isCreate=shiftModalMode==='create';
   document.getElementById('shiftSummaryGroup')?.classList.toggle('hidden',!isCreate);
+  document.getElementById('shiftSummaryUploadGroup')?.classList.toggle('hidden',!isCreate);
   document.getElementById('shiftAddItemBtn')?.classList.toggle('hidden',!isCreate);
   const label=document.getElementById('shiftItemsLabel');
   if(label)label.textContent=isCreate?'Handover Items':'Case Detail';
   const saveLabel=document.getElementById('shiftSaveLabel');
   if(saveLabel)saveLabel.textContent=isCreate?'Save Handover':'Save Item';
+  if(isCreate)shiftInitSummaryUploadDrop();
 }
 function openNewShiftReport(){
   shiftModalMode='create';
@@ -4567,7 +4668,8 @@ function openNewShiftReport(){
   if(!val('shiftName'))setVal('shiftName','Shift 1');
   setVal('shiftSummary','');
   clearShiftAllFiles();
-  shiftItems=[shiftBlankItem()];
+  clearShiftSummaryFiles();
+  shiftItems=[];
   applyShiftModalMode();
   renderShiftItems();
   openModal('shift');
@@ -4597,16 +4699,19 @@ function openEditShiftReport(id){
 async function saveShiftReport(){
   syncShiftItemsFromDom();
   if(shiftModalMode==='edit')return saveShiftItemEdit();
+  const summary=val('shiftSummary').trim();
+  if(!summary){toast('Shift summary is required','error');return;}
   const items=shiftItems.filter(it=>it.title.trim());
-  if(!items.length){toast('Add at least one item with a title','error');return;}
-  const payload={
-    shift_name:val('shiftName'),
-    active_date:val('shiftDate'),
-    summary:val('shiftSummary'),
-    items:items.map(it=>({title:it.title.trim(),details:it.details,priority:it.priority,status:it.status||'active',resolution_note:it.resolution_note,resolved_at:it.resolved_at}))
-  };
+  const shiftName=val('shiftName');
+  const activeDate=val('shiftDate');
+  const fd=new FormData();
+  fd.append('shift_name',shiftName);
+  fd.append('active_date',activeDate);
+  fd.append('summary',summary);
+  fd.append('items',JSON.stringify(items.map(it=>({title:it.title.trim(),details:it.details,priority:it.priority,status:it.status||'active',resolution_note:it.resolution_note,resolved_at:it.resolved_at}))));
+  shiftSummaryFiles.forEach(f=>fd.append('attachments[]',f.file,f.file.name));
   const btn=document.getElementById('shiftSaveBtn');
-  const d=await withLoadingState(btn,'Saving...',()=>api(API.SHIFT.HANDOVER_CREATE,payload));
+  const d=await withLoadingState(btn,'Saving...',()=>caseApiWithUploads(API.SHIFT.HANDOVER_CREATE,fd));
   if(!d)return;
   if(!d.success){handleModalError({modal:'shift',error:{message:d.message,status:d.status}});return;}
   const created=(d.data&&d.data.items)||[];
@@ -4616,24 +4721,24 @@ async function saveShiftReport(){
     if(!src)return;
     const files=shiftItemFiles[src.uid]||[];
     if(!files.length)return;
-    const fd=new FormData();
-    fd.append('id',ci.id);
-    fd.append('title',src.title.trim());
-    fd.append('shift_name',payload.shift_name);
-    fd.append('priority',src.priority);
-    fd.append('status',src.status||'active');
-    fd.append('details',src.details);
-    fd.append('active_date',payload.active_date);
-    fd.append('resolution_note',src.resolution_note||'');
-    fd.append('resolved_at',src.resolved_at||'');
-    files.forEach(f=>fd.append('attachments[]',f.file,f.file.name));
-    uploads.push(caseApiWithUploads(API.SHIFT.UPDATE,fd));
+    const ifd=new FormData();
+    ifd.append('id',ci.id);
+    ifd.append('title',src.title.trim());
+    ifd.append('shift_name',shiftName);
+    ifd.append('priority',src.priority);
+    ifd.append('status',src.status||'active');
+    ifd.append('details',src.details);
+    ifd.append('active_date',activeDate);
+    ifd.append('resolution_note',src.resolution_note||'');
+    ifd.append('resolved_at',src.resolved_at||'');
+    files.forEach(f=>ifd.append('attachments[]',f.file,f.file.name));
+    uploads.push(caseApiWithUploads(API.SHIFT.UPDATE,ifd));
   });
   if(uploads.length){try{await Promise.all(uploads);}catch(e){/* screenshots are best-effort */}}
   showModalSuccessAndClose({
     modal:'shift',
     message:'Handover filed.',
-    onAfterClose:()=>{clearShiftAllFiles();location.reload();}
+    onAfterClose:()=>{clearShiftAllFiles();clearShiftSummaryFiles();location.reload();}
   });
 }
 async function saveShiftItemEdit(){
@@ -4668,8 +4773,8 @@ async function saveShiftItemEdit(){
 async function editHandoverSummary(id,btn){
   const wrap=btn?.closest('.shift-report-agent-summary');
   const current=wrap?.querySelector('.search-text')?.textContent?.trim()||'';
-  const next=window.prompt('Shift summary for this handover (what to watch, how the shift went):',current);
-  if(next===null)return;
+  const next=await tracsPrompt({title:'Edit shift summary',message:'Shift summary for this handover (what to watch, how the shift went):',defaultValue:current,inputLabel:'Shift summary',required:true});
+  if(next===null || next===undefined)return;
   const d=await api(API.SHIFT.HANDOVER_UPDATE,{id,summary:next});
   if(d&&d.success){showToast('Handover summary updated.','success',{context:'page'});_reload();}
   else handleRequestError({message:d?.message,status:d?.status},'page','The summary could not be updated. Please try again.');

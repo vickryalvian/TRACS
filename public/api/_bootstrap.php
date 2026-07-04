@@ -175,6 +175,7 @@ $apiMethodMap = [
     'shift-resolve.php' => ['POST'],
     'shift-update.php' => ['POST'],
     'shifting-assignment.php' => ['GET', 'POST'],
+    'task-attachment.php' => ['GET'],
     'task-create.php' => ['POST'],
     'task-delete.php' => ['POST'],
     'task-toggle.php' => ['POST'],

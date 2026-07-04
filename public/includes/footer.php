@@ -100,7 +100,7 @@ $_tracs_case_can_delete = isset($conn) && $conn instanceof mysqli && function_ex
       <input class="case-upload-input" type="file" id="caseAttachments" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" multiple>
       <label class="case-upload-drop" id="caseUploadDrop" for="caseAttachments">
         <i data-lucide="image-plus" class="icon-sm"></i>
-        <span>Click or drop images here</span>
+        <span>Click, drop, or paste images here</span>
         <small>JPG, JPEG, PNG, WEBP. Max 5MB each.</small>
       </label>
       <div class="case-upload-status" id="caseUploadStatus" aria-live="polite"></div>
@@ -295,15 +295,26 @@ $_tracs_case_can_delete = isset($conn) && $conn instanceof mysqli && function_ex
       </div>
     </div>
     <div class="form-group" id="shiftSummaryGroup">
-      <label class="form-label">Shift Summary <span class="form-optional">(optional)</span></label>
+      <label class="form-label">Shift Summary *</label>
       <textarea class="form-textarea" id="shiftSummary" placeholder="Overall notes for the next agent — how the shift went, what to watch, carryovers" style="min-height:64px"></textarea>
+    </div>
+    <div class="form-group case-upload-group" id="shiftSummaryUploadGroup">
+      <label class="form-label">Screenshots / Photos</label>
+      <input class="case-upload-input" type="file" id="shiftSummaryAttachments" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" multiple onchange="shiftSummaryAddFiles(this.files)">
+      <label class="case-upload-drop" id="shiftSummaryUploadDrop" for="shiftSummaryAttachments">
+        <i data-lucide="image-plus" class="icon-sm"></i>
+        <span>Click, drop, or paste images here</span>
+        <small>JPG, JPEG, PNG, WEBP. Max 5MB each.</small>
+      </label>
+      <div class="case-upload-status" id="shiftSummaryUploadStatus" aria-live="polite"></div>
+      <div class="case-attachment-grid" id="shiftSummaryAttachmentPreview"></div>
     </div>
     <div class="shift-items-head">
       <span class="form-label" id="shiftItemsLabel">Handover Items</span>
       <span class="shift-items-count" id="shiftItemsCount"></span>
     </div>
     <div id="shiftItemsContainer" class="shift-items-container"></div>
-    <button type="button" class="btn btn-ghost btn-sm shift-add-item-btn" id="shiftAddItemBtn" onclick="addShiftItem()"><i data-lucide="plus" class="icon-sm"></i>Add another item</button>
+    <button type="button" class="btn btn-ghost btn-sm shift-add-item-btn" id="shiftAddItemBtn" onclick="addShiftItem()"><i data-lucide="plus" class="icon-sm"></i>Add item</button>
   </div>
   <div class="modal-foot">
     <button class="btn btn-ghost" onclick="closeModal('shift')">Cancel</button>

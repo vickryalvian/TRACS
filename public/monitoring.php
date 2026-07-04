@@ -7,6 +7,7 @@ require_once __DIR__ . '/auth/auth_check.php';
 require_once __DIR__ . '/../core/access_control.php';
 require_once __DIR__ . '/../modules/task-management/controller.php';
 require_once __DIR__ . '/../modules/alert-ticker/controller.php';
+require_once __DIR__ . '/api/task-attachment-lib.php';
 require_once __DIR__ . '/includes/page_helpers.php';
 
 $uid = (int)($_SESSION['user_id'] ?? 0);
@@ -123,6 +124,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'delete_task' => $TM->deleteTask($_POST),
             default => throw new InvalidArgumentException('Unknown task action.'),
         };
+        if ($action === 'create_task' && !empty($_FILES['attachments']) && !empty($result['task_id'])) {
+            try {
+                task_attachment_ensure_table($conn);
+                task_attachment_store_uploads($conn, $_FILES['attachments'], (int)$result['task_id'], $uid);
+            } catch (Throwable $e) {
+                error_log('TRACS task attachment upload failed: ' . $e->getMessage());
+                $result['message'] = ($result['message'] ?? 'Task created.') . ' Some screenshots could not be attached.';
+            }
+        }
         $return_tab = (string)($_POST['return_tab'] ?? 'my');
         if (tm_is_ajax_request()) {
             tm_json_response(true, $result['message'] ?? 'Saved.', $return_tab);
@@ -200,7 +210,7 @@ include __DIR__ . '/includes/header.php';
           <strong><?=esc($critical_count)?></strong> overdue
         </a>
       <?php endif; ?>
-      <?php if($can_create): ?><button type="button" class="btn btn-primary" onclick="openModal('tmTask')"><i data-lucide="plus-circle" class="icon-sm"></i>Add Task</button><?php endif; ?>
+      <?php if($can_create): ?><button type="button" class="btn btn-primary" onclick="tmOpenNewTask()"><i data-lucide="plus-circle" class="icon-sm"></i>Add Task</button><?php endif; ?>
     </div>
   </div>
 
@@ -465,6 +475,19 @@ include __DIR__ . '/includes/header.php';
           <div><span>Cadence</span><strong><?=(($selected_task['recurrence_type'] ?? 'none') !== 'none') ? 'Recurring · every ' . (int)($selected_task['recurrence_interval_days'] ?? 1) . ' day(s)' : 'One-time'?></strong></div>
         </div>
         <div class="tm-detail-notes"><span>Instruction / notes</span><strong><?=esc($selected_task['description'] ?: 'No instruction provided.')?></strong></div>
+        <?php $tm_task_attachments = task_attachment_list_for_task($conn, (int)$selected_task['task_id']); ?>
+        <?php if(!empty($tm_task_attachments)): ?>
+        <div class="tm-detail-notes">
+          <span>Screenshots</span>
+          <div class="shift-photo-grid">
+            <?php foreach($tm_task_attachments as $attachment): ?>
+            <a href="<?=esc($attachment['image_url'])?>" target="_blank" rel="noopener noreferrer" class="shift-photo-thumb" title="<?=esc($attachment['original_filename'])?>">
+              <img src="<?=esc($attachment['thumbnail_url'])?>" alt="<?=esc($attachment['original_filename'])?>" loading="lazy">
+            </a>
+            <?php endforeach; ?>
+          </div>
+        </div>
+        <?php endif; ?>
         <details class="tm-detail-section">
           <summary><i data-lucide="chevron-right" class="icon-xs tm-caret"></i>Timing detail</summary>
           <div class="tm-detail-grid">
@@ -502,7 +525,7 @@ include __DIR__ . '/includes/header.php';
 
 <?php if($schema_ready && $can_create): ?>
 <div class="modal-overlay hidden" id="tmTaskModal">
-  <form method="post" class="modal modal-lg" data-tracs-modal-ajax data-close-delay="1000">
+  <form method="post" class="modal modal-lg" data-tracs-modal-ajax data-close-delay="1000" enctype="multipart/form-data">
     <?=csrf_input()?><input type="hidden" name="action" value="create_task"><input type="hidden" name="return_tab" value="<?=esc($tab)?>">
     <div class="modal-head"><div><div class="modal-title">Add Task Assignment</div><div class="modal-sub">Assign once or daily, with checklist and reminder sync.</div></div><button type="button" class="modal-close" onclick="closeModal('tmTask')"><i data-lucide="x"></i></button></div>
     <div class="modal-body tm-form">
@@ -512,6 +535,17 @@ include __DIR__ . '/includes/header.php';
         <div class="form-group"><label class="form-label">Instruction</label><textarea class="form-textarea" name="description" rows="3" placeholder="What needs to be done?"></textarea></div>
         <div class="form-row"><div class="form-group"><label class="form-label">Priority</label><select class="form-select" name="priority"><option value="normal" selected>Normal</option><option value="low">Low</option><option value="high">High</option><option value="urgent">Urgent</option></select></div><div class="form-group"><label class="form-label">Reference URL</label><input class="form-input" type="url" name="reference_url" placeholder="https://..."></div></div>
         <label class="tm-check"><input type="checkbox" name="requires_review" value="1"><span>Require review after completion</span></label>
+        <div class="form-group case-upload-group">
+          <label class="form-label">Screenshots / Photos</label>
+          <input class="case-upload-input" type="file" id="tmTaskAttachments" name="attachments[]" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" multiple>
+          <label class="case-upload-drop" id="tmTaskUploadDrop" for="tmTaskAttachments">
+            <i data-lucide="image-plus" class="icon-sm"></i>
+            <span>Click, drop, or paste images here</span>
+            <small>JPG, JPEG, PNG, WEBP. Max 5MB each.</small>
+          </label>
+          <div class="case-upload-status" id="tmTaskUploadStatus" aria-live="polite"></div>
+          <div class="case-attachment-grid" id="tmTaskAttachmentPreview"></div>
+        </div>
       </div>
       <div class="tm-form-section">
         <div class="tm-section-label">Schedule</div>
@@ -722,12 +756,105 @@ function tmMarkDone(btn){
   document.getElementById('tmMarkDoneAssignmentId').value=btn.dataset.assignmentId||'';
   document.getElementById('tmMarkDoneForm').requestSubmit();
 }
+
+/* Screenshots on the Add Task modal: same click/drag/paste model as the case
+   and shift handover modals. Files stay in the native <input> itself (via
+   DataTransfer) so the existing data-tracs-modal-ajax form submit picks them
+   up automatically — no manual FormData building needed here. */
+let tmTaskStagedFiles=[];
+const tmTaskFileUrls=new Map();
+function tmTaskAttachmentEls(){
+  return {
+    input: document.getElementById('tmTaskAttachments'),
+    drop: document.getElementById('tmTaskUploadDrop'),
+    status: document.getElementById('tmTaskUploadStatus'),
+    preview: document.getElementById('tmTaskAttachmentPreview')
+  };
+}
+function tmTaskUrlFor(file){
+  if(!tmTaskFileUrls.has(file))tmTaskFileUrls.set(file,URL.createObjectURL(file));
+  return tmTaskFileUrls.get(file);
+}
+function tmTaskSyncInputFiles(){
+  const input=tmTaskAttachmentEls().input;
+  if(!input)return;
+  const dt=new DataTransfer();
+  tmTaskStagedFiles.forEach(f=>dt.items.add(f));
+  input.files=dt.files;
+}
+function tmTaskValidateFile(file){
+  if(!file || !file.type || !file.type.startsWith('image/'))return `${file?.name||'File'} must be an image.`;
+  if(file.size<=0)return `${file.name} is empty.`;
+  if(file.size>CASE_ATTACHMENT_MAX)return `${file.name} is larger than 5MB.`;
+  if(!CASE_ATTACHMENT_TYPES.has(file.type))return `${file.name} must be JPG, JPEG, PNG, or WEBP.`;
+  return '';
+}
+function tmTaskAddFiles(files){
+  const incoming=Array.from(files||[]);
+  const errors=[];
+  incoming.forEach(file=>{
+    const err=tmTaskValidateFile(file);
+    if(err){errors.push(err);return;}
+    const dup=tmTaskStagedFiles.some(f=>f.name===file.name && f.size===file.size && f.lastModified===file.lastModified);
+    if(!dup)tmTaskStagedFiles.push(file);
+  });
+  tmTaskSyncInputFiles();
+  renderTmTaskAttachments();
+  const st=tmTaskAttachmentEls().status;
+  if(st){
+    if(errors.length){st.textContent=errors[0];st.className='case-upload-status error';}
+    else{const n=tmTaskStagedFiles.length;st.textContent=n?`${n} image${n===1?'':'s'} ready to upload.`:'';st.className='case-upload-status ok';}
+  }
+}
+function tmTaskRemoveFile(index){
+  const file=tmTaskStagedFiles[index];
+  if(file && tmTaskFileUrls.has(file)){try{URL.revokeObjectURL(tmTaskFileUrls.get(file));}catch(e){} tmTaskFileUrls.delete(file);}
+  tmTaskStagedFiles=tmTaskStagedFiles.filter((_,i)=>i!==index);
+  tmTaskSyncInputFiles();
+  renderTmTaskAttachments();
+}
+function renderTmTaskAttachments(){
+  const el=tmTaskAttachmentEls().preview;
+  if(!el)return;
+  el.innerHTML=tmTaskStagedFiles.map((file,i)=>`
+    <div class="case-attachment-tile">
+      <button class="case-attachment-thumb" type="button" onclick="openCaseImagePreview(${jsAttr(tmTaskUrlFor(file))},${jsAttr(file.name)})"><img src="${tmTaskUrlFor(file)}" alt="${escHtml(file.name)}"></button>
+      <div class="case-attachment-meta"><span title="${escHtml(file.name)}">${escHtml(file.name)}</span><small>${formatBytes(file.size)}</small></div>
+      <button class="case-attachment-remove" type="button" onclick="tmTaskRemoveFile(${i})" aria-label="Remove selected image"><i data-lucide="x" class="icon-xs"></i></button>
+    </div>`).join('');
+  tracsRefreshIcons(el);
+}
+function tmTaskClearAttachments(){
+  tmTaskFileUrls.forEach(url=>{try{URL.revokeObjectURL(url);}catch(e){}});
+  tmTaskFileUrls.clear();
+  tmTaskStagedFiles=[];
+  const els=tmTaskAttachmentEls();
+  if(els.input)els.input.value='';
+  if(els.preview)els.preview.innerHTML='';
+  if(els.status){els.status.textContent='';els.status.className='case-upload-status';}
+}
+function tmInitTaskAttachmentUpload(){
+  const els=tmTaskAttachmentEls();
+  if(!els.input||els.input.dataset.ready)return;
+  els.input.dataset.ready='1';
+  els.input.addEventListener('change',()=>tmTaskAddFiles(els.input.files));
+  if(els.drop){
+    ['dragenter','dragover'].forEach(evt=>els.drop.addEventListener(evt,e=>{e.preventDefault();els.drop.classList.add('drag');}));
+    ['dragleave','drop'].forEach(evt=>els.drop.addEventListener(evt,e=>{e.preventDefault();els.drop.classList.remove('drag');}));
+    els.drop.addEventListener('drop',e=>tmTaskAddFiles(e.dataTransfer?.files));
+  }
+}
+function tmOpenNewTask(){
+  tmInitTaskAttachmentUpload();
+  tmTaskClearAttachments();
+  openModal('tmTask');
+}
 </script>
 <?php endif; ?>
 
 <?php if($can_create && (string)($_GET['add'] ?? '') === '1'): ?>
 <script>
-document.addEventListener('DOMContentLoaded', () => openModal('tmTask'));
+document.addEventListener('DOMContentLoaded', () => tmOpenNewTask());
 </script>
 <?php endif; ?>
 

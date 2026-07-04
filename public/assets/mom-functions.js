@@ -928,36 +928,94 @@ function resolveLinkedCaseFromMOM(mom_id, case_id) {
   }).catch(e => toast(e.message || "The change didn't go through. Please try again.", 'error'));
 }
 
-function uploadMOMScreenshot(mom_id, input) {
-  const file = input.files && input.files[0];
-  if(!file) return;
-  if(!file.type.startsWith('image/')) {
+function uploadMOMScreenshotFile(mom_id, file) {
+  if(!file || !file.type || !file.type.startsWith('image/')) {
     toast('Screenshot must be an image', 'warning');
-    input.value = '';
-    return;
+    return Promise.resolve(false);
   }
   if(file.size > 5 * 1024 * 1024) {
     toast('Screenshot must be under 5MB', 'warning');
-    input.value = '';
-    return;
+    return Promise.resolve(false);
   }
-  const reader = new FileReader();
-  reader.onload = () => {
-    api('api/api_mom.php', {
-      action: 'upload_screenshot',
-      mom_id,
-      image_data: reader.result
-    }).then(r => {
-      if(r.ok) {
-        toast('Screenshot uploaded', 'success');
-        momReloadAfterToast(300);
-      } else {
-        toast(r.msg || 'Failed to upload screenshot', 'error');
-      }
-    }).catch(e => toast(e.message || "The change didn't go through. Please try again.", 'error'));
-  };
-  reader.readAsDataURL(file);
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      api('api/api_mom.php', {
+        action: 'upload_screenshot',
+        mom_id,
+        image_data: reader.result
+      }).then(r => {
+        if(r.ok) resolve(true);
+        else { toast(r.msg || 'Failed to upload screenshot', 'error'); resolve(false); }
+      }).catch(e => { toast(e.message || "The change didn't go through. Please try again.", 'error'); resolve(false); });
+    };
+    reader.readAsDataURL(file);
+  });
 }
+
+async function uploadMOMScreenshotFiles(mom_id, files) {
+  const list = Array.from(files || []).filter(Boolean);
+  if(!list.length) return;
+  let uploaded = 0;
+  for(const file of list) {
+    if(await uploadMOMScreenshotFile(mom_id, file)) uploaded++;
+  }
+  if(uploaded) {
+    toast(`${uploaded} screenshot${uploaded === 1 ? '' : 's'} uploaded`, 'success');
+    momReloadAfterToast(300);
+  }
+}
+
+function uploadMOMScreenshot(mom_id, input) {
+  const files = input.files;
+  if(!files || !files.length) return;
+  uploadMOMScreenshotFiles(mom_id, files).finally(() => { input.value = ''; });
+}
+
+/* Screenshots card: click (above), drag & drop, and paste all funnel through
+   the same uploadMOMScreenshotFiles — same upload behavior as the case and
+   shift handover modals. */
+function momScreenshotsCard() {
+  return document.querySelector('[data-sidebar-edit="screenshots"]');
+}
+function momInitScreenshotDropzone() {
+  const card = momScreenshotsCard();
+  if(!card || card.dataset.dropReady) return;
+  card.dataset.dropReady = '1';
+  ['dragenter', 'dragover'].forEach(evt => card.addEventListener(evt, e => {
+    if(!card.classList.contains('is-editing')) return;
+    e.preventDefault();
+    card.classList.add('is-drag-over');
+  }));
+  ['dragleave', 'drop'].forEach(evt => card.addEventListener(evt, e => {
+    e.preventDefault();
+    card.classList.remove('is-drag-over');
+  }));
+  card.addEventListener('drop', e => {
+    if(!card.classList.contains('is-editing')) return;
+    const momId = Number(card.dataset.momId || 0);
+    if(!momId) return;
+    uploadMOMScreenshotFiles(momId, e.dataTransfer?.files);
+  });
+}
+momInitScreenshotDropzone();
+document.addEventListener('paste', e => {
+  const card = momScreenshotsCard();
+  if(!card || !card.classList.contains('is-editing')) return;
+  const items = e.clipboardData?.items;
+  if(!items || !items.length) return;
+  const files = [];
+  for(const it of items) {
+    if(it.kind === 'file' && it.type && it.type.startsWith('image/')) {
+      const f = it.getAsFile();
+      if(f) files.push(f);
+    }
+  }
+  if(!files.length) return;
+  e.preventDefault();
+  const momId = Number(card.dataset.momId || 0);
+  if(momId) uploadMOMScreenshotFiles(momId, files);
+});
 
 function markMOMScreenshotForRemoval(button) {
   const item = button?.closest('.mom-shot-item');

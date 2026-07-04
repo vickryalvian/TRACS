@@ -17,10 +17,13 @@ function shift_attachment_allowed_mimes(): array {
 }
 
 function shift_attachment_ensure_table(mysqli $conn): void {
+    static $migrated = false;
+
     $sql = "
         CREATE TABLE IF NOT EXISTS `shift_report_attachments` (
           `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-          `shift_report_id` INT UNSIGNED NOT NULL,
+          `shift_report_id` INT UNSIGNED NULL,
+          `handover_id` INT UNSIGNED NULL,
           `original_filename` VARCHAR(255) NOT NULL,
           `stored_filename` VARCHAR(255) NOT NULL,
           `thumbnail_filename` VARCHAR(255) NOT NULL,
@@ -30,12 +33,27 @@ function shift_attachment_ensure_table(mysqli $conn): void {
           `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
           PRIMARY KEY (`id`),
           KEY `idx_shift_report_attachments_report` (`shift_report_id`),
+          KEY `idx_shift_report_attachments_handover` (`handover_id`),
           KEY `idx_shift_report_attachments_uploaded_by` (`uploaded_by`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ";
     if (!$conn->query($sql)) {
         if (function_exists('fail')) fail('Shift attachment storage is not ready.', 500);
         throw new RuntimeException('Shift attachment storage is not ready.');
+    }
+
+    if ($migrated) return;
+    $migrated = true;
+
+    // Pre-existing installs: widen to support handover-level (not per-case) photos.
+    if (function_exists('tracs_column_exists') && !tracs_column_exists($conn, 'shift_report_attachments', 'handover_id')) {
+        $conn->query("ALTER TABLE shift_report_attachments ADD COLUMN `handover_id` INT UNSIGNED NULL AFTER `shift_report_id`");
+        $conn->query("ALTER TABLE shift_report_attachments ADD INDEX `idx_shift_report_attachments_handover` (`handover_id`)");
+    }
+    $col = $conn->query("SHOW COLUMNS FROM shift_report_attachments LIKE 'shift_report_id'");
+    $nullable = $col ? strtoupper((string)($col->fetch_assoc()['Null'] ?? 'NO')) === 'YES' : true;
+    if (!$nullable) {
+        $conn->query("ALTER TABLE shift_report_attachments MODIFY COLUMN `shift_report_id` INT UNSIGNED NULL");
     }
 }
 
@@ -117,7 +135,7 @@ function shift_attachment_normalize_files(array $files): array {
     return $normalized;
 }
 
-function shift_attachment_store_upload(mysqli $conn, array $file, int $reportId, int $uid): array {
+function shift_attachment_persist_upload(mysqli $conn, array $file, int $uid, ?int $reportId, ?int $handoverId): array {
     $error = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
     if ($error === UPLOAD_ERR_NO_FILE) throw new RuntimeException('Choose a valid image before uploading.');
     if ($error !== UPLOAD_ERR_OK) throw new RuntimeException('One screenshot could not be uploaded. Please try again.');
@@ -142,8 +160,9 @@ function shift_attachment_store_upload(mysqli $conn, array $file, int $reportId,
     $dir = shift_attachment_storage_dir();
     $token = bin2hex(random_bytes(16));
     $ext = $allowed[$mime];
-    $stored = 'shift_' . $reportId . '_' . $token . '.' . $ext;
-    $thumb = 'shift_' . $reportId . '_' . $token . '_thumb.' . $ext;
+    $label = $reportId !== null ? (string)$reportId : 'h' . $handoverId;
+    $stored = 'shift_' . $label . '_' . $token . '.' . $ext;
+    $thumb = 'shift_' . $label . '_' . $token . '_thumb.' . $ext;
     $storedPath = $dir . DIRECTORY_SEPARATOR . $stored;
     $thumbPath = $dir . DIRECTORY_SEPARATOR . $thumb;
     $resource = shift_attachment_resource($tmpName, $mime);
@@ -167,15 +186,15 @@ function shift_attachment_store_upload(mysqli $conn, array $file, int $reportId,
     $finalSize = (int)filesize($storedPath);
     $stmt = $conn->prepare("
         INSERT INTO shift_report_attachments
-            (shift_report_id, original_filename, stored_filename, thumbnail_filename, mime_type, file_size, uploaded_by, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+            (shift_report_id, handover_id, original_filename, stored_filename, thumbnail_filename, mime_type, file_size, uploaded_by, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
     ");
     if (!$stmt) {
         @unlink($storedPath);
         @unlink($thumbPath);
         throw new RuntimeException('Unable to save shift screenshot metadata.');
     }
-    $stmt->bind_param('issssii', $reportId, $original, $stored, $thumb, $mime, $finalSize, $uid);
+    $stmt->bind_param('iissssii', $reportId, $handoverId, $original, $stored, $thumb, $mime, $finalSize, $uid);
     if (!$stmt->execute()) {
         @unlink($storedPath);
         @unlink($thumbPath);
@@ -184,6 +203,14 @@ function shift_attachment_store_upload(mysqli $conn, array $file, int $reportId,
     }
     $stmt->close();
     return ['stored_path' => $storedPath, 'thumb_path' => $thumbPath];
+}
+
+function shift_attachment_store_upload(mysqli $conn, array $file, int $reportId, int $uid): array {
+    return shift_attachment_persist_upload($conn, $file, $uid, $reportId, null);
+}
+
+function shift_attachment_store_handover_upload(mysqli $conn, array $file, int $handoverId, int $uid): array {
+    return shift_attachment_persist_upload($conn, $file, $uid, null, $handoverId);
 }
 
 function shift_attachment_store_uploads(mysqli $conn, array $files, int $reportId, int $uid): array {
@@ -195,15 +222,18 @@ function shift_attachment_store_uploads(mysqli $conn, array $files, int $reportI
     return $stored;
 }
 
+function shift_attachment_store_handover_uploads(mysqli $conn, array $files, int $handoverId, int $uid): array {
+    $stored = [];
+    foreach (shift_attachment_normalize_files($files) as $file) {
+        if ((int)($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) continue;
+        $stored[] = shift_attachment_store_handover_upload($conn, $file, $handoverId, $uid);
+    }
+    return $stored;
+}
+
 function shift_attachment_fetch_for_user(mysqli $conn, int $attachmentId, int $uid): ?array {
     shift_attachment_ensure_table($conn);
-    $stmt = $conn->prepare("
-        SELECT a.*
-        FROM shift_report_attachments a
-        INNER JOIN tracs_shift_reports r ON r.id = a.shift_report_id
-        WHERE a.id = ?
-        LIMIT 1
-    ");
+    $stmt = $conn->prepare("SELECT * FROM shift_report_attachments WHERE id = ? LIMIT 1");
     if (!$stmt) return null;
     $stmt->bind_param('i', $attachmentId);
     $stmt->execute();
@@ -222,6 +252,27 @@ function shift_attachment_list_for_report(mysqli $conn, int $reportId): array {
     ");
     if (!$stmt) return [];
     $stmt->bind_param('i', $reportId);
+    $stmt->execute();
+    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+    foreach ($rows as &$row) {
+        $id = (int)$row['id'];
+        $row['thumbnail_url'] = '/api/shift-attachment.php?id=' . $id . '&variant=thumb';
+        $row['image_url'] = '/api/shift-attachment.php?id=' . $id;
+    }
+    return $rows;
+}
+
+function shift_attachment_list_for_handover(mysqli $conn, int $handoverId): array {
+    shift_attachment_ensure_table($conn);
+    $stmt = $conn->prepare("
+        SELECT id, handover_id, original_filename, mime_type, file_size, uploaded_by, created_at
+        FROM shift_report_attachments
+        WHERE handover_id = ?
+        ORDER BY created_at ASC, id ASC
+    ");
+    if (!$stmt) return [];
+    $stmt->bind_param('i', $handoverId);
     $stmt->execute();
     $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $stmt->close();

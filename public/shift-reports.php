@@ -418,11 +418,13 @@ include 'includes/header.php';
             foreach($group['reports'] as $r) {
               $hk = !empty($r['handover_id']) ? 'h'.$r['handover_id'] : 'u'.($r['created_by'] ?? '0');
               if(!isset($agentBlocks[$hk])) {
+                $blockHandoverId = (int)($r['handover_id'] ?? 0);
                 $agentBlocks[$hk] = [
                   'agent' => tracs_creator_label($r),
                   'summary' => trim((string)($r['handover_summary'] ?? '')),
                   'submitted' => (string)($r['handover_submitted_at'] ?? ''),
-                  'handover_id' => (int)($r['handover_id'] ?? 0),
+                  'handover_id' => $blockHandoverId,
+                  'attachments' => $blockHandoverId ? shift_attachment_list_for_handover($conn, $blockHandoverId) : [],
                   'reports' => [],
                 ];
               }
@@ -445,6 +447,15 @@ include 'includes/header.php';
             <?php elseif($block['handover_id']): ?>
             <div class="shift-report-agent-summary is-empty">
               <button class="shift-summary-edit" type="button" onclick="editHandoverSummary(<?=$block['handover_id']?>,this)"><i data-lucide="plus" class="icon-xs"></i>Add shift summary</button>
+            </div>
+            <?php endif; ?>
+            <?php if(!empty($block['attachments'])): ?>
+            <div class="shift-photo-grid shift-handover-photo-grid">
+              <?php foreach($block['attachments'] as $attachment): ?>
+              <a href="<?=esc($attachment['image_url'])?>" target="_blank" rel="noopener noreferrer" class="shift-photo-thumb" title="<?=esc($attachment['original_filename'])?>">
+                <img src="<?=esc($attachment['thumbnail_url'])?>" alt="<?=esc($attachment['original_filename'])?>" loading="lazy">
+              </a>
+              <?php endforeach; ?>
             </div>
             <?php endif; ?>
           <?php foreach($block['reports'] as $r):

@@ -154,6 +154,7 @@ function tracs_can_view_owned_record(mysqli $conn, string $table, int $id, array
         'tracs_reminders' => true,
         'tracs_side_tasks' => true,
         'tracs_shift_reports' => true,
+        'tracs_shift_handovers' => true,
         'tracs_cancellation_feedback' => true,
         'tracs_domains' => true,
         'tracs_finance_transfers' => true,
@@ -249,6 +250,41 @@ function tracs_can_view_case(mysqli $conn, int $caseId): bool {
 
 function tracs_can_view_report(mysqli $conn, int $reportId): bool {
     return tracs_can_view_owned_record($conn, 'tracs_shift_reports', $reportId, ['created_by'], null);
+}
+
+function tracs_can_view_handover(mysqli $conn, int $handoverId): bool {
+    return tracs_can_view_owned_record($conn, 'tracs_shift_handovers', $handoverId, ['created_by'], null);
+}
+
+/**
+ * A task's screenshots are viewable by anyone with task-monitor access, plus
+ * the task's creator/assigner and any of its current assignees — mirrors who
+ * can already see the task itself on the monitoring page.
+ */
+function tracs_can_view_task(mysqli $conn, int $taskId): bool {
+    if ($taskId <= 0) return false;
+    $actor = tracs_get_user_by_id($conn, (int)($_SESSION['user_id'] ?? 0));
+    if (!$actor || !tracs_user_can_login($actor)) return false;
+    $actorId = (int)$actor['id'];
+
+    if (tracs_user_can($conn, 'tasks.monitor', $actorId)) return true;
+
+    $stmt = $conn->prepare('SELECT created_by, assigned_by FROM tracs_tasks WHERE id = ? LIMIT 1');
+    if (!$stmt) return false;
+    $stmt->bind_param('i', $taskId);
+    $stmt->execute();
+    $task = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$task) return false;
+    if ((int)($task['created_by'] ?? 0) === $actorId || (int)($task['assigned_by'] ?? 0) === $actorId) return true;
+
+    $stmt = $conn->prepare('SELECT id FROM tracs_task_assignments WHERE task_id = ? AND user_id = ? LIMIT 1');
+    if (!$stmt) return false;
+    $stmt->bind_param('ii', $taskId, $actorId);
+    $stmt->execute();
+    $isAssignee = (bool)$stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    return $isAssignee;
 }
 
 function tracs_can_view_feedback(mysqli $conn, int $feedbackId): bool {

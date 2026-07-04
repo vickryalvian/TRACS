@@ -1,10 +1,13 @@
 <?php require '_bootstrap.php';
 require_once __DIR__.'/../../modules/shift-reports/controller.php';
+require_once __DIR__.'/shift-attachment-lib.php';
 
 /**
- * Create one shift handover (an agent's end-of-shift report) that bundles many
- * items in a single submit. Attachments are uploaded per item in a second pass
- * by the client via shift-update.php, reusing the existing attachment pipeline.
+ * Create one shift handover (an agent's end-of-shift report). The shift
+ * summary is the mandatory part; items are optional extra cases. Submitted as
+ * multipart so shift-level "attachments[]" screenshots can ride along in the
+ * same request. Item-specific screenshots upload in a second pass by the
+ * client via shift-update.php, reusing the existing per-case pipeline.
  */
 
 $input = $_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST) ? $_POST : $body;
@@ -12,9 +15,10 @@ $input = $_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST) ? $_POST : $bod
 $shift = trim($input['shift_name'] ?? 'Shift 1');
 $date = $input['active_date'] ?? date('Y-m-d');
 $summary = trim((string)($input['summary'] ?? ''));
+if ($summary === '') fail('Shift summary is required.');
 
-$rawItems = $input['items'] ?? [];
-if (!is_array($rawItems)) $rawItems = [];
+$rawItemsInput = $input['items'] ?? [];
+$rawItems = is_string($rawItemsInput) ? (json_decode($rawItemsInput, true) ?: []) : (is_array($rawItemsInput) ? $rawItemsInput : []);
 
 $items = [];
 foreach ($rawItems as $index => $item) {
@@ -32,11 +36,10 @@ foreach ($rawItems as $index => $item) {
     ];
 }
 
-if (empty($items)) fail('Add at least one handover item with a title.');
-
 $SC = new ShiftReportController($conn, $uid);
 $createdItems = [];
 $handoverId = 0;
+$storedUploads = [];
 try {
     $conn->begin_transaction();
     $handoverId = $SC->createHandover([
@@ -61,9 +64,18 @@ try {
         if (!$id) throw new RuntimeException('Database error');
         $createdItems[] = ['client_index' => $item['client_index'], 'id' => (int)$id, 'title' => $item['title'], 'status' => $item['status']];
     }
+
+    shift_attachment_ensure_table($conn);
+    if (!empty($_FILES['attachments'])) {
+        $storedUploads = shift_attachment_store_handover_uploads($conn, $_FILES['attachments'], $handoverId, $uid);
+    }
     $conn->commit();
 } catch (Throwable $e) {
     $conn->rollback();
+    foreach ($storedUploads as $upload) {
+        if (!empty($upload['stored_path'])) @unlink($upload['stored_path']);
+        if (!empty($upload['thumb_path'])) @unlink($upload['thumb_path']);
+    }
     fail($e->getMessage() === 'Database error' ? 'Database error' : $e->getMessage(), $e->getMessage() === 'Database error' ? 500 : 400);
 }
 
@@ -75,4 +87,4 @@ foreach ($createdItems as $ci) {
     }
 }
 
-ok(['handover_id' => $handoverId, 'items' => $createdItems], 'Shift handover filed');
+ok(['handover_id' => $handoverId, 'items' => $createdItems, 'attachments' => count($storedUploads)], 'Shift handover filed');

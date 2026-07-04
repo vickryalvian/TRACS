@@ -12851,18 +12851,21 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
 }
 
 /* ── Shift handover: multi-item modal ─────────────────────── */
-.form-optional { color: var(--tx3); font-weight: 400; font-size: 10px; }
-.shift-items-head {
-  display: flex; align-items: center; justify-content: space-between;
-  margin: 12px 0 8px;
-}
+/* .modal-body is display:flex;flex-direction:column;gap:12px, so every direct
+   child (form-row, form-group, shift-items-head, shift-items-container, the
+   add-item button) already gets a uniform 12px rhythm for free. Nothing in
+   this block should add its own margin on top of that — that was the source
+   of uneven spacing (a double gap above "Handover Items"). */
+.shift-items-head { display: flex; align-items: center; justify-content: space-between; }
 .shift-items-count { font-size: 10px; color: var(--tx3); font-family: var(--mono); }
+.shift-items-container:empty { display: none; }
 .shift-items-container { display: flex; flex-direction: column; gap: 10px; }
 .shift-item-card {
+  display: flex; flex-direction: column; gap: 10px;
   border: 1px solid var(--bd1); border-radius: var(--r2);
   padding: 12px; background: var(--s2);
 }
-.shift-item-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.shift-item-card-head { display: flex; align-items: center; gap: 8px; }
 .shift-item-card-head .shift-i-title { flex: 1; min-width: 0; }
 .shift-item-idx {
   flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%;
@@ -12870,9 +12873,33 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
   font-family: var(--mono); display: flex; align-items: center; justify-content: center;
 }
 .shift-item-remove { flex-shrink: 0; }
-.shift-add-item-btn { margin-top: 10px; }
-.shift-item-upload .case-upload-drop { padding: 10px; }
-.shift-item-upload .case-upload-drop span { font-size: 11px; }
+
+/* Minimalist per-item screenshot uploader: a small pill button + tiny chips,
+   not a full dashed dropzone (that's reserved for the shared shift summary). */
+.shift-item-photos {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.shift-item-photo-list { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.shift-item-photo-chip {
+  position: relative; width: 30px; height: 30px; border-radius: 5px;
+  overflow: hidden; border: 1px solid var(--bd2); flex-shrink: 0;
+}
+.shift-item-photo-chip button { display: block; width: 100%; height: 100%; padding: 0; border: 0; background: none; cursor: pointer; }
+.shift-item-photo-chip img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.shift-item-photo-remove {
+  position: absolute; top: -4px; right: -4px; width: 14px; height: 14px;
+  border-radius: 50%; background: var(--s1); border: 1px solid var(--bd2);
+  color: var(--tx2); display: flex; align-items: center; justify-content: center;
+}
+.shift-item-photo-remove svg { width: 8px; height: 8px; }
+.shift-item-photo-add {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10.5px; color: var(--tx3); cursor: pointer;
+  border: 1px dashed var(--bd2); border-radius: var(--r2);
+  padding: 4px 8px; flex-shrink: 0;
+}
+.shift-item-photo-add:hover { color: var(--blue); border-color: var(--blue-bd); }
+.shift-item-photo-add svg { width: 12px; height: 12px; }
 
 /* ── Shift handover: dashboard widget agent blocks ────────── */
 .shift-handover-block {
@@ -12920,3 +12947,4 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
 }
 .shift-summary-edit:hover { color: var(--blue); }
 .shift-summary-edit svg { width: 12px; height: 12px; }
+.shift-handover-photo-grid { padding: 0 14px 8px; margin-top: 0; }

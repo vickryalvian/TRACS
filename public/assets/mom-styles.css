@@ -1947,6 +1947,11 @@
   box-shadow: 0 0 0 3px var(--blue-lt);
 }
 
+.mom-screenshots-card.is-drag-over {
+  border-color: var(--blue-bd);
+  box-shadow: 0 0 0 3px var(--blue-lt);
+}
+
 body.mom-shot-lightbox-open {
   overflow: hidden;
 }
