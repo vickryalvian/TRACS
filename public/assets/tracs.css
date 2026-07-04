@@ -471,7 +471,9 @@ input, select, textarea { font-family: inherit }
   .nav-group-label span,
   .nav-pin,
   .nav-submenu,
-  .nav-chevron { transition-duration: 1ms !important }
+  .nav-submenu-track,
+  .nav-chevron,
+  .user-menu { transition-duration: 1ms !important }
 }
 .sidebar-logo {
   width: 100%;
@@ -7481,7 +7483,13 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
   .shell { height: auto; min-height: 100vh; min-height: 100svh }
   .body-row { flex-direction: column }
   .sidebar { width: 100%; height: 46px }
-  .sidebar-flyout { position: static; width: 100% !important; height: 100%; flex-direction: row; border-right: none; border-bottom: 1px solid var(--bd1); box-shadow: none !important }
+  /* position:relative (not static): keeps the same in-flow horizontal-bar
+     layout, but static would make z-index inapplicable, dropping this
+     whole subtree (including .user-menu's z-index:6000) to the "auto"
+     paint tier -- where position:relative page content later in DOM order
+     (e.g. .notif-bell-btn's badge) wins ties and paints over the profile
+     dropdown. */
+  .sidebar-flyout { position: relative; width: 100% !important; height: 100%; flex-direction: row; border-right: none; border-bottom: 1px solid var(--bd1); box-shadow: none !important }
   .sidebar-logo { width: 46px; height: 100%; border-bottom: none; border-right: 1px solid var(--bd1) }
   /* flex-shrink stays default (1) with min-width:0 so this is the one that
      yields space and scrolls internally -- .sidebar-bottom below is
