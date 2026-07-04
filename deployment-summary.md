@@ -4,6 +4,87 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Collapsed-Rail Nav: Square Active/Hover Indicator, Drop Left Accent Bar (2026-07-04 ~10:40 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch
+`fix/monitoring-task-assignment-routing-and-modal`, commit `a18a67a`.
+1 file: `public/assets/tracs.css`.
+Backup `/opt/tracs/backups/nav-square-indicator-20260704-104039/`.
+
+User-requested audit: the active/hover nav-item highlight in the
+collapsed sidebar rail looked horizontally stretched instead of a
+proportional square around the icon.
+
+- **Root cause**: the active/hover background is painted on `.nav-item`
+  itself, which is `width: auto` and fills whatever lane width is
+  available -- ~47px in the collapsed rail against a fixed 36px row
+  height, a rectangle rather than a square. The icon was already
+  exactly centered in the 64px rail by construction (existing comment:
+  `gutter + pad + icon/2 == half the rail width`), so only the
+  highlight's shape was wrong, not its position.
+- **Fix**: added `.nav-icon::before`, a decorative pseudo-element sized
+  to a fixed `36x36` (`var(--sb-row-h)`) square, centered via
+  `top/left: 50%` + `translate(-50%, -50%)` on `.nav-icon` -- independent
+  of the row's own width, so it's always a 1:1 square with equal padding
+  on every side regardless of layout. In the collapsed state (including
+  while forced-collapsed by the account menu being open), `.nav-item`'s
+  own background/border go transparent and the highlight moves onto
+  this square instead. Same transition timing (`var(--dur) var(--ease)`),
+  same `--sb-radius` token, same color tokens (`--blue-lt`, `--blue-bd`,
+  `--s3`, `--bd2`) -- fully reused from the existing design system, no
+  new values introduced. Scoped to `@media (min-width: 641px)` only;
+  mobile already handles its own icon-only sizing independently and is
+  untouched.
+- **Follow-up in the same deploy**: removed the pre-existing 3px left
+  accent bar on `.nav-item.active::before` per direct feedback after
+  the first pass (`- just remove left vertical line accent`) -- it was
+  a separate decorative flourish unrelated to the square fix. Mobile's
+  own bottom-underline active indicator reused the same `::before` and
+  depended on the removed base rule for `content`/`position`/
+  `background`, so it's now a fully self-contained declaration instead
+  of relying on that shared base.
+
+Verified locally against the docker dev stack before deploying (per
+explicit instruction to work locally first and not deploy until fully
+verified):
+
+- Computed styles confirm the highlight is exactly `36px x 36px`,
+  `8px` radius (`--sb-radius`), across all 11 sidebar nav icons --
+  consistent sizing/alignment/spacing check.
+- Confirmed via `getComputedStyle` that non-active/non-hover icons stay
+  fully transparent, and that the expanded (full pill) state is
+  completely unchanged.
+- Confirmed the square renders correctly in the "account menu open,
+  forced collapse" edge case, not just the plain resting collapsed
+  state.
+- Zoom levels 0.75x-1.5x and viewport resize (1024x768, mobile 375px):
+  ratio stays exactly 1:1 at every level; mobile's own layout is
+  untouched (scoped media query) and its bottom-underline indicator
+  still renders correctly post-refactor.
+- Checked both light and dark theme -- token colors resolve correctly
+  in both.
+- After removing the accent bar: confirmed `content: none` on
+  `.nav-item.active::before` on desktop (fully gone, both collapsed and
+  expanded), and confirmed mobile's bottom-underline still renders
+  (`content:""`, 2px height, full width) via its own self-contained
+  rule.
+
+Verification on production:
+
+- No PHP touched -- static asset, cache-busted via `filemtime()`, no
+  `php-fpm` reload needed.
+- Drift-check before deploy: prod's `tracs.css` sha256 matched the
+  previous deploy's commit (`6d28e8e`) exactly -- no untracked drift.
+- Post-deploy sha256
+  (`a92bab1e17d059b4765ab9f00fdb8513eb5f761f26fc474ad259ecf3c4e26c57`)
+  matches the local working tree byte-for-byte.
+- `https://tracs.vickry.id/login.php` → 200; cache-bust version advanced
+  to `?v=1783136456`.
+
+Branch remains pushed for review/PR. Production tracks the working tree via
+file-copy deploy (not a `main` pull).
+
 ## Deployed — Sidebar Profile Rework: Two-Row Name/Position + Collapse-on-Open Menu (2026-07-04 ~09:45 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
