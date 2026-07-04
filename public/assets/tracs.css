@@ -430,6 +430,13 @@ input, select, textarea { font-family: inherit }
   z-index: 150;
   transition: width var(--sb-dur) var(--ease), box-shadow var(--sb-dur) var(--ease);
 }
+/* .user-menu is position:fixed so it should escape this box's clip in
+   theory, but backdrop-filter below makes .sidebar-flyout a containing
+   block for fixed descendants too, so overflow:hidden clips it anyway --
+   without this, opening the profile menu renders nothing. */
+.sidebar-flyout:has(.user-menu-wrap[open]) {
+  overflow: visible;
+}
 /* Subtle glass effect -- only where backdrop-filter is actually supported,
    so browsers without it keep the solid var(--s1) fallback above instead
    of a too-sheer, unblurred tint. */
@@ -9434,7 +9441,9 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
      since it renders outside the flyout's own box. Positioned relative to
      the viewport instead, anchored past the sidebar's expanded edge --
      the flyout is expanded whenever this can be opened, since opening it
-     requires the pointer to be over the sidebar in the first place. */
+     requires the pointer to be over the sidebar in the first place.
+     Escaping to the viewport still isn't enough on its own -- see the
+     .sidebar-flyout:has(.user-menu-wrap[open]) rule above. */
   position: fixed;
   left: calc(var(--sb-w-open) + 10px);
   bottom: 12px;
