@@ -4,6 +4,70 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Consistent Click/Drag/Paste Image Upload Across Modals (2026-07-05 ~02:27 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch
+`fix/monitoring-task-assignment-routing-and-modal`, commit `7fd75fa`.
+15 files (13 modified + 2 new).
+File backup `/opt/tracs/backups/upload-consistency-20260705-022703/` (13 files).
+DB backup (pre-migration, full gzip)
+`/opt/tracs/backups/db-pre-upload-consistency-20260705-022505/tracs-full.sql.gz`.
+
+User-requested audit: every screenshot/photo upload surface in the app
+should support the same click, drag-drop, and paste interaction — not just
+the shift handover modal from the previous deploy.
+
+- **Case modal**: added paste-to-upload (already had click + drag-drop).
+- **MoM screenshots** (`mom.php` sidebar card): was single-file, click-only,
+  immediate-upload. Refactored into `uploadMOMScreenshotFile`/`Files`, added
+  multi-file select, drag-drop, and paste (gated to the card's existing
+  edit-mode toggle).
+- **Add Task Assignment modal** (`monitoring.php`): had no attachment support
+  at all. Added a full click/drag/paste screenshot uploader backed by a new
+  `tracs_task_attachments` table + `task-attachment-lib.php` (mirrors the
+  proven shift-attachment pipeline, kept as an independent file rather than a
+  shared refactor to avoid touching the already-deployed shift code), a new
+  `tracs_can_view_task()` permission check (monitor access, or the task's
+  creator/assigner/assignee), and a serving endpoint
+  (`api/task-attachment.php`, permission gated via `api_require_any_permission`
+  since the map-based gate is AND-only). Screenshots render in the task
+  detail panel.
+- One shared `tracsHandleImagePaste` in `tracs.js` now covers every modal
+  (shift summary, shift item, case, Add Task) instead of one-off listeners.
+- Also finished the previous deploy's shift-handover polish: shared
+  "shift notes" screenshot section (attaches to the handover, not a specific
+  case), summary now required / items optional, fixed a real double-spacing
+  bug in the item card (wasn't a flex container), and fixed a broken
+  "edit summary" prompt that always no-opped (used the overridden synchronous
+  `window.prompt` instead of the async `tracsPrompt`).
+
+**Drift note**: `mom.php`, `mom-functions.js`, and `mom-styles.css` showed
+drift against the last-deployed baseline before this push. Investigated by
+diffing prod's live copies against git — the direction was "prod is behind"
+(missing already-committed UI polish: sticky header, section group labels,
+discussion-note clamping, the Timeline card), not "prod has unique work."
+Confirmed safe to overwrite; this deploy also catches prod up on that
+already-approved-but-undeployed work.
+
+Migration verified on prod in a controlled run after deploy (DB backed up
+first): `tracs_task_attachments` created with expected columns,
+`tracs_can_view_task()` correctly allows the task's owner/assignee/monitor
+and denies unrelated users (tested against both real prod data and outsider
+accounts), no rows mutated.
+
+Deploy steps: full DB dump → drift-check against `630d96f` baseline (3 files
+flagged, investigated and confirmed safe) → back up prod files → `scp` 15
+files → `chown vickry:www-data` → `php -l` all 11 PHP files (clean) → sha256
+local↔prod verified for all 15 → `systemctl reload php8.3-fpm`.
+
+Verification:
+- `https://tracs.vickry.id/login.php` returns `200`
+- `https://tracs.vickry.id/shift-reports.php`, `/monitoring.php`, `/mom.php`
+  all return `302` (not `500`)
+- `https://tracs.vickry.id/api/task-attachment.php` returns `401`
+  (route + auth gate working)
+
 ## Deployed — Comprehensive Multi-Item Shift Handover (2026-07-04 ~16:05 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
