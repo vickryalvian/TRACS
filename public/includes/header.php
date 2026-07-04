@@ -22,6 +22,7 @@ $_can_domains = true;
 $_can_checklist = true;
 $_is_super_admin = false;
 $_header_user = null;
+$_header_position = '';
 $_header_preferences = [];
 $_tracs_visual_theme_preference = '';
 if (isset($conn) && $conn instanceof mysqli && !empty($_SESSION['user_id'])) {
@@ -39,6 +40,7 @@ if (isset($conn) && $conn instanceof mysqli && !empty($_SESSION['user_id'])) {
   if ($_header_user) {
     $_av = tracs_user_initials($_header_user['display_name'] ?? '', $_header_user['email'] ?? ($_un ?: 'U'));
     $_avatar_url = tracs_user_avatar_url($_header_user);
+    $_header_position = trim((string)($_header_user['position'] ?? '')) ?: trim((string)($_header_user['role_name'] ?? '')) ?: tracs_role_fallback_meta((string)($_header_user['role_slug'] ?? ''))['name'];
   }
 }
 
@@ -370,7 +372,10 @@ window.TRACS_BUILD_INFO = <?=json_encode($_tracs_build_info, JSON_UNESCAPED_SLAS
         <span class="user-avatar tracs-avatar" style="<?=!empty($_header_user['avatar_initials_color'])?'--um-avatar-bg:'.htmlspecialchars((string)$_header_user['avatar_initials_color'], ENT_QUOTES, 'UTF-8'):''?>" data-avatar-user-id="<?=htmlspecialchars((string)($_header_user['id'] ?? ''), ENT_QUOTES, 'UTF-8')?>" data-avatar-initials="<?=htmlspecialchars($_av, ENT_QUOTES, 'UTF-8')?>">
           <?php if($_avatar_url !== ''): ?><img src="<?=htmlspecialchars($_avatar_url, ENT_QUOTES, 'UTF-8')?>" alt="" loading="lazy" decoding="async"><?php else: ?><span><?=$_av?></span><?php endif; ?>
         </span>
-        <span class="nav-label"><?=htmlspecialchars($_header_user['display_name'] ?? ($_SESSION['user_name'] ?? $user_email ?? 'User'))?></span>
+        <span class="nav-label user-menu-info">
+          <span class="user-menu-name"><?=htmlspecialchars($_header_user['display_name'] ?? ($_SESSION['user_name'] ?? $user_email ?? 'User'))?></span>
+          <span class="user-menu-position"><?=htmlspecialchars($_header_position)?></span>
+        </span>
       </summary>
       <div class="user-menu" role="menu" aria-label="User account menu">
         <div class="user-menu-head">
