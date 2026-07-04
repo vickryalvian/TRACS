@@ -370,7 +370,7 @@ window.TRACS_BUILD_INFO = <?=json_encode($_tracs_build_info, JSON_UNESCAPED_SLAS
         <span class="user-avatar tracs-avatar" style="<?=!empty($_header_user['avatar_initials_color'])?'--um-avatar-bg:'.htmlspecialchars((string)$_header_user['avatar_initials_color'], ENT_QUOTES, 'UTF-8'):''?>" data-avatar-user-id="<?=htmlspecialchars((string)($_header_user['id'] ?? ''), ENT_QUOTES, 'UTF-8')?>" data-avatar-initials="<?=htmlspecialchars($_av, ENT_QUOTES, 'UTF-8')?>">
           <?php if($_avatar_url !== ''): ?><img src="<?=htmlspecialchars($_avatar_url, ENT_QUOTES, 'UTF-8')?>" alt="" loading="lazy" decoding="async"><?php else: ?><span><?=$_av?></span><?php endif; ?>
         </span>
-        <span class="nav-label"><?=htmlspecialchars($user_email??'')?></span>
+        <span class="nav-label"><?=htmlspecialchars($_header_user['display_name'] ?? ($_SESSION['user_name'] ?? $user_email ?? 'User'))?></span>
       </summary>
       <div class="user-menu" role="menu" aria-label="User account menu">
         <div class="user-menu-head">
