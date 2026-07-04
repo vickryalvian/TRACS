@@ -4,6 +4,75 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Profile Dropdown Invisible/Unclickable Fix (2026-07-04 ~09:00 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch
+`fix/monitoring-task-assignment-routing-and-modal`, commit `36d3950`.
+1 file: `public/assets/tracs.css`.
+Backup `/opt/tracs/backups/profile-menu-clip-fix-20260704-085550/`.
+
+User reported clicking the sidebar profile/avatar row (bottom of the
+sidebar, e.g. `admin@tracs.local`) appeared to do nothing — no dropdown
+ever showed up.
+
+- **Root cause**: `.sidebar-flyout` (the sidebar's hover-expand panel) has
+  `overflow: hidden` for its rail-collapse width animation, and also a
+  `backdrop-filter: blur(14px)` glass effect. The `.user-menu` profile
+  dropdown uses `position: fixed` specifically so it can escape that
+  `overflow: hidden` clip and float over the main content — this worked
+  when the CSS comment was written, but `backdrop-filter` on an ancestor
+  creates a new containing block for `position: fixed` descendants (same
+  as `transform`/`filter`/`will-change`), which put the dropdown back
+  inside the clip region. The `<details>` element still toggled `open`
+  correctly and the menu existed in the DOM with `opacity:1`/
+  `visibility:visible`, but it was invisible and non-interactive —
+  `elementFromPoint` over the menu's own bounding rect resolved to the
+  dashboard card underneath it, not the menu.
+- **Fix**: `.sidebar-flyout:has(.user-menu-wrap[open]) { overflow: visible }`,
+  relaxing the clip only while the menu is open. Matches the existing
+  `.panel:has(> .panel-head .report-export-menu[open]), .panel:has(.row-action-menu[open])`
+  pattern already used elsewhere in this stylesheet for the identical
+  problem class.
+- Also investigated a suspected open/close animation asymmetry (raised
+  during triage) — on closer inspection of the transition cascade, the
+  `:not([open])` closing state correctly falls back to the base
+  `.user-menu` rule's per-property `transition-delay` (visibility waits
+  for the opacity/transform fade to finish before hiding), so open and
+  close were already symmetric. No change made there.
+
+Verified pre-deploy against the docker dev stack with two real sessions —
+`admin@tracs.local` (super_admin) and `gagas@idcloudhost.co.id` (operator/
+agent), both temporarily password-reset for testing:
+
+- Confirmed via `elementFromPoint` + toggling `overflow`/`backdrop-filter`
+  independently in devtools that the clip was the actual cause before
+  touching any code.
+- Post-fix, clicked the real summary element (no JS override) on both
+  accounts: menu renders, "Profile / Account" link navigates to
+  `profile.php?section=profile` correctly for the super_admin session.
+  Confirmed role-based sidebar visibility (Admin group hidden for the
+  agent role) and the existing `tasks.php`/`monitoring.php` routing split
+  from the 904bbbc fix both still behave correctly.
+
+Verification on production:
+
+- No PHP files touched — `tracs.css` is served as a static asset,
+  cache-busted via `filemtime()` query string (`header.php:55`), so no
+  `php -l` or `php8.3-fpm` reload was needed.
+- Drift-check before deploy: prod's `tracs.css` sha256
+  (`2544b313fe38f6480b7f01a4828532e1a318feb117f52e16cf12bfee649be88b`)
+  matched the pre-fix commit (`904bbbc`) exactly — no untracked prod drift.
+- sha256 of `tracs.css` matches byte-for-byte between the local working
+  tree and `/opt/tracs` post-deploy
+  (`1c249a94bc7085f47fe797ddf60bd604e2306120dca73f6ff7fa9753bafb8580`).
+- `https://tracs.vickry.id/login.php` → 200; response now serves
+  `assets/tracs.css?v=1783130162` (new mtime), confirming the cache-bust
+  picked up the change.
+
+Branch remains pushed for review/PR. Production tracks the working tree via
+file-copy deploy (not a `main` pull).
+
 ## Deployed — Task Assignment 404 Fix + Recurring-Task Modal Rework (2026-07-04 ~00:12 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
