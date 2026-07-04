@@ -9,13 +9,16 @@ class ShiftReportModel {
     public function __construct($connection) {
         $this->conn = $connection;
         $this->ensureResolvedSchema();
+        $this->ensureHandoverSchema();
     }
 
     public function getTodayReports() {
         $query = "
-            SELECT r.*, u.email AS creator_email, COALESCE(NULLIF(r.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name
+            SELECT r.*, u.email AS creator_email, COALESCE(NULLIF(r.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name,
+                   h.summary AS handover_summary, h.submitted_at AS handover_submitted_at
             FROM tracs_shift_reports r
             LEFT JOIN tracs_users u ON r.created_by = u.id
+            LEFT JOIN tracs_shift_handovers h ON r.handover_id = h.id
             WHERE r.active_date = CURDATE()
             ORDER BY FIELD(r.status, 'active', 'on_hold', 'resolved') ASC,
                      FIELD(r.priority, 'critical', 'high', 'medium', 'low') ASC,
@@ -39,9 +42,11 @@ class ShiftReportModel {
         }
 
         $query = "
-            SELECT r.*, u.email AS creator_email, COALESCE(NULLIF(r.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name
+            SELECT r.*, u.email AS creator_email, COALESCE(NULLIF(r.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name,
+                   h.summary AS handover_summary, h.submitted_at AS handover_submitted_at
             FROM tracs_shift_reports r
             LEFT JOIN tracs_users u ON r.created_by = u.id
+            LEFT JOIN tracs_shift_handovers h ON r.handover_id = h.id
             WHERE {$where}
             ORDER BY r.active_date ASC,
                      FIELD(r.shift_name, 'Shift 1', 'Shift 2', 'Shift 3') ASC,
@@ -88,9 +93,11 @@ class ShiftReportModel {
         $whereClause = implode(" AND ", $where);
         
         $query = "
-            SELECT r.*, u.email AS creator_email, COALESCE(NULLIF(r.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name
+            SELECT r.*, u.email AS creator_email, COALESCE(NULLIF(r.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name,
+                   h.summary AS handover_summary, h.submitted_at AS handover_submitted_at
             FROM tracs_shift_reports r
             LEFT JOIN tracs_users u ON r.created_by = u.id
+            LEFT JOIN tracs_shift_handovers h ON r.handover_id = h.id
             WHERE $whereClause
             ORDER BY r.active_date DESC, r.created_at DESC
             LIMIT ? OFFSET ?
@@ -121,20 +128,21 @@ class ShiftReportModel {
         $resolvedAt = $status === 'resolved' ? $this->normalizeDateTime($data['resolved_at'] ?? null) : null;
         $resolutionNote = $status === 'resolved' ? trim((string)($data['resolution_note'] ?? '')) : null;
         $stmt = $this->conn->prepare("
-            INSERT INTO tracs_shift_reports 
-            (shift_name, title, details, priority, active_date, status, resolution_note, resolved_at, visible_to_next_shift, created_by, created_by_name, created_at, updated_at) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+            INSERT INTO tracs_shift_reports
+            (shift_name, title, details, priority, active_date, status, resolution_note, resolved_at, visible_to_next_shift, created_by, created_by_name, handover_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
         ");
         if (!$stmt) return false;
 
         $date = !empty($data['active_date']) ? $data['active_date'] : date('Y-m-d');
 
         $creatorName = $data['created_by_name'] ?? '';
+        $handoverId = !empty($data['handover_id']) ? (int)$data['handover_id'] : null;
 
-        $stmt->bind_param('ssssssssiis', 
-            $data['shift_name'], 
-            $data['title'], 
-            $data['details'], 
+        $stmt->bind_param('ssssssssiisi',
+            $data['shift_name'],
+            $data['title'],
+            $data['details'],
             $data['priority'],
             $date,
             $status,
@@ -142,7 +150,8 @@ class ShiftReportModel {
             $resolvedAt,
             $visible,
             $uid,
-            $creatorName
+            $creatorName,
+            $handoverId
         );
         $success = $stmt->execute();
         $id = $success ? $stmt->insert_id : false;
@@ -228,6 +237,125 @@ class ShiftReportModel {
         if ($value === '') return null;
         $ts = strtotime($value);
         return $ts ? date('Y-m-d H:i:s', $ts) : null;
+    }
+
+    /**
+     * Create a handover header row (one agent's end-of-shift report). Items are
+     * inserted separately via create() with the returned handover_id.
+     */
+    public function createHandover(array $header, int $uid): int|false {
+        $shift = trim((string)($header['shift_name'] ?? 'Shift 1'));
+        $date = !empty($header['active_date']) ? $header['active_date'] : date('Y-m-d');
+        $summary = trim((string)($header['summary'] ?? ''));
+        $summary = $summary === '' ? null : $summary;
+        $creatorName = (string)($header['created_by_name'] ?? '');
+
+        $stmt = $this->conn->prepare("
+            INSERT INTO tracs_shift_handovers
+                (shift_name, active_date, summary, created_by, created_by_name, submitted_at, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, NOW(), NOW(), NOW())
+        ");
+        if (!$stmt) return false;
+        $stmt->bind_param('sssis', $shift, $date, $summary, $uid, $creatorName);
+        $ok = $stmt->execute();
+        $id = $ok ? $stmt->insert_id : false;
+        $stmt->close();
+        return $id;
+    }
+
+    public function getHandover(int $id): ?array {
+        $stmt = $this->conn->prepare("SELECT * FROM tracs_shift_handovers WHERE id = ?");
+        if (!$stmt) return null;
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        return $row ?: null;
+    }
+
+    public function updateHandoverSummary(int $id, ?string $summary): bool {
+        $summary = trim((string)$summary);
+        $summary = $summary === '' ? null : $summary;
+        $stmt = $this->conn->prepare("UPDATE tracs_shift_handovers SET summary = ?, updated_at = NOW() WHERE id = ?");
+        if (!$stmt) return false;
+        $stmt->bind_param('si', $summary, $id);
+        $ok = $stmt->execute();
+        $stmt->close();
+        return $ok;
+    }
+
+    private function ensureHandoverSchema(): void {
+        static $checked = false;
+        if ($checked) return;
+        $checked = true;
+
+        $this->conn->query("
+            CREATE TABLE IF NOT EXISTS `tracs_shift_handovers` (
+              `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+              `shift_name` VARCHAR(32) NOT NULL DEFAULT 'Shift 1',
+              `active_date` DATE NOT NULL,
+              `summary` TEXT NULL,
+              `created_by` INT NULL,
+              `created_by_name` VARCHAR(255) NULL,
+              `submitted_at` DATETIME NULL,
+              `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              PRIMARY KEY (`id`),
+              KEY `idx_shift_handovers_group` (`active_date`, `shift_name`, `created_by`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+
+        if (function_exists('tracs_column_exists') && !tracs_column_exists($this->conn, 'tracs_shift_reports', 'handover_id')) {
+            $this->conn->query("ALTER TABLE tracs_shift_reports ADD COLUMN `handover_id` INT UNSIGNED NULL AFTER `created_by_name`");
+            $this->conn->query("ALTER TABLE tracs_shift_reports ADD INDEX `idx_shift_reports_handover` (`handover_id`)");
+        }
+
+        $this->backfillHandovers();
+    }
+
+    /**
+     * One-time (idempotent) migration: bundle any legacy items that predate the
+     * parent table into a synthetic handover per (agent, shift, date).
+     */
+    private function backfillHandovers(): void {
+        $orphans = $this->conn->query("
+            SELECT created_by, MAX(created_by_name) AS created_by_name, shift_name, active_date, MIN(created_at) AS first_at
+            FROM tracs_shift_reports
+            WHERE handover_id IS NULL
+            GROUP BY created_by, shift_name, active_date
+        ");
+        if (!$orphans) return;
+
+        $groups = [];
+        while ($row = $orphans->fetch_assoc()) {
+            $groups[] = $row;
+        }
+        foreach ($groups as $g) {
+            $createdBy = $g['created_by'] !== null ? (int)$g['created_by'] : null;
+            $name = (string)($g['created_by_name'] ?? '');
+            $shift = (string)$g['shift_name'];
+            $date = (string)$g['active_date'];
+            $firstAt = (string)$g['first_at'];
+
+            $ins = $this->conn->prepare("
+                INSERT INTO tracs_shift_handovers
+                    (shift_name, active_date, summary, created_by, created_by_name, submitted_at, created_at, updated_at)
+                VALUES (?, ?, NULL, ?, ?, ?, NOW(), NOW())
+            ");
+            if (!$ins) continue;
+            $ins->bind_param('ssiss', $shift, $date, $createdBy, $name, $firstAt);
+            if (!$ins->execute()) { $ins->close(); continue; }
+            $handoverId = $ins->insert_id;
+            $ins->close();
+
+            if ($createdBy === null) {
+                $upd = $this->conn->prepare("UPDATE tracs_shift_reports SET handover_id = ? WHERE handover_id IS NULL AND created_by IS NULL AND shift_name = ? AND active_date = ?");
+                if ($upd) { $upd->bind_param('iss', $handoverId, $shift, $date); $upd->execute(); $upd->close(); }
+            } else {
+                $upd = $this->conn->prepare("UPDATE tracs_shift_reports SET handover_id = ? WHERE handover_id IS NULL AND created_by = ? AND shift_name = ? AND active_date = ?");
+                if ($upd) { $upd->bind_param('iiss', $handoverId, $createdBy, $shift, $date); $upd->execute(); $upd->close(); }
+            }
+        }
     }
 
     private function ensureResolvedSchema(): void {

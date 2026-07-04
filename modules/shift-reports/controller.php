@@ -160,6 +160,24 @@ class ShiftReportController {
         return $this->model->create($data, $this->user_id);
     }
 
+    public function createHandover(array $header): int|false {
+        if (function_exists('tracs_ensure_creator_columns')) {
+            tracs_ensure_creator_columns($this->conn, 'tracs_shift_reports', 'created_by');
+        }
+        if (function_exists('tracs_current_user_display')) {
+            $header['created_by_name'] = tracs_current_user_display($this->conn);
+        }
+        return $this->model->createHandover($header, (int)$this->user_id);
+    }
+
+    public function getHandover(int $id): ?array {
+        return $this->model->getHandover($id);
+    }
+
+    public function updateHandoverSummary(int $id, ?string $summary): bool {
+        return $this->model->updateHandoverSummary($id, $summary);
+    }
+
     public function update($id, $data) {
         return $this->model->update($id, $data);
     }

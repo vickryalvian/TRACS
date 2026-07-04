@@ -12849,3 +12849,74 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
     flex: 1 1 100%;
   }
 }
+
+/* ── Shift handover: multi-item modal ─────────────────────── */
+.form-optional { color: var(--tx3); font-weight: 400; font-size: 10px; }
+.shift-items-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin: 12px 0 8px;
+}
+.shift-items-count { font-size: 10px; color: var(--tx3); font-family: var(--mono); }
+.shift-items-container { display: flex; flex-direction: column; gap: 10px; }
+.shift-item-card {
+  border: 1px solid var(--bd1); border-radius: var(--r2);
+  padding: 12px; background: var(--s2);
+}
+.shift-item-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.shift-item-card-head .shift-i-title { flex: 1; min-width: 0; }
+.shift-item-idx {
+  flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%;
+  background: var(--s3); color: var(--tx2); font-size: 11px; font-weight: 700;
+  font-family: var(--mono); display: flex; align-items: center; justify-content: center;
+}
+.shift-item-remove { flex-shrink: 0; }
+.shift-add-item-btn { margin-top: 10px; }
+.shift-item-upload .case-upload-drop { padding: 10px; }
+.shift-item-upload .case-upload-drop span { font-size: 11px; }
+
+/* ── Shift handover: dashboard widget agent blocks ────────── */
+.shift-handover-block {
+  padding-top: 6px; margin-top: 6px; border-top: 1px dashed var(--bd1);
+}
+.shift-handover-block:first-of-type { border-top: 0; margin-top: 0; padding-top: 0; }
+.shift-handover-agent {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 2px 12px 4px;
+}
+.shift-agent-name {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 700; color: var(--tx2);
+}
+.shift-agent-name svg { width: 12px; height: 12px; }
+.shift-agent-counts { display: inline-flex; gap: 4px; flex-shrink: 0; }
+.shift-handover-summary {
+  padding: 0 12px 4px; font-size: 11px; color: var(--tx2); line-height: 1.5;
+}
+
+/* ── Shift handover: reports page agent blocks ────────────── */
+.shift-report-agent-block { border-top: 1px solid var(--bd1); }
+.shift-report-agent-block:first-child { border-top: 0; }
+.shift-report-agent-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 8px 14px 2px;
+}
+.shift-report-agent-name {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 700; color: var(--tx1);
+}
+.shift-report-agent-name svg { width: 13px; height: 13px; }
+.shift-report-agent-time { color: var(--tx3); font-weight: 500; }
+.shift-report-agent-count { font-size: 10px; color: var(--tx3); font-family: var(--mono); flex-shrink: 0; }
+.shift-report-agent-summary {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 2px 14px 8px; font-size: 12px; color: var(--tx2); line-height: 1.5;
+}
+.shift-report-agent-summary .search-text { flex: 1; min-width: 0; }
+.shift-report-agent-summary.is-empty { padding-top: 0; }
+.shift-summary-edit {
+  background: none; border: 0; color: var(--tx3); cursor: pointer;
+  display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 0;
+  flex-shrink: 0;
+}
+.shift-summary-edit:hover { color: var(--blue); }
+.shift-summary-edit svg { width: 12px; height: 12px; }

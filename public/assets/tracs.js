@@ -2,14 +2,6 @@
 'use strict';
 
 function tracsLogBuildSignature() {
-  if (window.__TRACS_SIGNATURE_LOGGED__) return;
-  const build = window.TRACS_BUILD_INFO || {};
-  const owner = build.owner || 'Vickry';
-  const version = build.version ? ` • ${build.version}` : '';
-  console.log(`%cTRACS System • Initial Build by ${owner}${version}`, 'color:#0891b2;font-weight:700;');
-  if (build.easterEgg) {
-    console.log('Internal build channel active.');
-  }
   window.__TRACS_SIGNATURE_LOGGED__ = true;
 }
 tracsLogBuildSignature();
@@ -87,7 +79,9 @@ const API = {
     UPDATE : API_BASE + 'shift-update.php',
     RESOLVE: API_BASE + 'shift-resolve.php',
     DELETE : API_BASE + 'shift-delete.php',
-    LIST   : API_BASE + 'shift-list.php'
+    LIST   : API_BASE + 'shift-list.php',
+    HANDOVER_CREATE : API_BASE + 'shift-handover-create.php',
+    HANDOVER_UPDATE : API_BASE + 'shift-handover-update.php'
   },
 
   NOTIFICATION: {
@@ -4401,21 +4395,21 @@ if (document.getElementById('tickerScroll')) {
 }
 
 /* ── SHIFT REPORT CRUD ────────────────────────────────── */
-let shiftSelectedAttachments = [];
+/* A shift handover is ONE report by one agent that bundles many cases (items).
+   The modal collects a header (date/shift/summary) + N item cards; create posts
+   them in a single call, then uploads per-item screenshots in a second pass that
+   reuses the existing shift-update attachment pipeline. Edit mode reuses the same
+   modal for a single existing item. */
+const SHIFT_PRIORITIES=[['low','Low'],['medium','Medium'],['high','High'],['critical','Critical']];
+const SHIFT_STATUSES=[['active','Active / Need Handover'],['on_hold','On Hold'],['resolved','Resolved']];
+let shiftModalMode='create';   // 'create' | 'edit'
+let shiftItems=[];             // [{uid,title,details,priority,status,resolution_note,resolved_at}]
+let shiftItemFiles={};         // uid -> [{id,file,url}]
+let shiftItemSeq=0;
 
-function shiftAttachmentEls(){
-  return {
-    input: document.getElementById('shiftAttachments'),
-    drop: document.getElementById('shiftUploadDrop'),
-    status: document.getElementById('shiftUploadStatus'),
-    selected: document.getElementById('shiftAttachmentPreview')
-  };
-}
-function shiftSetUploadStatus(message='',type=''){
-  const el=shiftAttachmentEls().status;
-  if(!el)return;
-  el.textContent=message;
-  el.className=`case-upload-status ${type||''}`.trim();
+function shiftNewUid(){return 'it'+(++shiftItemSeq)+'_'+(crypto.randomUUID?.()||String(Date.now()+Math.random()).replace('.','' ));}
+function shiftBlankItem(overrides={}){
+  return Object.assign({uid:shiftNewUid(),title:'',details:'',priority:'medium',status:'active',resolution_note:'',resolved_at:''},overrides);
 }
 function shiftValidateAttachment(file){
   if(!file || !file.name)return 'Choose a valid image.';
@@ -4424,132 +4418,261 @@ function shiftValidateAttachment(file){
   if(!CASE_ATTACHMENT_TYPES.has(file.type))return `${file.name} must be JPG, JPEG, PNG, or WEBP.`;
   return '';
 }
-function shiftAddAttachmentFiles(files){
+function shiftCardByUid(uid){return document.querySelector(`.shift-item-card[data-uid="${uid}"]`);}
+
+function shiftItemCardHtml(item,index,total){
+  const uid=item.uid;
+  const removable=shiftModalMode==='create' && total>1;
+  const prioOpts=SHIFT_PRIORITIES.map(([v,l])=>`<option value="${v}"${item.priority===v?' selected':''}>${l}</option>`).join('');
+  const statOpts=SHIFT_STATUSES.map(([v,l])=>`<option value="${v}"${item.status===v?' selected':''}>${l}</option>`).join('');
+  const resShown=item.status==='resolved';
+  return `
+  <div class="shift-item-card" data-uid="${uid}">
+    <div class="shift-item-card-head">
+      <span class="shift-item-idx">${index+1}</span>
+      <input type="text" class="form-input shift-i-title" placeholder="Case title, e.g. VPS node monitoring required" value="${escHtml(item.title)}" autocomplete="off">
+      ${removable?`<button type="button" class="btn btn-ghost btn-icon shift-item-remove" onclick="removeShiftItem(${jsAttr(uid)})" aria-label="Remove item"><i data-lucide="trash-2" class="icon-sm"></i></button>`:''}
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Priority</label><select class="form-select shift-i-priority">${prioOpts}</select></div>
+      <div class="form-group"><label class="form-label">Status</label><select class="form-select shift-i-status" onchange="shiftToggleItemResolution(this)">${statOpts}</select></div>
+    </div>
+    <div class="form-group"><label class="form-label">Handover Details</label><textarea class="form-textarea shift-i-details" placeholder="Context, steps taken, customer impact, next actions" style="min-height:70px">${escHtml(item.details)}</textarea></div>
+    <div class="shift-resolution-fields ${resShown?'':'hidden'}">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Resolved Time</label><input type="datetime-local" class="form-input shift-i-resolved-at" value="${escHtml(item.resolved_at||'')}"></div>
+        <div class="form-group"><label class="form-label">Resolution Summary</label><input type="text" class="form-input shift-i-resolution-note" maxlength="255" value="${escHtml(item.resolution_note||'')}" placeholder="Short note for next shift visibility"></div>
+      </div>
+    </div>
+    <div class="form-group case-upload-group shift-item-upload">
+      <input class="case-upload-input" type="file" id="shiftFile_${uid}" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" multiple onchange="shiftItemAddFiles(${jsAttr(uid)},this.files)">
+      <label class="case-upload-drop shift-item-drop" for="shiftFile_${uid}">
+        <i data-lucide="image-plus" class="icon-sm"></i>
+        <span>Add screenshots</span>
+        <small>JPG, PNG, WEBP · Max 5MB</small>
+      </label>
+      <div class="case-upload-status shift-i-upstatus" aria-live="polite"></div>
+      <div class="case-attachment-grid shift-i-preview"></div>
+    </div>
+  </div>`;
+}
+function renderShiftItems(){
+  const c=document.getElementById('shiftItemsContainer');
+  if(!c)return;
+  const total=shiftItems.length;
+  c.innerHTML=shiftItems.map((it,i)=>shiftItemCardHtml(it,i,total)).join('');
+  shiftItems.forEach(it=>renderShiftItemFiles(it.uid));
+  tracsRefreshIcons(c);
+  updateShiftItemsMeta();
+}
+function syncShiftItemsFromDom(){
+  const c=document.getElementById('shiftItemsContainer');
+  if(!c)return;
+  c.querySelectorAll('.shift-item-card').forEach(card=>{
+    const it=shiftItems.find(x=>x.uid===card.dataset.uid);
+    if(!it)return;
+    it.title=card.querySelector('.shift-i-title')?.value||'';
+    it.priority=card.querySelector('.shift-i-priority')?.value||'medium';
+    it.status=card.querySelector('.shift-i-status')?.value||'active';
+    it.details=card.querySelector('.shift-i-details')?.value||'';
+    it.resolved_at=card.querySelector('.shift-i-resolved-at')?.value||'';
+    it.resolution_note=card.querySelector('.shift-i-resolution-note')?.value||'';
+  });
+}
+function shiftToggleItemResolution(sel){
+  const card=sel.closest('.shift-item-card');
+  if(!card)return;
+  const isResolved=sel.value==='resolved';
+  card.querySelector('.shift-resolution-fields')?.classList.toggle('hidden',!isResolved);
+  const at=card.querySelector('.shift-i-resolved-at');
+  if(isResolved && at && !at.value){const now=new Date();now.setMinutes(now.getMinutes()-now.getTimezoneOffset());at.value=now.toISOString().slice(0,16);}
+}
+function updateShiftItemsMeta(){
+  const c=document.getElementById('shiftItemsCount');
+  if(!c)return;
+  if(shiftModalMode!=='create'){c.textContent='';return;}
+  const n=shiftItems.length;
+  c.textContent=`${n} item${n===1?'':'s'}`;
+}
+function addShiftItem(){
+  syncShiftItemsFromDom();
+  shiftItems.push(shiftBlankItem());
+  renderShiftItems();
+  const cards=document.querySelectorAll('.shift-item-card');
+  cards[cards.length-1]?.querySelector('.shift-i-title')?.focus();
+}
+function removeShiftItem(uid){
+  if(shiftItems.length<=1)return;
+  syncShiftItemsFromDom();
+  (shiftItemFiles[uid]||[]).forEach(x=>{try{URL.revokeObjectURL(x.url);}catch(e){}});
+  delete shiftItemFiles[uid];
+  shiftItems=shiftItems.filter(x=>x.uid!==uid);
+  renderShiftItems();
+}
+function shiftItemAddFiles(uid,files){
   const incoming=Array.from(files||[]);
+  const list=shiftItemFiles[uid]||(shiftItemFiles[uid]=[]);
   const errors=[];
   incoming.forEach(file=>{
     const err=shiftValidateAttachment(file);
     if(err){errors.push(err);return;}
-    const duplicate=shiftSelectedAttachments.some(item=>item.file.name===file.name && item.file.size===file.size && item.file.lastModified===file.lastModified);
-    if(!duplicate)shiftSelectedAttachments.push({id:crypto.randomUUID?.()||String(Date.now()+Math.random()),file,url:URL.createObjectURL(file)});
+    const dup=list.some(x=>x.file.name===file.name && x.file.size===file.size && x.file.lastModified===file.lastModified);
+    if(!dup)list.push({id:crypto.randomUUID?.()||String(Date.now()+Math.random()),file,url:URL.createObjectURL(file)});
   });
-  renderShiftSelectedAttachments();
-  if(errors.length)shiftSetUploadStatus(errors[0],'error');
-  else if(incoming.length)shiftSetUploadStatus(`${shiftSelectedAttachments.length} image${shiftSelectedAttachments.length===1?'':'s'} ready to upload.`,'ok');
+  renderShiftItemFiles(uid);
+  const st=shiftCardByUid(uid)?.querySelector('.shift-i-upstatus');
+  if(st){
+    if(errors.length){st.textContent=errors[0];st.className='case-upload-status error';}
+    else{st.textContent=list.length?`${list.length} image${list.length===1?'':'s'} ready.`:'';st.className='case-upload-status ok';}
+  }
 }
-function clearShiftAttachmentState(){
-  shiftSelectedAttachments.forEach(item=>{try{URL.revokeObjectURL(item.url);}catch(e){}});
-  shiftSelectedAttachments=[];
-  const els=shiftAttachmentEls();
-  if(els.input)els.input.value='';
-  if(els.selected)els.selected.innerHTML='';
-  shiftSetUploadStatus('');
+function shiftItemRemoveFile(uid,fileId){
+  const list=shiftItemFiles[uid]||[];
+  const f=list.find(x=>x.id===fileId);
+  if(f){try{URL.revokeObjectURL(f.url);}catch(e){}}
+  shiftItemFiles[uid]=list.filter(x=>x.id!==fileId);
+  renderShiftItemFiles(uid);
 }
-function removeShiftSelectedAttachment(id){
-  const item=shiftSelectedAttachments.find(entry=>entry.id===id);
-  if(item){try{URL.revokeObjectURL(item.url);}catch(e){}}
-  shiftSelectedAttachments=shiftSelectedAttachments.filter(entry=>entry.id!==id);
-  renderShiftSelectedAttachments();
-  shiftSetUploadStatus(shiftSelectedAttachments.length?`${shiftSelectedAttachments.length} image${shiftSelectedAttachments.length===1?'':'s'} ready to upload.`:'');
-}
-function renderShiftSelectedAttachments(){
-  const el=shiftAttachmentEls().selected;
-  if(!el)return;
-  el.innerHTML=shiftSelectedAttachments.map(item=>`
+function renderShiftItemFiles(uid){
+  const grid=shiftCardByUid(uid)?.querySelector('.shift-i-preview');
+  if(!grid)return;
+  const list=shiftItemFiles[uid]||[];
+  grid.innerHTML=list.map(item=>`
     <div class="case-attachment-tile">
-      <button class="case-attachment-thumb" type="button" onclick="openCaseImagePreview(${jsAttr(item.url)},${jsAttr(item.file.name)})">
-        <img src="${item.url}" alt="${escHtml(item.file.name)}">
-      </button>
+      <button class="case-attachment-thumb" type="button" onclick="openCaseImagePreview(${jsAttr(item.url)},${jsAttr(item.file.name)})"><img src="${item.url}" alt="${escHtml(item.file.name)}"></button>
       <div class="case-attachment-meta"><span title="${escHtml(item.file.name)}">${escHtml(item.file.name)}</span><small>${formatBytes(item.file.size)}</small></div>
-      <button class="case-attachment-remove" type="button" onclick="removeShiftSelectedAttachment(${jsAttr(item.id)})" aria-label="Remove selected image"><i data-lucide="x" class="icon-xs"></i></button>
-    </div>
-  `).join('');
-  tracsRefreshIcons(el);
+      <button class="case-attachment-remove" type="button" onclick="shiftItemRemoveFile(${jsAttr(uid)},${jsAttr(item.id)})" aria-label="Remove selected image"><i data-lucide="x" class="icon-xs"></i></button>
+    </div>`).join('');
+  tracsRefreshIcons(grid);
 }
-function shiftPayloadFormData(id=''){
-  const fd=new FormData();
-  if(id)fd.append('id',id);
-  fd.append('title',val('shiftTitle').trim());
-  fd.append('shift_name',val('shiftName'));
-  fd.append('priority',val('shiftPriority'));
-  fd.append('status',val('shiftStatus')||'active');
-  fd.append('details',val('shiftDetails'));
-  fd.append('active_date',val('shiftDate'));
-  fd.append('resolution_note',val('shiftResolutionNote'));
-  fd.append('resolved_at',val('shiftResolvedAt'));
-  shiftSelectedAttachments.forEach(item=>fd.append('attachments[]',item.file,item.file.name));
-  return fd;
+function clearShiftAllFiles(){
+  Object.values(shiftItemFiles).forEach(list=>list.forEach(x=>{try{URL.revokeObjectURL(x.url);}catch(e){}}));
+  shiftItemFiles={};
 }
-function toggleShiftResolutionFields(){
-  const fields=document.getElementById('shiftResolutionFields');
-  if(!fields)return;
-  const isResolved=val('shiftStatus')==='resolved';
-  fields.classList.toggle('hidden',!isResolved);
-  if(isResolved && !val('shiftResolvedAt')){
-    const now=new Date();
-    now.setMinutes(now.getMinutes()-now.getTimezoneOffset());
-    setVal('shiftResolvedAt',now.toISOString().slice(0,16));
-  }
-}
-function initShiftAttachmentUpload(){
-  const els=shiftAttachmentEls();
-  if(!els.input||els.input.dataset.ready)return;
-  els.input.dataset.ready='1';
-  els.input.addEventListener('change',()=>shiftAddAttachmentFiles(els.input.files));
-  if(els.drop){
-    ['dragenter','dragover'].forEach(evt=>els.drop.addEventListener(evt,e=>{e.preventDefault();els.drop.classList.add('drag');}));
-    ['dragleave','drop'].forEach(evt=>els.drop.addEventListener(evt,e=>{e.preventDefault();els.drop.classList.remove('drag');}));
-    els.drop.addEventListener('drop',e=>shiftAddAttachmentFiles(e.dataTransfer?.files));
-  }
+function applyShiftModalMode(){
+  const isCreate=shiftModalMode==='create';
+  document.getElementById('shiftSummaryGroup')?.classList.toggle('hidden',!isCreate);
+  document.getElementById('shiftAddItemBtn')?.classList.toggle('hidden',!isCreate);
+  const label=document.getElementById('shiftItemsLabel');
+  if(label)label.textContent=isCreate?'Handover Items':'Case Detail';
+  const saveLabel=document.getElementById('shiftSaveLabel');
+  if(saveLabel)saveLabel.textContent=isCreate?'Save Handover':'Save Item';
 }
 function openNewShiftReport(){
-  initShiftAttachmentUpload();
-  document.getElementById('shiftModalTitle').textContent='New Shift Report';
-  ['shiftId','shiftTitle','shiftDetails','shiftResolutionNote','shiftResolvedAt'].forEach(id=>setVal(id,''));
-  setVal('shiftPriority','medium');
-  setVal('shiftStatus','active');
+  shiftModalMode='create';
+  setVal('shiftId','');
+  document.getElementById('shiftModalTitle').textContent='New Shift Handover';
+  document.getElementById('shiftModalSub').textContent="One report, all the cases you're handing over";
   setVal('shiftDate', new Date().toISOString().split('T')[0]);
-  toggleShiftResolutionFields();
-  clearShiftAttachmentState();
+  if(!val('shiftName'))setVal('shiftName','Shift 1');
+  setVal('shiftSummary','');
+  clearShiftAllFiles();
+  shiftItems=[shiftBlankItem()];
+  applyShiftModalMode();
+  renderShiftItems();
   openModal('shift');
 }
 function openEditShiftReport(id){
-  initShiftAttachmentUpload();
   const row=document.querySelector(`[data-id="${id}"]`);
   if(!row)return;
-  document.getElementById('shiftModalTitle').textContent='Edit Shift Report';
+  shiftModalMode='edit';
   setVal('shiftId',id);
-  setVal('shiftTitle',row.dataset.title||'');
+  document.getElementById('shiftModalTitle').textContent='Edit Handover Item';
+  document.getElementById('shiftModalSub').textContent='Update a single case';
   setVal('shiftName',row.dataset.shift||'Shift 1');
-  setVal('shiftPriority',row.dataset.prio||'medium');
-  setVal('shiftStatus',row.dataset.status||'active');
   setVal('shiftDate', row.dataset.date || new Date().toISOString().split('T')[0]);
-  setVal('shiftDetails',row.dataset.details||'');
-  setVal('shiftResolutionNote',row.dataset.resolutionNote||'');
-  setVal('shiftResolvedAt',(row.dataset.resolvedAt||'').replace(' ','T').slice(0,16));
-  toggleShiftResolutionFields();
-  clearShiftAttachmentState();
+  clearShiftAllFiles();
+  shiftItems=[shiftBlankItem({
+    title:row.dataset.title||'',
+    details:row.dataset.details||'',
+    priority:row.dataset.prio||'medium',
+    status:row.dataset.status||'active',
+    resolution_note:row.dataset.resolutionNote||'',
+    resolved_at:(row.dataset.resolvedAt||'').replace(' ','T').slice(0,16)
+  })];
+  applyShiftModalMode();
+  renderShiftItems();
   openModal('shift');
 }
 async function saveShiftReport(){
-  const title=val('shiftTitle').trim();
+  syncShiftItemsFromDom();
+  if(shiftModalMode==='edit')return saveShiftItemEdit();
+  const items=shiftItems.filter(it=>it.title.trim());
+  if(!items.length){toast('Add at least one item with a title','error');return;}
+  const payload={
+    shift_name:val('shiftName'),
+    active_date:val('shiftDate'),
+    summary:val('shiftSummary'),
+    items:items.map(it=>({title:it.title.trim(),details:it.details,priority:it.priority,status:it.status||'active',resolution_note:it.resolution_note,resolved_at:it.resolved_at}))
+  };
+  const btn=document.getElementById('shiftSaveBtn');
+  const d=await withLoadingState(btn,'Saving...',()=>api(API.SHIFT.HANDOVER_CREATE,payload));
+  if(!d)return;
+  if(!d.success){handleModalError({modal:'shift',error:{message:d.message,status:d.status}});return;}
+  const created=(d.data&&d.data.items)||[];
+  const uploads=[];
+  created.forEach(ci=>{
+    const src=items[ci.client_index];
+    if(!src)return;
+    const files=shiftItemFiles[src.uid]||[];
+    if(!files.length)return;
+    const fd=new FormData();
+    fd.append('id',ci.id);
+    fd.append('title',src.title.trim());
+    fd.append('shift_name',payload.shift_name);
+    fd.append('priority',src.priority);
+    fd.append('status',src.status||'active');
+    fd.append('details',src.details);
+    fd.append('active_date',payload.active_date);
+    fd.append('resolution_note',src.resolution_note||'');
+    fd.append('resolved_at',src.resolved_at||'');
+    files.forEach(f=>fd.append('attachments[]',f.file,f.file.name));
+    uploads.push(caseApiWithUploads(API.SHIFT.UPDATE,fd));
+  });
+  if(uploads.length){try{await Promise.all(uploads);}catch(e){/* screenshots are best-effort */}}
+  showModalSuccessAndClose({
+    modal:'shift',
+    message:'Handover filed.',
+    onAfterClose:()=>{clearShiftAllFiles();location.reload();}
+  });
+}
+async function saveShiftItemEdit(){
+  const it=shiftItems[0];
+  const title=(it?.title||'').trim();
   if(!title){toast('Title is required','error');return;}
   const id=val('shiftId');
-  shiftSetUploadStatus(shiftSelectedAttachments.length?'Uploading images...':'Saving report...');
-  const d=await withLoadingState(document.getElementById('shiftSaveBtn'),'Saving...',()=>shiftSelectedAttachments.length
-    ? caseApiWithUploads(id?API.SHIFT.UPDATE:API.SHIFT.CREATE,shiftPayloadFormData(id))
-    : api(id?API.SHIFT.UPDATE:API.SHIFT.CREATE,{id,title,shift_name:val('shiftName'),priority:val('shiftPriority'),status:val('shiftStatus')||'active',details:val('shiftDetails'),active_date:val('shiftDate'),resolution_note:val('shiftResolutionNote'),resolved_at:val('shiftResolvedAt')}));
+  const files=shiftItemFiles[it.uid]||[];
+  const btn=document.getElementById('shiftSaveBtn');
+  const d=await withLoadingState(btn,'Saving...',()=>{
+    if(files.length){
+      const fd=new FormData();
+      fd.append('id',id);
+      fd.append('title',title);
+      fd.append('shift_name',val('shiftName'));
+      fd.append('priority',it.priority);
+      fd.append('status',it.status||'active');
+      fd.append('details',it.details);
+      fd.append('active_date',val('shiftDate'));
+      fd.append('resolution_note',it.resolution_note||'');
+      fd.append('resolved_at',it.resolved_at||'');
+      files.forEach(f=>fd.append('attachments[]',f.file,f.file.name));
+      return caseApiWithUploads(API.SHIFT.UPDATE,fd);
+    }
+    return api(API.SHIFT.UPDATE,{id,title,shift_name:val('shiftName'),priority:it.priority,status:it.status||'active',details:it.details,active_date:val('shiftDate'),resolution_note:it.resolution_note,resolved_at:it.resolved_at});
+  });
   if(!d)return;
   if(d.success){
-    showModalSuccessAndClose({
-      modal:'shift',
-      message:id?'Report updated.':'Report created.',
-      onAfterClose:()=>{
-        clearShiftAttachmentState();
-        location.reload();
-      }
-    });
+    showModalSuccessAndClose({modal:'shift',message:'Item updated.',onAfterClose:()=>{clearShiftAllFiles();location.reload();}});
   }else handleModalError({modal:'shift',error:{message:d.message,status:d.status}});
+}
+async function editHandoverSummary(id,btn){
+  const wrap=btn?.closest('.shift-report-agent-summary');
+  const current=wrap?.querySelector('.search-text')?.textContent?.trim()||'';
+  const next=window.prompt('Shift summary for this handover (what to watch, how the shift went):',current);
+  if(next===null)return;
+  const d=await api(API.SHIFT.HANDOVER_UPDATE,{id,summary:next});
+  if(d&&d.success){showToast('Handover summary updated.','success',{context:'page'});_reload();}
+  else handleRequestError({message:d?.message,status:d?.status},'page','The summary could not be updated. Please try again.');
 }
 async function resolveShiftReport(id,button=null){
   tracsConfirm('Mark this shift report as resolved?',async()=>{
@@ -4585,7 +4708,6 @@ async function convertCurrency() {
   const amount = document.getElementById('currency-amount')?.value;
 
   if (!from || !to || !amount) {
-    console.warn("Missing input", { from, to, amount });
     return;
   }
 
@@ -4596,20 +4718,15 @@ async function convertCurrency() {
     const res = await fetch(url);
 
     const text = await res.text();
-    console.log("RAW RESPONSE:", text);
 
     let data;
     try {
       data = JSON.parse(text);
     } catch (e) {
-      console.error("JSON PARSE ERROR:", text);
       return;
     }
 
-    console.log("PARSED DATA:", data);
-
     if (!data.success) {
-      console.error("API FAILED:", data.message);
       return;
     }
 

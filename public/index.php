@@ -1581,42 +1581,78 @@ include 'includes/header.php';
           <div class="shift-group">
             <div class="shift-group-title"><?=esc($sname)?></div>
             <?php
+              // Sub-group a shift's items by the agent's handover (one report per
+              // agent). Falls back to author+date when a legacy row has no handover.
+              $handoverBlocks = [];
+              foreach($items as $it) {
+                $hkey = !empty($it['handover_id'])
+                  ? 'h'.$it['handover_id']
+                  : 'u'.($it['created_by'] ?? '0').'|'.($it['active_date'] ?? '');
+                if(!isset($handoverBlocks[$hkey])) {
+                  $handoverBlocks[$hkey] = [
+                    'agent' => tracs_creator_label($it),
+                    'summary' => trim((string)($it['handover_summary'] ?? '')),
+                    'items' => [],
+                  ];
+                }
+                $handoverBlocks[$hkey]['items'][] = $it;
+              }
+            ?>
+            <?php foreach($handoverBlocks as $block):
+              $blockItems = $block['items'];
+              $cActive = count(array_filter($blockItems, fn($sr) => ($sr['status'] ?? 'active') === 'active'));
+              $cHold = count(array_filter($blockItems, fn($sr) => ($sr['status'] ?? '') === 'on_hold'));
+              $cResolved = count(array_filter($blockItems, fn($sr) => ($sr['status'] ?? '') === 'resolved'));
               $shiftStatusGroups = [
-                'active' => ['label' => 'Needs Handover', 'items' => array_values(array_filter($items, fn($sr) => ($sr['status'] ?? 'active') === 'active'))],
-                'on_hold' => ['label' => 'On Hold / Monitoring', 'items' => array_values(array_filter($items, fn($sr) => ($sr['status'] ?? '') === 'on_hold'))],
-                'resolved' => ['label' => 'Resolved This Shift', 'items' => array_values(array_filter($items, fn($sr) => ($sr['status'] ?? '') === 'resolved'))],
+                'active' => ['label' => 'Needs Handover', 'items' => array_values(array_filter($blockItems, fn($sr) => ($sr['status'] ?? 'active') === 'active'))],
+                'on_hold' => ['label' => 'On Hold / Monitoring', 'items' => array_values(array_filter($blockItems, fn($sr) => ($sr['status'] ?? '') === 'on_hold'))],
+                'resolved' => ['label' => 'Resolved This Shift', 'items' => array_values(array_filter($blockItems, fn($sr) => ($sr['status'] ?? '') === 'resolved'))],
               ];
             ?>
-            <?php foreach($shiftStatusGroups as $statusKey => $statusGroup): if(empty($statusGroup['items'])) continue; ?>
-            <div class="shift-status-lane is-<?=esc($statusKey)?>">
-              <div class="shift-status-lane-title"><?=esc($statusGroup['label'])?></div>
-              <?php foreach($statusGroup['items'] as $sr):
-              $srid=intval($sr['id']);
-              $srtit=esc($sr['title']);
-              $srprio=strtolower($sr['priority']);
-              $srstatus=$sr['status'];
-              $pclass=prio_bar($srprio);
-              $statusBadge = $srstatus === 'resolved' ? 'b-resolved' : ($srstatus === 'on_hold' ? 'b-hold' : 'b-active');
-              $statusText = $srstatus === 'active' ? 'Need Handover' : ucwords(str_replace('_', ' ', $srstatus));
-            ?>
-            <div class="shift-item <?=$srstatus==='resolved'?'resolved':''?> <?=$srstatus==='on_hold'?'on-hold':''?>"
-              data-id="<?=$srid?>"
-              data-title="<?=$srtit?>"
-              data-shift="<?=esc($sr['shift_name'] ?? $sname)?>"
-              data-prio="<?=esc($srprio)?>"
-              data-status="<?=esc($srstatus)?>"
-              data-details="<?=esc($sr['details'] ?? '')?>"
-              data-date="<?=esc($sr['active_date'] ?? '')?>"
-              data-resolution-note="<?=esc($sr['resolution_note'] ?? '')?>"
-              data-resolved-at="<?=esc($sr['resolved_at'] ?? '')?>"
-              role="button"
-              tabindex="0"
-              onclick="openEditShiftReport(<?=$srid?>)"
-              onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openEditShiftReport(<?=$srid?>)}">
-              <div class="shift-priority <?=$pclass?>"></div>
-              <div class="shift-text"><?=$srtit?><?=tracs_creator_meta($sr, $sr['created_at'] ?? null, false)?></div>
-              <span class="badge badge-sm <?=$statusBadge?>"><?=esc($statusText)?></span>
-            </div>
+            <div class="shift-handover-block">
+              <div class="shift-handover-agent">
+                <span class="shift-agent-name"><i data-lucide="user" class="icon-xs"></i><?=esc($block['agent'])?></span>
+                <span class="shift-agent-counts">
+                  <?php if($cActive): ?><span class="badge badge-sm b-active"><?=$cActive?></span><?php endif; ?>
+                  <?php if($cHold): ?><span class="badge badge-sm b-hold"><?=$cHold?></span><?php endif; ?>
+                  <?php if($cResolved): ?><span class="badge badge-sm b-resolved"><?=$cResolved?></span><?php endif; ?>
+                </span>
+              </div>
+              <?php if($block['summary'] !== ''): ?>
+              <div class="shift-handover-summary"><?=esc($block['summary'])?></div>
+              <?php endif; ?>
+              <?php foreach($shiftStatusGroups as $statusKey => $statusGroup): if(empty($statusGroup['items'])) continue; ?>
+              <div class="shift-status-lane is-<?=esc($statusKey)?>">
+                <div class="shift-status-lane-title"><?=esc($statusGroup['label'])?></div>
+                <?php foreach($statusGroup['items'] as $sr):
+                $srid=intval($sr['id']);
+                $srtit=esc($sr['title']);
+                $srprio=strtolower($sr['priority']);
+                $srstatus=$sr['status'];
+                $pclass=prio_bar($srprio);
+                $statusBadge = $srstatus === 'resolved' ? 'b-resolved' : ($srstatus === 'on_hold' ? 'b-hold' : 'b-active');
+                $statusText = $srstatus === 'active' ? 'Need Handover' : ucwords(str_replace('_', ' ', $srstatus));
+              ?>
+              <div class="shift-item <?=$srstatus==='resolved'?'resolved':''?> <?=$srstatus==='on_hold'?'on-hold':''?>"
+                data-id="<?=$srid?>"
+                data-title="<?=$srtit?>"
+                data-shift="<?=esc($sr['shift_name'] ?? $sname)?>"
+                data-prio="<?=esc($srprio)?>"
+                data-status="<?=esc($srstatus)?>"
+                data-details="<?=esc($sr['details'] ?? '')?>"
+                data-date="<?=esc($sr['active_date'] ?? '')?>"
+                data-resolution-note="<?=esc($sr['resolution_note'] ?? '')?>"
+                data-resolved-at="<?=esc($sr['resolved_at'] ?? '')?>"
+                role="button"
+                tabindex="0"
+                onclick="openEditShiftReport(<?=$srid?>)"
+                onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openEditShiftReport(<?=$srid?>)}">
+                <div class="shift-priority <?=$pclass?>"></div>
+                <div class="shift-text"><?=$srtit?></div>
+                <span class="badge badge-sm <?=$statusBadge?>"><?=esc($statusText)?></span>
+              </div>
+                <?php endforeach; ?>
+              </div>
               <?php endforeach; ?>
             </div>
             <?php endforeach; ?>

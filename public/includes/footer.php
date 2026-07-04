@@ -277,12 +277,11 @@ $_tracs_case_can_delete = isset($conn) && $conn instanceof mysqli && function_ex
 <div class="modal-overlay hidden" id="shiftModal">
 <div class="modal">
   <div class="modal-head">
-    <div><div class="modal-title" id="shiftModalTitle">New Shift Report</div><div class="modal-sub">Handover active items</div></div>
+    <div><div class="modal-title" id="shiftModalTitle">New Shift Handover</div><div class="modal-sub" id="shiftModalSub">One report, all the cases you're handing over</div></div>
     <button class="modal-close" onclick="closeModal('shift')"><i data-lucide="x"></i></button>
   </div>
   <div class="modal-body">
     <input type="hidden" id="shiftId">
-    <div class="form-group"><label class="form-label">Shift Report Title *</label><input type="text" class="form-input" id="shiftTitle" placeholder="Shift report title, e.g. VPS node monitoring required" autocomplete="off"></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Work Date *</label>
         <input type="date" class="form-input" id="shiftDate" value="<?=date('Y-m-d')?>">
@@ -295,45 +294,20 @@ $_tracs_case_can_delete = isset($conn) && $conn instanceof mysqli && function_ex
         </select>
       </div>
     </div>
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">Priority</label>
-        <select class="form-select" id="shiftPriority">
-          <option value="low">Low</option>
-          <option value="medium" selected>Medium</option>
-          <option value="high">High</option>
-          <option value="critical">Critical</option>
-        </select>
-      </div>
-      <div class="form-group"><label class="form-label">Status</label>
-        <select class="form-select" id="shiftStatus" onchange="toggleShiftResolutionFields()">
-          <option value="active" selected>Active / Need Handover</option>
-          <option value="on_hold">On Hold</option>
-          <option value="resolved">Resolved</option>
-        </select>
-      </div>
+    <div class="form-group" id="shiftSummaryGroup">
+      <label class="form-label">Shift Summary <span class="form-optional">(optional)</span></label>
+      <textarea class="form-textarea" id="shiftSummary" placeholder="Overall notes for the next agent — how the shift went, what to watch, carryovers" style="min-height:64px"></textarea>
     </div>
-    <div class="form-group"><label class="form-label">Handover Details</label><textarea class="form-textarea" id="shiftDetails" placeholder="Describe handover context, steps taken, customer impact, and next actions" style="min-height:100px"></textarea></div>
-    <div class="shift-resolution-fields hidden" id="shiftResolutionFields">
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">Resolved Time</label><input type="datetime-local" class="form-input" id="shiftResolvedAt"></div>
-        <div class="form-group"><label class="form-label">Resolution Summary</label><input type="text" class="form-input" id="shiftResolutionNote" maxlength="255" placeholder="Short note for next shift visibility"></div>
-      </div>
+    <div class="shift-items-head">
+      <span class="form-label" id="shiftItemsLabel">Handover Items</span>
+      <span class="shift-items-count" id="shiftItemsCount"></span>
     </div>
-    <div class="form-group case-upload-group">
-      <label class="form-label">Screenshots / Photos</label>
-      <input class="case-upload-input" type="file" id="shiftAttachments" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" multiple>
-      <label class="case-upload-drop" id="shiftUploadDrop" for="shiftAttachments">
-        <i data-lucide="image-plus" class="icon-sm"></i>
-        <span>Click or drop images here</span>
-        <small>JPG, JPEG, PNG, WEBP. Max 5MB each.</small>
-      </label>
-      <div class="case-upload-status" id="shiftUploadStatus" aria-live="polite"></div>
-      <div class="case-attachment-grid" id="shiftAttachmentPreview"></div>
-    </div>
+    <div id="shiftItemsContainer" class="shift-items-container"></div>
+    <button type="button" class="btn btn-ghost btn-sm shift-add-item-btn" id="shiftAddItemBtn" onclick="addShiftItem()"><i data-lucide="plus" class="icon-sm"></i>Add another item</button>
   </div>
   <div class="modal-foot">
     <button class="btn btn-ghost" onclick="closeModal('shift')">Cancel</button>
-    <button class="btn btn-primary" id="shiftSaveBtn" data-loading-text="Saving..." onclick="saveShiftReport()"><i data-lucide="check" class="icon-sm"></i>Save Report</button>
+    <button class="btn btn-primary" id="shiftSaveBtn" data-loading-text="Saving..." onclick="saveShiftReport()"><i data-lucide="check" class="icon-sm"></i><span id="shiftSaveLabel">Save Handover</span></button>
   </div>
 </div></div>
 
