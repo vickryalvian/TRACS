@@ -4,6 +4,57 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Comprehensive Multi-Item Shift Handover (2026-07-04 ~16:05 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch
+`fix/monitoring-task-assignment-routing-and-modal`, commit `cb39e24`.
+11 files (9 modified + 2 new).
+File backup `/opt/tracs/backups/shift-handover-20260704-160357/` (9 files).
+DB backup (pre-migration, full gzip)
+`/opt/tracs/backups/db-pre-shift-handover-20260704-160242/tracs-full.sql.gz`.
+
+User-requested rework + audit of the shift-handover flow on the dashboard
+widget and `shift-reports.php`. Real-world case: an agent ending a shift files
+one handover covering **many** cases, but the old modal/model treated one row
+as one case, so a multi-case handover became several disconnected "reports".
+
+- **Root cause**: `tracs_shift_reports` conflated the *handover* (one agent,
+  one shift, one date) with the *case* (a single item). No parent entity, no
+  place for an overall shift summary, and grouping was by shift only (never by
+  author).
+- **Fix (Option B — parent + child)**: new `tracs_shift_handovers` table
+  (agent, shift, date, `summary`, `submitted_at`) + nullable `handover_id` on
+  `tracs_shift_reports`, both created at runtime via the existing
+  `ensure*Schema` pattern. An idempotent `backfillHandovers()` bundles legacy
+  rows into one synthetic handover per `(agent, shift, date)` on first load.
+- **API**: `shift-handover-create.php` (one transactional multi-item submit)
+  and `shift-handover-update.php` (edit summary); per-item screenshots upload
+  in a second pass reusing the existing `shift-update.php` attachment pipeline.
+- **UI**: the modal is now a multi-item card list with a shift summary (edit
+  mode reuses it for a single item); the dashboard widget and reports page
+  group items by shift/date, then per-agent handover block with a summary line.
+- **Also**: fixed a fatal placeholder/bind mismatch in the backfill INSERT
+  (surfaced as a local 500), and removed currency-converter debug console
+  noise + the build-signature console banner.
+
+Migration verified on prod in a controlled run after deploy (DB backed up
+first): `tracs_shift_handovers` created, `handover_id` column present, all 10
+existing reports backfilled into 10 handovers, **0 orphans**, `getHistory`
+reads back with `handover_id` populated.
+
+Deploy steps: full DB dump → drift-check (all 9 modified files matched the
+`2271b54` baseline on prod) → back up prod files → `scp` 11 files →
+`chown vickry:www-data` → `php -l` all 8 PHP files (clean) → sha256
+local↔prod verified for all 11 → `systemctl reload php8.3-fpm`.
+
+Verification:
+- `https://tracs.vickry.id/` returns `302` to `/login.php`
+- `https://tracs.vickry.id/login.php` returns `200`
+- `https://tracs.vickry.id/shift-reports.php` returns `302` (not `500`)
+- `https://tracs.vickry.id/api/shift-handover-create.php` returns `401`
+  (route + auth gate working)
+
 ## Deployed — Collapsed-Rail Nav: Square Active/Hover Indicator, Drop Left Accent Bar (2026-07-04 ~10:40 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
