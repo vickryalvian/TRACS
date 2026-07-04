@@ -4,6 +4,83 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Sidebar Profile Rework: Two-Row Name/Position + Collapse-on-Open Menu (2026-07-04 ~09:45 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch
+`fix/monitoring-task-assignment-routing-and-modal`, commit `6d28e8e`.
+2 files: `public/assets/tracs.css`, `public/includes/header.php`.
+Backup `/opt/tracs/backups/sidebar-profile-rework-20260704-094526/`.
+
+User-requested rework of the sidebar profile/account-menu flow, on top
+of the earlier blank-label/name-display fix:
+
+- **Two-row profile label**: the sidebar row next to the avatar now
+  shows the user's name and position stacked (name bold/primary,
+  position smaller/muted below it), instead of a single line. Added
+  `$_header_position` in `header.php`, resolved as
+  `$_header_user['position'] ?: $_header_user['role_name'] ?: tracs_role_fallback_meta($_header_user['role_slug'])['name']`
+  so accounts without a `position` value set still show something
+  sensible (their role name) rather than a blank second line. New
+  markup: `.user-menu-info` wrapper (kept the `nav-label` class so it
+  still participates in the existing hover-reveal/opacity system) with
+  `.user-menu-name` / `.user-menu-position` children; `.user-menu-row`
+  changed from a fixed 36px row to `min-height` + auto so it can grow to
+  fit two lines.
+- **Collapse-on-open flow**: previously, clicking the avatar opened the
+  floating account dropdown while the *full expanded nav* stayed open
+  behind it (since focusing the summary via click keeps `:focus-within`
+  true) — both panels visible/overlapping at once. Reworked so opening
+  the account menu now always collapses the nav rail first. Every
+  hover/focus-within expand trigger in the stylesheet
+  (`.sidebar-flyout` width, `.nav-label` opacity, `.nav-chevron`
+  opacity, `.nav-pin` display) is now guarded with
+  `:not(:has(.user-menu-wrap[open]))`, so all of them turn off the
+  moment the menu opens, regardless of continued hover/focus, and
+  re-evaluate normally (re-expanding if still hovered) once it closes.
+  `.user-menu`'s own anchor position changed from
+  `calc(var(--sb-w-open) + 10px)` to `calc(var(--sb-w) + 10px)` to match
+  — it now always anchors off the *collapsed* rail width, since the rail
+  no longer stays expanded while the menu is visible.
+- **Animation**: both the nav-collapse (`.sidebar-flyout`'s existing
+  `transition: width`) and the menu's own open/close fade (already fixed
+  in the previous two deploys) run off the same `[open]` attribute flip,
+  so they already animate together with no new transition timing needed.
+
+Verified pre-deploy against the docker dev stack as both
+`gagas@idcloudhost.co.id` (operator, position "Customer Support" — real
+DB value, confirms the position fallback chain reads real data not just
+the role fallback) and `admin@tracs.local` (super_admin):
+
+- Hovered the collapsed rail — two-row name/position renders correctly,
+  screenshot-confirmed in dark theme.
+- Clicked the profile row — nav fully collapses back to the icon rail
+  and the account menu renders anchored beside it, screenshot-confirmed
+  (this was the core ask: no more full-nav-plus-menu overlap).
+- Clicked the avatar again to close — menu closes and, since the
+  summary still had focus, nav re-expanded correctly (expected
+  `:focus-within` behavior).
+- Re-opened the Tasks & Monitoring accordion afterward to confirm it's
+  unaffected (still expands independently; unrelated to the
+  `.user-menu-wrap[open]` guard) and still mutually closes the profile
+  menu as before.
+- Re-checked mobile (375px): unaffected, as expected — mobile's sidebar
+  never uses the hover/focus-within expand path this change touches.
+
+Verification on production:
+
+- `php -l` clean on `header.php`.
+- Drift-check before deploy: both files' prod sha256 matched the
+  previous deploy's commit (`351fb23`) exactly — no untracked drift.
+- Post-deploy sha256 matches the local working tree byte-for-byte on
+  both files.
+- `sudo systemctl reload php8.3-fpm` (opcache cleared); `nginx` and
+  `php8.3-fpm` both `active`.
+- `https://tracs.vickry.id/login.php` → 200.
+
+Branch remains pushed for review/PR. Production tracks the working tree via
+file-copy deploy (not a `main` pull).
+
 ## Deployed — Sidebar Profile Row: Blank Label Fix + Show Name Instead of Email (2026-07-04 ~09:27 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
