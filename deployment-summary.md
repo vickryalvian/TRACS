@@ -4,6 +4,80 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Mobile Profile-Menu Z-Index Leak + Reduced-Motion Gaps (2026-07-04 ~09:15 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch
+`fix/monitoring-task-assignment-routing-and-modal`, commit `1f60bcb`.
+1 file: `public/assets/tracs.css`.
+Backup `/opt/tracs/backups/mobile-zindex-reduced-motion-fix-20260704-091547/`.
+
+Follow-up request after the previous profile-dropdown clipping fix,
+asking to double-check open/close smoothness on the accordion (Tasks &
+Monitoring / User Management submenus) and the profile dropdown, and to
+check for any overlapping CSS.
+
+- **Accordion smoothness**: re-traced the `.nav-submenu-track`
+  (`grid-template-rows: 0fr -> 1fr`) + `.nav-submenu` (opacity/visibility,
+  delayed-hide) pattern and the `.user-menu` open/close cascade by hand.
+  Both already animate symmetrically in both directions (the `:not([open])`
+  states correctly fall back to the base rule's per-property
+  `transition-delay` rather than snapping instantly, contrary to an
+  earlier, incorrect note from initial triage) — confirmed via live
+  open/close screenshots at rest on desktop; no change needed there.
+- **Real bug found — mobile z-index leak**: at ≤640px the sidebar
+  collapses into a horizontal top bar via `.sidebar-flyout { position:
+  static }`, but `z-index` has no effect on statically positioned
+  elements, so its `z-index: 150` silently stopped applying. Its
+  `backdrop-filter` still creates a stacking context regardless of
+  `position`, so the entire subtree — including `.user-menu`'s
+  `z-index: 6000` profile dropdown — got pinned at the "auto" paint tier.
+  `.notif-bell-btn` (the header's notification bell, `position: relative`,
+  later in DOM order under `.main`) then won paint-order ties at that same
+  tier, so its unread-count badge rendered on top of the open profile
+  dropdown. Confirmed precisely via `elementFromPoint` plus toggling
+  `position`/`backdrop-filter` independently in devtools before touching
+  any code; functionally clicks still worked (the badge only stole taps
+  landing exactly on its 16x16px area), but visually the badge floated
+  over dropdown text. Fixed by changing `position: static` to
+  `position: relative` in the mobile override — identical in-flow layout,
+  but restores z-index applicability so the whole sidebar subtree
+  properly outranks ordinary page content again.
+- **Reduced-motion gap**: `@media (prefers-reduced-motion: reduce)`
+  already forced `.sidebar-flyout`, `.nav-submenu`, and `.nav-chevron` to
+  `transition-duration: 1ms`, but `.nav-submenu-track` (the accordion's
+  actual height-slide) and `.user-menu` (the profile dropdown) were
+  missing from that list — under that OS preference the container would
+  still animate at full speed while its sibling/parent snapped instantly,
+  a real half-instant/half-animated mismatch. Added both to the list.
+
+Verified pre-deploy against the docker dev stack as `admin@tracs.local`:
+
+- Accordion and profile-menu open/close screenshotted at rest in both
+  states on desktop — clean, no residual gaps or clipping.
+- Reproduced the mobile badge-over-dropdown overlap at 375px width with
+  `elementFromPoint`, then confirmed it disappears post-fix (same point
+  now resolves to the dropdown's own link) and re-screenshotted to
+  confirm visually.
+- Re-checked desktop after the mobile-only CSS change — no regression,
+  profile menu and accordion both still open/close/mutually-close
+  correctly.
+
+Verification on production:
+
+- No PHP touched — static asset, cache-busted via `filemtime()`, no
+  `php-fpm` reload needed.
+- Drift-check before deploy: prod's `tracs.css` sha256 matched the
+  previous deploy's commit (`36d3950`) exactly — no untracked drift.
+- Post-deploy sha256
+  (`0c448e977042cf0916b7137dce44bbd7e7d6ad1186a6ba4b62d8998c58c1e8ec`)
+  matches the local working tree byte-for-byte.
+- `https://tracs.vickry.id/login.php` → 200; cache-bust version advanced
+  to `?v=1783131354`.
+
+Branch remains pushed for review/PR. Production tracks the working tree via
+file-copy deploy (not a `main` pull).
+
 ## Deployed — Profile Dropdown Invisible/Unclickable Fix (2026-07-04 ~09:00 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
