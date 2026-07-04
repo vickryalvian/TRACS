@@ -17,4 +17,8 @@ $stmt->execute();
 if($stmt->affected_rows===0){ $stmt->close(); fail('Only the creator can delete this checklist item',403); }
 $stmt->close();
 logAct($conn,$uid,'deleted','Checklist',"Deleted task: {$row['title']}",$id);
+try {
+    require_once __DIR__.'/../../modules/task-management/controller.php';
+    (new TaskManagementController($conn, $uid))->deleteTaskFromChecklist($id);
+} catch (Throwable $e) { /* Task Management mirror is non-fatal for the checklist item itself. */ }
 ok(null,'Deleted');

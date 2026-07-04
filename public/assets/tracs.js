@@ -53,7 +53,9 @@ const API = {
     CREATE : API_BASE + 'task-create.php',
     UPDATE : API_BASE + 'task-update.php',
     DELETE : API_BASE + 'task-delete.php',
-    TOGGLE : API_BASE + 'task-toggle.php'
+    TOGGLE : API_BASE + 'task-toggle.php',
+    HISTORY: API_BASE + 'checklist-history.php',
+    LIST   : API_BASE + 'checklist-list.php'
   },
 
   DOMAIN: {
@@ -1314,7 +1316,8 @@ const TRACS_POPUP_DETAILS_SELECTOR = [
   '.user-menu-wrap',
   '.nav-menu-wrap',
   '.report-export-menu',
-  '.row-action-menu'
+  '.row-action-menu',
+  '.tm-more-filters'
 ].join(',');
 const TRACS_CUSTOM_POPUP_SELECTOR = '.notif-bell-btn';
 
@@ -3724,33 +3727,123 @@ function syncReminderPrimaryAction(row, id, checked){
 }
 
 /* ── TASK CRUD ────────────────────────────────────────── */
+/* Checklist item screenshots: same staged-then-submit pattern as the case
+   modal (JS array + FormData built at save time), just with a "task" prefix
+   to avoid colliding with the Task Assignment modal's tmTask* functions. */
+let taskSelectedAttachments=[];
+function taskAttachmentEls(){
+  return {
+    input: document.getElementById('taskAttachments'),
+    drop: document.getElementById('taskUploadDrop'),
+    status: document.getElementById('taskUploadStatus'),
+    selected: document.getElementById('taskAttachmentPreview')
+  };
+}
+function taskSetUploadStatus(message='',type=''){
+  const el=taskAttachmentEls().status;
+  if(!el)return;
+  el.textContent=message;
+  el.className=`case-upload-status ${type||''}`.trim();
+}
+function taskValidateAttachment(file){
+  if(!file || !file.name)return 'Choose a valid image.';
+  if(file.size<=0)return `${file.name} is empty.`;
+  if(file.size>CASE_ATTACHMENT_MAX)return `${file.name} is larger than 5MB.`;
+  if(!CASE_ATTACHMENT_TYPES.has(file.type))return `${file.name} must be JPG, JPEG, PNG, or WEBP.`;
+  return '';
+}
+function taskAddAttachmentFiles(files){
+  const incoming=Array.from(files||[]);
+  const errors=[];
+  incoming.forEach(file=>{
+    const err=taskValidateAttachment(file);
+    if(err){errors.push(err);return;}
+    const duplicate=taskSelectedAttachments.some(item=>item.file.name===file.name && item.file.size===file.size && item.file.lastModified===file.lastModified);
+    if(!duplicate)taskSelectedAttachments.push({id:crypto.randomUUID?.()||String(Date.now()+Math.random()),file,url:URL.createObjectURL(file)});
+  });
+  renderTaskSelectedAttachments();
+  if(errors.length)taskSetUploadStatus(errors[0],'error');
+  else if(incoming.length)taskSetUploadStatus(`${taskSelectedAttachments.length} image${taskSelectedAttachments.length===1?'':'s'} ready to upload.`,'ok');
+}
+function clearTaskAttachmentState(){
+  taskSelectedAttachments.forEach(item=>{try{URL.revokeObjectURL(item.url);}catch(e){}});
+  taskSelectedAttachments=[];
+  const els=taskAttachmentEls();
+  if(els.input)els.input.value='';
+  if(els.selected)els.selected.innerHTML='';
+  taskSetUploadStatus('');
+}
+function removeTaskSelectedAttachment(id){
+  const item=taskSelectedAttachments.find(entry=>entry.id===id);
+  if(item){try{URL.revokeObjectURL(item.url);}catch(e){}}
+  taskSelectedAttachments=taskSelectedAttachments.filter(entry=>entry.id!==id);
+  renderTaskSelectedAttachments();
+  taskSetUploadStatus(taskSelectedAttachments.length?`${taskSelectedAttachments.length} image${taskSelectedAttachments.length===1?'':'s'} ready to upload.`:'');
+}
+function renderTaskSelectedAttachments(){
+  const el=taskAttachmentEls().selected;
+  if(!el)return;
+  el.innerHTML=taskSelectedAttachments.map(item=>`
+    <div class="case-attachment-tile">
+      <button class="case-attachment-thumb" type="button" onclick="openCaseImagePreview(${jsAttr(item.url)},${jsAttr(item.file.name)})">
+        <img src="${item.url}" alt="${escHtml(item.file.name)}">
+      </button>
+      <div class="case-attachment-meta"><span title="${escHtml(item.file.name)}">${escHtml(item.file.name)}</span><small>${formatBytes(item.file.size)}</small></div>
+      <button class="case-attachment-remove" type="button" onclick="removeTaskSelectedAttachment(${jsAttr(item.id)})" aria-label="Remove selected image"><i data-lucide="x" class="icon-xs"></i></button>
+    </div>
+  `).join('');
+  tracsRefreshIcons(el);
+}
+function taskPayloadFormData(id=''){
+  const fd=new FormData();
+  if(id)fd.append('id',id);
+  fd.append('title',val('taskTitle').trim());
+  fd.append('description',val('taskDesc'));
+  taskSelectedAttachments.forEach(item=>fd.append('attachments[]',item.file,item.file.name));
+  return fd;
+}
+function initTaskAttachmentUpload(){
+  const els=taskAttachmentEls();
+  if(!els.input||els.input.dataset.ready)return;
+  els.input.dataset.ready='1';
+  els.input.addEventListener('change',()=>taskAddAttachmentFiles(els.input.files));
+  if(els.drop){
+    ['dragenter','dragover'].forEach(evt=>els.drop.addEventListener(evt,e=>{e.preventDefault();els.drop.classList.add('drag');}));
+    ['dragleave','drop'].forEach(evt=>els.drop.addEventListener(evt,e=>{e.preventDefault();els.drop.classList.remove('drag');}));
+    els.drop.addEventListener('drop',e=>taskAddAttachmentFiles(e.dataTransfer?.files));
+  }
+}
 function openNewTask(){
+  initTaskAttachmentUpload();
   document.getElementById('taskModalTitle').textContent='New Task';
   ['taskId','taskTitle','taskDesc'].forEach(id=>setVal(id,''));
+  clearTaskAttachmentState();
   openModal('task');
 }
 function openEditTask(id){
+  initTaskAttachmentUpload();
   const row=document.querySelector(`[data-tid="${id}"]`);
   if(!row)return;
   document.getElementById('taskModalTitle').textContent='Edit Task';
   setVal('taskId',id);
   setVal('taskTitle',row.dataset.title||'');
   setVal('taskDesc',row.dataset.desc||'');
+  clearTaskAttachmentState();
   openModal('task');
 }
 async function saveTask(){
   const title=val('taskTitle').trim();
   if(!title){toast('Task title is required','error');return;}
   const id=val('taskId');
-  const d=await withLoadingState(document.getElementById('taskSaveBtn'),'Saving...',()=>api(id?API.TASK.UPDATE:API.TASK.CREATE,{
-    id,title,description:val('taskDesc')
-  }));
+  const d=await withLoadingState(document.getElementById('taskSaveBtn'),'Saving...',()=>taskSelectedAttachments.length
+    ? caseApiWithUploads(id?API.TASK.UPDATE:API.TASK.CREATE,taskPayloadFormData(id))
+    : api(id?API.TASK.UPDATE:API.TASK.CREATE,{id,title,description:val('taskDesc')}));
   if(!d)return;
   if(d.success){
     showModalSuccessAndClose({
       modal:'task',
       message:id?'Task updated.':'Task created.',
-      onAfterClose:()=>location.reload()
+      onAfterClose:()=>{clearTaskAttachmentState();location.reload();}
     });
   }else handleModalError({modal:'task',error:{message:d.message,status:d.status}});
 }
@@ -3769,6 +3862,90 @@ async function deleteTask(id,button=null){
     }
     else handleRequestError({message:d.message,status:d.status},'page','The task could not be deleted. Please try again.');
   });
+}
+/* "View All Checklist" popup: Active tab (the full live list, same rows/
+   behavior as the dashboard widget via shared data-tid selectors) + History
+   tab (completions), plus an Add Task button that opens the existing task
+   modal stacked on top. */
+function openChecklistAll(){
+  switchChecklistAllTab('active',true);
+  openModal('checklistAll');
+  loadChecklistActiveList();
+}
+function switchChecklistAllTab(tab,skipLoad){
+  document.querySelectorAll('#checklistAllModal [data-checklist-tab]').forEach(btn=>{
+    const active=btn.dataset.checklistTab===tab;
+    btn.classList.toggle('active',active);
+    btn.setAttribute('aria-selected',active?'true':'false');
+  });
+  document.querySelectorAll('#checklistAllModal [data-checklist-pane]').forEach(pane=>{
+    pane.hidden=pane.dataset.checklistPane!==tab;
+    pane.classList.toggle('is-active',pane.dataset.checklistPane===tab);
+  });
+  if(skipLoad)return;
+  if(tab==='active')loadChecklistActiveList();
+  else loadChecklistHistoryList();
+}
+function checklistAttachmentGridHtml(attachments){
+  if(!attachments||!attachments.length)return '';
+  return `<div class="shift-photo-grid">${attachments.map(a=>`
+    <a href="${a.image_url}" target="_blank" rel="noopener noreferrer" class="shift-photo-thumb" title="${escHtml(a.original_filename||'')}">
+      <img src="${a.thumbnail_url}" alt="${escHtml(a.original_filename||'')}" loading="lazy">
+    </a>`).join('')}</div>`;
+}
+async function loadChecklistActiveList(){
+  const list=document.getElementById('checklistAllActiveList');
+  if(list)list.innerHTML='<div class="tm-history-empty">Loading…</div>';
+  let items=[];
+  try{
+    const r=await fetch(API.TASK.LIST);
+    const d=await r.json();
+    items=(d.success && d.data && d.data.items) || [];
+  }catch(e){/* fall through to empty state */}
+  if(!list)return;
+  if(!items.length){
+    list.innerHTML='<div class="tm-history-empty">No checklist items yet.</div>';
+    return;
+  }
+  list.innerHTML=items.map(item=>`
+    <div class="task-row checkable-row ${item.is_completed?'is-completed':''}"
+      data-tid="${item.id}"
+      data-completed="${item.is_completed?'1':'0'}"
+      data-title="${escHtml(item.title||'')}"
+      data-desc="${escHtml(item.description||'')}">
+      <input type="checkbox" class="rem-check task-chk" data-unsaved-ignore ${item.is_completed?'checked':''} onchange="toggleTask(${item.id},this)">
+      <div class="flex1">
+        <div class="task-title ${item.is_completed?'done':''}">${escHtml(item.title||'Untitled')}</div>
+        ${item.description?`<div class="task-sub">${escHtml(item.description)}</div>`:''}
+        <span class="tracs-creator-meta"><i data-lucide="user" class="icon-xs"></i><span>${escHtml(item.meta_text||'')}</span></span>
+        ${checklistAttachmentGridHtml(item.attachments)}
+      </div>
+      <div class="task-acts">
+        <button class="btn btn-ghost btn-icon" onclick="openEditTask(${item.id})" title="Edit" aria-label="Edit checklist item"><i data-lucide="pencil" class="icon-sm"></i></button>
+        ${item.can_delete?`<button class="btn btn-danger btn-icon" onclick="deleteTask(${item.id},this)" title="Delete" aria-label="Delete checklist item"><i data-lucide="trash-2" class="icon-sm"></i></button>`:''}
+      </div>
+    </div>`).join('');
+  tracsRefreshIcons(list);
+}
+async function loadChecklistHistoryList(){
+  const list=document.getElementById('checklistHistoryList');
+  if(list)list.innerHTML='<div class="tm-history-empty">Loading…</div>';
+  let items=[];
+  try{
+    const r=await fetch(API.TASK.HISTORY);
+    const d=await r.json();
+    items=(d.success && d.data && d.data.items) || [];
+  }catch(e){/* fall through to empty state */}
+  if(!list)return;
+  if(!items.length){
+    list.innerHTML='<div class="tm-history-empty">No checklist history recorded yet.</div>';
+    return;
+  }
+  list.innerHTML=items.map(item=>`
+    <div class="tm-history-row">
+      <strong>${escHtml(item.description||'Checklist update')}</strong>
+      <span>${escHtml(item.creator_name||'System')} · ${escHtml(item.time_ago||'')}</span>
+    </div>`).join('');
 }
 async function toggleTask(id,checkboxOrChecked,sourceElement=null){
   const rows=[...document.querySelectorAll(`[data-tid="${id}"]`)];
@@ -3899,12 +4076,15 @@ function moveCheckableRow(row, checked){
   row.classList.add('checkable-moving');
 
   window.requestAnimationFrame(()=>{
-    if(checked){
+    const firstDone=[...parent.children].find(el=>el!==row && el.dataset?.completed==='1');
+    if(firstDone){
+      // Land right at the top of the completed group (or, when reopening,
+      // right before it) instead of always jumping to the very bottom.
+      parent.insertBefore(row, firstDone);
+    }else if(checked){
       parent.appendChild(row);
     }else{
-      const firstDone=[...parent.children].find(el=>el!==row && el.dataset?.completed==='1');
-      if(firstDone) parent.insertBefore(row, firstDone);
-      else parent.insertBefore(row, parent.firstElementChild);
+      parent.insertBefore(row, parent.firstElementChild);
     }
     window.requestAnimationFrame(()=>{
       row.classList.add('checkable-landed');
@@ -4637,6 +4817,14 @@ function tracsHandleImagePaste(e){
     if(!files.length)return;
     e.preventDefault();
     caseAddAttachmentFiles(files);
+    return;
+  }
+  const taskModal=document.getElementById('taskModal');
+  if(taskModal && !taskModal.classList.contains('hidden')){
+    const files=tracsExtractPastedImages(e);
+    if(!files.length)return;
+    e.preventDefault();
+    taskAddAttachmentFiles(files);
     return;
   }
   const tmTaskModal=document.getElementById('tmTaskModal');

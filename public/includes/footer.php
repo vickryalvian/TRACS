@@ -266,11 +266,51 @@ $_tracs_case_can_delete = isset($conn) && $conn instanceof mysqli && function_ex
     <input type="hidden" id="taskId">
     <div class="form-group"><label class="form-label">Task Title *</label><input type="text" class="form-input" id="taskTitle" placeholder="Task title, e.g. Verify pending customer escalation" autocomplete="off"></div>
     <div class="form-group"><label class="form-label">Task Details</label><textarea class="form-textarea" id="taskDesc" placeholder="Add internal notes, checklist context, or next action" style="min-height:60px"></textarea></div>
+    <div class="form-group case-upload-group">
+      <label class="form-label">Screenshots / Photos</label>
+      <input class="case-upload-input" type="file" id="taskAttachments" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" multiple>
+      <label class="case-upload-drop" id="taskUploadDrop" for="taskAttachments">
+        <i data-lucide="image-plus" class="icon-sm"></i>
+        <span>Click, drop, or paste images here</span>
+        <small>JPG, JPEG, PNG, WEBP. Max 5MB each.</small>
+      </label>
+      <div class="case-upload-status" id="taskUploadStatus" aria-live="polite"></div>
+      <div class="case-attachment-grid" id="taskAttachmentPreview"></div>
+    </div>
   </div>
   <div class="modal-foot">
     <button class="btn btn-ghost" onclick="closeModal('task')">Cancel</button>
     <button class="btn btn-primary" id="taskSaveBtn" data-loading-text="Saving..." onclick="saveTask()"><i data-lucide="check" class="icon-sm"></i>Save Task</button>
   </div>
+</div></div>
+
+<!-- VIEW ALL CHECKLIST MODAL -->
+<div class="modal-overlay hidden" id="checklistAllModal">
+<div class="modal modal-lg checklist-all-modal">
+  <div class="modal-head">
+    <div><div class="modal-title">Operational Checklist</div><div class="modal-sub">All items and completion history</div></div>
+    <button class="modal-close" onclick="closeModal('checklistAll')"><i data-lucide="x"></i></button>
+  </div>
+  <div class="modal-body checklist-all-body">
+    <div class="checklist-all-toolbar">
+      <div class="task-monitoring-tabs" role="tablist" aria-label="Checklist view">
+        <button type="button" class="task-monitoring-tab active" role="tab" aria-selected="true" data-checklist-tab="active" onclick="switchChecklistAllTab('active')"><i data-lucide="list-checks" class="icon-xs"></i>Active Checklist</button>
+        <button type="button" class="task-monitoring-tab" role="tab" aria-selected="false" data-checklist-tab="history" onclick="switchChecklistAllTab('history')"><i data-lucide="history" class="icon-xs"></i>History Checklist</button>
+      </div>
+      <button type="button" class="btn btn-primary btn-sm" onclick="openNewTask()"><i data-lucide="plus" class="icon-sm"></i>Add Task</button>
+    </div>
+    <div class="checklist-all-pane is-active" data-checklist-pane="active">
+      <div class="checklist-all-list" id="checklistAllActiveList">
+        <div class="tm-history-empty">Loading…</div>
+      </div>
+    </div>
+    <div class="checklist-all-pane" data-checklist-pane="history" hidden>
+      <div class="tm-history checklist-all-list" id="checklistHistoryList">
+        <div class="tm-history-empty">Loading…</div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('checklistAll')">Close</button></div>
 </div></div>
 
 <!-- SHIFT REPORT MODAL -->

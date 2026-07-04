@@ -800,6 +800,112 @@ class TaskManagementModel {
         $this->log((int)$assignment['task_id'], (int)$assignment['id'], $actorId, $done ? 'completed' : 'reopened', 'Synced from checklist.');
     }
 
+    /**
+     * The inverse of createAssignment(): a checklist item created directly
+     * (not via a Task Assignment) gets promoted into a full self-assigned
+     * Task Assignment, so it shows up on the Task Management & Monitoring
+     * page too. Uses the same defaults createTask() falls back to for
+     * fields the checklist widget doesn't collect (category, priority, due
+     * date, recurrence).
+     */
+    public function createFromChecklist(int $checklistId, string $title, string $description, int $actorId): array {
+        $this->conn->begin_transaction();
+        try {
+            $stmt = $this->conn->prepare("
+                INSERT INTO tracs_tasks
+                  (title, description, category, priority, assignment_scope, due_at, recurrence_type, recurrence_interval_days, reference_url, requires_review, created_by, assigned_by, created_at, updated_at)
+                VALUES (?, ?, 'custom', 'normal', 'users', NULL, 'none', 1, NULL, 0, ?, ?, NOW(), NOW())
+            ");
+            if (!$stmt) throw new RuntimeException('Database error.');
+            $stmt->bind_param('ssii', $title, $description, $actorId, $actorId);
+            if (!$stmt->execute()) throw new RuntimeException('Task could not be created.');
+            $taskId = (int)$stmt->insert_id;
+            $stmt->close();
+
+            $stmt = $this->conn->prepare("
+                INSERT INTO tracs_task_assignments
+                  (task_id, user_id, status, assigned_by, assigned_at, linked_checklist_task_id, created_at, updated_at)
+                VALUES (?, ?, 'assigned', ?, NOW(), ?, NOW(), NOW())
+            ");
+            if (!$stmt) throw new RuntimeException('Database error.');
+            $stmt->bind_param('iiii', $taskId, $actorId, $actorId, $checklistId);
+            if (!$stmt->execute()) throw new RuntimeException('Task assignment could not be created.');
+            $assignmentId = (int)$stmt->insert_id;
+            $stmt->close();
+
+            if (tracs_column_exists($this->conn, 'tracs_side_tasks', 'linked_assignment_id')) {
+                $stmt = $this->conn->prepare("UPDATE tracs_side_tasks SET linked_assignment_id = ? WHERE id = ?");
+                if ($stmt) {
+                    $stmt->bind_param('ii', $assignmentId, $checklistId);
+                    $stmt->execute();
+                    $stmt->close();
+                }
+            }
+
+            $this->log($taskId, $assignmentId, $actorId, 'assigned', 'Created from checklist.');
+            $this->conn->commit();
+            return ['task_id' => $taskId, 'assignment_id' => $assignmentId];
+        } catch (Throwable $e) {
+            $this->conn->rollback();
+            throw $e;
+        }
+    }
+
+    /** Propagate a checklist item's title/description edit up to its linked task, if any. */
+    public function syncTaskFromChecklist(int $checklistTaskId, string $title, string $description): void {
+        $stmt = $this->conn->prepare("SELECT task_id FROM tracs_task_assignments WHERE linked_checklist_task_id = ? LIMIT 1");
+        if (!$stmt) return;
+        $stmt->bind_param('i', $checklistTaskId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$row) return;
+        $taskId = (int)$row['task_id'];
+        $stmt = $this->conn->prepare("UPDATE tracs_tasks SET title=?, description=?, updated_at=NOW() WHERE id=?");
+        if ($stmt) {
+            $stmt->bind_param('ssi', $title, $description, $taskId);
+            $stmt->execute();
+            $stmt->close();
+        }
+    }
+
+    /**
+     * Deleting a checklist item removes its linked assignment too, and the
+     * whole task if that was its only assignee (mirrors deleteTask()'s own
+     * cleanup, just entered from the checklist side).
+     */
+    public function deleteTaskFromChecklist(int $checklistTaskId): void {
+        $stmt = $this->conn->prepare("SELECT id, task_id FROM tracs_task_assignments WHERE linked_checklist_task_id = ? LIMIT 1");
+        if (!$stmt) return;
+        $stmt->bind_param('i', $checklistTaskId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$row) return;
+        $assignmentId = (int)$row['id'];
+        $taskId = (int)$row['task_id'];
+
+        $count = 0;
+        $res = $this->conn->query("SELECT COUNT(*) AS c FROM tracs_task_assignments WHERE task_id = " . $taskId);
+        if ($res && ($r = $res->fetch_assoc())) $count = (int)$r['c'];
+
+        $this->conn->begin_transaction();
+        try {
+            $this->conn->query("DELETE FROM tracs_task_logs WHERE assignment_id = " . $assignmentId);
+            $stmt = $this->conn->prepare("DELETE FROM tracs_task_assignments WHERE id = ?");
+            $stmt->bind_param('i', $assignmentId);
+            $stmt->execute();
+            $stmt->close();
+            if ($count <= 1) {
+                $this->conn->query("DELETE FROM tracs_task_logs WHERE task_id = " . $taskId);
+                $this->conn->query("DELETE FROM tracs_tasks WHERE id = " . $taskId);
+            }
+            $this->conn->commit();
+        } catch (Throwable $e) {
+            $this->conn->rollback();
+        }
+    }
+
     public function log(int $taskId, ?int $assignmentId, int $actorId, string $action, string $note): void {
         $stmt = $this->conn->prepare("
             INSERT INTO tracs_task_logs (task_id, assignment_id, actor_user_id, action, note, created_at)

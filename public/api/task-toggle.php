@@ -49,7 +49,7 @@ if($log){
     $log->execute();
     $log->close();
 }
-logAct($conn,$uid,($done?'completed':'updated'),'Checklist',"Task marked ".($done?'complete':'incomplete'),$id);
+logAct($conn,$uid,($done?'completed':'updated'),'Checklist',($done?"Checklist item completed: {$taskTitle}":"Checklist item reopened: {$taskTitle}"),$id);
 if ($done) {
     $shiftActivity = new ShiftActivityService($conn, $uid);
     $shiftActivity->logActivity('checklist', $id, "Checklist completed: {$taskTitle}", null, 'completed');

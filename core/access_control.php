@@ -256,6 +256,10 @@ function tracs_can_view_handover(mysqli $conn, int $handoverId): bool {
     return tracs_can_view_owned_record($conn, 'tracs_shift_handovers', $handoverId, ['created_by'], null);
 }
 
+function tracs_can_view_checklist_item(mysqli $conn, int $taskId): bool {
+    return tracs_can_view_owned_record($conn, 'tracs_side_tasks', $taskId, ['created_by'], null);
+}
+
 /**
  * A task's screenshots are viewable by anyone with task-monitor access, plus
  * the task's creator/assigner and any of its current assignees — mirrors who

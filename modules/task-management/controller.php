@@ -247,4 +247,22 @@ class TaskManagementController {
             $this->model->syncFromChecklist($checklistTaskId, $this->actorId, $done);
         }
     }
+
+    /** @return array{task_id:int, assignment_id:int}|array{} */
+    public function createFromChecklist(int $checklistId, string $title, string $description): array {
+        if (!$this->schemaReady()) return [];
+        return $this->model->createFromChecklist($checklistId, $title, $description, $this->actorId);
+    }
+
+    public function syncTaskFromChecklist(int $checklistTaskId, string $title, string $description): void {
+        if ($this->schemaReady()) {
+            $this->model->syncTaskFromChecklist($checklistTaskId, $title, $description);
+        }
+    }
+
+    public function deleteTaskFromChecklist(int $checklistTaskId): void {
+        if ($this->schemaReady()) {
+            $this->model->deleteTaskFromChecklist($checklistTaskId);
+        }
+    }
 }

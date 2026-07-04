@@ -21,6 +21,7 @@ require_once __DIR__.'/../modules/ops-status/controller.php';
 require_once __DIR__.'/../modules/shift-reports/controller.php';
 require_once __DIR__.'/../modules/mom/controller.php';
 require_once __DIR__.'/../modules/task-management/controller.php';
+require_once __DIR__.'/api/checklist-attachment-lib.php';
 require_once __DIR__.'/../core/notifications.php';
 require_once __DIR__.'/../core/infrastructure_servers.php';
 
@@ -1444,6 +1445,7 @@ include 'includes/header.php';
                   </div>
                   <div class="tm-column-actions">
                     <span class="panel-counter <?=dashboard_counter_class($unchecked_task_count)?>" data-task-monitor-unchecked title="<?=$unchecked_task_count?> unchecked checklist items"><?=$unchecked_task_count?></span>
+                    <button type="button" class="btn btn-ghost btn-icon btn-sm" onclick="openChecklistAll()" title="View all checklist" aria-label="View all checklist"><i data-lucide="list-checks" class="icon-sm"></i></button>
                     <button type="button" class="btn btn-primary btn-sm btn-add-reveal tm-column-add" onclick="openNewTask()" title="Add checklist item" aria-label="Add checklist item">
                       <i data-lucide="plus" class="icon-sm"></i><span class="btn-add-label">Add</span>
                     </button>
@@ -1487,6 +1489,16 @@ include 'includes/header.php';
                       <div class="task-title <?=$tdone?'done':''?>"><?=$ttit?></div>
                       <?php if($tdesc): ?><div class="task-sub"><?=$tdesc?></div><?php endif; ?>
                       <?=tracs_creator_meta($t, $t['created_at'] ?? null, false)?>
+                      <?php $t_attachments = checklist_attachment_list_for_task($conn, $tid); ?>
+                      <?php if(!empty($t_attachments)): ?>
+                      <div class="shift-photo-grid">
+                        <?php foreach($t_attachments as $attachment): ?>
+                        <a href="<?=esc($attachment['image_url'])?>" target="_blank" rel="noopener noreferrer" class="shift-photo-thumb" title="<?=esc($attachment['original_filename'])?>">
+                          <img src="<?=esc($attachment['thumbnail_url'])?>" alt="<?=esc($attachment['original_filename'])?>" loading="lazy">
+                        </a>
+                        <?php endforeach; ?>
+                      </div>
+                      <?php endif; ?>
                     </div>
                     <div class="task-acts">
                       <button class="btn btn-ghost btn-icon" onclick="openEditTask(<?=$tid?>)" title="Edit" aria-label="Edit checklist item"><i data-lucide="pencil" class="icon-sm"></i></button>

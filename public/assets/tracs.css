@@ -11451,7 +11451,12 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
   align-items: center;
   position: absolute;
   top: calc(100% + 6px);
-  left: 0;
+  /* Right-anchored: the trigger sits near the right edge of the filter row
+     (right before Apply), so a left:0 popover expanded rightward off-screen.
+     Anchoring to the trigger's right edge and growing leftward keeps it
+     inside the panel/viewport instead. */
+  right: 0;
+  left: auto;
   z-index: 60;
   width: max-content;
   max-width: min(420px, 90vw);
@@ -12948,3 +12953,28 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
 .shift-summary-edit:hover { color: var(--blue); }
 .shift-summary-edit svg { width: 12px; height: 12px; }
 .shift-handover-photo-grid { padding: 0 14px 8px; margin-top: 0; }
+
+/* ── View All Checklist popup: comprehensive (active + history tabs, plus
+   an Add Task entry point), sized properly for that ─────────────────── */
+.checklist-all-modal { width: 560px; }
+.checklist-all-body { padding-top: 12px; }
+.checklist-all-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 2px;
+}
+.checklist-all-pane { display: none; }
+.checklist-all-pane.is-active { display: block; }
+.checklist-all-list {
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 2px;
+  scrollbar-gutter: stable;
+}
+#checklistAllActiveList.checklist-all-list {
+  display: flex;
+  flex-direction: column;
+}
+.checklist-all-list .tm-history-row:first-child { border-top: 0; padding-top: 0; }
