@@ -575,15 +575,6 @@ input, select, textarea { font-family: inherit }
 .nav-item-button { text-align: left }
 .nav-item:hover  { background: var(--s3); color: var(--tx2); border-color: var(--bd2) }
 .nav-item.active { background: var(--blue-lt); color: var(--blue); border-color: var(--blue-bd) }
-.nav-item.active::before {
-  content: '';
-  position: absolute;
-  left: -1px; top: 50%;
-  width: 3px; height: 16px;
-  transform: translateY(-50%);
-  background: var(--blue);
-  border-radius: 0 3px 3px 0;
-}
 .nav-item svg { width: var(--sb-icon); height: var(--sb-icon); stroke-width: 1.8 }
 .nav-icon {
   position: relative;
@@ -592,6 +583,48 @@ input, select, textarea { font-family: inherit }
   display: flex;
   align-items: center;
   justify-content: center;
+}
+/* Decorative only -- doesn't affect layout/centering of anything above.
+   .nav-item's active/hover background fills the row's own (auto) width,
+   which is correct when expanded but reads as a stretched rectangle
+   against the fixed row height once collapsed, since the row no longer
+   spans the full nav width. Sized/centered independently of the row so
+   it's always a true 36x36 square regardless of the row's width. */
+.nav-icon::before {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  width: var(--sb-row-h); height: var(--sb-row-h);
+  transform: translate(-50%, -50%);
+  border-radius: var(--sb-radius);
+  background: transparent;
+  border: 1px solid transparent;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
+  z-index: -1;
+}
+/* Collapsed rail (including while forced-collapsed by the account menu
+   being open, see .sidebar:has(.user-menu-wrap[open]) elsewhere): move
+   the active/hover highlight off the row and onto the icon-centered
+   square above, so it keeps a 1:1 ratio with equal padding on every side
+   instead of matching the row's full (non-square) width. The icon
+   itself is already exactly centered in the 64px rail by construction
+   (gutter + pad + icon/2 == half the rail width, see .sidebar above), so
+   this square is centered on it for free. Not applied on mobile, which
+   already handles its own icon-only layout independently. */
+@media (min-width: 641px) {
+  .sidebar:is(:has(.user-menu-wrap[open]), :not(:hover):not(:focus-within)) .nav-item.active,
+  .sidebar:is(:has(.user-menu-wrap[open]), :not(:hover):not(:focus-within)) .nav-item:hover {
+    background: transparent;
+    border-color: transparent;
+  }
+  .sidebar:is(:has(.user-menu-wrap[open]), :not(:hover):not(:focus-within)) .nav-item.active .nav-icon::before {
+    background: var(--blue-lt);
+    border-color: var(--blue-bd);
+  }
+  .sidebar:is(:has(.user-menu-wrap[open]), :not(:hover):not(:focus-within)) .nav-item:hover .nav-icon::before {
+    background: var(--s3);
+    border-color: var(--bd2);
+  }
 }
 .nav-label {
   flex: 1;
@@ -7528,7 +7561,14 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
   .nav-group-label, .nav-favorites, .nav-pin, .nav-chevron { display: none !important }
   .nav-item-wrap { width: auto; flex-shrink: 0 }
   .nav-item, .user-menu-row { width: 36px; height: 36px; margin: 0 2px; padding: 0; gap: 0; justify-content: center; border-radius: var(--r); flex-shrink: 0 }
-  .nav-item.active::before { left: 0; right: 0; top: auto; bottom: -1px; width: auto; height: 2px; transform: none; border-radius: 0 }
+  .nav-item.active::before {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; bottom: -1px;
+    width: auto; height: 2px;
+    background: var(--blue);
+    border-radius: 0;
+  }
   .nav-label { display: none }
   .nav-submenu { padding-left: 10px }
   .sidebar-bottom { width: auto; flex-direction: row; flex-shrink: 0; align-items: center; border-top: none; border-left: 1px solid var(--bd1); padding: 0 var(--sp-2) }
