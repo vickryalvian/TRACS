@@ -11545,6 +11545,44 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
 .tm-table th {
   white-space: normal;
 }
+.tm-sort-btn {
+  display: grid;
+  width: 100%;
+  min-height: 22px;
+  grid-template-columns: minmax(0, 1fr) 14px;
+  align-items: center;
+  gap: 6px;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: left;
+}
+.tm-sort-btn span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tm-sort-icon {
+  justify-self: end;
+  width: 12px;
+  height: 12px;
+  color: var(--tx3);
+  opacity: .62;
+  transition: color var(--dur) var(--ease), opacity var(--dur) var(--ease);
+}
+.tm-sort-btn:hover,
+.tm-sort-btn:focus-visible {
+  color: var(--blue);
+  outline: none;
+}
+.tm-sort-btn:hover .tm-sort-icon,
+.tm-sort-btn:focus-visible .tm-sort-icon,
+.tm-table th[aria-sort="ascending"] .tm-sort-icon,
+.tm-table th[aria-sort="descending"] .tm-sort-icon {
+  color: var(--blue);
+  opacity: 1;
+}
 .tm-table td strong,
 .tm-user-snapshot strong,
 .tm-intern-card strong {
@@ -11571,6 +11609,24 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.tm-clickable-row {
+  cursor: pointer;
+}
+.tm-clickable-row:hover .tm-task-title-link,
+.tm-clickable-row:focus-visible .tm-task-title-link {
+  color: var(--blue);
+}
+.tm-clickable-row:focus {
+  outline: none;
+}
+.tm-clickable-row:focus-visible td {
+  background: var(--blue-lt);
+  box-shadow: inset 0 1px 0 var(--blue-bd), inset 0 -1px 0 var(--blue-bd);
+}
+.tm-clickable-row td:last-child,
+.tm-clickable-row td:last-child * {
+  cursor: default;
 }
 /* Fixed layout with explicit column widths so the table fits the panel
    without a horizontal scrollbar, instead of growing to fit long content. */

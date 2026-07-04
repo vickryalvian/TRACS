@@ -586,7 +586,9 @@ class TaskManagementModel {
             LEFT JOIN tracs_users cb ON cb.id = t.created_by
             LEFT JOIN tracs_users ab ON ab.id = ta.assigned_by
             WHERE " . implode(' AND ', $where) . "
-            ORDER BY COALESCE(t.due_at, t.created_at) ASC, FIELD(t.priority,'urgent','high','normal','low'), t.created_at DESC
+            ORDER BY COALESCE(ta.updated_at, ta.assigned_at, t.updated_at, t.created_at) DESC,
+                     COALESCE(t.due_at, t.created_at) DESC,
+                     FIELD(t.priority,'urgent','high','normal','low')
             LIMIT 300
         ");
         if (!$stmt) {

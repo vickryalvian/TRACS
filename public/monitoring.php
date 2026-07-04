@@ -103,6 +103,18 @@ function tm_sample_note(int $n, string $noun = ''): string {
     $body = 'n=' . $n . ($noun !== '' ? ' ' . $noun : '');
     return '<em class="tm-kpi-note">' . htmlspecialchars($body, ENT_QUOTES) . '</em>';
 }
+function tm_sort_header(string $label, string $type = 'text', string $default = '', string $firstDirection = ''): string {
+    $aria = $default === 'desc' ? 'descending' : ($default === 'asc' ? 'ascending' : 'none');
+    $icon = $aria === 'descending' ? 'chevron-down' : ($aria === 'ascending' ? 'chevron-up' : 'chevrons-up-down');
+    $attrs = 'scope="col" data-tm-sort-type="' . esc($type) . '" aria-sort="' . esc($aria) . '"';
+    if ($default !== '') {
+        $attrs .= ' data-tm-default-sort="' . esc($default) . '"';
+    }
+    if ($firstDirection !== '') {
+        $attrs .= ' data-tm-sort-default-direction="' . esc($firstDirection) . '"';
+    }
+    return '<th ' . $attrs . '><button type="button" class="tm-sort-btn" data-tm-sort-button title="Sort by ' . esc($label) . '"><span>' . esc($label) . '</span><i data-lucide="' . esc($icon) . '" class="icon-xs tm-sort-icon" aria-hidden="true"></i></button></th>';
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
@@ -395,24 +407,35 @@ include __DIR__ . '/includes/header.php';
         <div class="um-empty-state"><div class="empty-ic"><i data-lucide="list-checks"></i></div><div class="empty-t">No matching tasks</div><div class="empty-sub">Assigned tasks also appear in Checklist, and timed tasks appear in Reminders.</div></div>
       <?php else: ?>
       <div class="table-wrap">
-        <table class="tracs-table tm-table">
-          <thead><tr><th>Task</th><th>Assigned To</th><th>Priority</th><th>Due</th><th>Status &amp; SLA</th><th>Last Update</th><th aria-label="Actions"></th></tr></thead>
+        <table class="tracs-table tm-table" data-tm-sortable-table>
+          <thead><tr><?=tm_sort_header('Task')?><?=tm_sort_header('Assigned To')?><?=tm_sort_header('Priority', 'number', '', 'desc')?><?=tm_sort_header('Due', 'date', '', 'desc')?><?=tm_sort_header('Status & SLA')?><?=tm_sort_header('Last Update', 'date', 'desc')?><th scope="col" aria-label="Actions"></th></tr></thead>
           <tbody>
           <?php foreach($tasks as $task):
             $delta = tm_time_delta($task['due_at'] ?? null, (string)$task['assignment_status']);
             $tm_can_edit = $can_monitor || (int)($task['created_by'] ?? 0) === $uid;
             $tm_is_done = in_array((string)$task['assignment_status'], ['completed_on_time','completed_late','reviewed','cancelled'], true);
+            $tm_detail_url = '?' . http_build_query(array_merge($_GET, ['assignment_id' => (int)$task['assignment_id']])) . '#tmDetail';
+            $tm_priority_rank = match ((string)$task['priority']) {
+              'urgent' => 4,
+              'high' => 3,
+              'normal' => 2,
+              default => 1,
+            };
+            $tm_due_sort = !empty($task['due_at']) ? strtotime((string)$task['due_at']) : 0;
+            $tm_update_sort = !empty($task['assignment_updated_at'])
+              ? strtotime((string)$task['assignment_updated_at'])
+              : (!empty($task['updated_at']) ? strtotime((string)$task['updated_at']) : (!empty($task['created_at']) ? strtotime((string)$task['created_at']) : 0));
           ?>
-            <tr>
-              <td><a class="tm-task-title-link" href="?<?=http_build_query(array_merge($_GET, ['assignment_id' => (int)$task['assignment_id']]))?>#tmDetail" title="View task details"><?=esc($task['title'])?></a><?php if(!empty($task['description'])): ?><span><?=esc($task['description'])?></span><?php endif; ?></td>
-              <td><?=esc($task['assignee_name'])?><span><?=esc($task['role_name'] ?? '')?> · <?=esc($task['division_name'] ?? 'No division')?></span></td>
-              <td><span class="badge <?=tm_badge_class($task['priority'], 'priority')?>"><?=esc(tm_label($task['priority']))?></span></td>
-              <td><?=!empty($task['due_at']) ? esc(date('d M Y, H:i', strtotime($task['due_at']))) : '—'?></td>
-              <td class="tm-status-cell">
+            <tr class="tm-clickable-row" data-tm-row-href="<?=esc($tm_detail_url)?>" tabindex="0" role="link" aria-label="View task details for <?=esc($task['title'])?>">
+              <td data-sort-value="<?=esc($task['title'])?>"><a class="tm-task-title-link" href="<?=esc($tm_detail_url)?>" title="View task details"><?=esc($task['title'])?></a><?php if(!empty($task['description'])): ?><span><?=esc($task['description'])?></span><?php endif; ?></td>
+              <td data-sort-value="<?=esc(($task['assignee_name'] ?? '') . ' ' . ($task['role_name'] ?? '') . ' ' . ($task['division_name'] ?? ''))?>"><?=esc($task['assignee_name'])?><span><?=esc($task['role_name'] ?? '')?> · <?=esc($task['division_name'] ?? 'No division')?></span></td>
+              <td data-sort-value="<?=esc((string)$tm_priority_rank)?>"><span class="badge <?=tm_badge_class($task['priority'], 'priority')?>"><?=esc(tm_label($task['priority']))?></span></td>
+              <td data-sort-value="<?=esc((string)$tm_due_sort)?>"><?=!empty($task['due_at']) ? esc(date('d M Y, H:i', strtotime($task['due_at']))) : '—'?></td>
+              <td class="tm-status-cell" data-sort-value="<?=esc(tm_label((string)$task['assignment_status']))?>">
                 <span class="badge <?=tm_badge_class($task['assignment_status'])?>"><?=esc(tm_label($task['assignment_status']))?></span>
                 <?php if($delta['label'] !== '-'): ?><span class="tm-sla <?=esc($delta['class'])?>"><?=esc($delta['label'])?></span><?php endif; ?>
               </td>
-              <td><?=!empty($task['assignment_updated_at']) ? esc(date('d M Y, H:i', strtotime($task['assignment_updated_at']))) : '—'?></td>
+              <td data-sort-value="<?=esc((string)$tm_update_sort)?>"><?=!empty($task['assignment_updated_at']) ? esc(date('d M Y, H:i', strtotime($task['assignment_updated_at']))) : '—'?></td>
               <td>
                 <div class="row-action-group tm-actions">
                   <details class="row-action-menu">

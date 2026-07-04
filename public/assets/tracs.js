@@ -4141,6 +4141,110 @@ function syncTaskMonitoringReminderMirrors(id, completed){
   });
 }
 
+function tmSortValue(row,index,type){
+  const cell=row.children[index];
+  let raw=cell?.dataset.sortValue;
+  if(raw == null) raw=cell?.textContent || '';
+  if(type === 'number' || type === 'date'){
+    const parsed=Number.parseFloat(String(raw).replace(/,/g,''));
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return String(raw).trim().toLocaleLowerCase();
+}
+
+function tmSortIconName(state){
+  if(state === 'ascending')return 'chevron-up';
+  if(state === 'descending')return 'chevron-down';
+  return 'chevrons-up-down';
+}
+
+function tmSyncSortHeaderIcon(header){
+  const icon=header.querySelector('.tm-sort-icon');
+  if(icon)icon.setAttribute('data-lucide',tmSortIconName(header.getAttribute('aria-sort') || 'none'));
+}
+
+function tmSortTableByHeader(header,forcedDirection=''){
+  const table=header.closest('table[data-tm-sortable-table]');
+  const tbody=table?.tBodies?.[0];
+  if(!table || !tbody)return;
+  const headers=[...(table.tHead?.querySelectorAll('th') || [])];
+  const index=headers.indexOf(header);
+  if(index < 0)return;
+  const type=header.dataset.tmSortType || 'text';
+  const current=header.getAttribute('aria-sort') || 'none';
+  const preferred=header.dataset.tmSortDefaultDirection || ((type === 'date' || type === 'number') ? 'desc' : 'asc');
+  const direction=forcedDirection || (current === 'ascending' ? 'desc' : (current === 'descending' ? 'asc' : preferred));
+  const rows=[...tbody.rows].map((row,originalIndex)=>({
+    row,
+    originalIndex,
+    value:tmSortValue(row,index,type)
+  }));
+  rows.sort((a,b)=>{
+    let result=0;
+    if(type === 'number' || type === 'date'){
+      result=a.value-b.value;
+    }else{
+      result=String(a.value).localeCompare(String(b.value),undefined,{numeric:true,sensitivity:'base'});
+    }
+    if(result === 0)return a.originalIndex-b.originalIndex;
+    return direction === 'desc' ? -result : result;
+  });
+  rows.forEach(item=>tbody.appendChild(item.row));
+  headers.forEach(other=>{
+    if(other.dataset.tmSortType){
+      other.setAttribute('aria-sort','none');
+      tmSyncSortHeaderIcon(other);
+    }
+  });
+  header.setAttribute('aria-sort',direction === 'desc' ? 'descending' : 'ascending');
+  tmSyncSortHeaderIcon(header);
+  table.dataset.tmSortColumn=String(index);
+  table.dataset.tmSortDirection=direction;
+  tracsRefreshIcons(table);
+}
+
+function tmIsInteractiveRowTarget(target){
+  if(!(target instanceof Element))return false;
+  return !!target.closest('a,button,input,select,textarea,label,summary,details,[role="button"],[contenteditable="true"],.row-action-menu,.row-action-popover');
+}
+
+function tmOpenRowDetail(row){
+  const href=row?.dataset.tmRowHref;
+  if(href)window.location.assign(href);
+}
+
+function initTaskManagementTables(root=document){
+  root.querySelectorAll('table[data-tm-sortable-table]').forEach(table=>{
+    if(table.dataset.tmTableReady === '1')return;
+    table.dataset.tmTableReady='1';
+    const headers=[...(table.tHead?.querySelectorAll('th[data-tm-sort-type]') || [])];
+    headers.forEach(header=>{
+      const button=header.querySelector('[data-tm-sort-button]');
+      header.setAttribute('aria-sort',header.getAttribute('aria-sort') || 'none');
+      tmSyncSortHeaderIcon(header);
+      button?.addEventListener('click',event=>{
+        event.preventDefault();
+        tmSortTableByHeader(header);
+      });
+    });
+    const defaultHeader=headers.find(header=>header.dataset.tmDefaultSort);
+    if(defaultHeader)tmSortTableByHeader(defaultHeader,defaultHeader.dataset.tmDefaultSort || 'desc');
+    table.addEventListener('click',event=>{
+      const target=event.target instanceof Element ? event.target : null;
+      const row=target?.closest('.tm-clickable-row[data-tm-row-href]');
+      if(!row || !table.contains(row) || tmIsInteractiveRowTarget(target))return;
+      tmOpenRowDetail(row);
+    });
+    table.addEventListener('keydown',event=>{
+      const target=event.target instanceof Element ? event.target : null;
+      const row=target?.closest('.tm-clickable-row[data-tm-row-href]');
+      if(!row || event.target !== row || !['Enter',' '].includes(event.key))return;
+      event.preventDefault();
+      tmOpenRowDetail(row);
+    });
+  });
+}
+
 function initTaskMonitoringTabs(){
   const root=document.querySelector('[data-task-monitoring]');
   if(!root)return;
@@ -6381,6 +6485,7 @@ if (document.readyState === 'loading') {
 /* ── Calendar Initialization (Flatpickr) ── */
 document.addEventListener('DOMContentLoaded', () => {
   initTaskMonitoringTabs();
+  initTaskManagementTables();
 
   // Only init visible inputs, avoid hidden master inputs
   document.querySelectorAll('.form-input[type="date"], .form-input[type="datetime-local"], .form-input[type="time"], .dt-date-input').forEach(el => {
