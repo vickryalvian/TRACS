@@ -4,6 +4,75 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Checklist History Rework, Task Management Wiring, Monitoring Filter Fix (2026-07-05 ~04:07 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch
+`fix/monitoring-task-assignment-routing-and-modal`, commit `dcb8a05`.
+16 files (12 modified + 4 new).
+File backup `/opt/tracs/backups/checklist-taskmgmt-wiring-20260705-040751/` (12 files).
+DB backup (pre-migration, full gzip)
+`/opt/tracs/backups/db-pre-checklist-taskmgmt-wiring-20260705-040712/tracs-full.sql.gz`.
+
+Three user-requested changes in one deploy:
+
+1. **"Checklist History" reworked into "View All Checklist"**: a bigger
+   `modal-lg` popup with Active/History tabs and an Add Task button in the
+   toolbar. Active tab lists every checklist item (not just the widget's
+   compact scroll), reusing the same `toggleTask`/`openEditTask`/`deleteTask`
+   wiring via shared `data-tid` so it stays in sync with the dashboard widget
+   automatically — no separate state to manage. History tab's description
+   text now names the actual item instead of a generic "Task marked
+   complete". Checklist items also gained click/drag/paste screenshot
+   upload, backed by a new `tracs_checklist_attachments` table.
+2. **Checklist ↔ Task Management wiring**: checklist items created from the
+   dashboard widget now also create a self-assigned Task Assignment
+   (`tracs_tasks` + `tracs_task_assignments`), mirroring the existing reverse
+   flow where assigning a task already creates a linked checklist item.
+   Toggle/edit/delete all propagate to the linked assignment; deleting a
+   checklist item also removes the assignment and the task if it was the
+   only assignee. User explicitly chose this deeper integration over a
+   read-only alternative after being asked directly, since it's a bigger,
+   less reversible change (touches the already-live task-management sync
+   logic).
+3. **Fix**: monitoring.php's "More filters" popover was anchored `left:0` on
+   a trigger sitting near the right edge of the filter row, so it overflowed
+   off-screen (cut off, overlapping the Apply button) — screenshotted by the
+   user. Right-anchored it instead. It also didn't close on an outside
+   click; added it to the app's existing shared popup-close mechanism
+   (`TRACS_POPUP_DETAILS_SELECTOR`) rather than writing a one-off handler.
+
+Caught and fixed a real testing mistake during local verification: nested
+`begin_transaction()` calls implicitly commit the outer transaction in
+MySQL/MariaDB, so an early "rolled back" verification actually left a real
+row in the dev DB. Traced it, cleaned it up by exact id+title match (never
+positional), and re-verified correctly afterward — flagged here since it's
+a pattern worth remembering for any future test harness in this codebase.
+
+Migration verified on prod in a controlled run after deploy (DB backed up
+first, not wrapped in a redundant outer transaction this time): the checklist
+→ task-assignment lifecycle (create → mirror created → permission check →
+delete cascade) ran for real against prod, then was cleaned up via the
+production `deleteTaskFromChecklist()` cascade itself plus one explicit
+delete-by-exact-id for the checklist row. Final sweep confirms 0 stray rows
+and 0 rows in the new attachments table.
+
+Deploy steps: full DB dump → schema dependency check (`linked_assignment_id`
+column, `tracs_tasks`/`tracs_task_assignments` tables already present on
+prod from the earlier Task Assignment deploy) → drift-check against
+`fb4812c` baseline (all 12 modified files matched, 0 drift) → back up prod
+files → `scp` 16 files → `chown vickry:www-data` → `php -l` all 14 PHP files
+(clean) → sha256 local↔prod verified for all 16 → `systemctl reload
+php8.3-fpm`.
+
+Verification:
+- `https://tracs.vickry.id/login.php` returns `200`
+- `https://tracs.vickry.id/monitoring.php`, `/checklist.php`,
+  `/shift-reports.php` all return `302` (not `500`)
+- `https://tracs.vickry.id/api/checklist-attachment.php`,
+  `/api/checklist-history.php`, `/api/checklist-list.php` all return `401`
+  (routes + auth gate working)
+
 ## Deployed — Consistent Click/Drag/Paste Image Upload Across Modals (2026-07-05 ~02:27 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
