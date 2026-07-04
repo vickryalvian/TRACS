@@ -4,6 +4,55 @@ Status: Deployed successfully
 Completed: 2026-06-29 08:54 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Sidebar Profile Row: Blank Label Fix + Show Name Instead of Email (2026-07-04 ~09:27 WIB)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
+`https://tracs.vickry.id`). Branch
+`fix/monitoring-task-assignment-routing-and-modal`, commit `351fb23`.
+1 file: `public/includes/header.php`.
+Backup `/opt/tracs/backups/profile-name-display-20260704-092738/`.
+
+User reported the username/email next to the sidebar avatar had gone
+blank, and asked to show the display name there instead of the email
+once fixed.
+
+- **Root cause of the blank label**: `header.php:373` rendered
+  `$user_email` directly — a variable each including page must pass in
+  itself — while the dropdown header just above it (`.user-menu-head`)
+  already used `$_header_user['display_name']`, populated by a DB fetch
+  inside `header.php` itself and therefore reliable regardless of what
+  the calling page passed in. When `$user_email` wasn't set on a given
+  page, the row went blank while the dropdown (built from
+  `$_header_user`) still worked — matching the exact symptom reported.
+- **Fix**: switched the row's label to the same
+  `$_header_user['display_name'] ?? ($_SESSION['user_name'] ?? $user_email ?? 'User')`
+  fallback chain already proven correct at the dropdown header, which
+  both fixes the blank-label bug at its source (no longer depends on the
+  fragile per-page variable) and satisfies the "show name instead of
+  email" request in the same change.
+
+Verified pre-deploy against the docker dev stack with two real sessions:
+
+- `admin@tracs.local` (super_admin): sidebar row now reads "Vickry"
+  instead of the email, visible in both light and dark theme,
+  screenshot-confirmed.
+- `gagas@idcloudhost.co.id` (operator/agent): sidebar row reads "Gagas" —
+  confirms the fallback isn't admin-specific and works the same for any
+  role.
+
+Verification on production:
+
+- `php -l` clean.
+- Drift-check before deploy: prod's `header.php` sha256 matched the
+  pre-fix commit exactly — no untracked drift.
+- Post-deploy sha256 matches the local working tree byte-for-byte.
+- `sudo systemctl reload php8.3-fpm` (opcache cleared); `nginx` and
+  `php8.3-fpm` both `active`.
+- `https://tracs.vickry.id/login.php` → 200.
+
+Branch remains pushed for review/PR. Production tracks the working tree via
+file-copy deploy (not a `main` pull).
+
 ## Deployed — Mobile Profile-Menu Z-Index Leak + Reduced-Motion Gaps (2026-07-04 ~09:15 WIB)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`,
