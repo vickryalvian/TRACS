@@ -954,7 +954,6 @@ foreach($task_monitor_regular_reminders as $r){
 }
 
 $task_monitor_assignment_alert_items = [];
-$task_monitor_assignment_awareness = [];
 foreach($task_assignment_rows as $assignment){
   if(!dashboard_assignment_active($assignment)) continue;
   $status = dashboard_assignment_status_meta($assignment);
@@ -971,11 +970,7 @@ foreach($task_assignment_rows as $assignment){
     'assignment',
     $aid
   );
-  if((int)($assignment['user_id'] ?? 0) === $uid && in_array($status['key'], ['new','due-soon','overdue'], true)){
-    $task_monitor_assignment_awareness[] = $assignment;
-  }
 }
-$task_monitor_assignment_awareness = array_slice($task_monitor_assignment_awareness, 0, 3);
 $task_monitor_active_assignment_count = count(array_filter($task_assignment_rows, 'dashboard_assignment_active'));
 
 $task_monitor_meeting_items = [];
@@ -1425,13 +1420,13 @@ include 'includes/header.php';
             </div>
           </div>
           <div class="panel-right task-monitoring-actions">
-            <a href="checklist.php" class="btn btn-ghost btn-sm" data-task-monitor-all>All →</a>
+            <a href="monitoring.php" class="btn btn-ghost btn-sm" data-task-monitor-all>All →</a>
           </div>
         </div>
 
         <div class="task-monitoring-tabs" role="tablist" aria-label="Task Monitoring">
-          <button type="button" class="task-monitoring-tab active" role="tab" aria-selected="true" aria-controls="tm-pane-checklist" data-task-monitor-tab="checklist" data-all-href="checklist.php"><i data-lucide="list-checks" class="icon-xs"></i>Checklist and Reminder</button>
-          <button type="button" class="task-monitoring-tab" role="tab" aria-selected="false" aria-controls="tm-pane-assignments" data-task-monitor-tab="assignments" data-all-href="<?=esc($task_monitor_base_href)?>"><i data-lucide="user-check" class="icon-xs"></i>Assignments<?php if($task_monitor_active_assignment_count > 0): ?><span class="tm-tab-count"><?=esc($task_monitor_active_assignment_count)?></span><?php endif; ?></button>
+          <button type="button" class="task-monitoring-tab active" role="tab" aria-selected="true" aria-controls="tm-pane-checklist" data-task-monitor-tab="checklist" data-all-href="monitoring.php"><i data-lucide="list-checks" class="icon-xs"></i>Checklist and Reminder</button>
+          <button type="button" class="task-monitoring-tab" role="tab" aria-selected="false" aria-controls="tm-pane-assignments" data-task-monitor-tab="assignments" data-all-href="monitoring.php"><i data-lucide="user-check" class="icon-xs"></i>Assignments<?php if($task_monitor_active_assignment_count > 0): ?><span class="tm-tab-count"><?=esc($task_monitor_active_assignment_count)?></span><?php endif; ?></button>
         </div>
 
         <div class="task-monitoring-viewport">
@@ -1455,20 +1450,6 @@ include 'includes/header.php';
                   <div class="prog-track"><div class="prog-fill" id="prog-fill" style="width:<?=$pct?>%"></div></div>
                   <div class="prog-info"><span>Progress</span><span id="prog-pct"><?=$pct?>%</span></div>
                 </div>
-                <?php if(!empty($task_monitor_assignment_awareness)): ?>
-                <div class="tm-assignment-awareness">
-                  <?php foreach($task_monitor_assignment_awareness as $assignment):
-                    $status = dashboard_assignment_status_meta($assignment);
-                    $aid = (int)($assignment['assignment_id'] ?? 0);
-                  ?>
-                  <button type="button" class="tm-assignment-awareness-item is-<?=esc($status['key'])?>" data-task-monitor-switch="assignments" data-assignment-href="<?=esc($aid > 0 ? $task_monitor_base_href.'?assignment_id='.$aid : $task_monitor_base_href)?>">
-                    <span class="tm-type-badge">Assigned</span>
-                    <span>New assigned task: <?=esc($assignment['title'] ?? 'Untitled assignment')?></span>
-                    <i data-lucide="arrow-right" class="icon-xs"></i>
-                  </button>
-                  <?php endforeach; ?>
-                </div>
-                <?php endif; ?>
                 <?php if(empty($dashboard_tasks_sorted)): ?>
                 <div class="tm-empty"><i data-lucide="list-checks" class="icon-sm"></i><span>No active checklist items</span></div>
                 <?php else: ?>

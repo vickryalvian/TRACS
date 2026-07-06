@@ -3865,24 +3865,25 @@ async function deleteTask(id,button=null){
 }
 /* "View All Checklist" popup: Active tab (the full live list, same rows/
    behavior as the dashboard widget via shared data-tid selectors) + History
-   tab (completions), plus an Add Task button that opens the existing task
-   modal stacked on top. */
+   tab (completions). */
 function openChecklistAll(){
   switchChecklistAllTab('active',true);
   openModal('checklistAll');
-  loadChecklistActiveList();
+  loadChecklistActiveList(true);
 }
 function switchChecklistAllTab(tab,skipLoad){
-  document.querySelectorAll('#checklistAllModal [data-checklist-tab]').forEach(btn=>{
+  const modal=document.getElementById('checklistAllModal');
+  const current=modal?.querySelector('[data-checklist-tab].active')?.dataset.checklistTab || '';
+  modal?.querySelectorAll('[data-checklist-tab]').forEach(btn=>{
     const active=btn.dataset.checklistTab===tab;
     btn.classList.toggle('active',active);
     btn.setAttribute('aria-selected',active?'true':'false');
   });
-  document.querySelectorAll('#checklistAllModal [data-checklist-pane]').forEach(pane=>{
+  modal?.querySelectorAll('[data-checklist-pane]').forEach(pane=>{
     pane.hidden=pane.dataset.checklistPane!==tab;
     pane.classList.toggle('is-active',pane.dataset.checklistPane===tab);
   });
-  if(skipLoad)return;
+  if(skipLoad || current===tab)return;
   if(tab==='active')loadChecklistActiveList();
   else loadChecklistHistoryList();
 }
@@ -3893,8 +3894,9 @@ function checklistAttachmentGridHtml(attachments){
       <img src="${a.thumbnail_url}" alt="${escHtml(a.original_filename||'')}" loading="lazy">
     </a>`).join('')}</div>`;
 }
-async function loadChecklistActiveList(){
+async function loadChecklistActiveList(force=false){
   const list=document.getElementById('checklistAllActiveList');
+  if(!force && list?.dataset.loaded==='1')return;
   if(list)list.innerHTML='<div class="tm-history-empty">Loading…</div>';
   let items=[];
   try{
@@ -3905,6 +3907,7 @@ async function loadChecklistActiveList(){
   if(!list)return;
   if(!items.length){
     list.innerHTML='<div class="tm-history-empty">No checklist items yet.</div>';
+    list.dataset.loaded='1';
     return;
   }
   list.innerHTML=items.map(item=>`
@@ -3925,10 +3928,12 @@ async function loadChecklistActiveList(){
         ${item.can_delete?`<button class="btn btn-danger btn-icon" onclick="deleteTask(${item.id},this)" title="Delete" aria-label="Delete checklist item"><i data-lucide="trash-2" class="icon-sm"></i></button>`:''}
       </div>
     </div>`).join('');
+  list.dataset.loaded='1';
   tracsRefreshIcons(list);
 }
-async function loadChecklistHistoryList(){
+async function loadChecklistHistoryList(force=false){
   const list=document.getElementById('checklistHistoryList');
+  if(!force && list?.dataset.loaded==='1')return;
   if(list)list.innerHTML='<div class="tm-history-empty">Loading…</div>';
   let items=[];
   try{
@@ -3939,6 +3944,7 @@ async function loadChecklistHistoryList(){
   if(!list)return;
   if(!items.length){
     list.innerHTML='<div class="tm-history-empty">No checklist history recorded yet.</div>';
+    list.dataset.loaded='1';
     return;
   }
   list.innerHTML=items.map(item=>`
@@ -3946,6 +3952,7 @@ async function loadChecklistHistoryList(){
       <strong>${escHtml(item.description||'Checklist update')}</strong>
       <span>${escHtml(item.creator_name||'System')} · ${escHtml(item.time_ago||'')}</span>
     </div>`).join('');
+  list.dataset.loaded='1';
 }
 async function toggleTask(id,checkboxOrChecked,sourceElement=null){
   const rows=[...document.querySelectorAll(`[data-tid="${id}"]`)];
@@ -3979,6 +3986,8 @@ async function toggleTask(id,checkboxOrChecked,sourceElement=null){
       item.querySelector('.task-title')?.classList.toggle('done',checked);
       item.querySelectorAll('.task-chk').forEach(taskBox=>{taskBox.checked=checked;});
     });
+    const historyList=document.getElementById('checklistHistoryList');
+    if(historyList)historyList.dataset.loaded='0';
     const badgeContainer=document.getElementById('notif-badge-container');
     if(badgeContainer && previousChecked!==checked){
       const current=parseInt(badgeContainer.dataset.uncheckedChecklist || '0',10) || 0;
@@ -4269,11 +4278,6 @@ function initTaskMonitoringTabs(){
   };
   tabs.forEach(tab=>{
     tab.addEventListener('click',()=>activate(tab.dataset.taskMonitorTab));
-  });
-  root.querySelectorAll('[data-task-monitor-switch]').forEach(control=>{
-    control.addEventListener('click',()=>{
-      activate(control.dataset.taskMonitorSwitch || 'assignments');
-    });
   });
   activate(tabs.find(tab=>tab.classList.contains('active'))?.dataset.taskMonitorTab || tabs[0]?.dataset.taskMonitorTab);
   refreshTaskMonitoringCounters();

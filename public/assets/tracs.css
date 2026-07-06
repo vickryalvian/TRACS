@@ -1950,36 +1950,6 @@ input, select, textarea { font-family: inherit }
   margin-top: 5px;
 }
 
-.tm-assignment-awareness {
-  display: grid;
-  gap: 5px;
-  padding: 8px 10px;
-  border-bottom: 1px solid color-mix(in srgb, var(--bd1) 64%, transparent);
-  background: color-mix(in srgb, var(--blue-lt) 42%, transparent);
-}
-
-.tm-assignment-awareness-item {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 7px;
-  min-height: 30px;
-  padding: 0 8px;
-  border: 1px solid color-mix(in srgb, var(--blue-bd) 66%, transparent);
-  border-radius: var(--r);
-  background: color-mix(in srgb, var(--s2) 74%, transparent);
-  color: var(--tx2);
-  font-size: 11px;
-  font-weight: 700;
-  text-align: left;
-}
-
-.tm-assignment-awareness-item span:nth-child(2) {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .tm-scroll {
   flex: 1 1 auto;
   min-height: 0;
@@ -2268,8 +2238,7 @@ input, select, textarea { font-family: inherit }
   color: var(--red);
 }
 
-.type-assignment .tm-type-badge,
-.tm-assignment-awareness-item .tm-type-badge {
+.type-assignment .tm-type-badge {
   border-color: color-mix(in srgb, var(--green) 32%, transparent);
   background: color-mix(in srgb, var(--green-lt) 88%, var(--s2));
   color: var(--green);
@@ -11505,6 +11474,11 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
 }
 .tm-panel {
   overflow: visible;
+  border-radius: var(--radius-xl);
+}
+.tm-panel > .panel-head:first-child,
+.tm-detail-panel > .panel-head:first-child {
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
 }
 .tm-split-layout {
   display: grid;
@@ -11519,6 +11493,7 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
      while the header-overlap report is investigated further. */
   position: static;
   overflow: visible;
+  border-radius: var(--radius-xl);
   box-shadow: none;
   /* Clear the sticky topbar/ticker when "View details" jumps to #tmDetail. */
   scroll-margin-top: 76px;
@@ -11645,13 +11620,13 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
   z-index: auto;
 }
 /* 7 columns after merging Status + Time Left/Overdue into one Status & SLA cell. */
-.tm-table th:nth-child(1), .tm-table td:nth-child(1) { width: 23%; }
-.tm-table th:nth-child(2), .tm-table td:nth-child(2) { width: 16%; }
+.tm-table th:nth-child(1), .tm-table td:nth-child(1) { width: 24%; }
+.tm-table th:nth-child(2), .tm-table td:nth-child(2) { width: 17%; }
 .tm-table th:nth-child(3), .tm-table td:nth-child(3) { width: 8%; }
 .tm-table th:nth-child(4), .tm-table td:nth-child(4) { width: 14%; }
-.tm-table th:nth-child(5), .tm-table td:nth-child(5) { width: 14%; }
-.tm-table th:nth-child(6), .tm-table td:nth-child(6) { width: 15%; }
-.tm-table th:nth-child(7), .tm-table td:nth-child(7) { width: 10%; white-space: nowrap; }
+.tm-table th:nth-child(5), .tm-table td:nth-child(5) { width: 15%; }
+.tm-table th:nth-child(6), .tm-table td:nth-child(6) { width: 16%; }
+.tm-table th:nth-child(7), .tm-table td:nth-child(7) { width: 6%; text-align: right; white-space: nowrap; }
 /* Merged Status & SLA cell: status pill with subordinate overdue/time-left caption. */
 .tm-status-cell { white-space: normal; }
 .tm-status-cell .tm-sla {
@@ -13010,21 +12985,25 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
 .shift-summary-edit svg { width: 12px; height: 12px; }
 .shift-handover-photo-grid { padding: 0 14px 8px; margin-top: 0; }
 
-/* ── View All Checklist popup: comprehensive (active + history tabs, plus
-   an Add Task entry point), sized properly for that ─────────────────── */
+/* ── View All Checklist popup: comprehensive active + history tabs. */
 .checklist-all-modal { width: 560px; }
 .checklist-all-body { padding-top: 12px; }
 .checklist-all-toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 10px;
   margin-bottom: 2px;
 }
 .checklist-all-pane { display: none; }
-.checklist-all-pane.is-active { display: block; }
+.checklist-all-pane.is-active {
+  display: block;
+  height: min(420px, 58vh);
+  min-height: 260px;
+}
 .checklist-all-list {
-  max-height: 420px;
+  height: 100%;
+  max-height: none;
   overflow-y: auto;
   padding-right: 2px;
   scrollbar-gutter: stable;

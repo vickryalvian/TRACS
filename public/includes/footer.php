@@ -297,7 +297,6 @@ $_tracs_case_can_delete = isset($conn) && $conn instanceof mysqli && function_ex
         <button type="button" class="task-monitoring-tab active" role="tab" aria-selected="true" data-checklist-tab="active" onclick="switchChecklistAllTab('active')"><i data-lucide="list-checks" class="icon-xs"></i>Active Checklist</button>
         <button type="button" class="task-monitoring-tab" role="tab" aria-selected="false" data-checklist-tab="history" onclick="switchChecklistAllTab('history')"><i data-lucide="history" class="icon-xs"></i>History Checklist</button>
       </div>
-      <button type="button" class="btn btn-primary btn-sm" onclick="openNewTask()"><i data-lucide="plus" class="icon-sm"></i>Add Task</button>
     </div>
     <div class="checklist-all-pane is-active" data-checklist-pane="active">
       <div class="checklist-all-list" id="checklistAllActiveList">
