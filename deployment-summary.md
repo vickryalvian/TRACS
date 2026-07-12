@@ -1,8 +1,13 @@
 # TRACS Deployment Summary
 
 Status: Deployed successfully
-Completed: 2026-06-29 08:54 WIB
+Completed: 2026-07-12 15:45 WIB
 Domain: https://tracs.vickry.id
+
+## Deployed — Task Monitoring Sorting, Routing, and Recurrence Update (2026-07-12)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `fix/monitoring-task-assignment-routing-and-modal`, commit `7755a40`.
+Deployed via secure rsync and php-fpm reload.
 
 ## Deployed — Checklist History Rework, Task Management Wiring, Monitoring Filter Fix (2026-07-05 ~04:07 WIB)
 
