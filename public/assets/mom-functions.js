@@ -7,14 +7,218 @@
 // MODAL MANAGEMENT
 // ═══════════════════════════════════════════════════════════════
 
-function momReloadAfterToast(delay=420){
-  if(window.reloadAfterToast)window.reloadAfterToast(delay);
-  else setTimeout(()=>location.reload(),delay);
-}
-
 function momNavigateAfterToast(url,delay=420){
   if(window.navigateAfterToast)window.navigateAfterToast(url,delay);
   else setTimeout(()=>{location.href=url;},delay);
+}
+
+function momMarkSaved(root){
+  window.TRACSUnsavedChanges?.markSaved(root || null);
+  if(root instanceof Element){
+    root.dispatchEvent(new CustomEvent('tracs:save-success',{bubbles:true,detail:{root}}));
+  }
+}
+
+function momEscape(value=''){
+  return typeof escHtml === 'function'
+    ? escHtml(value)
+    : String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
+}
+
+function momFlash(node){
+  if(!node)return;
+  node.classList.remove('tracs-row-live-updated');
+  void node.offsetWidth;
+  node.classList.add('tracs-row-live-updated');
+  setTimeout(()=>node.classList.remove('tracs-row-live-updated'),1400);
+  if(window.lucide) lucide.createIcons({nodes:node.querySelectorAll('[data-lucide]')});
+}
+
+function momRemoveNode(node){
+  if(!node)return;
+  node.classList.add('tracs-row-removing');
+  setTimeout(()=>node.remove(),190);
+}
+
+function momTimeNow(){
+  return new Date().toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit',hour12:false});
+}
+
+function momAppendAgendaItem(id, topic){
+  const host=document.getElementById('momAgendaTopic')?.closest('.section-body');
+  if(!host)return;
+  const div=document.createElement('div');
+  div.className='agenda-item agenda-item-pending';
+  div.dataset.agendaId=String(id);
+  div.innerHTML=`<input type="checkbox" class="agenda-check" data-unsaved-ignore onchange="toggleAgendaItem(${id},this.checked)"><div class="agenda-content"><div class="agenda-topic">${momEscape(topic)}</div></div><button class="btn btn-ghost btn-icon btn-sm mom-item-delete" onclick="deleteAgendaItem(${id})" title="Delete" aria-label="Delete agenda item"><i data-lucide="x" class="icon-xs"></i></button>`;
+  host.appendChild(div);
+  momFlash(div);
+}
+
+function momAppendNote(id, content, type='discussion'){
+  const host=document.getElementById('momNotesArea');
+  if(!host)return;
+  const div=document.createElement('div');
+  div.className=`discussion-note discussion-note-${type}`;
+  div.dataset.noteId=String(id);
+  div.innerHTML=`<div class="note-header"><span class="note-type">${momEscape(type.charAt(0).toUpperCase()+type.slice(1))}</span><span class="note-time">${momEscape(momTimeNow())}</span><button class="btn btn-ghost btn-icon btn-xs mom-item-delete" onclick="deleteNote(${id})" title="Delete" aria-label="Delete discussion note"><i data-lucide="x" class="icon-xs"></i></button></div><div class="note-text" onmouseup="handleTextSelection(this.parentElement.parentElement)">${momEscape(content).replace(/\n/g,'<br>')}</div>`;
+  host.appendChild(div);
+  momFlash(div);
+}
+
+function momAppendDecision(id, decision, rationale='', owner=''){
+  const host=document.getElementById('momInlineDecisionText')?.closest('.section-body');
+  if(!host)return;
+  const div=document.createElement('div');
+  div.className='decision-card';
+  div.innerHTML=`<div class="decision-head"><strong>${momEscape(decision)}</strong><button class="btn btn-ghost btn-icon btn-xs mom-item-delete" onclick="deleteDecision(${id})" title="Delete" aria-label="Delete decision"><i data-lucide="x" class="icon-xs"></i></button></div>${rationale ? `<div class="decision-rationale"><span class="label">Rationale:</span> ${momEscape(rationale)}</div>` : ''}${owner ? `<div class="decision-owner"><span class="label">Owner:</span> ${momEscape(owner)}</div>` : ''}`;
+  host.appendChild(div);
+  momFlash(div);
+}
+
+function momAppendAction(id, title, description='', assignee='', priority='medium', dueDate=''){
+  const host=document.getElementById('momInlineActionTitle')?.closest('.section-body');
+  if(!host)return;
+  const div=document.createElement('div');
+  div.className=`action-item action-item-${priority} action-item-pending`;
+  div.dataset.aid=String(id);
+  div.innerHTML=`<input type="checkbox" class="action-check" data-unsaved-ignore onchange="completeAction(${id},this.checked)"><div class="action-content"><div class="action-title">${momEscape(title)}</div>${description ? `<div class="action-desc">${momEscape(description)}</div>` : ''}<div class="action-meta"><span class="action-owner">${momEscape(assignee || '—')}</span>${dueDate ? `<span class="action-due">${momEscape(dueDate)}</span>` : ''}</div></div><div class="action-btns"><button class="btn btn-ghost btn-icon btn-sm" onclick="createReminderFromAction(${id})" title="Create Reminder" aria-label="Create reminder from action"><i data-lucide="bell" class="icon-sm"></i></button><button class="btn btn-ghost btn-icon btn-sm" onclick="createCaseFromAction(${id})" title="Create Case" aria-label="Create case from action"><i data-lucide="briefcase" class="icon-sm"></i></button><button class="btn btn-ghost btn-icon btn-sm" onclick="editActionItem(${id})" title="Edit" aria-label="Edit action item"><i data-lucide="edit-2" class="icon-sm"></i></button><button class="btn btn-ghost btn-icon btn-sm mom-item-delete" onclick="deleteActionItem(${id})" title="Delete" aria-label="Delete action item"><i data-lucide="trash-2" class="icon-sm"></i></button></div>`;
+  host.appendChild(div);
+  momFlash(div);
+  momUpdateActionProgress();
+}
+
+function momUpdateActionProgress(){
+  const total=document.querySelectorAll('[data-aid]').length;
+  const done=document.querySelectorAll('.action-item-completed,[data-aid].action-item-completed').length;
+  const fill=document.querySelector('.progress-fill');
+  const text=document.querySelector('.progress-text');
+  if(fill)fill.style.width=`${total ? Math.round(done/total*100) : 0}%`;
+  if(text)text.textContent=`${done}/${total} completed`;
+}
+
+function momDateLabel(value){
+  if(!value)return '';
+  const date=new Date(String(value).replace(' ','T'));
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString(undefined,{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+}
+
+function momEmpty(text){
+  return `<p class="empty-text">${momEscape(text)}</p>`;
+}
+
+function momRemoveEmpty(host){
+  host?.querySelectorAll('.empty-text').forEach(el=>el.remove());
+}
+
+function momReminderClass(status=''){
+  const s=String(status).toLowerCase();
+  if(s.includes('overdue'))return 'text-red-500';
+  if(s.includes('today'))return 'text-orange-500';
+  return 'text-gray-400';
+}
+
+function momReminderHtml(reminder){
+  const id=Number(reminder?.id || reminder?.reminder_id || 0);
+  const priority=String(reminder?.priority || 'medium');
+  const status=reminder?.status || 'Upcoming';
+  const statusClass=reminder?.status_class || momReminderClass(status);
+  return `<div class="reminder-item reminder-item-${momEscape(priority)}" data-rid="${id}">
+    <div class="reminder-stat ${momEscape(statusClass)}">${momEscape(status)}</div>
+    <div class="reminder-info">
+      <div class="reminder-title">${momEscape(reminder?.title || 'Reminder')}</div>
+      <div class="reminder-due">${momEscape(momDateLabel(reminder?.due_date))}</div>
+    </div>
+    <button class="btn btn-ghost btn-icon btn-xs" onclick="openEditReminder(${id})" title="Edit" aria-label="Edit reminder"><i data-lucide="edit-2" class="icon-xs"></i></button>
+  </div>`;
+}
+
+function momApplyReminder(reminder){
+  const id=Number(reminder?.id || reminder?.reminder_id || 0);
+  const host=document.querySelector('.mom-reminders-list');
+  if(!host || !id)return;
+  momRemoveEmpty(host);
+  const existing=host.querySelector(`[data-rid="${id}"]`);
+  const wrap=document.createElement('div');
+  wrap.innerHTML=momReminderHtml(reminder).trim();
+  const node=wrap.firstElementChild;
+  if(existing)existing.replaceWith(node);
+  else host.prepend(node);
+  momFlash(node);
+}
+
+function momCaseStatusOptions(status='active'){
+  const options=[['completed','Solved'],['active','Active'],['in_progress','In Progress'],['pending','Pending'],['stuck','Stuck'],['on_hold','On Hold']];
+  return options.map(([value,label])=>`<option value="${value}"${value===status?' selected':''}>${label}</option>`).join('');
+}
+
+function momCaseHtml(record){
+  const id=Number(record?.id || record?.case_id || 0);
+  const priority=String(record?.priority || 'low');
+  const status=String(record?.status || 'active');
+  const completed=!!document.querySelector('[data-sidebar-edit="screenshots"], .mom-case-resolution');
+  const momId=Number(document.querySelector('[data-sidebar-edit="cases"]')?.dataset?.momId || 0);
+  return `<div class="case-item case-item-${momEscape(priority)} case-item-${momEscape(status)}" data-case-id="${id}">
+    <div class="case-badge case-badge-${momEscape(priority)}">${momEscape(priority.charAt(0).toUpperCase())}</div>
+    <div class="case-info">
+      <div class="case-id">#${id}</div>
+      <div class="case-title">${momEscape(record?.title || 'Case')}</div>
+    </div>
+    ${completed ? `<div class="mom-case-resolution mom-sidebar-edit">
+      <select class="form-select" id="momCaseStatus${id}">${momCaseStatusOptions(status)}</select>
+      <input class="form-input" id="momCaseNote${id}" placeholder="Add resolution note or follow-up detail">
+      <button class="btn btn-primary btn-sm" onclick="resolveLinkedCaseFromMOM(${momId}, ${id})">Update</button>
+    </div>` : ''}
+    <div class="case-actions">
+      <button class="btn btn-danger btn-icon btn-xs mom-sidebar-edit" onclick="markMOMCaseForRemoval(this)" title="Remove Link" aria-label="Remove linked case"><i data-lucide="x" class="icon-xs"></i></button>
+      <a href="cases.php?action=edit&id=${id}" class="btn btn-ghost btn-icon btn-xs" title="View" aria-label="View case"><i data-lucide="external-link" class="icon-xs"></i></a>
+    </div>
+  </div>`;
+}
+
+function momApplyCase(record){
+  const id=Number(record?.id || record?.case_id || 0);
+  const host=document.querySelector('.mom-cases-list');
+  if(!host || !id)return;
+  momRemoveEmpty(host);
+  const existing=host.querySelector(`[data-case-id="${id}"]`);
+  const wrap=document.createElement('div');
+  wrap.innerHTML=momCaseHtml(record).trim();
+  const node=wrap.firstElementChild;
+  if(existing)existing.replaceWith(node);
+  else host.appendChild(node);
+  momFlash(node);
+}
+
+function momRemoveCase(id){
+  momRemoveNode(document.querySelector(`[data-case-id="${Number(id)}"]`));
+  const host=document.querySelector('.mom-cases-list');
+  setTimeout(()=>{
+    if(host && !host.querySelector('.case-item'))host.insertAdjacentHTML('beforeend',momEmpty('No cases linked'));
+  },220);
+}
+
+function momScreenshotHtml(shot){
+  const id=Number(shot?.id || shot?.screenshot_id || 0);
+  const src=shot?.src || `/api/mom-screenshot.php?id=${id}`;
+  return `<div class="mom-shot-item" data-shot-id="${id}">
+    <button class="mom-shot-link" type="button" data-mom-screenshot-src="${momEscape(src)}" onclick="openMOMScreenshotLightbox(this)" title="Open screenshot">
+      <img class="mom-shot-thumb" src="${momEscape(src)}" alt="MOM screenshot">
+    </button>
+    <button class="btn btn-danger btn-icon btn-xs mom-shot-remove mom-sidebar-edit" onclick="markMOMScreenshotForRemoval(this)" title="Delete Screenshot" aria-label="Delete screenshot"><i data-lucide="trash-2" class="icon-xs"></i></button>
+  </div>`;
+}
+
+function momApplyScreenshot(shot){
+  const id=Number(shot?.id || shot?.screenshot_id || 0);
+  const host=document.querySelector('.mom-shot-list');
+  if(!host || !id)return;
+  momRemoveEmpty(host);
+  const wrap=document.createElement('div');
+  wrap.innerHTML=momScreenshotHtml(shot).trim();
+  const node=wrap.firstElementChild;
+  host.prepend(node);
+  momFlash(node);
 }
 
 function momModalIsOpen(id) {
@@ -174,7 +378,7 @@ function saveMOMObjective(mom_id) {
   }).then(r => {
     if(r.ok) {
       toast('Objective updated', 'success');
-      momReloadAfterToast();
+      momMarkSaved(document.getElementById('momObjectiveText'));
     } else {
       toast(r.msg || 'Failed to update objective', 'error');
     }
@@ -194,7 +398,12 @@ function saveMOMParticipants(mom_id) {
   }).then(r => {
     if(r.ok) {
       toast('Participants updated', 'success');
-      momReloadAfterToast();
+      const tags=document.getElementById('momParticipantTags');
+      if(tags){
+        tags.innerHTML=parts.split(',').map(v=>v.trim()).filter(Boolean).map(v=>`<span class="participant-tag">${momEscape(v)}</span>`).join('');
+      }
+      document.querySelector('[data-sidebar-edit="participants"]')?.classList.remove('is-editing');
+      momMarkSaved(document.querySelector('[data-sidebar-edit="participants"]'));
     } else {
       toast(r.msg || 'Failed to update participants', 'error');
     }
@@ -254,12 +463,16 @@ async function saveMOM() {
     if(r.ok) {
       const targetMomId = r.mom_id || Number(mom_id || 0);
       await linkSelectedCasesToMOM(targetMomId);
+      momMarkSaved(document.getElementById('momFormModal'));
       showModalSuccessAndClose({
         modal:'momForm',
         message:mom_id ? 'Meeting updated.' : 'Meeting scheduled.',
         onAfterClose:()=>{
-          if(targetMomId) location.assign(mom_id ? `mom.php?mom_id=${targetMomId}` : 'mom.php');
-          else location.reload();
+          if(!mom_id && targetMomId) location.assign('mom.php');
+          else {
+            const titleEl=document.querySelector('.mom-title');
+            if(titleEl)titleEl.textContent=title;
+          }
         }
       });
     } else {
@@ -323,7 +536,10 @@ function saveMOMSummary(mom_id) {
     mom_id,
     summary
   }).then(r => {
-    if(r.ok) toast('MOM summary saved', 'success');
+    if(r.ok) {
+      toast('MOM summary saved', 'success');
+      momMarkSaved(document.getElementById('momSummaryText'));
+    }
     else toast(r.msg || 'Failed to save summary', 'error');
   }).catch(e => toast(e.message || "The change didn't go through. Please try again.", 'error'));
 }
@@ -336,7 +552,7 @@ function deleteMOM(mom_id) {
     }).then(r => {
       if(r.ok) {
         toast('Meeting deleted', 'success');
-        momReloadAfterToast(300);
+        document.querySelectorAll(`[data-mid="${mom_id}"], [data-preview-for="${mom_id}"]`).forEach(momRemoveNode);
       } else {
         toast(r.msg || 'Failed to delete meeting', 'error');
       }
@@ -386,7 +602,10 @@ function saveInlineAgendaItem(mom_id, options = {}) {
   }).then(r => {
     if(r.ok) {
       toast('Agenda item added', 'success');
-      momReloadAfterToast();
+      momAppendAgendaItem(r.item_id, topic);
+      input.value='';
+      momStopInlineSave('agenda', mom_id);
+      momMarkSaved(input.closest('[data-mom-autosave]') || input);
     } else {
       momStopInlineSave('agenda', mom_id);
       toast(r.msg || 'Failed to add agenda item', 'error');
@@ -423,7 +642,7 @@ function deleteAgendaItem(item_id) {
     }).then(r => {
       if(r.ok) {
         toast('Agenda item deleted', 'success');
-        momReloadAfterToast();
+        momRemoveNode(document.querySelector(`[data-agenda-id="${item_id}"]`));
       }
     }).catch(e => toast(e.message || "The change didn't go through. Please try again.", 'error'));
   });
@@ -460,7 +679,10 @@ function saveInlineDiscussionNote(mom_id, options = {}) {
   }).then(r => {
     if(r.ok) {
       toast('Note added', 'success');
-      momReloadAfterToast();
+      momAppendNote(r.note_id, content, note_type);
+      contentEl.value='';
+      momStopInlineSave('note', mom_id);
+      momMarkSaved(contentEl.closest('[data-mom-autosave]') || contentEl);
     } else {
       momStopInlineSave('note', mom_id);
       toast(r.msg || 'Failed to add note', 'error');
@@ -491,7 +713,9 @@ async function saveDiscussionNote() {
   }));
   if(!r)return;
   if(r.ok) {
-    showModalSuccessAndClose({modal:'momNoteForm',message:'Discussion note saved.',onAfterClose:()=>location.reload()});
+    momAppendNote(r.note_id, content, document.getElementById('momNoteFormType')?.value || 'discussion');
+    momMarkSaved(document.getElementById('momNoteFormModal'));
+    showModalSuccessAndClose({modal:'momNoteForm',message:'Discussion note saved.'});
   } else {
     handleModalError({modal:'momNoteForm',error:{message:r.msg || r.message},fallbackMessage:'The discussion note could not be saved. Please try again.'});
   }
@@ -505,7 +729,7 @@ function deleteNote(note_id) {
     }).then(r => {
       if(r.ok) {
         toast('Note deleted', 'success');
-        momReloadAfterToast();
+        momRemoveNode(document.querySelector(`[data-note-id="${note_id}"]`));
       }
     }).catch(e => toast(e.message || "The change didn't go through. Please try again.", 'error'));
   });
@@ -582,7 +806,14 @@ function saveInlineDecision(mom_id, options = {}) {
   }).then(r => {
     if(r.ok) {
       toast('Decision recorded', 'success');
-      momReloadAfterToast();
+      momAppendDecision(r.decision_id, decision, rationale, owner);
+      decisionEl.value='';
+      const rationaleEl=document.getElementById('momInlineDecisionRationale');
+      const ownerEl=document.getElementById('momInlineDecisionOwner');
+      if(rationaleEl)rationaleEl.value='';
+      if(ownerEl)ownerEl.value='';
+      momStopInlineSave('decision', mom_id);
+      momMarkSaved(decisionEl.closest('[data-mom-autosave]') || decisionEl);
     } else {
       momStopInlineSave('decision', mom_id);
       toast(r.msg || 'Failed to add decision', 'error');
@@ -614,7 +845,9 @@ async function saveDecision() {
   }));
   if(!r)return;
   if(r.ok) {
-    showModalSuccessAndClose({modal:'momDecisionForm',message:'Decision recorded.',onAfterClose:()=>location.reload()});
+    momAppendDecision(r.decision_id, decision, document.getElementById('momDecisionFormRationale')?.value?.trim() || '', document.getElementById('momDecisionFormOwner')?.value?.trim() || '');
+    momMarkSaved(document.getElementById('momDecisionFormModal'));
+    showModalSuccessAndClose({modal:'momDecisionForm',message:'Decision recorded.'});
   } else {
     handleModalError({modal:'momDecisionForm',error:{message:r.msg || r.message},fallbackMessage:'The decision could not be saved. Please try again.'});
   }
@@ -628,7 +861,8 @@ function deleteDecision(decision_id) {
     }).then(r => {
       if(r.ok) {
         toast('Decision deleted', 'success');
-        momReloadAfterToast();
+        const btn=document.querySelector(`[onclick="deleteDecision(${decision_id})"]`);
+        momRemoveNode(btn?.closest('.decision-card'));
       }
     }).catch(e => toast(e.message || "The change didn't go through. Please try again.", 'error'));
   });
@@ -687,7 +921,15 @@ function saveInlineActionItem(mom_id, options = {}) {
   api('api/api_mom.php', payload).then(r => {
     if(r.ok) {
       toast('Action created', 'success');
-      momReloadAfterToast();
+      momAppendAction(r.action_id, title, description, assignee, priority, due_date);
+      ['momInlineActionTitle','momInlineActionDesc','momInlineActionAssignee','momInlineActionDueDate'].forEach(id => {
+        const el=document.getElementById(id);
+        if(el)el.value='';
+      });
+      const priorityEl=document.getElementById('momInlineActionPriority');
+      if(priorityEl)priorityEl.value='medium';
+      momStopInlineSave('action', mom_id);
+      momMarkSaved(titleEl.closest('[data-mom-autosave]') || titleEl);
     } else {
       momStopInlineSave('action', mom_id);
       toast(r.msg || 'Failed to save action', 'error');
@@ -721,7 +963,16 @@ async function saveActionItem() {
   }));
   if(!r)return;
   if(r.ok) {
-    showModalSuccessAndClose({modal:'momActionForm',message:'Action item saved.',onAfterClose:()=>location.reload()});
+    momAppendAction(
+      r.action_id,
+      title,
+      document.getElementById('momActionFormDesc')?.value?.trim() || '',
+      document.getElementById('momActionFormAssignee')?.value?.trim() || '',
+      document.getElementById('momActionFormPriority')?.value || 'medium',
+      document.getElementById('momActionFormDueDate')?.value || ''
+    );
+    momMarkSaved(document.getElementById('momActionFormModal'));
+    showModalSuccessAndClose({modal:'momActionForm',message:'Action item saved.'});
   } else {
     handleModalError({modal:'momActionForm',error:{message:r.msg || r.message},fallbackMessage:'The action item could not be saved. Please try again.'});
   }
@@ -773,7 +1024,9 @@ function completeAction(action_id, checked) {
       const item = document.querySelector(`[data-aid="${action_id}"]`);
       if(item) {
         item.classList.toggle('action-item-completed', checked);
+        item.classList.toggle('action-item-pending', !checked);
       }
+      momUpdateActionProgress();
       toast(checked ? 'Action completed' : 'Action reopened', 'success');
     }
   }).catch(e => toast(e.message || "The change didn't go through. Please try again.", 'error'));
@@ -787,7 +1040,8 @@ function deleteActionItem(action_id) {
     }).then(r => {
       if(r.ok) {
         toast('Action deleted', 'success');
-        momReloadAfterToast();
+        momRemoveNode(document.querySelector(`[data-aid="${action_id}"]`));
+        setTimeout(momUpdateActionProgress,210);
       }
     }).catch(e => toast(e.message || "The change didn't go through. Please try again.", 'error'));
   });
@@ -805,7 +1059,7 @@ function createReminderFromAction(action_id) {
     }).then(r => {
       if(r.ok) {
         toast('Reminder created and linked', 'success');
-        momReloadAfterToast();
+        momApplyReminder(r.reminder || {id:r.reminder_id,title:'Reminder'});
       } else {
         toast(r.msg || 'Failed to create reminder', 'error');
       }
@@ -841,7 +1095,9 @@ function saveInlineCaseLink(mom_id) {
   }).then(r => {
     if(r.ok) {
       toast('Case linked', 'success');
-      momReloadAfterToast();
+      momApplyCase(r.case || {id:case_id,title:`Case #${case_id}`});
+      if(input)input.value='';
+      momMarkSaved(input || document.querySelector('[data-sidebar-edit="cases"]'));
     } else {
       toast(r.msg || 'Failed to link case', 'error');
     }
@@ -889,7 +1145,14 @@ function saveMOMSidebarCases(mom_id) {
       return;
     }
     toast('Linked cases updated', 'success');
-    momReloadAfterToast();
+    removals.forEach(momRemoveCase);
+    if(case_id) {
+      const linked = results.find(r => r.case || r.case_id);
+      momApplyCase(linked?.case || {id:Number(case_id),title:`Case #${case_id}`});
+      if(input)input.value='';
+    }
+    toggleMOMSidebarEdit('cases');
+    momMarkSaved(document.querySelector('[data-sidebar-edit="cases"]'));
   }).catch(e => toast(e.message || "The change didn't go through. Please try again.", 'error'));
 }
 
@@ -901,7 +1164,7 @@ function createCaseFromAction(action_id) {
     }).then(r => {
       if(r.ok) {
         toast('Case created and linked', 'success');
-        momReloadAfterToast(300);
+        momApplyCase(r.case || {id:r.case_id,title:`Case #${r.case_id}`});
       } else {
         toast(r.msg || 'Failed to create case', 'error');
       }
@@ -921,7 +1184,10 @@ function resolveLinkedCaseFromMOM(mom_id, case_id) {
   }).then(r => {
     if(r.ok) {
       toast('Linked case updated', 'success');
-      momReloadAfterToast(300);
+      momApplyCase(r.case || {id:case_id,status});
+      const noteEl=document.getElementById(`momCaseNote${case_id}`);
+      if(noteEl)noteEl.value='';
+      momMarkSaved(noteEl || document.getElementById(`momCaseStatus${case_id}`));
     } else {
       toast(r.msg || 'Failed to update case', 'error');
     }
@@ -945,7 +1211,10 @@ function uploadMOMScreenshotFile(mom_id, file) {
         mom_id,
         image_data: reader.result
       }).then(r => {
-        if(r.ok) resolve(true);
+        if(r.ok) {
+          momApplyScreenshot(r.screenshot || {id:r.screenshot_id});
+          resolve(true);
+        }
         else { toast(r.msg || 'Failed to upload screenshot', 'error'); resolve(false); }
       }).catch(e => { toast(e.message || "The change didn't go through. Please try again.", 'error'); resolve(false); });
     };
@@ -962,7 +1231,7 @@ async function uploadMOMScreenshotFiles(mom_id, files) {
   }
   if(uploaded) {
     toast(`${uploaded} screenshot${uploaded === 1 ? '' : 's'} uploaded`, 'success');
-    momReloadAfterToast(300);
+    momMarkSaved(document.querySelector('[data-sidebar-edit="screenshots"]'));
   }
 }
 
@@ -1044,7 +1313,13 @@ function saveMOMSidebarScreenshots(mom_id) {
       return;
     }
     toast('Screenshots updated', 'success');
-    momReloadAfterToast();
+    removals.forEach(id=>momRemoveNode(document.querySelector(`[data-shot-id="${id}"]`)));
+    toggleMOMSidebarEdit('screenshots');
+    momMarkSaved(document.querySelector('[data-sidebar-edit="screenshots"]'));
+    setTimeout(()=>{
+      const host=document.querySelector('.mom-shot-list');
+      if(host && !host.querySelector('.mom-shot-item'))host.insertAdjacentHTML('beforeend',momEmpty('No screenshots uploaded'));
+    },220);
   }).catch(e => toast(e.message || "The change didn't go through. Please try again.", 'error'));
 }
 

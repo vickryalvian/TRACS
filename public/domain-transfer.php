@@ -12,6 +12,7 @@ require_once __DIR__ . '/../core/access_control.php';
 tracs_require_page_permission($conn, 'domains.view');
 require_once __DIR__ . '/../modules/alert-ticker/controller.php';
 require_once __DIR__ . '/includes/page_helpers.php';
+require_once __DIR__ . '/api/_realtime_payloads.php';
 
 $uid        = $_SESSION['user_id']    ?? 0;
 $user_email = $_SESSION['user_email'] ?? 'operator@tracs.local';
@@ -156,9 +157,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->close();
 
         if ($ok) {
+            $new_id = (int)$conn->insert_id;
             $msg = "New domain transfer added: {$domain}";
             log_domain_activity($conn, 'domain_added', $msg, $domain, $uid);
-            echo json_encode(['success'=>true,'message'=>'Domain transfer recorded']);
+            echo json_encode([
+                'success' => true,
+                'message' => 'Domain transfer recorded',
+                'data' => [
+                    'id' => $new_id,
+                    'record' => tracs_realtime_domain_transfer($conn, $new_id),
+                ],
+            ]);
         } else {
             echo json_encode(['success'=>false,'message'=>'Error saving record']);
         }
@@ -232,7 +241,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $msg = $msg_map[$status] ?? "Domain {$domain} status changed to: {$status}";
                 log_domain_activity($conn, $type, $msg, $domain, $uid);
             }
-            echo json_encode(['success'=>true,'message'=>'Transfer updated']);
+            echo json_encode([
+                'success' => true,
+                'message' => 'Transfer updated',
+                'data' => [
+                    'record' => tracs_realtime_domain_transfer($conn, $id),
+                ],
+            ]);
         } else {
             echo json_encode(['success'=>false,'message'=>'Error updating record']);
         }
@@ -285,7 +300,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $msg = $msg_map[$status] ?? "Domain {$dn} status changed to: {$status}";
             log_domain_activity($conn, $type, $msg, $dn, $uid);
         }
-        echo json_encode(['success' => (bool)$ok, 'message' => $ok ? 'Status updated' : 'Error updating status']);
+        echo json_encode([
+            'success' => (bool)$ok,
+            'message' => $ok ? 'Status updated' : 'Error updating status',
+            'data' => $ok ? ['record' => tracs_realtime_domain_transfer($conn, $id)] : null,
+        ]);
         exit;
     }
 
@@ -315,7 +334,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $ok = $stmt->execute();
         $stmt->close();
 
-        echo json_encode(['success' => (bool)$ok, 'message' => $ok ? 'Updated' : 'Error']);
+        echo json_encode([
+            'success' => (bool)$ok,
+            'message' => $ok ? 'Updated' : 'Error',
+            'data' => $ok ? ['record' => tracs_realtime_domain_transfer($conn, $id)] : null,
+        ]);
         exit;
     }
 
@@ -334,7 +357,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $ok = $stmt->execute();
         $stmt->close();
 
-        echo json_encode(['success' => (bool)$ok, 'message' => $ok ? 'End date updated' : 'Error updating end date']);
+        echo json_encode([
+            'success' => (bool)$ok,
+            'message' => $ok ? 'End date updated' : 'Error updating end date',
+            'data' => $ok ? ['record' => tracs_realtime_domain_transfer($conn, $id)] : null,
+        ]);
         exit;
     }
 
@@ -343,10 +370,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $id = (int) ($data['id'] ?? 0);
         if (!$id) { echo json_encode(['success'=>false,'message'=>'Invalid ID']); exit; }
 
-        /* Grab domain name for activity log */
-        $domain_name = '';
-        $gs = $conn->prepare("SELECT domain_name FROM domain_transfers WHERE id = ?");
-        if ($gs) { $gs->bind_param('i',$id); $gs->execute(); $gs->bind_result($domain_name); $gs->fetch(); $gs->close(); }
+        /* Grab domain data for activity log and client rollback/accounting */
+        $deleted_record = tracs_realtime_domain_transfer($conn, $id);
+        $domain_name = (string)($deleted_record['domain_name'] ?? '');
 
         $stmt = $conn->prepare("DELETE FROM domain_transfers WHERE id = ?");
         if (!$stmt) { echo json_encode(['success'=>false,'message'=>'DB prepare error']); exit; }
@@ -356,7 +382,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($ok) {
             if ($domain_name) log_domain_activity($conn,'domain_deleted',"Domain transfer record removed: {$domain_name}",$domain_name,$uid);
-            echo json_encode(['success'=>true,'message'=>'Record deleted']);
+            echo json_encode([
+                'success' => true,
+                'message' => 'Record deleted',
+                'data' => [
+                    'record' => $deleted_record,
+                ],
+            ]);
         } else {
             echo json_encode(['success'=>false,'message'=>'Error deleting record']);
         }
@@ -762,7 +794,11 @@ include 'includes/header.php';
         'notes'                    => $dr['notes'] ?? '',
       ]), ENT_QUOTES, 'UTF-8');
     ?>
-    <tr data-dt-id="<?= $did ?>">
+    <tr data-dt-id="<?= $did ?>"
+        data-dt-status="<?= esc($status) ?>"
+        data-dt-start-date="<?= esc($dr['process_start_date'] ?? '') ?>"
+        data-dt-end-date="<?= esc($dr['process_end_date'] ?? '') ?>"
+        data-dt-move="<?= esc($move_val) ?>">
       <td><span class="dt-rownum"><?= $row_num++ ?></span></td>
 
       <td>

@@ -1,6 +1,7 @@
 <?php
 /* ── api/bt-update.php — Edit balance transfer ──────────────── */
 require '_bootstrap.php';
+require_once __DIR__ . '/_realtime_payloads.php';
 
 $id              = intval($body['id']             ?? 0);
 $sender_email    = trim($body['sender_email']    ?? '');
@@ -63,8 +64,10 @@ if (!$stmt->execute()) {
   error_log('TRACS bt-update failed: ' . $stmt->error);
   fail('Database error', 500);
 }
-if ($stmt->affected_rows === 0) fail('Record not found or no changes');
+if ($stmt->affected_rows < 0) fail('Database error', 500);
 
-try { logAct('balance_transfer','update',$id,'Updated transfer #'.$id); } catch(Throwable $e){}
+try { logAct($conn, $uid, 'update', 'Balance Transfer', 'Updated transfer #'.$id, $id); } catch(Throwable $e){}
 
-ok([], 'Transfer updated');
+ok([
+  'record' => tracs_realtime_balance_transfer($conn, $id),
+], 'Transfer updated');

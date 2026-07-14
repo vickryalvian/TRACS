@@ -7742,6 +7742,18 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
 .tracs-table tr:last-child td { border-bottom: none }
 .tracs-table tbody tr { transition: background var(--dur) var(--ease) }
 .tracs-table tbody tr:hover { background: var(--s3) }
+.tracs-row-live-updated {
+  animation: tracs-row-live-updated 1.25s var(--ease);
+}
+.tracs-row-removing {
+  opacity: 0;
+  transform: translateY(-3px);
+  transition: opacity .18s var(--ease), transform .18s var(--ease);
+}
+@keyframes tracs-row-live-updated {
+  0% { background: color-mix(in srgb, var(--green-lt) 82%, var(--s1)); }
+  100% { background: transparent; }
+}
 .tracs-table tbody tr.case-click-row {
   cursor: pointer;
 }
@@ -8065,6 +8077,69 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
   white-space: nowrap;
 }
 
+/* ── Auto-Save Status Badge ──────────────────────────────────────────────── */
+.cf-autosave-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-family: var(--mono);
+  font-weight: 600;
+  letter-spacing: .03em;
+  padding: 2px 8px 2px 6px;
+  border-radius: 20px;
+  margin-left: 8px;
+  vertical-align: middle;
+  transition: opacity .25s ease, background .2s;
+  user-select: none;
+  pointer-events: none;
+  min-width: 0;
+}
+.cf-autosave-status.cf-as-idle {
+  opacity: 0;
+  pointer-events: none;
+}
+.cf-autosave-status.cf-as-saving {
+  opacity: 1;
+  background: color-mix(in srgb, var(--yellow, #f5a623) 15%, transparent);
+  color: color-mix(in srgb, var(--yellow, #f5a623) 90%, var(--tx1));
+  animation: cf-as-pulse 1.2s ease-in-out infinite;
+}
+.cf-autosave-status.cf-as-saved {
+  opacity: 1;
+  background: color-mix(in srgb, var(--green, #22c55e) 12%, transparent);
+  color: color-mix(in srgb, var(--green, #22c55e) 90%, var(--tx1));
+}
+.cf-autosave-status.cf-as-failed {
+  opacity: 1;
+  background: color-mix(in srgb, var(--red, #ef4444) 12%, transparent);
+  color: color-mix(in srgb, var(--red, #ef4444) 90%, var(--tx1));
+  pointer-events: all;
+}
+.cf-as-retry-btn {
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.cf-as-retry-btn:hover { opacity: .8; }
+
+@keyframes cf-as-pulse {
+  0%, 100% { opacity: .6; }
+  50%       { opacity: 1;  }
+}
+
+/* Modal auto-save badge — appears inline with the modal subtitle */
+#feedbackModal .cf-autosave-status {
+  margin-left: 6px;
+  font-size: 9.5px;
+}
+
 .tracs-save-btn, .bt-save-btn, .dt-save-btn {
   height: 30px;
   display: flex;
@@ -8077,6 +8152,7 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
   justify-content: center;
 }
 .tracs-save-btn svg, .bt-save-btn svg, .dt-save-btn svg { width: 11px; height: 11px }
+
 .req-star { color: var(--red); margin-left: 1px }
 
 /* ═══════════════════════════════════════════════

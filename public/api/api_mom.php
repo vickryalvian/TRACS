@@ -33,6 +33,27 @@ function respond($ok, $data = [], $msg = '') {
   exit;
 }
 
+function mom_api_case_payload(MOMController $MC, CaseController $CC, int $case_id): ?array {
+  $case = $MC->getCaseForUser($case_id);
+  return $case ? $CC->formatCase($case) : null;
+}
+
+function mom_api_reminder_payload(mysqli $conn, ReminderController $RC, int $reminder_id): ?array {
+  $stmt = $conn->prepare("SELECT * FROM tracs_reminders WHERE id=? LIMIT 1");
+  if(!$stmt) return null;
+  $stmt->bind_param('i', $reminder_id);
+  $stmt->execute();
+  $row = $stmt->get_result()->fetch_assoc();
+  return $row ? $RC->formatReminder($row) : null;
+}
+
+function mom_api_screenshot_payload(int $shot_id): array {
+  return [
+    'id' => $shot_id,
+    'src' => '/api/mom-screenshot.php?id=' . $shot_id,
+  ];
+}
+
 if(!$MC->isInstalled()) {
   http_response_code(503);
   respond(false, [], 'MOM storage is not available.');
@@ -403,7 +424,10 @@ else if($action === 'create_reminder_from_action') {
   
   $rem_id = $MC->createReminderFromAction($action_id);
   if($rem_id) {
-    respond(true, ['reminder_id' => $rem_id], 'Reminder created');
+    respond(true, [
+      'reminder_id' => $rem_id,
+      'reminder' => mom_api_reminder_payload($conn, $RC, (int)$rem_id),
+    ], 'Reminder created');
   } else {
     respond(false, [], 'Failed to create reminder');
   }
@@ -430,7 +454,10 @@ else if($action === 'link_case') {
   }
   
   if($MC->linkCaseToMOM($mom_id, $case_id)) {
-    respond(true, [], 'Case linked');
+    respond(true, [
+      'case_id' => $case_id,
+      'case' => mom_api_case_payload($MC, $CC, $case_id),
+    ], 'Case linked');
   } else {
     respond(false, [], 'Failed to link case');
   }
@@ -445,7 +472,10 @@ else if($action === 'create_case_from_action') {
   
   $case_id = $MC->createCaseFromAction($action_id);
   if($case_id) {
-    respond(true, ['case_id' => $case_id], 'Case created and linked');
+    respond(true, [
+      'case_id' => $case_id,
+      'case' => mom_api_case_payload($MC, $CC, (int)$case_id),
+    ], 'Case created and linked');
   } else {
     respond(false, [], 'Failed to create case');
   }
@@ -458,7 +488,7 @@ else if($action === 'unlink_case') {
     respond(false, [], 'MOM ID and Case ID required');
   }
   if($MC->unlinkCase($mom_id, $case_id)) {
-    respond(true, [], 'Case unlinked');
+    respond(true, ['case_id' => $case_id], 'Case unlinked');
   }
   respond(false, [], 'Failed to unlink case');
 }
@@ -472,7 +502,10 @@ else if($action === 'resolve_linked_case') {
     respond(false, [], 'MOM ID and Case ID required');
   }
   if($MC->resolveLinkedCaseFromMOM($mom_id, $case_id, $status, $note)) {
-    respond(true, [], 'Linked case updated');
+    respond(true, [
+      'case_id' => $case_id,
+      'case' => mom_api_case_payload($MC, $CC, $case_id),
+    ], 'Linked case updated');
   }
   respond(false, [], 'Failed to update linked case');
 }
@@ -485,7 +518,10 @@ else if($action === 'upload_screenshot') {
   }
   $shot_id = $MC->attachScreenshot($mom_id, $image_data, 'general', null);
   if($shot_id) {
-    respond(true, ['screenshot_id' => $shot_id], 'Screenshot uploaded');
+    respond(true, [
+      'screenshot_id' => $shot_id,
+      'screenshot' => mom_api_screenshot_payload((int)$shot_id),
+    ], 'Screenshot uploaded');
   }
   respond(false, [], 'Failed to upload screenshot');
 }
@@ -496,7 +532,7 @@ else if($action === 'delete_screenshot') {
     respond(false, [], 'Screenshot ID required');
   }
   if($MC->deleteScreenshot($shot_id)) {
-    respond(true, [], 'Screenshot deleted');
+    respond(true, ['screenshot_id' => $shot_id], 'Screenshot deleted');
   }
   respond(false, [], 'Failed to delete screenshot');
 }

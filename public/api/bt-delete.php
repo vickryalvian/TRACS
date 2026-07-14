@@ -1,10 +1,12 @@
 <?php
 /* ── api/bt-delete.php — Delete balance transfer ────────────── */
 require '_bootstrap.php';
+require_once __DIR__ . '/_realtime_payloads.php';
 
 $id = intval($body['id'] ?? 0);
 if (!$id) fail('Invalid ID');
 if (!tracs_can_view_balance_transfer($conn, $id)) fail_not_found();
+$record = tracs_realtime_balance_transfer($conn, $id);
 
 $stmt = $conn->prepare("DELETE FROM balance_transfers WHERE id = ? LIMIT 1");
 $stmt->bind_param('i', $id);
@@ -14,6 +16,6 @@ if (!$stmt->execute()) {
 }
 if ($stmt->affected_rows === 0) fail('Record not found');
 
-try { logAct('balance_transfer','delete',$id,'Deleted transfer #'.$id); } catch(Throwable $e){}
+try { logAct($conn, $uid, 'delete', 'Balance Transfer', 'Deleted transfer #'.$id, $id); } catch(Throwable $e){}
 
-ok([], 'Transfer deleted');
+ok(['record' => $record], 'Transfer deleted');

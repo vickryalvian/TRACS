@@ -400,7 +400,7 @@ include 'includes/header.php';
     </div>
 
     <!-- Related Cases -->
-    <div class="mom-card" data-sidebar-edit="cases">
+    <div class="mom-card" data-sidebar-edit="cases" data-mom-id="<?=$mom_id?>">
       <div class="card-head">
         <span class="card-title"><i data-lucide="briefcase" class="icon-sm"></i>Linked Cases</span>
         <button class="btn btn-ghost btn-icon btn-sm" onclick="toggleMOMSidebarEdit('cases')" title="Edit Linked Cases" aria-label="Edit linked cases"><i data-lucide="edit-2" class="icon-sm"></i></button>

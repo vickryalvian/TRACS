@@ -856,6 +856,7 @@ function tracsCloseSystemDialog(result,value=''){
   const overlay=document.getElementById('tracsSystemDialog');
   tracsDialogActive=null;
   if(overlay)overlay.classList.add('hidden');
+  if(active?.previousFocus?.isConnected)active.previousFocus.focus({preventScroll:true});
   if(active)active.resolve(active.mode === 'prompt' ? (result ? value : null) : !!result);
 }
 function tracsOpenSystemDialog(options={},mode='alert'){
@@ -877,6 +878,7 @@ function tracsOpenSystemDialog(options={},mode='alert'){
   const cancel=overlay.querySelector('[data-tracs-dialog-cancel]');
   const cancelButtons=overlay.querySelectorAll('[data-tracs-dialog-cancel]');
   const ok=overlay.querySelector('[data-tracs-dialog-ok]');
+  const previousFocus=document.activeElement instanceof Element ? document.activeElement : null;
   field.hidden=mode !== 'prompt';
   if(mode === 'prompt'){
     label.textContent=String(options.inputLabel || 'Response');
@@ -895,10 +897,11 @@ function tracsOpenSystemDialog(options={},mode='alert'){
   overlay.classList.remove('hidden');
   tracsRefreshIcons(overlay);
   return new Promise(resolve=>{
-    tracsDialogActive={resolve,mode};
+    tracsDialogActive={resolve,mode,previousFocus};
     const cleanup=()=>{
       ok.onclick=null;
       cancelButtons.forEach(btn=>{btn.onclick=null;});
+      overlay.onkeydown=null;
     };
     ok.onclick=()=>{
       if(mode === 'prompt' && input.required && !input.value.trim()){
@@ -914,6 +917,31 @@ function tracsOpenSystemDialog(options={},mode='alert'){
         tracsCloseSystemDialog(false,'');
       };
     });
+    overlay.onkeydown=event=>{
+      if(event.key === 'Escape'){
+        event.preventDefault();
+        cleanup();
+        tracsCloseSystemDialog(false,'');
+        return;
+      }
+      if(event.key === 'Enter' && mode !== 'prompt'){
+        event.preventDefault();
+        ok.click();
+        return;
+      }
+      if(event.key !== 'Tab')return;
+      const focusable=Array.from(overlay.querySelectorAll('button:not([hidden]):not([disabled]), textarea:not([hidden]):not([disabled])'));
+      if(!focusable.length)return;
+      const first=focusable[0];
+      const last=focusable[focusable.length-1];
+      if(event.shiftKey && document.activeElement === first){
+        event.preventDefault();
+        last.focus();
+      }else if(!event.shiftKey && document.activeElement === last){
+        event.preventDefault();
+        first.focus();
+      }
+    };
     window.setTimeout(()=>{(mode === 'prompt' ? input : ok).focus();},30);
   });
 }
@@ -1952,6 +1980,85 @@ function renderFeedbackChips(values, critical = false) {
     return `<div class="cf-chip-row">${items.map(item => `<span class="cf-chip ${critical ? 'cf-chip-critical' : ''}">${escapeHtml(item)}</span>`).join('')}</div>`;
 }
 
+function feedbackCritical(reasons=[]){
+    const criticalReasons = ['Frequent downtime', 'DDoS / security-related instability', 'Slow server performance', 'Repeated Issue', 'Issue not resolved'];
+    return parseFeedbackMulti(reasons).some(reason => criticalReasons.includes(reason));
+}
+
+function feedbackNormalizeRecord(record={}){
+    const services=parseFeedbackMulti(record.cancelled_services || record.cancelled_service);
+    const reasons=parseFeedbackMulti(record.cancellation_reasons || record.cancellation_reason);
+    return {
+        ...record,
+        id:Number(record.id || 0),
+        cancelled_services:services,
+        cancelled_service:record.cancelled_service || JSON.stringify(services),
+        cancelled_service_display:record.cancelled_service_display || services.join(', '),
+        cancellation_reasons:reasons,
+        cancellation_reason:record.cancellation_reason || JSON.stringify(reasons),
+        cancellation_reason_display:record.cancellation_reason_display || reasons.join(', '),
+        submitter_name:record.submitter_display || record.submitter_name || record.creator_name || record.created_by_name || 'System'
+    };
+}
+
+function feedbackInitials(name=''){
+    const parts=String(name || 'System').trim().split(/\s+/);
+    return `${parts[0]?.[0] || 'S'}${parts[1]?.[0] || ''}`.toUpperCase();
+}
+
+function feedbackRowHtml(rawRecord){
+    const record=feedbackNormalizeRecord(rawRecord);
+    const id=record.id;
+    const isCritical=feedbackCritical(record.cancellation_reasons);
+    return `
+      <tr data-feedback-id="${id}" data-feedback-critical="${isCritical ? '1' : '0'}" class="${isCritical ? 'row-critical' : ''}">
+        <td><div class="user-cell"><div class="avatar">${escHtml(feedbackInitials(record.submitter_name))}</div><div class="user-info"><div class="user-name">${escHtml(record.submitter_name)}</div><div class="creator-meta">${escHtml(record.creator_name || record.created_by_name || 'System')}</div></div></div></td>
+        <td>${renderFeedbackChips(record.cancelled_services)}</td>
+        <td>${renderFeedbackChips(record.cancellation_reasons,isCritical)}</td>
+        <td class="details-cell" title="${escHtml(record.additional_details || '')}"><div class="truncate-details">${escHtml(record.additional_details || '')}</div></td>
+        <td class="mono"><div class="ref-wrap"><span class="ref-text">${escHtml(record.whmcs_reference || '')}</span><button class="btn-copy" onclick="copyToClipboard(${jsAttr(record.whmcs_reference || '')})"><i data-lucide="copy"></i></button></div></td>
+        <td>${record.email_address ? `<a href="mailto:${escHtml(record.email_address)}" class="email-link">${escHtml(record.email_address)}</a>` : ''}</td>
+        <td><span class="resolution-text">${escHtml(record.payment_resolution || '')}</span></td>
+        <td class="mono text-muted">${escHtml(formatFeedbackDate(record.created_at))}</td>
+        <td class="feedback-actions-cell"><div class="row-action-group cf-row-actions">
+          <button class="btn btn-ghost btn-icon" type="button" onclick="viewFeedback(${id})" title="View report" aria-label="View cancellation feedback report"><i data-lucide="eye" class="icon-sm"></i></button>
+          <button class="btn btn-ghost btn-icon cf-delete-action" type="button" onclick="deleteFeedback(${id})" title="Delete feedback" aria-label="Delete cancellation feedback"><i data-lucide="trash-2" class="icon-sm"></i></button>
+        </div></td>
+      </tr>`;
+}
+
+function feedbackEnsureTableBody(){
+    const tbody=tracsTableBody('.tracs-table');
+    if(!tbody)return null;
+    tbody.querySelector('td[colspan="9"]')?.closest('tr')?.remove();
+    return tbody;
+}
+
+function feedbackApplyRecord(rawRecord,{isNew=false}={}){
+    const record=feedbackNormalizeRecord(rawRecord);
+    if(!record.id)return;
+    window.feedbackRecords = window.feedbackRecords || {};
+    window.feedbackRecords[record.id]=record;
+    const tbody=feedbackEnsureTableBody();
+    if(!tbody)return;
+    const holder=document.createElement('tbody');
+    holder.innerHTML=feedbackRowHtml(record).trim();
+    tracsInsertOrReplaceRow(tbody,holder.firstElementChild,`[data-feedback-id="${record.id}"]`,true);
+    if(isNew)tracsAdjustPanelMeta(1);
+}
+
+function feedbackRemoveRecord(id){
+    delete window.feedbackRecords?.[id];
+    tracsRowFadeRemove(document.querySelector(`[data-feedback-id="${id}"]`));
+    tracsAdjustPanelMeta(-1);
+}
+
+window.TRACSFeedbackRealtime = {
+    applyRecord: feedbackApplyRecord,
+    removeRecord: feedbackRemoveRecord,
+    normalizeRecord: feedbackNormalizeRecord
+};
+
 function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, char => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
@@ -1998,6 +2105,10 @@ function openEditFeedback(data) {
     document.getElementById('feedbackDetails').value = data.additional_details;
     document.getElementById('feedbackModalTitle').innerText = 'Edit Feedback';
     openModal('feedback');
+    // Wire auto-save for this specific record
+    if (window.FeedbackAutoSave) {
+        FeedbackAutoSave.bindEditModal(data.id);
+    }
 }
 
 async function saveFeedback() {
@@ -2018,6 +2129,11 @@ async function saveFeedback() {
         return;
     }
 
+    // Flush any pending auto-save changes before the full save
+    if (window.FeedbackAutoSave && id) {
+        await FeedbackAutoSave.flushAll();
+    }
+
     try {
         const res = await withLoadingState(button,'Saving...',async()=>{
             const response=await fetch(url,{method:'POST',body:fd});
@@ -2031,11 +2147,22 @@ async function saveFeedback() {
         });
         if(!res)return;
         if (res.success) {
-            showModalSuccessAndClose({
-                modal:'feedback',
-                message:id ? 'Feedback updated.' : 'Feedback added.',
-                onAfterClose:()=>location.reload()
-            });
+            const record=tracsPayloadRecord(res);
+            if(record)feedbackApplyRecord(record,{isNew:!id});
+            tracsMarkSaved(document.getElementById('feedbackModal'));
+            if (id) {
+                if (window.FeedbackAutoSave) FeedbackAutoSave.unbindModal();
+                showModalSuccessAndClose({
+                    modal:'feedback',
+                    message:'Feedback updated.',
+                });
+            } else {
+                if (window.FeedbackAutoSave) FeedbackAutoSave.resetInlineForm();
+                showModalSuccessAndClose({
+                    modal:'feedback',
+                    message:'Feedback added.',
+                });
+            }
         } else {
             handleModalError({modal:'feedback',error:{message:res.error || res.message},fallbackMessage:'The feedback could not be saved. Please try again.'});
         }
@@ -2055,15 +2182,17 @@ async function deleteFeedback(id) {
     if (!ok) return;
     const fd = new FormData();
     fd.append('id', id);
-    fetch('api/feedback-delete.php', { method: 'POST', body: fd })
-    .then(r => r.json())
-    .then(res => {
+    try {
+      const response=await fetch('api/feedback-delete.php', { method: 'POST', body: fd });
+      const res=await response.json();
         if (res.success) {
           toast('Feedback deleted', 'success');
-          reloadAfterToast();
+          feedbackRemoveRecord(id);
         }
         else toast(res.error || "Couldn't delete the feedback entry. Please try again.", 'error');
-    });
+    } catch(error) {
+      toast(error.message || "Couldn't delete the feedback entry. Please try again.", 'error');
+    }
 }
 
 function viewFeedback(id) {
@@ -2101,26 +2230,48 @@ function copyToClipboard(text) {
 }
 
 /* ── Inline Feedback Handlers ── */
-function quickSaveFeedback() {
-    const fd = new FormData();
-    appendMultiValues(fd, 'service', selectedValues('inService'));
-    appendMultiValues(fd, 'reason', selectedValues('inReason'));
-    fd.append('reference', document.getElementById('inRef').value);
-    fd.append('email', document.getElementById('inEmail').value);
-    fd.append('resolution', document.getElementById('inResolution').value);
-    fd.append('details', document.getElementById('inDetails').value);
+async function quickSaveFeedback() {
+    // If auto-save created the record already, just flush remaining fields
+    // and reload to show the new row; no need to re-POST to feedback-create.
+    if (window.FeedbackAutoSave) {
+        const existingId = FeedbackAutoSave.getCurrentId();
+        if (existingId) {
+            await FeedbackAutoSave.flushAll();
+            FeedbackAutoSave.resetInlineForm();
+            clearInlineFeedback();
+            toast('Feedback saved', 'success');
+            tracsMarkSaved(document.querySelector('.fb-inline-form'));
+            return;
+        }
+    }
 
-    if (!selectedValues('inService').length || !selectedValues('inReason').length) {
+    // No auto-saved record yet — validate first, then POST normally
+    const services = selectedValues('inService');
+    const reasons  = selectedValues('inReason');
+
+    if (!services.length || !reasons.length) {
         toast('Service and Reason are required.', 'error');
         return;
     }
+
+    const fd = new FormData();
+    appendMultiValues(fd, 'service', services);
+    appendMultiValues(fd, 'reason', reasons);
+    fd.append('reference',  document.getElementById('inRef').value);
+    fd.append('email',      document.getElementById('inEmail').value);
+    fd.append('resolution', document.getElementById('inResolution').value);
+    fd.append('details',    document.getElementById('inDetails').value);
 
     fetch('api/feedback-create.php', { method: 'POST', body: fd })
     .then(r => r.json())
     .then(res => {
         if (res.success) {
+            const record=tracsPayloadRecord(res);
+            if(record)feedbackApplyRecord(record,{isNew:true});
+            if (window.FeedbackAutoSave) FeedbackAutoSave.resetInlineForm();
+            clearInlineFeedback();
             toast('Feedback added', 'success');
-            reloadAfterToast();
+            tracsMarkSaved(document.querySelector('.fb-inline-form'));
         } else {
             toast(res.error || "Couldn't save the feedback. Please check the fields and try again.", 'error');
         }
@@ -2155,6 +2306,107 @@ function escHtml(value=''){
 }
 function jsAttr(value=''){
   return JSON.stringify(String(value)).replace(/"/g,'&quot;');
+}
+function jsonActionArg(value={}){
+  return encodeURIComponent(JSON.stringify(value ?? {})).replace(/'/g,'%27');
+}
+function tracsDecodeJsonActionArg(value=''){
+  try{return JSON.parse(decodeURIComponent(String(value || '')));}
+  catch(e){return {};}
+}
+function tracsRefreshNode(node){
+  if(!node)return null;
+  tracsRefreshIcons(node);
+  window.TRACSDropdowns?.refresh?.(node);
+  return node;
+}
+function tracsFlashRow(row){
+  if(!row)return;
+  row.classList.remove('tracs-row-live-updated');
+  void row.offsetWidth;
+  row.classList.add('tracs-row-live-updated');
+  window.setTimeout(()=>row.classList.remove('tracs-row-live-updated'),1400);
+}
+function tracsRowFadeRemove(row){
+  if(!row)return;
+  row.classList.add('tracs-row-removing');
+  window.setTimeout(()=>row.remove(),190);
+}
+function tracsTableBody(tableSelector){
+  return document.querySelector(`${tableSelector} tbody`);
+}
+function tracsRemoveEmptyState(selectors=''){
+  selectors.split(',').map(s=>s.trim()).filter(Boolean).forEach(selector=>{
+    document.querySelectorAll(selector).forEach(node=>node.remove());
+  });
+}
+function tracsInsertOrReplaceRow(tbody,row,selector,prepend=true){
+  if(!tbody || !row)return null;
+  const existing=tbody.querySelector(selector);
+  if(existing)existing.replaceWith(row);
+  else if(prepend)tbody.prepend(row);
+  else tbody.appendChild(row);
+  tracsRefreshNode(row);
+  tracsFlashRow(row);
+  return row;
+}
+function tracsAdjustPanelMeta(delta, pattern=/(\d+)\s+record/i){
+  const meta=document.querySelector('.panel .panel-head .panel-meta, .panel-meta');
+  if(!meta)return;
+  const text=meta.textContent || '';
+  const match=text.match(pattern);
+  if(!match)return;
+  const next=Math.max(0,(Number(match[1])||0)+delta);
+  meta.textContent=text.replace(match[1],String(next)).replace(/record(s)?/,`record${next === 1 ? '' : 's'}`);
+}
+function tracsAdjustPageSubTotal(delta, pattern=/(\d+)\s+total/i){
+  const sub=document.querySelector('.page-sub');
+  if(!sub)return;
+  const text=sub.textContent || '';
+  const match=text.match(pattern);
+  if(!match)return;
+  const next=Math.max(0,(Number(match[1])||0)+delta);
+  sub.textContent=text.replace(match[1],String(next));
+}
+function tracsStatCardByLabel(label){
+  const needle=String(label || '').trim().toLowerCase();
+  return Array.from(document.querySelectorAll('.stat-card')).find(card=>
+    (card.querySelector('.stat-label')?.textContent || '').trim().toLowerCase() === needle
+  ) || null;
+}
+function tracsNumberFromText(text=''){
+  const normalized=String(text || '').replace(/[^\d,.-]/g,'').replace(/\./g,'').replace(',', '.');
+  const value=Number(normalized);
+  return Number.isFinite(value) ? value : 0;
+}
+function tracsFormatIDR(value=0){
+  return `Rp ${Math.round(Number(value)||0).toLocaleString('id-ID')}`;
+}
+function tracsAdjustStatNumber(label,delta,{money=false}={}){
+  const card=tracsStatCardByLabel(label);
+  const el=card?.querySelector('.stat-num');
+  if(!el)return;
+  const next=Math.max(0,tracsNumberFromText(el.textContent)+Number(delta||0));
+  el.textContent=money ? tracsFormatIDR(next) : String(Math.round(next));
+}
+function tracsCurrentMonthKey(){
+  const now=new Date();
+  return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+}
+function tracsRecordMonthKey(value=''){
+  return String(value || '').slice(0,7);
+}
+function tracsMarkSaved(root){
+  window.TRACSUnsavedChanges?.markSaved(root || null);
+  if(root instanceof Element){
+    root.dispatchEvent(new CustomEvent('tracs:save-success',{bubbles:true,detail:{root}}));
+  }
+}
+function tracsPayloadRecord(payload){
+  return payload?.record || payload?.data?.record || payload?.data?.data?.record || null;
+}
+function tracsPayloadId(payload){
+  return Number(payload?.id || payload?.data?.id || payload?.data?.data?.id || tracsPayloadRecord(payload)?.id || 0);
 }
 function formatBytes(bytes=0){
   const size=Number(bytes)||0;
@@ -6016,6 +6268,117 @@ const DT_STATUS_LABEL = {
   'pending verification': 'Pending Verification',
   'renew period'        : 'Renew Period',
 };
+function dtStatusStatLabel(status=''){
+  if(status === 'pending transfer')return 'Pending Transfer';
+  if(status === 'done')return 'Completed';
+  if(status === 'cancelled')return 'Cancelled';
+  if(status === 'locked' || status === 'error epp code')return 'Error / Problem';
+  return '';
+}
+function dtModalPayload(record){
+  return {
+    id: Number(record?.id || 0),
+    domain_name: record?.domain_name || '',
+    transfer_status: record?.transfer_status || 'pending transfer',
+    process_start_date: record?.process_start_date || '',
+    process_end_date: record?.process_end_date || '',
+    webnic_reseller_transfer: record?.webnic_reseller_transfer || '',
+    notes: record?.notes || ''
+  };
+}
+function dtFormatDate(value=''){
+  if(!value)return '';
+  const date=new Date(`${value}T00:00:00`);
+  if(Number.isNaN(date.getTime()))return value;
+  return date.toLocaleDateString(undefined,{day:'2-digit',month:'short',year:'numeric'});
+}
+function dtMoveOptions(selected=''){
+  const source=document.getElementById('nWebnic') || document.getElementById('dtWebnic');
+  const values=source ? Array.from(source.options).map(option=>option.value) : ['','Webnic','Resellercamp'];
+  if(selected && !values.includes(selected))values.push(selected);
+  return values.map(value=>{
+    const label=value || '—';
+    return `<option value="${escHtml(value)}"${value===selected?' selected':''}>${escHtml(label)}</option>`;
+  }).join('');
+}
+function dtStatusOptions(selected='pending transfer'){
+  return Object.keys(DT_STATUS_LABEL).map(value=>
+    `<option value="${escHtml(value)}"${value===selected?' selected':''}>${escHtml(DT_STATUS_LABEL[value])}</option>`
+  ).join('');
+}
+function dtEnsureTable(){
+  let tbody=tracsTableBody('.dt-table');
+  if(tbody)return tbody;
+  const empty=document.querySelector('.dt-empty');
+  if(!empty)return null;
+  const wrap=document.createElement('div');
+  wrap.className='dt-table-wrap';
+  wrap.innerHTML=`
+    <table class="dt-table">
+      <thead><tr><th style="width:38px">No</th><th>Domain</th><th>Status</th><th>Start Date</th><th>End Date</th><th>Move Domain</th><th>Notes</th></tr></thead>
+      <tbody></tbody>
+    </table>`;
+  empty.replaceWith(wrap);
+  return wrap.querySelector('tbody');
+}
+function dtRowHtml(record){
+  const id=Number(record?.id || 0);
+  const status=record?.transfer_status || 'pending transfer';
+  const move=record?.webnic_reseller_transfer || '';
+  const notes=record?.notes || '';
+  const payload=jsonActionArg(dtModalPayload(record));
+  return `
+    <tr data-dt-id="${id}" data-dt-status="${escHtml(status)}" data-dt-start-date="${escHtml(record?.process_start_date || '')}" data-dt-end-date="${escHtml(record?.process_end_date || '')}" data-dt-move="${escHtml(move)}">
+      <td><span class="dt-rownum">1</span></td>
+      <td><div class="dt-domain-name" title="${escHtml(record?.domain_name || '')}">${escHtml(record?.domain_name || '')}</div><div class="dt-domain-sub">#${id}</div><div class="creator-meta">${escHtml(record?.creator_name || 'System')}</div></td>
+      <td><div class="dt-status-wrap" title="Click to change status"><span class="dt-status ${DT_STATUS_CLASS[status] || ''}" id="dt-status-badge-${id}">${escHtml(DT_STATUS_LABEL[status] || status)}</span><select class="dt-status-select" onchange="quickStatusUpdate(${id}, this)" aria-label="Change status for ${escHtml(record?.domain_name || 'domain')}">${dtStatusOptions(status)}</select></div></td>
+      <td>${record?.process_start_date ? `<span class="dt-date">${escHtml(dtFormatDate(record.process_start_date))}</span>` : '<span class="dt-date-none">—</span>'}</td>
+      <td><input type="date" class="dt-date-input ${record?.process_end_date ? 'has-value' : ''}" id="dt-end-${id}" value="${escHtml(record?.process_end_date || '')}" data-prev="${escHtml(record?.process_end_date || '')}" onchange="quickEndDateUpdate(${id}, this)" title="Click to set end date"></td>
+      <td><select class="dt-move-select ${move ? 'has-value' : ''}" id="dt-move-${id}" onchange="quickMoveUpdate(${id}, this)" aria-label="Move domain for ${escHtml(record?.domain_name || 'domain')}">${dtMoveOptions(move)}</select></td>
+      <td>${notes ? `<span class="dt-notes" title="${escHtml(notes)}">${escHtml(notes)}</span>` : '<span class="dt-notes-none">—</span>'}
+        <details class="row-action-menu">
+          <summary class="btn btn-ghost btn-icon" title="Actions" aria-label="Row actions"><i data-lucide="more-vertical" class="icon-sm"></i></summary>
+          <div class="row-action-popover">
+            <button class="btn btn-ghost btn-sm" type="button" onclick="openEditDt(tracsDecodeJsonActionArg('${payload}'))">Edit</button>
+            <button class="btn btn-danger btn-sm" type="button" onclick="deleteDt(${id})">Delete</button>
+          </div>
+        </details>
+      </td>
+    </tr>`;
+}
+function dtRenumberRows(){
+  document.querySelectorAll('.dt-table tbody .dt-rownum').forEach((el,index)=>{el.textContent=String(index+1);});
+}
+function dtRecordFromRow(row){
+  if(!row)return null;
+  return {id:Number(row.dataset.dtId || 0),transfer_status:row.dataset.dtStatus || ''};
+}
+function dtStatsDelta(oldRecord,newRecord){
+  if(!oldRecord && newRecord){
+    tracsAdjustStatNumber('Total Transfers',1);
+  }else if(oldRecord && !newRecord){
+    tracsAdjustStatNumber('Total Transfers',-1);
+  }
+  const oldLabel=dtStatusStatLabel(oldRecord?.transfer_status || '');
+  const newLabel=dtStatusStatLabel(newRecord?.transfer_status || '');
+  if(oldLabel)tracsAdjustStatNumber(oldLabel,-1);
+  if(newLabel)tracsAdjustStatNumber(newLabel,1);
+}
+function dtApplyRecord(record,{isNew=false,oldRecord=null}={}){
+  if(!record?.id)return;
+  const tbody=dtEnsureTable();
+  const holder=document.createElement('tbody');
+  holder.innerHTML=dtRowHtml(record).trim();
+  const previous=oldRecord || dtRecordFromRow(document.querySelector(`[data-dt-id="${record.id}"]`));
+  const rendered=holder.firstElementChild;
+  tracsInsertOrReplaceRow(tbody,rendered,`[data-dt-id="${record.id}"]`,true);
+  dtRenumberRows();
+  dtStatsDelta(previous,record);
+  if(isNew){
+    tracsAdjustPanelMeta(1);
+    tracsAdjustPageSubTotal(1);
+  }
+}
 
 /* Inline row: status update */
 async function quickStatusUpdate(id, selectEl) {
@@ -6023,6 +6386,8 @@ async function quickStatusUpdate(id, selectEl) {
   const badge     = document.getElementById('dt-status-badge-' + id);
   const prevOpt   = [...selectEl.options].find(o => o.defaultSelected);
   const prevStatus = prevOpt ? prevOpt.value : null;
+  const row=selectEl.closest('tr');
+  const oldRecord=dtRecordFromRow(row);
 
   /* Optimistic UI */
   if (badge) {
@@ -6035,8 +6400,11 @@ async function quickStatusUpdate(id, selectEl) {
   });
 
   if (d.success) {
+    const record=tracsPayloadRecord(d);
+    if(record)dtApplyRecord(record,{oldRecord});
     toast('Status updated', 'success');
     [...selectEl.options].forEach(o => { o.defaultSelected = (o.value === newStatus); });
+    tracsMarkSaved(selectEl);
   } else {
     toast(d.message || "Couldn't update the status. Please try again.", 'error');
     if (badge && prevStatus) {
@@ -6061,8 +6429,11 @@ async function quickMoveUpdate(id, selectEl) {
   });
 
   if (d.success) {
+    const record=tracsPayloadRecord(d);
+    if(record)dtApplyRecord(record);
     toast(newVal ? 'Move domain: ' + newVal : 'Move domain cleared', 'success');
     [...selectEl.options].forEach(o => { o.defaultSelected = (o.value === newVal); });
+    tracsMarkSaved(selectEl);
   } else {
     toast(d.message || "Couldn't update the move-domain field. Please try again.", 'error');
     selectEl.value = prevVal;
@@ -6085,9 +6456,12 @@ async function quickEndDateUpdate(id, inputEl) {
   inputEl.classList.remove('saving');
 
   if (d.success) {
+    const record=tracsPayloadRecord(d);
+    if(record)dtApplyRecord(record);
     inputEl.classList.toggle('has-value', !!newVal);
     inputEl.dataset.prev = newVal;
     toast(newVal ? 'End date set' : 'End date cleared', 'success');
+    tracsMarkSaved(inputEl);
   } else {
     toast(d.message || "Couldn't update the end date. Please try again.", 'error');
     inputEl.value = prevVal;
@@ -6119,11 +6493,13 @@ async function quickSaveDt() {
   }
 
   if (d.success) {
+    const record=tracsPayloadRecord(d);
+    if(record)dtApplyRecord(record,{isNew:true});
     toast('Domain transfer recorded', 'success');
     ['nDomain','nStartDate','nEndDate','nWebnic'].forEach(id => setVal(id, ''));
     setVal('nStatus', 'pending transfer');
     document.getElementById('nDomain').focus();
-    _reload();
+    tracsMarkSaved(document.querySelector('.dt-inline-form'));
   } else {
     toast(d.message || "Couldn't save the transfer. Please try again.", 'error');
   }
@@ -6167,10 +6543,12 @@ async function saveEditDt() {
   if(!d)return;
 
   if (d.success) {
+    const record=tracsPayloadRecord(d);
+    if(record)dtApplyRecord(record);
+    tracsMarkSaved(document.getElementById('dtModal'));
     showModalSuccessAndClose({
       modal:'dt',
       message:'Transfer updated.',
-      onAfterClose:()=>location.reload()
     });
   } else {
     handleModalError({modal:'dt',error:{message:d.message,status:d.status},fallbackMessage:'The transfer could not be updated. Please try again.'});
@@ -6180,10 +6558,15 @@ async function saveEditDt() {
 /* Delete Domain Transfer */
 function deleteDt(id) {
   tracsConfirm('Delete this domain transfer record? This cannot be undone.', async () => {
+    const row=document.querySelector(`[data-dt-id="${id}"]`);
+    const oldRecord=dtRecordFromRow(row);
     const d = await api(window.location.pathname, { action: 'delete', id });
     if (d.success) {
       toast('Transfer deleted', 'success');
-      removeRow(`[data-dt-id="${id}"]`);
+      tracsRowFadeRemove(row);
+      dtStatsDelta(oldRecord,null);
+      tracsAdjustPanelMeta(-1);
+      tracsAdjustPageSubTotal(-1);
     } else {
       toast(d.message || "Couldn't delete the transfer. Please try again.", 'error');
     }
@@ -6199,6 +6582,124 @@ API.BT = {
   UPDATE : API_BASE + 'bt-update.php',
   DELETE : API_BASE + 'bt-delete.php'
 };
+
+const BT_TYPE_LABEL = {
+  client_area: 'Client Area',
+  billing_console: 'Billing Console',
+  billing_awan: 'Billing Awan'
+};
+const BT_TYPE_CLASS = {
+  client_area: 'type-ca',
+  billing_console: 'type-bc',
+  billing_awan: 'type-ba'
+};
+function btFormatDateParts(value=''){
+  const date=new Date(String(value || '').replace(' ','T'));
+  if(Number.isNaN(date.getTime()))return {date:'—',time:'—'};
+  return {
+    date:date.toLocaleDateString(undefined,{day:'2-digit',month:'short',year:'numeric'}),
+    time:date.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit',hour12:false})
+  };
+}
+function btModalPayload(record){
+  return {
+    id: Number(record?.id || 0),
+    transfer_date: String(record?.transfer_date || '').replace(' ','T').slice(0,16),
+    sender_email: record?.sender_email || '',
+    sender_user_id: record?.sender_user_id || '',
+    sender_type: record?.sender_type || 'client_area',
+    receiver_email: record?.receiver_email || '',
+    receiver_user_id: record?.receiver_user_id || '',
+    receiver_type: record?.receiver_type || 'client_area',
+    amount: Number(record?.amount || 0),
+    status: record?.status || 'pending',
+    ticket_id: record?.ticket_id || ''
+  };
+}
+function btEnsureTable(){
+  let tbody=tracsTableBody('.bt-table');
+  if(tbody)return tbody;
+  const empty=document.querySelector('.bt-empty');
+  if(!empty)return null;
+  const wrap=document.createElement('div');
+  wrap.className='bt-table-wrap';
+  wrap.innerHTML=`
+    <table class="bt-table">
+      <thead><tr><th style="width:38px">No</th><th>Transfer Date</th><th>Sender</th><th>Type</th><th style="width:20px"></th><th>Receiver</th><th>Type</th><th style="text-align:right">Amount</th><th>Status</th><th>Ticket ID</th></tr></thead>
+      <tbody></tbody>
+    </table>`;
+  empty.replaceWith(wrap);
+  return wrap.querySelector('tbody');
+}
+function btRowHtml(record){
+  const id=Number(record?.id || 0);
+  const amount=Number(record?.amount || 0);
+  const status=String(record?.status || 'pending');
+  const parts=btFormatDateParts(record?.transfer_date);
+  const senderType=record?.sender_type || 'client_area';
+  const receiverType=record?.receiver_type || 'client_area';
+  const ticket=record?.ticket_id || '';
+  const payload=jsonActionArg(btModalPayload(record));
+  return `
+    <tr data-bt-id="${id}" data-bt-amount="${amount}" data-bt-status="${escHtml(status)}" data-bt-transfer-date="${escHtml(record?.transfer_date || '')}">
+      <td><span class="bt-rownum">1</span></td>
+      <td><div class="bt-date-main">${escHtml(parts.date)}</div><div class="bt-date-time">${escHtml(parts.time)}</div><div class="creator-meta">${escHtml(record?.creator_name || 'System')}</div></td>
+      <td><div class="bt-acct-email" title="${escHtml(record?.sender_email || '')}">${escHtml(record?.sender_email || '')}</div><div class="bt-acct-uid">${escHtml(record?.sender_user_id || '')}</div></td>
+      <td><span class="bt-type ${BT_TYPE_CLASS[senderType] || ''}">${escHtml(BT_TYPE_LABEL[senderType] || senderType)}</span></td>
+      <td><div class="bt-dir-arrow"><i data-lucide="chevron-right" class="icon-sm"></i></div></td>
+      <td><div class="bt-acct-email" title="${escHtml(record?.receiver_email || '')}">${escHtml(record?.receiver_email || '')}</div><div class="bt-acct-uid">${escHtml(record?.receiver_user_id || '')}</div></td>
+      <td><span class="bt-type ${BT_TYPE_CLASS[receiverType] || ''}">${escHtml(BT_TYPE_LABEL[receiverType] || receiverType)}</span></td>
+      <td style="text-align:right"><div class="bt-amount"><span class="bt-amount-cur">Rp</span>${amount.toLocaleString('id-ID',{minimumFractionDigits:2,maximumFractionDigits:2})}</div></td>
+      <td><span class="bt-status ${escHtml(status)}">${escHtml(status.charAt(0).toUpperCase()+status.slice(1))}</span></td>
+      <td>${ticket ? `<span class="bt-ticket">${escHtml(ticket)}</span>` : '<span class="bt-ticket-none">—</span>'}
+        <details class="row-action-menu">
+          <summary class="btn btn-ghost btn-icon" title="Actions" aria-label="Row actions"><i data-lucide="more-vertical" class="icon-sm"></i></summary>
+          <div class="row-action-popover">
+            <button class="btn btn-ghost btn-sm" type="button" onclick="openEditBt(tracsDecodeJsonActionArg('${payload}'))">Edit</button>
+            <button class="btn btn-danger btn-sm" type="button" onclick="deleteBt(${id})">Delete</button>
+          </div>
+        </details>
+      </td>
+    </tr>`;
+}
+function btRenumberRows(){
+  document.querySelectorAll('.bt-table tbody .bt-rownum').forEach((el,index)=>{el.textContent=String(index+1);});
+}
+function btStatsDelta(oldRecord,newRecord){
+  const oldAmount=Number(oldRecord?.amount || 0);
+  const newAmount=Number(newRecord?.amount || 0);
+  const oldStatus=oldRecord?.status || '';
+  const newStatus=newRecord?.status || '';
+  tracsAdjustStatNumber('Total Transferred',newAmount-oldAmount,{money:true});
+  tracsAdjustStatNumber('Completed',(newStatus==='done'?newAmount:0)-(oldStatus==='done'?oldAmount:0),{money:true});
+  tracsAdjustStatNumber('Pending Transfers',(newStatus==='pending'?1:0)-(oldStatus==='pending'?1:0));
+  if(tracsRecordMonthKey(oldRecord?.transfer_date) === tracsCurrentMonthKey())tracsAdjustStatNumber('This Month',-oldAmount,{money:true});
+  if(tracsRecordMonthKey(newRecord?.transfer_date) === tracsCurrentMonthKey())tracsAdjustStatNumber('This Month',newAmount,{money:true});
+}
+function btRecordFromRow(row){
+  if(!row)return null;
+  return {
+    id:Number(row.dataset.btId || 0),
+    amount:Number(row.dataset.btAmount || 0),
+    status:row.dataset.btStatus || '',
+    transfer_date:row.dataset.btTransferDate || ''
+  };
+}
+function btApplyRecord(record,{isNew=false,oldRecord=null}={}){
+  if(!record?.id)return;
+  const tbody=btEnsureTable();
+  const row=document.createElement('tbody');
+  row.innerHTML=btRowHtml(record).trim();
+  const rendered=row.firstElementChild;
+  const previous=oldRecord || btRecordFromRow(document.querySelector(`[data-bt-id="${record.id}"]`));
+  tracsInsertOrReplaceRow(tbody,rendered,`[data-bt-id="${record.id}"]`,true);
+  btRenumberRows();
+  btStatsDelta(previous,record);
+  if(isNew){
+    tracsAdjustPanelMeta(1);
+    tracsAdjustPageSubTotal(1);
+  }
+}
 
 /* Set default datetime in inline form (only if on finance page) */
 (function(){
@@ -6241,12 +6742,14 @@ async function quickSaveBt() {
   if (btn) { btn.disabled = false; btn.innerHTML = '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg> Save'; }
 
   if (d.success) {
+    const record=tracsPayloadRecord(d);
+    if(record)btApplyRecord(record,{isNew:true});
     toast('Transfer recorded', 'success');
     ['nSenderEmail','nSenderUid','nReceiverEmail','nReceiverUid','nAmount','nTicket'].forEach(id => setVal(id, ''));
     setVal('nDate', new Date().toISOString().slice(0, 16));
     setVal('nStatus', 'pending');
     document.getElementById('nAmount').focus();
-    _reload();
+    tracsMarkSaved(document.getElementById('btInlineForm') || document.querySelector('.bt-inline-form'));
   } else {
     toast(d.message || "Couldn't save the transfer. Please try again.", 'error');
   }
@@ -6299,10 +6802,12 @@ async function saveEditBt() {
   if(!d)return;
 
   if (d.success) {
+    const record=tracsPayloadRecord(d);
+    if(record)btApplyRecord(record);
+    tracsMarkSaved(document.getElementById('btModal'));
     showModalSuccessAndClose({
       modal:'bt',
       message:'Transfer updated.',
-      onAfterClose:()=>location.reload()
     });
   } else {
     handleModalError({modal:'bt',error:{message:d.message,status:d.status},fallbackMessage:'The transfer could not be updated. Please try again.'});
@@ -6312,10 +6817,15 @@ async function saveEditBt() {
 /* Delete Balance Transfer */
 function deleteBt(id) {
   tracsConfirm('Delete this transfer record? This cannot be undone.', async () => {
+    const row=document.querySelector(`[data-bt-id="${id}"]`);
+    const oldRecord=btRecordFromRow(row);
     const d = await api(API.BT.DELETE, { id });
     if (d.success) {
       toast('Transfer deleted', 'success');
-      removeRow(`[data-bt-id="${id}"]`);
+      tracsRowFadeRemove(row);
+      btStatsDelta(oldRecord,null);
+      tracsAdjustPanelMeta(-1);
+      tracsAdjustPageSubTotal(-1);
     } else {
       toast(d.message || "Couldn't delete the transfer. Please try again.", 'error');
     }

@@ -421,7 +421,10 @@ include 'includes/header.php';
         'ticket_id'        => $ticket,
       ]), ENT_QUOTES, 'UTF-8');
     ?>
-    <tr data-bt-id="<?= $tid ?>">
+    <tr data-bt-id="<?= $tid ?>"
+        data-bt-amount="<?= esc((string)(float)$tr['amount']) ?>"
+        data-bt-status="<?= esc($status) ?>"
+        data-bt-transfer-date="<?= esc($tr['transfer_date']) ?>">
       <td><span class="bt-rownum"><?= $row_num++ ?></span></td>
 
       <td>

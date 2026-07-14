@@ -188,7 +188,10 @@
 
   function markSaved(root = null) {
     const controls = root
-      ? Array.from(root.querySelectorAll(editableSelector))
+      ? [
+          ...(root instanceof Element && root.matches(editableSelector) ? [root] : []),
+          ...Array.from(root.querySelectorAll?.(editableSelector) || [])
+        ]
       : Array.from(document.querySelectorAll(editableSelector));
     controls.forEach(control => {
       if (isIgnored(control)) return;

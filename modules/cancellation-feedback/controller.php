@@ -35,7 +35,7 @@ class CancellationFeedbackController {
             // Push to ticker
             $tickerMsg = "[CS OPS] New cancellation feedback for " . $serviceText . " — Reason: " . $reasonText;
             $criticalReasons = ['Frequent downtime', 'DDoS / security-related instability', 'Slow server performance', 'Repeated Issue'];
-            $type = array_intersect(cf_decode_multi_value($data['cancellation_reason']), $criticalReasons) ? 'urgent' : 'info';
+            $type = array_intersect(cf_decode_multi_value($data['cancellation_reason']), $criticalReasons) ? 'critical' : 'info';
             $this->ticker->create($this->userId, $tickerMsg, $type, 'Cancellation Feedback', $id);
 
             return $id;
@@ -50,6 +50,25 @@ class CancellationFeedbackController {
             return true;
         }
         return false;
+    }
+
+    /**
+     * Patch a single field on an existing feedback record (auto-save).
+     * Logs a lightweight activity entry for auditability.
+     *
+     * @param  int    $id    Record primary key
+     * @param  string $field DB column name (validated by model whitelist)
+     * @param  mixed  $value New value
+     * @return array{updated_at:string}|false
+     */
+    public function patchFeedbackField(int $id, string $field, mixed $value): array|false {
+        $result = $this->model->patchField($id, $field, $value);
+        if ($result !== false) {
+            $humanField = str_replace('_', ' ', $field);
+            $msg = "Auto-saved field '{$humanField}' on cancellation feedback";
+            $this->activityLogger->logActivity('updated', 'Cancellation Feedback', $msg, $id);
+        }
+        return $result;
     }
 
     public function deleteFeedback($id) {
