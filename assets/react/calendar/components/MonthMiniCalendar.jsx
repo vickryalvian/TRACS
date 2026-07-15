@@ -31,9 +31,9 @@ export function MonthMiniCalendar({
         <span className="cal:text-sm cal:font-semibold cal:text-tracs-primary">{MONTHS[month]}</span>
         <span className="cal:font-mono cal:text-[9px] cal:text-tracs-muted">{year}</span>
       </button>
-      <div className="cal:grid cal:grid-cols-7 cal:gap-1" role="grid" aria-label={`${MONTHS[month]} ${year}`}>
+      <div className="cal:grid cal:grid-cols-7 cal:gap-1 cal:overflow-hidden" role="grid" aria-label={`${MONTHS[month]} ${year}`}>
         {WEEKDAYS.map((day) => (
-          <span key={day} className="cal:pb-1 cal:text-center cal:font-mono cal:text-[8px] cal:font-bold cal:text-tracs-faint">{day[0]}</span>
+          <span key={day} className="cal:min-w-0 cal:pb-1 cal:text-center cal:font-mono cal:text-[8px] cal:font-bold cal:text-tracs-faint">{day[0]}</span>
         ))}
         {monthCells(year, month).map((cell) => {
           const events = eventIndex.get(cell.iso) || [];

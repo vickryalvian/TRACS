@@ -4507,31 +4507,49 @@ function initTaskManagementTables(root=document){
 }
 
 function initTaskMonitoringTabs(){
-  const root=document.querySelector('[data-task-monitoring]');
-  if(!root)return;
-  const tabs=[...root.querySelectorAll('[data-task-monitor-tab]')];
-  const panes=[...root.querySelectorAll('[data-task-monitor-pane]')];
-  const allLink=root.querySelector('[data-task-monitor-all]');
-  const activate=(name)=>{
-    const activeTab=tabs.find(tab=>tab.dataset.taskMonitorTab===name) || tabs[0];
-    if(!activeTab)return;
-    tabs.forEach(tab=>{
-      const selected=tab===activeTab;
-      tab.classList.toggle('active',selected);
-      tab.setAttribute('aria-selected',selected?'true':'false');
+  document.querySelectorAll('[data-task-monitoring]').forEach(root=>{
+    if(root.dataset.taskMonitoringReady==='1')return;
+    root.dataset.taskMonitoringReady='1';
+    const tabs=[...root.querySelectorAll('[data-task-monitor-tab]')];
+    const panes=[...root.querySelectorAll('[data-task-monitor-pane]')];
+    const allLink=root.querySelector('[data-task-monitor-all]');
+    const activate=(name,focus=false)=>{
+      const activeTab=tabs.find(tab=>tab.dataset.taskMonitorTab===name) || tabs[0];
+      if(!activeTab)return;
+      tabs.forEach(tab=>{
+        const selected=tab===activeTab;
+        tab.classList.toggle('active',selected);
+        tab.setAttribute('aria-selected',selected?'true':'false');
+        tab.tabIndex=selected?0:-1;
+      });
+      panes.forEach(pane=>{
+        const selected=pane.dataset.taskMonitorPane===activeTab.dataset.taskMonitorTab;
+        pane.hidden=!selected;
+        pane.classList.toggle('is-active',selected);
+      });
+      if(allLink)allLink.href=activeTab.dataset.allHref || '#';
+      if(focus)activeTab.focus();
+      tracsRefreshIcons(root);
+    };
+    tabs.forEach((tab,index)=>{
+      tab.addEventListener('click',()=>activate(tab.dataset.taskMonitorTab));
+      tab.addEventListener('keydown',event=>{
+        const key=event.key;
+        if(!['ArrowLeft','ArrowRight','Home','End'].includes(key))return;
+        event.preventDefault();
+        const last=tabs.length-1;
+        const nextIndex=key==='Home'
+          ? 0
+          : key==='End'
+            ? last
+            : key==='ArrowRight'
+              ? (index+1)%tabs.length
+              : (index-1+tabs.length)%tabs.length;
+        activate(tabs[nextIndex]?.dataset.taskMonitorTab,true);
+      });
     });
-    panes.forEach(pane=>{
-      const selected=pane.dataset.taskMonitorPane===activeTab.dataset.taskMonitorTab;
-      pane.hidden=!selected;
-      pane.classList.toggle('is-active',selected);
-    });
-    if(allLink)allLink.href=activeTab.dataset.allHref || '#';
-    tracsRefreshIcons(root);
-  };
-  tabs.forEach(tab=>{
-    tab.addEventListener('click',()=>activate(tab.dataset.taskMonitorTab));
+    activate(tabs.find(tab=>tab.classList.contains('active'))?.dataset.taskMonitorTab || tabs[0]?.dataset.taskMonitorTab);
   });
-  activate(tabs.find(tab=>tab.classList.contains('active'))?.dataset.taskMonitorTab || tabs[0]?.dataset.taskMonitorTab);
   refreshTaskMonitoringCounters();
 }
 

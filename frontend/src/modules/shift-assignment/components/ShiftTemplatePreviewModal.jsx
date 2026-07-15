@@ -378,15 +378,15 @@ export function ShiftTemplatePreviewModal({ context, onApplied, onClose, onToast
 
               <div className="tr:grid tr:grid-cols-1 tr:gap-tracs-2 tr:text-xs tr:text-tracs-secondary">
                 <label className="tr:flex tr:items-center tr:gap-2">
-                  <input checked={draft.include_holidays} name="include_holidays" onChange={update} type="checkbox" />
+                  <input checked={draft.include_holidays} className="tracs-checkbox" name="include_holidays" onChange={update} type="checkbox" />
                   Include holiday advisories
                 </label>
                 <label className="tr:flex tr:items-center tr:gap-2">
-                  <input checked={draft.include_warnings} name="include_warnings" onChange={update} type="checkbox" />
+                  <input checked={draft.include_warnings} className="tracs-checkbox" name="include_warnings" onChange={update} type="checkbox" />
                   Include warning checks
                 </label>
                 <label className="tr:flex tr:items-center tr:gap-2">
-                  <input checked={draft.strict_conflict_check} name="strict_conflict_check" onChange={update} type="checkbox" />
+                  <input checked={draft.strict_conflict_check} className="tracs-checkbox" name="strict_conflict_check" onChange={update} type="checkbox" />
                   Strict conflict check
                 </label>
               </div>

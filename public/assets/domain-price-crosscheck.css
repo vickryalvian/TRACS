@@ -315,8 +315,10 @@
 
 .dpc-export-option input,
 .tracs-domain-price-crosscheck .dpc-export-option input {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
   margin: 0;
-  accent-color: var(--blue);
 }
 
 .dpc-export-range,
@@ -1026,15 +1028,16 @@
 
 .dpc-option-card .dpc-check-row,
 .tracs-domain-price-crosscheck .dpc-option-card .dpc-check-row {
-  grid-template-columns: 16px minmax(0, 1fr);
+  grid-template-columns: 15px minmax(0, 1fr);
   gap: 8px;
 }
 
 .dpc-option-card .dpc-check-row input,
 .tracs-domain-price-crosscheck .dpc-option-card .dpc-check-row input {
-  width: 14px;
-  height: 14px;
-  margin-top: 1px;
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  margin-top: 2px;
 }
 
 .dpc-option-card .dpc-check-row span,
@@ -1408,7 +1411,10 @@
 
 .dpc-check-row input,
 .tracs-domain-price-crosscheck .dpc-check-row input {
-  margin-top: 3px;
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  margin-top: 2px;
 }
 
 .dpc-check-row strong,

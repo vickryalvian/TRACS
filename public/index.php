@@ -1378,33 +1378,225 @@ include 'includes/header.php';
         <?php endif; ?>
       </div><!-- /cases panel -->
 
-      <!-- WEBSITE SCREENSHOT PANEL (under Cases) -->
-      <div class="panel screenshot-panel">
-        <div class="panel-head">
-          <span class="panel-title">Website Screenshot</span>
-          <div class="panel-right">
-            <select id="screenshot-region" class="form-select" aria-label="Capture region" data-unsaved-ignore>
-              <option value="">Auto region</option>
-              <option value="id-1">🇮🇩 ID — Jakarta</option>
-              <option value="us-1">🇺🇸 US — Oregon</option>
-              <option value="all" selected>🌐 All regions</option>
-            </select>
-          </div>
-        </div>
-        <div class="screenshot-body">
-          <div class="screenshot-input-row">
-            <input type="text" id="screenshot-url" class="form-input" placeholder="Enter domain, URL, or IP — e.g. example.com" autocomplete="off" spellcheck="false" data-unsaved-ignore>
-            <button type="button" class="btn btn-primary" id="screenshot-btn">
-              <i data-lucide="camera" class="icon-sm"></i> <span class="screenshot-btn-label">Capture</span>
-            </button>
-          </div>
-          <div class="screenshot-status" id="screenshot-status" role="status" hidden></div>
-        </div>
-      </div><!-- /screenshot -->
-
     </div><!-- /col-left -->
 
     <div class="dashboard-workspace">
+
+    <div class="col-dashboard-tabs">
+      <section class="panel task-monitoring-panel dashboard-widget-tabs-panel" data-task-monitoring>
+        <div class="panel-head task-monitoring-head">
+          <div class="task-monitoring-title">
+            <span class="panel-title">Dashboard Widgets</span>
+          </div>
+        </div>
+
+        <div class="task-monitoring-tabs" role="tablist" aria-label="Dashboard widgets">
+          <button type="button" class="task-monitoring-tab active" role="tab" aria-selected="true" aria-controls="dashboard-pane-shift-handover" data-task-monitor-tab="shift-handover"><i data-lucide="refresh-cw" class="icon-xs"></i>Shift Handover</button>
+          <button type="button" class="task-monitoring-tab" role="tab" aria-selected="false" aria-controls="dashboard-pane-screenshot" data-task-monitor-tab="screenshot"><i data-lucide="camera" class="icon-xs"></i>Website Screenshot</button>
+          <button type="button" class="task-monitoring-tab" role="tab" aria-selected="false" aria-controls="dashboard-pane-currency" data-task-monitor-tab="currency"><i data-lucide="arrow-right-left" class="icon-xs"></i>Currency Converter</button>
+          <button type="button" class="task-monitoring-tab" role="tab" aria-selected="false" aria-controls="dashboard-pane-activity" data-task-monitor-tab="activity"><i data-lucide="activity" class="icon-xs"></i>Recent Activity<?php if(count($activities) > 0): ?><span class="tm-tab-count"><?=count($activities)?></span><?php endif; ?></button>
+        </div>
+
+        <div class="task-monitoring-viewport dashboard-widget-viewport">
+          <section class="task-monitoring-pane dashboard-widget-pane is-active" id="dashboard-pane-shift-handover" role="tabpanel" data-task-monitor-pane="shift-handover">
+            <!-- SHIFT HANDOVER PANEL -->
+            <div class="panel shift-handover-panel dashboard-tab-widget">
+              <div class="panel-head">
+                <span class="panel-title">Shift Handover</span>
+                <div class="panel-right">
+                  <span class="panel-meta"><?=esc($shift_handover_label)?></span>
+                  <a href="shift-reports.php" class="btn btn-ghost btn-sm">History →</a>
+                  <button class="btn btn-primary btn-sm btn-add-reveal" onclick="openNewShiftReport()">
+                    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span class="btn-add-label">Add</span>
+                  </button>
+                </div>
+              </div>
+              
+              <?php if(empty($shift_reports)): ?>
+              <div class="empty shift-handover-empty">
+                <div class="empty-ic"><i data-lucide="refresh-cw"></i></div>
+                <div class="empty-t">No reports today</div>
+              </div>
+              <?php else: ?>
+              <div class="scroll-y dashboard-shift-scroll">
+                <?php foreach($shift_reports as $sname => $items): ?>
+                <div class="shift-group">
+                  <div class="shift-group-title"><?=esc($sname)?></div>
+                  <?php
+                    // Sub-group a shift's items by the agent's handover (one report per
+                    // agent). Falls back to author+date when a legacy row has no handover.
+                    $handoverBlocks = [];
+                    foreach($items as $it) {
+                      $hkey = !empty($it['handover_id'])
+                        ? 'h'.$it['handover_id']
+                        : 'u'.($it['created_by'] ?? '0').'|'.($it['active_date'] ?? '');
+                      if(!isset($handoverBlocks[$hkey])) {
+                        $handoverBlocks[$hkey] = [
+                          'agent' => tracs_creator_label($it),
+                          'summary' => trim((string)($it['handover_summary'] ?? '')),
+                          'items' => [],
+                        ];
+                      }
+                      $handoverBlocks[$hkey]['items'][] = $it;
+                    }
+                  ?>
+                  <?php foreach($handoverBlocks as $block):
+                    $blockItems = $block['items'];
+                    $cActive = count(array_filter($blockItems, fn($sr) => ($sr['status'] ?? 'active') === 'active'));
+                    $cHold = count(array_filter($blockItems, fn($sr) => ($sr['status'] ?? '') === 'on_hold'));
+                    $cResolved = count(array_filter($blockItems, fn($sr) => ($sr['status'] ?? '') === 'resolved'));
+                    $shiftStatusGroups = [
+                      'active' => ['label' => 'Needs Handover', 'items' => array_values(array_filter($blockItems, fn($sr) => ($sr['status'] ?? 'active') === 'active'))],
+                      'on_hold' => ['label' => 'On Hold / Monitoring', 'items' => array_values(array_filter($blockItems, fn($sr) => ($sr['status'] ?? '') === 'on_hold'))],
+                      'resolved' => ['label' => 'Resolved This Shift', 'items' => array_values(array_filter($blockItems, fn($sr) => ($sr['status'] ?? '') === 'resolved'))],
+                    ];
+                  ?>
+                  <div class="shift-handover-block">
+                    <div class="shift-handover-agent">
+                      <span class="shift-agent-name"><i data-lucide="user" class="icon-xs"></i><?=esc($block['agent'])?></span>
+                      <span class="shift-agent-counts">
+                        <?php if($cActive): ?><span class="badge badge-sm b-active"><?=$cActive?></span><?php endif; ?>
+                        <?php if($cHold): ?><span class="badge badge-sm b-hold"><?=$cHold?></span><?php endif; ?>
+                        <?php if($cResolved): ?><span class="badge badge-sm b-resolved"><?=$cResolved?></span><?php endif; ?>
+                      </span>
+                    </div>
+                    <?php if($block['summary'] !== ''): ?>
+                    <div class="shift-handover-summary"><?=esc($block['summary'])?></div>
+                    <?php endif; ?>
+                    <?php foreach($shiftStatusGroups as $statusKey => $statusGroup): if(empty($statusGroup['items'])) continue; ?>
+                    <div class="shift-status-lane is-<?=esc($statusKey)?>">
+                      <div class="shift-status-lane-title"><?=esc($statusGroup['label'])?></div>
+                      <?php foreach($statusGroup['items'] as $sr):
+                      $srid=intval($sr['id']);
+                      $srtit=esc($sr['title']);
+                      $srprio=strtolower($sr['priority']);
+                      $srstatus=$sr['status'];
+                      $pclass=prio_bar($srprio);
+                      $statusBadge = $srstatus === 'resolved' ? 'b-resolved' : ($srstatus === 'on_hold' ? 'b-hold' : 'b-active');
+                      $statusText = $srstatus === 'active' ? 'Need Handover' : ucwords(str_replace('_', ' ', $srstatus));
+                    ?>
+                    <div class="shift-item <?=$srstatus==='resolved'?'resolved':''?> <?=$srstatus==='on_hold'?'on-hold':''?>"
+                      data-id="<?=$srid?>"
+                      data-title="<?=$srtit?>"
+                      data-shift="<?=esc($sr['shift_name'] ?? $sname)?>"
+                      data-prio="<?=esc($srprio)?>"
+                      data-status="<?=esc($srstatus)?>"
+                      data-details="<?=esc($sr['details'] ?? '')?>"
+                      data-date="<?=esc($sr['active_date'] ?? '')?>"
+                      data-resolution-note="<?=esc($sr['resolution_note'] ?? '')?>"
+                      data-resolved-at="<?=esc($sr['resolved_at'] ?? '')?>"
+                      role="button"
+                      tabindex="0"
+                      onclick="openEditShiftReport(<?=$srid?>)"
+                      onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openEditShiftReport(<?=$srid?>)}">
+                      <div class="shift-priority <?=$pclass?>"></div>
+                      <div class="shift-text"><?=$srtit?></div>
+                      <span class="badge badge-sm <?=$statusBadge?>"><?=esc($statusText)?></span>
+                    </div>
+                      <?php endforeach; ?>
+                    </div>
+                    <?php endforeach; ?>
+                  </div>
+                  <?php endforeach; ?>
+                </div>
+                <?php endforeach; ?>
+              </div>
+              <?php endif; ?>
+            </div><!-- /shift handover -->
+          </section>
+
+          <section class="task-monitoring-pane dashboard-widget-pane" id="dashboard-pane-screenshot" role="tabpanel" data-task-monitor-pane="screenshot" hidden>
+            <!-- WEBSITE SCREENSHOT PANEL -->
+            <div class="panel screenshot-panel dashboard-tab-widget">
+              <div class="panel-head">
+                <span class="panel-title">Website Screenshot</span>
+                <div class="panel-right">
+                  <select id="screenshot-region" class="form-select" aria-label="Capture region" data-unsaved-ignore>
+                    <option value="">Auto region</option>
+                    <option value="id-1">🇮🇩 ID — Jakarta</option>
+                    <option value="us-1">🇺🇸 US — Oregon</option>
+                    <option value="all" selected>🌐 All regions</option>
+                  </select>
+                </div>
+              </div>
+              <div class="screenshot-body">
+                <div class="screenshot-input-row">
+                  <input type="text" id="screenshot-url" class="form-input" placeholder="Enter domain, URL, or IP — e.g. example.com" autocomplete="off" spellcheck="false" data-unsaved-ignore>
+                  <button type="button" class="btn btn-primary" id="screenshot-btn">
+                    <i data-lucide="camera" class="icon-sm"></i> <span class="screenshot-btn-label">Capture</span>
+                  </button>
+                </div>
+                <div class="screenshot-status" id="screenshot-status" role="status" hidden></div>
+              </div>
+            </div><!-- /screenshot -->
+          </section>
+
+          <section class="task-monitoring-pane dashboard-widget-pane" id="dashboard-pane-currency" role="tabpanel" data-task-monitor-pane="currency" hidden>
+            <!-- CURRENCY CONVERTER PANEL -->
+            <div class="panel dashboard-tab-widget">
+              <div class="panel-head">
+                <span class="panel-title">Currency Converter</span>
+              </div>
+              <div class="currency-body">
+                <div class="currency-row">
+                  <select id="currency-from" class="form-select" data-unsaved-ignore>
+                    <option value="IDR">IDR</option>
+                    <option value="USD">USD</option>
+                    <option value="SGD">SGD</option>
+                  </select>
+                  <button type="button" class="btn btn-ghost btn-icon" id="swap-currency"><i data-lucide="arrow-right-left" class="icon-sm"></i></button>
+                  <select id="currency-to" class="form-select" data-unsaved-ignore>
+                    <option value="USD">USD</option>
+                    <option value="IDR">IDR</option>
+                    <option value="SGD">SGD</option>
+                  </select>
+                </div>
+                <input type="number" id="currency-amount" class="form-input" placeholder="Transfer amount" data-unsaved-ignore>
+                <button type="button" class="btn btn-primary" id="convert-btn">Convert</button>
+                <div class="currency-result">
+                  <div id="currency-result">—</div>
+                  <small id="currency-rate"></small>
+                </div>
+                <div class="currency-updated">Updated: <span id="currency-time">—</span></div>
+              </div>
+            </div><!-- /currency -->
+          </section>
+
+          <section class="task-monitoring-pane dashboard-widget-pane" id="dashboard-pane-activity" role="tabpanel" data-task-monitor-pane="activity" hidden>
+            <!-- RECENT ACTIVITY PANEL -->
+            <div class="panel dashboard-activity-panel dashboard-tab-widget">
+              <div class="panel-head">
+                <span class="panel-title">Recent Activity</span>
+                <div class="panel-right">
+                  <span class="panel-meta"><?=count($activities)?> events</span>
+                  <a href="activity.php" class="btn btn-ghost btn-sm">All →</a>
+                </div>
+              </div>
+              <?php if(empty($activities)): ?>
+              <div class="empty">
+                <div class="empty-ic"><i data-lucide="activity"></i></div>
+                <div class="empty-t">No activity yet</div>
+              </div>
+              <?php else: ?>
+              <div class="dashboard-activity-scroll scroll-y">
+                <?php foreach(array_slice($activities,0,10) as $a): ?>
+                <div class="act-row">
+                  <div class="act-ic"><i data-lucide="<?=esc($a['icon']??'file-text')?>" class="icon-sm"></i></div>
+                  <div class="flex1 min0">
+                    <div class="act-text"><strong><?=esc(ucfirst($a['action']??''))?></strong><span>· <?=esc($a['module']??'')?></span></div>
+                    <div class="act-desc"><?=esc($a['description']??'')?></div>
+                    <div class="act-time"><?=esc($a['time_ago']??'')?> · <?=tracs_creator_meta($a, $a['created_at'] ?? null, false)?></div>
+                  </div>
+                </div>
+                <?php endforeach; ?>
+              </div>
+              <?php endif; ?>
+            </div><!-- /recent activity -->
+          </section>
+        </div>
+      </section>
+    </div><!-- /col-dashboard-tabs -->
+
     <!-- ════════════════════════════
          PRODUCTIVITY - Task Monitoring
     ════════════════════════════ -->
@@ -1544,191 +1736,6 @@ include 'includes/header.php';
         </div>
       </section>
     </div><!-- /col-productivity -->
-
-    <!-- ════════════════════════════
-         CENTER COL — Workstream
-    ════════════════════════════ -->
-    <div class="col-center">
-
-      <!-- SHIFT HANDOVER PANEL -->
-      <div class="panel shift-handover-panel">
-        <div class="panel-head">
-          <span class="panel-title">Shift Handover</span>
-          <div class="panel-right">
-            <span class="panel-meta"><?=esc($shift_handover_label)?></span>
-            <a href="shift-reports.php" class="btn btn-ghost btn-sm">History →</a>
-            <button class="btn btn-primary btn-sm btn-add-reveal" onclick="openNewShiftReport()">
-              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span class="btn-add-label">Add</span>
-            </button>
-          </div>
-        </div>
-        
-        <?php if(empty($shift_reports)): ?>
-        <div class="empty shift-handover-empty">
-          <div class="empty-ic"><i data-lucide="refresh-cw"></i></div>
-          <div class="empty-t">No reports today</div>
-        </div>
-        <?php else: ?>
-        <div class="scroll-y dashboard-shift-scroll">
-          <?php foreach($shift_reports as $sname => $items): ?>
-          <div class="shift-group">
-            <div class="shift-group-title"><?=esc($sname)?></div>
-            <?php
-              // Sub-group a shift's items by the agent's handover (one report per
-              // agent). Falls back to author+date when a legacy row has no handover.
-              $handoverBlocks = [];
-              foreach($items as $it) {
-                $hkey = !empty($it['handover_id'])
-                  ? 'h'.$it['handover_id']
-                  : 'u'.($it['created_by'] ?? '0').'|'.($it['active_date'] ?? '');
-                if(!isset($handoverBlocks[$hkey])) {
-                  $handoverBlocks[$hkey] = [
-                    'agent' => tracs_creator_label($it),
-                    'summary' => trim((string)($it['handover_summary'] ?? '')),
-                    'items' => [],
-                  ];
-                }
-                $handoverBlocks[$hkey]['items'][] = $it;
-              }
-            ?>
-            <?php foreach($handoverBlocks as $block):
-              $blockItems = $block['items'];
-              $cActive = count(array_filter($blockItems, fn($sr) => ($sr['status'] ?? 'active') === 'active'));
-              $cHold = count(array_filter($blockItems, fn($sr) => ($sr['status'] ?? '') === 'on_hold'));
-              $cResolved = count(array_filter($blockItems, fn($sr) => ($sr['status'] ?? '') === 'resolved'));
-              $shiftStatusGroups = [
-                'active' => ['label' => 'Needs Handover', 'items' => array_values(array_filter($blockItems, fn($sr) => ($sr['status'] ?? 'active') === 'active'))],
-                'on_hold' => ['label' => 'On Hold / Monitoring', 'items' => array_values(array_filter($blockItems, fn($sr) => ($sr['status'] ?? '') === 'on_hold'))],
-                'resolved' => ['label' => 'Resolved This Shift', 'items' => array_values(array_filter($blockItems, fn($sr) => ($sr['status'] ?? '') === 'resolved'))],
-              ];
-            ?>
-            <div class="shift-handover-block">
-              <div class="shift-handover-agent">
-                <span class="shift-agent-name"><i data-lucide="user" class="icon-xs"></i><?=esc($block['agent'])?></span>
-                <span class="shift-agent-counts">
-                  <?php if($cActive): ?><span class="badge badge-sm b-active"><?=$cActive?></span><?php endif; ?>
-                  <?php if($cHold): ?><span class="badge badge-sm b-hold"><?=$cHold?></span><?php endif; ?>
-                  <?php if($cResolved): ?><span class="badge badge-sm b-resolved"><?=$cResolved?></span><?php endif; ?>
-                </span>
-              </div>
-              <?php if($block['summary'] !== ''): ?>
-              <div class="shift-handover-summary"><?=esc($block['summary'])?></div>
-              <?php endif; ?>
-              <?php foreach($shiftStatusGroups as $statusKey => $statusGroup): if(empty($statusGroup['items'])) continue; ?>
-              <div class="shift-status-lane is-<?=esc($statusKey)?>">
-                <div class="shift-status-lane-title"><?=esc($statusGroup['label'])?></div>
-                <?php foreach($statusGroup['items'] as $sr):
-                $srid=intval($sr['id']);
-                $srtit=esc($sr['title']);
-                $srprio=strtolower($sr['priority']);
-                $srstatus=$sr['status'];
-                $pclass=prio_bar($srprio);
-                $statusBadge = $srstatus === 'resolved' ? 'b-resolved' : ($srstatus === 'on_hold' ? 'b-hold' : 'b-active');
-                $statusText = $srstatus === 'active' ? 'Need Handover' : ucwords(str_replace('_', ' ', $srstatus));
-              ?>
-              <div class="shift-item <?=$srstatus==='resolved'?'resolved':''?> <?=$srstatus==='on_hold'?'on-hold':''?>"
-                data-id="<?=$srid?>"
-                data-title="<?=$srtit?>"
-                data-shift="<?=esc($sr['shift_name'] ?? $sname)?>"
-                data-prio="<?=esc($srprio)?>"
-                data-status="<?=esc($srstatus)?>"
-                data-details="<?=esc($sr['details'] ?? '')?>"
-                data-date="<?=esc($sr['active_date'] ?? '')?>"
-                data-resolution-note="<?=esc($sr['resolution_note'] ?? '')?>"
-                data-resolved-at="<?=esc($sr['resolved_at'] ?? '')?>"
-                role="button"
-                tabindex="0"
-                onclick="openEditShiftReport(<?=$srid?>)"
-                onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openEditShiftReport(<?=$srid?>)}">
-                <div class="shift-priority <?=$pclass?>"></div>
-                <div class="shift-text"><?=$srtit?></div>
-                <span class="badge badge-sm <?=$statusBadge?>"><?=esc($statusText)?></span>
-              </div>
-                <?php endforeach; ?>
-              </div>
-              <?php endforeach; ?>
-            </div>
-            <?php endforeach; ?>
-          </div>
-          <?php endforeach; ?>
-        </div>
-        <?php endif; ?>
-      </div><!-- /shift handover -->
-
-    </div><!-- /col-center -->
-
-    <!-- ════════════════════════════
-         RIGHT COL — Utilities
-    ════════════════════════════ -->
-    <div class="col-right">
-
-      <!-- CURRENCY CONVERTER PANEL -->
-      <div class="panel">
-        <div class="panel-head">
-          <span class="panel-title">Currency Converter</span>
-        </div>
-        <div class="currency-body">
-          <div class="currency-row">
-            <select id="currency-from" class="form-select" data-unsaved-ignore>
-              <option value="IDR">IDR</option>
-              <option value="USD">USD</option>
-              <option value="SGD">SGD</option>
-            </select>
-            <button type="button" class="btn btn-ghost btn-icon" id="swap-currency" style="width:30px;height:30px;"><i data-lucide="arrow-right-left" class="icon-sm"></i></button>
-            <select id="currency-to" class="form-select" data-unsaved-ignore>
-              <option value="USD">USD</option>
-              <option value="IDR">IDR</option>
-              <option value="SGD">SGD</option>
-            </select>
-          </div>
-          <input type="number" id="currency-amount" class="form-input" placeholder="Transfer amount" data-unsaved-ignore>
-          <button type="button" class="btn btn-primary" id="convert-btn" style="width:100%">Convert</button>
-          <div class="currency-result">
-            <div id="currency-result">—</div>
-            <small id="currency-rate"></small>
-          </div>
-          <div class="currency-updated">Updated: <span id="currency-time">—</span></div>
-        </div>
-      </div><!-- /currency -->
-
-    </div><!-- /col-right -->
-
-    <!-- ════════════════════════════
-         ACTIVITY COL — Recent Activity (moved from Task Monitoring)
-    ════════════════════════════ -->
-    <div class="col-activity">
-
-      <!-- RECENT ACTIVITY PANEL -->
-      <div class="panel dashboard-activity-panel">
-        <div class="panel-head">
-          <span class="panel-title">Recent Activity</span>
-          <div class="panel-right">
-            <span class="panel-meta"><?=count($activities)?> events</span>
-            <a href="activity.php" class="btn btn-ghost btn-sm">All →</a>
-          </div>
-        </div>
-        <?php if(empty($activities)): ?>
-        <div class="empty">
-          <div class="empty-ic"><i data-lucide="activity"></i></div>
-          <div class="empty-t">No activity yet</div>
-        </div>
-        <?php else: ?>
-        <div class="dashboard-activity-scroll scroll-y">
-          <?php foreach(array_slice($activities,0,10) as $a): ?>
-          <div class="act-row">
-            <div class="act-ic"><i data-lucide="<?=esc($a['icon']??'file-text')?>" class="icon-sm"></i></div>
-            <div class="flex1 min0">
-              <div class="act-text"><strong><?=esc(ucfirst($a['action']??''))?></strong><span>· <?=esc($a['module']??'')?></span></div>
-              <div class="act-desc"><?=esc($a['description']??'')?></div>
-              <div class="act-time"><?=esc($a['time_ago']??'')?> · <?=tracs_creator_meta($a, $a['created_at'] ?? null, false)?></div>
-            </div>
-          </div>
-          <?php endforeach; ?>
-        </div>
-        <?php endif; ?>
-      </div><!-- /recent activity -->
-
-    </div><!-- /col-activity -->
 
     <!-- Dobby easter egg — fills the blank space below the utility row -->
     <div class="dobby-egg" aria-hidden="true" title="Dobby says hi">

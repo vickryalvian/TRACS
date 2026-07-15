@@ -28,10 +28,10 @@ export function MonthView({
       </div>
       <div className="cal:grid cal:grid-cols-7 cal:border-b cal:border-tracs-border cal:bg-tracs-surface-2">
         {WEEKDAYS.map((day) => (
-          <span key={day} className="cal:px-2 cal:py-2 cal:text-center cal:font-mono cal:text-[9px] cal:font-bold cal:text-tracs-muted">{day}</span>
+          <span key={day} className="cal:min-w-0 cal:px-1 cal:py-2 cal:text-center cal:font-mono cal:text-[9px] cal:font-bold cal:text-tracs-muted">{day}</span>
         ))}
       </div>
-      <div className="cal:grid cal:grid-cols-7">
+      <div className="cal:grid cal:grid-cols-7 cal:overflow-hidden" role="grid" aria-label={`${MONTHS[month]} ${year}`}>
         {monthCells(year, month).map((cell) => {
           const events = eventIndex.get(cell.iso) || [];
           const holiday = events.some((event) => event.type === 'holiday');
@@ -46,7 +46,7 @@ export function MonthView({
               onDoubleClick={() => onBookDate(cell.iso)}
               onKeyDown={(event) => handleDateGridKey(event, cell.iso, onSelectDate, onOpenDate)}
               className={cx(
-                'cal:min-h-28 cal:min-w-0 cal:border-b cal:border-r cal:border-tracs-border cal:p-2 cal:text-left cal:transition focus-visible:cal:z-10 focus-visible:cal:outline-none focus-visible:cal:ring-2 focus-visible:cal:ring-tracs-accent',
+                'cal:min-h-28 cal:min-w-0 cal:overflow-hidden cal:border-b cal:border-r cal:border-tracs-border cal:p-2 cal:text-left cal:transition focus-visible:cal:z-10 focus-visible:cal:outline-none focus-visible:cal:ring-2 focus-visible:cal:ring-tracs-accent',
                 cell.currentMonth ? 'cal:bg-tracs-card hover:cal:bg-tracs-surface-2' : 'cal:bg-tracs-page cal:opacity-35',
                 holiday && cell.currentMonth && 'cal:bg-tracs-danger-soft/40',
                 cell.iso === selectedDate && 'cal:bg-tracs-accent-soft',
