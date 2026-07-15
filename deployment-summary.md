@@ -1,13 +1,38 @@
 # TRACS Deployment Summary
 
 Status: Deployed successfully
-Completed: 2026-07-12 15:45 WIB
+Completed: 2026-07-15 19:00 WIB
 Domain: https://tracs.vickry.id
+
+## Deployed — Real-time Auto-Save Workflows, Calendar & Shift Assignment UI Parity (2026-07-15)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `codex/dashboard-tabs-calendar-checkbox-audit`.
+41 files (32 modified + 9 new).
+Deployed via secure rsync, file-permissions hardening, and php-fpm reload.
+
+### Changes Deployed
+
+1. **Real-Time Auto-Save Workflows & Collaboration**:
+   - Added real-time auto-save logic to `cancellation_feedback.php`, `domain-transfer.php`, `finance.php`, `mom.php`, and their respective APIs.
+   - Built a dedicated helper script `public/assets/feedback-autosave.js` for form auto-save and sync.
+   - Added `_realtime_payloads.php` to handle active payload caching.
+   - Implemented real-time collaboration/editing detection using the active payloads API (`_realtime_payloads.php`) to show who is currently editing a form, prevent conflicts, and synchronize field changes dynamically.
+2. **Calendar & Shift Assignment React/Tailwind Fixes**:
+   - Fixed rendering issues and responsive views for the React `MonthMiniCalendar`, `MonthView`, and `WeekView` components.
+   - Refined tailwind css styles for the calendar and shift assignment views, ensuring consistency across different screens.
+   - Rebuilt the frontend React bundles (`calendar` and `shiftAssignment`) so the production build matches the revised sources (updating Vite manifests and generated bundle chunks).
+   - Resolved specific visual issues with domain price crosscheck css, date range picker css, shifting assignment css, and general TRACS main css styles.
+
+### Verification
+- `https://tracs.vickry.id/login.php` returns `200`
+- `https://tracs.vickry.id/monitoring.php`, `/checklist.php`, `/shift-reports.php` all return `302` (not `500`)
+
 
 ## Deployed — Task Monitoring Sorting, Routing, and Recurrence Update (2026-07-12)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `fix/monitoring-task-assignment-routing-and-modal`, commit `7755a40`.
 Deployed via secure rsync and php-fpm reload.
+
 
 ## Deployed — Checklist History Rework, Task Management Wiring, Monitoring Filter Fix (2026-07-05 ~04:07 WIB)
 
