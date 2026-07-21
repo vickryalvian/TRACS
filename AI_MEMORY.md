@@ -54,6 +54,10 @@ font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Ro
 
 - Main dashboard areas are Cases, Task Monitoring, Shift Handover, Currency Converter, and the Infrastructure Pulse summary.
 - Dashboard case rows and `cases.php` rows open the same shared ticket-detail modal.
+- The tabbed widget panel (Shift Handover / Website Screenshot / Currency Converter / Recent Activity) is titled **Quick Tools**, not "Dashboard Widgets" — renamed to avoid overlapping with the adjacent Task Monitoring panel's language.
+- Website Screenshot and Currency Converter never open empty: Screenshot shows the last 5 captures (`screenshot_history` table + disk storage under `public/uploads/screenshot_history/`, served via `api/screenshot-history-image.php`) or a proper empty state; Currency shows a live USD/IDR rate card (`api/currency-rate.php`, 5 min server cache) plus last-converted and recent history (`api/currency-history.php`) from `tracs_currency_history`.
+- Screenshot capture regions are fetched live from PageFleets `GET /api/v1/regions` (`api/screenshot-regions.php`) — never hardcode the region list in the frontend; the API currently serves `id-1`, `us-1`, and `sg-1`.
+- The `dashboard-case-panel` (Cases) fills its full grid-stretched height (`min-height` floor only, no fixed clamp) so it matches the taller Quick-Tools-plus-Task-Monitoring stack beside it instead of leaving dead space below the card.
 - Task Monitoring has exactly these dashboard tabs:
   - `Checklist and Reminder`
   - `Assignments`

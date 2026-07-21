@@ -4,6 +4,27 @@ Status: Deployed successfully (remediated)
 Completed: 2026-07-15 19:13 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Dashboard Quick Tools: Website Screenshot & Currency Converter Overhaul (2026-07-21)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `dbe9802` (also carries the previously-committed, not-yet-deployed `fix/cases-status-access-audit` case-status-permission fix, commit `9e4831f`, since both landed in the same `tracs.js`/`index.php` file-copy).
+
+### Changes Deployed
+1. **Website Screenshot widget**: persisted capture history (new `screenshot_history` table + disk-backed storage under `public/uploads/screenshot_history/`, mirroring the shift-attachment pattern) shows the latest capture or a proper empty state instead of a blank panel on load; redesigned two-column preview modal (image + URL/region/time/resolution/size); region dropdown now populated live from PageFleets `GET /api/v1/regions` instead of a hardcoded 2-region list — the API actually serves 3 (`id-1`, `us-1`, `sg-1`/Singapore was missing).
+2. **Currency Converter widget**: realtime USD/IDR rate card (auto-refreshing every 5 min, server-cached to avoid hammering Frankfurter), "Last Converted" summary, and a compact recent-history list replace the previously bare converter form. Formalized the ad hoc `tracs_currency_history` table (previously `CREATE TABLE IF NOT EXISTS`'d inline on every conversion) into a proper migration.
+3. **Section rename**: "Dashboard Widgets" → "Quick Tools" (avoids overlapping with the adjacent Task Monitoring panel's language).
+4. **Layout fix**: Cases panel now fills its full grid-stretched height instead of a fixed clamp, so it no longer falls visibly short of the taller Quick-Tools-plus-Task-Monitoring stack beside it.
+5. **Code cleanup**: removed dead/duplicate currency module files never wired to any route (`modules/currency/{controller,model,view}.php`, `public/api/currency-converter.php`); fixed a `_bootstrap.php` gap where `screenshot-capture.php` had no registered method/permission entry.
+
+### Verification
+- Pre-deploy drift-check: of the 6 modified/deleted-from files already live, 4 matched the expected prior-commit baseline (`9e4831f`) exactly; `tracs.js`/`index.php` matched one commit further back (`2b4c271`) — expected, since the case-status-permission fix was committed this session but never previously deployed, not unexplained drift.
+- Backed up all 10 touched/removed files to `/opt/tracs/backups/dashboard-quick-tools-20260721-114454/` before overwrite.
+- Migration applied to `vickryid_tracs_alpha`: created `screenshot_history` (2 indexes); `tracs_currency_history` already existed from prior ad hoc use (1261 rows) — `CREATE TABLE IF NOT EXISTS` was a no-op there, so the new `created_at` index was added separately via `ALTER TABLE ... ADD INDEX IF NOT EXISTS`.
+- `php -l` clean on all 10 deployed PHP files; dead files confirmed removed.
+- Post-deploy `sha256sum` of all 12 deployed files matches local exactly.
+- `php8.3-fpm` reloaded; `nginx`/`php8.3-fpm` both active; no new errors in `nginx` error log or `php8.3-fpm` journal since deploy (only pre-existing unrelated bot/scanner noise).
+- `https://tracs.vickry.id/` → `200`, `/login.php` → `200`, `/api/screenshot-regions.php` → `401`, `/api/currency-rate.php` → `401` (auth-gated as expected, no 404/500).
+- **Not** verified: an authenticated browser walkthrough of either widget. Local Docker was broken (containerd I/O errors, low host disk space) for the entire session, so this shipped on static review only (PHP lint, JS syntax check, CSS brace balance, ID cross-checks between markup and JS) — the user explicitly chose to skip live verification and deploy as-is. Recommend an authenticated pass on both widgets (capture flow, region dropdown, currency rate/history) at the next opportunity.
+
 ## Deployed — No-Reload Save Flow Audit (2026-07-21)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `fix/intern-user-creation-audit`, commit `492e2c3`.
