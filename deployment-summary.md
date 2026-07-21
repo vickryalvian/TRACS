@@ -4,6 +4,24 @@ Status: Deployed successfully (remediated)
 Completed: 2026-07-15 19:13 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Currency Converter Workflow Prioritization (2026-07-21)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `cbadbcc`.
+3 files, deployed via `scp` + `sha256sum` drift-check/verify, backed up to `/opt/tracs/backups/currency-widget-refinement-20260721-145217/` before overwrite. No migration in this pass (frontend/layout only).
+
+### Changes Deployed
+1. Reordered the Currency Converter widget so the conversion form (currency selectors, amount, Convert button, result) sits at the top instead of below informational cards — matches the input → convert → result workflow.
+2. Realtime rate dropped from a bordered card to a compact single-line inline indicator (pair, rate, updated time) directly below the conversion result.
+3. "Last Converted" lost its redundant rate text (already shown by the realtime line) — now just amount, currency pair, and relative timestamp.
+4. Reduced `.currency-body` vertical spacing for a tighter, more compact widget consistent with the rest of the dashboard.
+
+### Verification
+- Pre-deploy drift-check: all 3 files matched the previous deploy (`3530c9a`) exactly, no drift.
+- Post-deploy `sha256sum` of all 3 files matches local exactly.
+- `php -l` clean on `index.php`; `php8.3-fpm` reloaded cleanly, no errors in the journal since deploy.
+- `https://tracs.vickry.id/` → `200`, `/login.php` → `200`.
+- **Not** verified: an authenticated browser walkthrough — local Docker is still not exercised this session (the earlier disk-space issue was resolved mid-session; a live pass is still recommended). Shipped on static review only (JS syntax check, CSS brace balance, PHP lint, ID cross-checks).
+
 ## Deployed — Website Screenshot Widget Hierarchy Refinement (2026-07-21)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `e74fdd4`.
