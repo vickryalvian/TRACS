@@ -1533,6 +1533,11 @@ include 'includes/header.php';
             <div class="panel dashboard-tab-widget">
               <div class="panel-head">
                 <span class="panel-title">Currency Converter</span>
+                <div class="panel-right">
+                  <div class="currency-rate-card" id="currency-rate-card" data-state="loading" aria-live="polite">
+                    <div class="skeleton-block currency-rate-skeleton"></div>
+                  </div>
+                </div>
               </div>
               <div class="currency-body">
                 <div class="currency-row">
@@ -1556,9 +1561,6 @@ include 'includes/header.php';
                 </div>
                 <div class="currency-updated">Updated: <span id="currency-time">—</span></div>
                 <div class="currency-last-converted" id="currency-last-converted" hidden></div>
-                <div class="currency-rate-card" id="currency-rate-card" data-state="loading" aria-live="polite">
-                  <div class="skeleton-block currency-rate-skeleton"></div>
-                </div>
                 <div class="currency-history" id="currency-history-list"></div>
               </div>
             </div><!-- /currency -->

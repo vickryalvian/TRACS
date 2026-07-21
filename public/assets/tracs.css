@@ -1582,16 +1582,23 @@ input, select, textarea { font-family: inherit }
 }
 
 .dashboard-case-panel {
-  /* Fills whatever height the grid stretches .col-left to (which tracks the
-     taller .dashboard-workspace stack: Quick Tools panel + Task Monitoring +
-     Dobby), instead of a fixed clamp that left dead space below the card.
-     The clamp's old lower bound becomes a floor so the panel never collapses
-     when the workspace stack is unusually short. */
+  /* Matches the *actual bounded* height of the .dashboard-workspace stack
+     beside it: two clamp(430px,48vh,540px) panels (Quick Tools tabs panel +
+     Task Monitoring, both already capped via .task-monitoring-panel) plus
+     the Dobby filler (44px) and the two row-gaps between them. This must be
+     an explicit height, not a flex-grow/min-height floor — an unbounded
+     Cases list previously made .dashboard-case-panel's own intrinsic height
+     unbounded too, which fed back into the grid row's auto-sizing and
+     defeated internal scrolling entirely (the whole list rendered inline
+     instead of clipping). Capping here is what lets .dashboard-case-list's
+     overflow-y:auto actually do its job regardless of case count. */
   --dashboard-widget-padding: var(--panel-padding);
+  --dashboard-case-panel-height: calc(var(--dashboard-primary-panel-height) * 2 + var(--dashboard-row-gap) * 2 + 44px);
   display: flex;
   flex: 1 1 auto;
+  height: var(--dashboard-case-panel-height);
+  max-height: var(--dashboard-case-panel-height);
   min-height: 430px;
-  max-height: none;
   flex-direction: column;
   margin: 0;
   overflow: hidden;
@@ -3517,22 +3524,23 @@ input[type="checkbox"]:not([data-native-checkbox]):disabled,
 .currency-result small { font-size: 9.5px; color: var(--tx3); font-weight: 400 }
 .currency-updated { font-size: 9.5px; color: var(--tx2); font-family: var(--mono) }
 
-/* Realtime rate — compact inline metadata line (not a card), secondary to
-   the conversion form above it. Skeleton is a single short bar while the
-   first fetch is in flight. */
+/* Realtime rate — compact single-line status pill in the panel-head's right
+   side (.panel-right), like the Screenshot widget's region select — secondary
+   contextual metadata beside the title, not a body card competing with the
+   conversion form. Skeleton is a single short bar while the first fetch is
+   in flight; the exact "Updated HH:MM" time lives in a title tooltip to stay
+   within the header's single-row height. */
 .currency-rate-card {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: 6px;
-  padding: 2px 0;
   font-size: 10.5px;
   color: var(--tx3);
   font-family: var(--mono);
+  white-space: nowrap;
 }
 .cri-pair { color: var(--tx2); font-weight: 600; }
 .cri-rate { color: var(--tx3); }
-.cri-updated { color: var(--tx4); margin-left: auto; }
 .cri-refresh {
   width: 20px;
   height: 20px;
@@ -3823,7 +3831,7 @@ input[type="checkbox"]:not([data-native-checkbox]):disabled,
   .skeleton-block::after { animation: none; display: none; }
 }
 .screenshot-history-skeleton { height: 84px; }
-.currency-rate-skeleton { height: 16px; max-width: 260px; }
+.currency-rate-skeleton { height: 14px; width: 130px; }
 
 /* Screenshot history — compact visual cards (thumbnail-first, minimal text).
    Whole card is a button that opens the full-detail preview modal; anything

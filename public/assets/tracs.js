@@ -5613,8 +5613,9 @@ async function fetchCurrencyRate(from = 'USD', to = 'IDR') {
   return data.data;
 }
 
-/* Compact inline status line, not a card — contextual metadata for the
-   conversion form above it, not the widget's primary focus. */
+/* Compact single-line status pill living in the panel-head's right side
+   (like the Screenshot widget's region select in .panel-right) — contextual
+   metadata next to the title, not a body card competing with the form. */
 function renderCurrencyRateCard(rate) {
   const card = document.getElementById('currency-rate-card');
   if (!card) return;
@@ -5623,10 +5624,10 @@ function renderCurrencyRateCard(rate) {
   const timeText = Number.isNaN(updated.getTime())
     ? '—'
     : updated.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }) + ' WIB';
+  card.title = `Updated ${timeText}`;
   card.innerHTML = `
     <span class="cri-pair">${escapeHtml(rate.from)} → ${escapeHtml(rate.to)}</span>
-    <span class="cri-rate">1 ${escapeHtml(rate.from)} = ${formatCurrencyConverterNumber(rate.rate, true)} ${escapeHtml(rate.to)}</span>
-    <span class="cri-updated">Updated ${escapeHtml(timeText)}</span>
+    <span class="cri-rate">${formatCurrencyConverterNumber(rate.rate, true)}</span>
     <button type="button" class="btn btn-ghost btn-icon cri-refresh" id="currency-rate-refresh" title="Refresh rate" aria-label="Refresh rate"><i data-lucide="refresh-cw" class="icon-xs"></i></button>
   `;
   tracsRefreshIcons(card);
