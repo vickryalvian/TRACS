@@ -127,6 +127,55 @@ function toastIconFor(type){
 function tracsRefreshIcons(root){
   if(window.lucide) lucide.createIcons(root ? { nodes: Array.from(root.querySelectorAll('[data-lucide]')) } : undefined);
 }
+/* Re-fetches the current URL's server-rendered HTML so a save can refresh a
+   widget in place with the exact same markup a full reload would produce,
+   without navigating away (loses no scroll/tab/filter state). */
+async function tracsFetchDocument(){
+  const res=await fetch(window.location.href,{headers:{'X-Requested-With':'XMLHttpRequest'}});
+  if(!res.ok)throw new Error('Refresh request failed');
+  return new DOMParser().parseFromString(await res.text(),'text/html');
+}
+async function tracsSwapFragment(selector,{preserveScroll=true}={}){
+  const target=document.querySelector(selector);
+  if(!target)return false;
+  const scrollHosts=preserveScroll?[...target.querySelectorAll('.scroll-y,.tm-scroll')]:[];
+  const scrollTops=scrollHosts.map(el=>el.scrollTop);
+  let doc;
+  try{ doc=await tracsFetchDocument(); }catch(error){ console.error('Unable to refresh section:',error); return false; }
+  const fresh=doc.querySelector(selector);
+  if(!fresh)return false;
+  target.replaceWith(fresh);
+  fresh.querySelectorAll('.scroll-y,.tm-scroll').forEach((el,i)=>{ if(scrollTops[i]!=null)el.scrollTop=scrollTops[i]; });
+  tracsRefreshIcons(fresh);
+  window.TRACSDropdowns?.syncAll();
+  return true;
+}
+/* For filter controls (status tabs, month pickers) that used to navigate via
+   location.href, causing a full reload just to change a query-string filter.
+   Fetches the filtered URL, swaps in the fresh section, and updates the
+   address bar via pushState so back/forward and bookmarking still work. */
+async function tracsFilterNavigate(url,{target='.main-inner',preserveScroll=true}={}){
+  const targetEl=document.querySelector(target);
+  if(!targetEl){window.location.href=url;return false;}
+  const scrollTop=preserveScroll?window.scrollY:null;
+  try{
+    const res=await fetch(url,{headers:{'X-Requested-With':'XMLHttpRequest'}});
+    if(!res.ok)throw new Error('Filter request failed');
+    const doc=new DOMParser().parseFromString(await res.text(),'text/html');
+    const fresh=doc.querySelector(target);
+    if(!fresh)throw new Error('Missing target section');
+    targetEl.replaceWith(fresh);
+    window.history.pushState({},'',url);
+    tracsRefreshIcons(fresh);
+    window.TRACSDropdowns?.syncAll();
+    if(scrollTop!=null)window.scrollTo(0,scrollTop);
+    return true;
+  }catch(error){
+    console.error('Unable to apply filter without reload:',error);
+    window.location.href=url;
+    return false;
+  }
+}
 function tracsVisibleModal(){
   return Array.from(document.querySelectorAll('.modal-overlay:not(.hidden), .dpc-modal, .infra-modal:not([hidden]), .cf-modal, [role="dialog"]:not([hidden])'))
     .find(node=>!node.hidden && !node.classList.contains('hidden') && getComputedStyle(node).display!=='none') || null;
@@ -1914,8 +1963,22 @@ function bindModalAjaxForms(){
         delay:Number(form.dataset.closeDelay || 1000),
         onAfterClose:()=>{
           const redirect=payload.redirect || form.dataset.refreshUrl || window.location.href;
-          if(redirect === window.location.href)window.location.reload();
-          else window.location.assign(redirect);
+          /* payload.redirect is commonly an absolute-path server response
+             (e.g. "/user-management.php?tab=users") which never string-equals
+             window.location.href, so compare resolved pathnames instead of
+             falling through to a real navigation on every same-page save. */
+          const redirectUrl=new URL(redirect,window.location.href);
+          if(redirectUrl.pathname !== window.location.pathname || payload.force_navigate){
+            window.location.assign(redirect);
+            return;
+          }
+          const refreshSelector=form.dataset.refreshSelector;
+          if(refreshSelector){
+            tracsSwapFragment(refreshSelector);
+            if(redirectUrl.search !== window.location.search || redirectUrl.hash !== window.location.hash){
+              window.history.replaceState({},'',redirectUrl.pathname+redirectUrl.search+redirectUrl.hash);
+            }
+          }else window.location.reload();
         }
       });
     }catch(error){
@@ -3365,6 +3428,45 @@ function setCaseWorkspaceView(view,remember=true){
     try{localStorage.setItem('tracs:cases:view',selected);}catch(e){}
   }
 }
+async function caseRefreshFromServer(){
+  let doc;
+  try{
+    const res=await fetch(window.location.href,{headers:{'X-Requested-With':'XMLHttpRequest'}});
+    if(!res.ok)return false;
+    doc=new DOMParser().parseFromString(await res.text(),'text/html');
+  }catch(error){
+    console.error('Unable to refresh case data:',error);
+    return false;
+  }
+  let refreshed=false;
+  const dataset=doc.getElementById('caseDataset');
+  if(dataset && caseBoardState.initialized){
+    try{
+      const parsed=JSON.parse(dataset.textContent||'[]');
+      if(Array.isArray(parsed)){
+        caseBoardState.rawCases=parsed.map(item=>({
+          ...item,
+          id:Number(item.id)||0,
+          status:String(item.status||'pending').toLowerCase(),
+          priority:String(item.priority||'low').toLowerCase(),
+          attachment_count:Number(item.attachment_count)||0,
+          overdue:caseIsOverdue(item)
+        })).filter(item=>item.id>0);
+        renderCaseWorkspace();
+        refreshed=true;
+      }
+    }catch(error){
+      console.error('Unable to parse refreshed case data:',error);
+    }
+  }
+  /* The dashboard's compact "Cases" widget (index.php) is a separate,
+     plain server-rendered panel, not the caseBoardState board/table used
+     on cases.php, so it needs its own fragment swap. */
+  if(document.querySelector('.dashboard-case-panel')){
+    if(await tracsSwapFragment('.dashboard-case-panel'))refreshed=true;
+  }
+  return refreshed;
+}
 function initCaseBoard(){
   const workspace=document.getElementById('caseWorkspace');
   const dataset=document.getElementById('caseDataset');
@@ -3778,7 +3880,7 @@ async function saveCase(){
       message:id?'Case updated.':'Case created.',
       onAfterClose:()=>{
         clearCaseAttachmentState();
-        location.reload();
+        caseRefreshFromServer();
       }
     });
   }
@@ -3843,7 +3945,7 @@ async function saveReminder(){
     showModalSuccessAndClose({
       modal:'rem',
       message:id?'Reminder updated.':'Reminder created.',
-      onAfterClose:()=>location.reload()
+      onAfterClose:()=>tracsRefreshTaskMonitoringPanel('#tm-pane-checklist')
     });
   }else handleModalError({modal:'rem',error:{message:d.message,status:d.status}});
 }
@@ -4095,7 +4197,7 @@ async function saveTask(){
     showModalSuccessAndClose({
       modal:'task',
       message:id?'Task updated.':'Task created.',
-      onAfterClose:()=>{clearTaskAttachmentState();location.reload();}
+      onAfterClose:()=>{clearTaskAttachmentState();tracsRefreshTaskMonitoringPanel('#tm-pane-checklist');}
     });
   }else handleModalError({modal:'task',error:{message:d.message,status:d.status}});
 }
@@ -4553,6 +4655,34 @@ function initTaskMonitoringTabs(){
   refreshTaskMonitoringCounters();
 }
 
+/* Refreshes a [data-task-monitoring] widget (Shift Handover/Screenshot/Currency/
+   Activity, or Checklist&Reminder/Assignments) after a save, without a page
+   reload. Re-fetches the current page, swaps in the fresh panel markup, then
+   re-binds tab handling and restores whichever tab/scroll position was active
+   so the save doesn't silently kick the user back to the first tab. */
+async function tracsRefreshTaskMonitoringPanel(containedSelector){
+  const anchor=document.querySelector(containedSelector);
+  const panel=anchor?.closest('[data-task-monitoring]');
+  if(!panel)return false;
+  const activeTab=panel.querySelector('[data-task-monitor-tab].active')?.dataset.taskMonitorTab;
+  const scrollHosts=[...panel.querySelectorAll('.scroll-y,.tm-scroll')];
+  const scrollTops=scrollHosts.map(el=>el.scrollTop);
+  let doc;
+  try{ doc=await tracsFetchDocument(); }catch(error){ console.error('Unable to refresh task monitoring panel:',error); return false; }
+  const fresh=[...doc.querySelectorAll('[data-task-monitoring]')].find(node=>node.querySelector(containedSelector));
+  if(!fresh)return false;
+  panel.replaceWith(fresh);
+  delete fresh.dataset.taskMonitoringReady;
+  initTaskMonitoringTabs();
+  if(activeTab && fresh.querySelector(`[data-task-monitor-tab="${activeTab}"]`) && !fresh.querySelector(`[data-task-monitor-tab="${activeTab}"]`).classList.contains('active')){
+    fresh.querySelector(`[data-task-monitor-tab="${activeTab}"]`).click();
+  }
+  fresh.querySelectorAll('.scroll-y,.tm-scroll').forEach((el,i)=>{ if(scrollTops[i]!=null)el.scrollTop=scrollTops[i]; });
+  tracsRefreshIcons(fresh);
+  window.TRACSDropdowns?.syncAll();
+  return true;
+}
+
 function refreshNotificationBadge(pendingOverride){
   const badgeContainer = document.getElementById('notif-badge-container');
   if (!badgeContainer) return;
@@ -4878,7 +5008,8 @@ async function addTickerMsg(){
       message:'Announcement added.',
       onAfterClose:()=>{
         setVal('newTickerText','');
-        location.reload();
+        refreshTickerBar();
+        tracsSwapFragment('.ticker-entry-list');
       }
     });
   }else handleModalError({modal:'ticker',error:{message:d.message,status:d.status},fallbackMessage:'The announcement could not be added. Please try again.'});
@@ -5304,7 +5435,7 @@ async function saveShiftReport(){
   showModalSuccessAndClose({
     modal:'shift',
     message:'Handover filed.',
-    onAfterClose:()=>{clearShiftAllFiles();clearShiftSummaryFiles();location.reload();}
+    onAfterClose:()=>{clearShiftAllFiles();clearShiftSummaryFiles();tracsRefreshTaskMonitoringPanel('#dashboard-pane-shift-handover');}
   });
 }
 async function saveShiftItemEdit(){
@@ -5333,7 +5464,7 @@ async function saveShiftItemEdit(){
   });
   if(!d)return;
   if(d.success){
-    showModalSuccessAndClose({modal:'shift',message:'Item updated.',onAfterClose:()=>{clearShiftAllFiles();location.reload();}});
+    showModalSuccessAndClose({modal:'shift',message:'Item updated.',onAfterClose:()=>{clearShiftAllFiles();tracsRefreshTaskMonitoringPanel('#dashboard-pane-shift-handover');}});
   }else handleModalError({modal:'shift',error:{message:d.message,status:d.status}});
 }
 async function editHandoverSummary(id,btn){
@@ -5765,7 +5896,7 @@ async function saveOpsStatus() {
     showModalSuccessAndClose({
       modal:'ops',
       message:'Operational status saved.',
-      onAfterClose:()=>location.reload()
+      onAfterClose:()=>refreshOpsStatusWidget()
     });
 
   } catch (err) {
@@ -5802,7 +5933,7 @@ async function archiveOpsStatus() {
     showModalSuccessAndClose({
       modal:'ops',
       message:'Operational status archived.',
-      onAfterClose:()=>location.reload()
+      onAfterClose:()=>refreshOpsStatusWidget()
     });
 
   } catch (err) {
@@ -5810,6 +5941,66 @@ async function archiveOpsStatus() {
     console.error(err);
     handleModalError({modal:'ops',button,error:err,fallbackMessage:'The operational status could not be archived. Please try again.'});
   }
+}
+
+/* Ops-status marquee. State lives at module scope (not inside bindOpsStatusSlider)
+   so a post-save refresh can re-run bind without stacking duplicate listeners on
+   the persistent opsNext/opsPrev buttons, while nextOps/prevOps always look up
+   #opsTrack/.ops-item fresh since that markup gets swapped in on refresh. */
+let _opsIndex=0;
+let _opsAnimating=false;
+let _opsAutoTimer=null;
+function _opsItems(){ return document.querySelectorAll('.ops-item'); }
+function updateOpsSlider(){
+  const track=document.getElementById('opsTrack');
+  const items=_opsItems();
+  if(!track||!items.length)return;
+  _opsAnimating=true;
+  items.forEach((item,index)=>{
+    item.classList.remove('active');
+    if(index===_opsIndex)setTimeout(()=>item.classList.add('active'),120);
+  });
+  track.style.transform=`translateX(-${_opsIndex*100}%)`;
+  setTimeout(()=>{_opsAnimating=false;},500);
+}
+function nextOps(){
+  const items=_opsItems();
+  if(!items.length||_opsAnimating)return;
+  _opsIndex=(_opsIndex+1)%items.length;
+  updateOpsSlider();
+}
+function prevOps(){
+  const items=_opsItems();
+  if(!items.length||_opsAnimating)return;
+  _opsIndex=(_opsIndex-1+items.length)%items.length;
+  updateOpsSlider();
+}
+function bindOpsStatusSlider(){
+  const opsNextBtn=document.getElementById('opsNext');
+  const opsPrevBtn=document.getElementById('opsPrev');
+  if(opsNextBtn && opsNextBtn.dataset.opsBound!=='1'){
+    opsNextBtn.addEventListener('click',nextOps);
+    opsNextBtn.dataset.opsBound='1';
+  }
+  if(opsPrevBtn && opsPrevBtn.dataset.opsBound!=='1'){
+    opsPrevBtn.addEventListener('click',prevOps);
+    opsPrevBtn.dataset.opsBound='1';
+  }
+  const items=_opsItems();
+  _opsIndex=0;
+  _opsAnimating=false;
+  if(_opsAutoTimer){clearInterval(_opsAutoTimer);_opsAutoTimer=null;}
+  if(items.length>0){
+    items.forEach(item=>item.classList.remove('active'));
+    items[0].classList.add('active');
+    updateOpsSlider();
+    if(items.length>1)_opsAutoTimer=setInterval(nextOps,6500);
+  }
+}
+async function refreshOpsStatusWidget(){
+  const ok=await tracsSwapFragment('#opsTrack',{preserveScroll:false});
+  if(ok)bindOpsStatusSlider();
+  return ok;
 }
 
 function bindOpsStatusControls() {
@@ -6177,75 +6368,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
   /* ── OPS STATUS SLIDER ────────────────────── */
-
-  const opsTrack = document.getElementById('opsTrack');
-  const opsItems = document.querySelectorAll('.ops-item');
-
-  let opsIndex = 0;
-  let opsAnimating = false;
-
-  function updateOpsSlider() {
-
-    if (!opsTrack || !opsItems.length) return;
-
-    opsAnimating = true;
-
-    opsItems.forEach((item, index) => {
-
-      item.classList.remove('active');
-
-      if (index === opsIndex) {
-
-        setTimeout(() => {
-          item.classList.add('active');
-        }, 120);
-      }
-    });
-
-    opsTrack.style.transform =
-      `translateX(-${opsIndex * 100}%)`;
-
-    setTimeout(() => {
-      opsAnimating = false;
-    }, 500);
-  }
-
-  function nextOps() {
-
-    if (!opsItems.length || opsAnimating) return;
-
-    opsIndex =
-      (opsIndex + 1) % opsItems.length;
-
-    updateOpsSlider();
-  }
-
-  function prevOps() {
-
-    if (!opsItems.length || opsAnimating) return;
-
-    opsIndex =
-      (opsIndex - 1 + opsItems.length) % opsItems.length;
-
-    updateOpsSlider();
-  }
-
-  document.getElementById('opsNext')
-    ?.addEventListener('click', nextOps);
-
-  document.getElementById('opsPrev')
-    ?.addEventListener('click', prevOps);
-
-  if (opsItems.length > 0) {
-
-    opsItems[0].classList.add('active');
-
-    updateOpsSlider();
-
-    if (opsItems.length > 1) {
-      setInterval(nextOps, 6500);
-    }
-  }
+  bindOpsStatusSlider();
 
 });
 

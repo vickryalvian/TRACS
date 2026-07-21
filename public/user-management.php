@@ -33,14 +33,14 @@ function um_is_ajax_request(): bool {
     return strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest'
         || str_contains(strtolower((string)($_SERVER['HTTP_ACCEPT'] ?? '')), 'application/json');
 }
-function um_json_response(bool $success, string $message, string $tab = 'users', int $status = 200): never {
+function um_json_response(bool $success, string $message, string $tab = 'users', int $status = 200, array $extra = []): never {
     http_response_code($status);
     header('Content-Type: application/json; charset=utf-8');
-    echo json_encode([
+    echo json_encode(array_merge([
         'success' => $success,
         'message' => $message,
         'redirect' => '/user-management.php?tab=' . urlencode($tab),
-    ], JSON_UNESCAPED_SLASHES);
+    ], $extra), JSON_UNESCAPED_SLASHES);
     exit;
 }
 
@@ -79,7 +79,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $tab = ($action === 'update_permissions') ? 'roles' : 'users';
         if (um_is_ajax_request()) {
-            um_json_response(true, $result['message'] ?? 'Saved successfully.', $tab);
+            /* A generated/temporary password is a show-once secret rendered
+               server-side from session flash data (see $temp_password below)
+               — it isn't included in this JSON body, so the client must do a
+               real navigation to the redirect URL to actually see it. */
+            um_json_response(true, $result['message'] ?? 'Saved successfully.', $tab, 200, [
+                'force_navigate' => !empty($result['temporary_password']),
+            ]);
         }
         um_flash('success', $result['message'] ?? 'Saved successfully.');
         um_redirect($tab);
@@ -511,7 +517,7 @@ include __DIR__ . '/includes/header.php';
     <?php endforeach; ?>
   </div>
 
-  <form method="post" class="panel um-permission-panel" onsubmit="return tracsConfirmSubmit(this, {type:'warning', title:'Save permission matrix', message:'Save role permission changes? This affects every user assigned to those roles.', confirmText:'Save changes', destructive:false})">
+  <form method="post" class="panel um-permission-panel" onsubmit="return umSubmitPermissionMatrix(this)">
     <?=csrf_input()?><input type="hidden" name="action" value="update_permissions">
     <div class="panel-head">
       <span class="panel-title">Permission Matrix</span>
@@ -677,7 +683,7 @@ include __DIR__ . '/includes/header.php';
 
 <?php if($schema_ready): ?>
 <div class="modal-overlay hidden" id="userFormModal">
-  <form method="post" class="modal modal-lg um-modal" data-tracs-modal-ajax data-close-delay="1000" onsubmit="return umUserFormSubmit(this)">
+  <form method="post" class="modal modal-lg um-modal" data-tracs-modal-ajax data-refresh-selector=".um-filebook" data-close-delay="1000" onsubmit="return umUserFormSubmit(this)">
     <?=csrf_input()?>
     <input type="hidden" name="action" id="umUserAction" value="create_user">
     <input type="hidden" name="user_id" id="umUserId" value="">
@@ -759,7 +765,7 @@ include __DIR__ . '/includes/header.php';
 
 <?php if($can_reset_2fa): ?>
 <div class="modal-overlay hidden" id="twoFactorResetModal">
-  <form method="post" class="modal" data-tracs-modal-ajax data-close-delay="1000" onsubmit="return umConfirmTwoFactorResetSubmit(this)">
+  <form method="post" class="modal" data-tracs-modal-ajax data-refresh-selector=".um-filebook" data-close-delay="1000" onsubmit="return umConfirmTwoFactorResetSubmit(this)">
     <?=csrf_input()?>
     <input type="hidden" name="action" value="reset_two_factor">
     <input type="hidden" name="user_id" id="umTwoFactorResetUserId" value="">
@@ -810,7 +816,7 @@ include __DIR__ . '/includes/header.php';
 <?php endif; ?>
 
 <div class="modal-overlay hidden" id="divisionFormModal">
-  <form method="post" class="modal" data-tracs-modal-ajax data-close-delay="1000">
+  <form method="post" class="modal" data-tracs-modal-ajax data-refresh-selector=".um-filebook" data-close-delay="1000">
     <?=csrf_input()?>
     <input type="hidden" name="action" id="umDivisionAction" value="create_division">
     <input type="hidden" name="division_id" id="umDivisionFormId" value="">
@@ -917,6 +923,41 @@ function umSubmitAfterDialog(form){
   form.dataset.tracsConfirmed='1';
   if(typeof form.requestSubmit === 'function') form.requestSubmit();
   else form.submit();
+}
+/* The permission matrix is an in-page panel, not a modal, so it can't go
+   through bindModalAjaxForms (that flow hides the submitted element on
+   success, which would hide this panel instead of a dialog). */
+function umSubmitPermissionMatrix(form){
+  tracsConfirm({
+    type:'warning',
+    title:'Save permission matrix',
+    message:'Save role permission changes? This affects every user assigned to those roles.',
+    confirmText:'Save changes',
+    destructive:false
+  }).then(async ok=>{
+    if(!ok)return;
+    const btn=form.querySelector('button[type="submit"]');
+    const formData=new FormData(form);
+    if(btn && !setButtonLoading(btn,'Saving...'))return;
+    try{
+      const res=await fetch(form.getAttribute('action') || window.location.href,{
+        method:'POST',
+        body:formData,
+        headers:{'Accept':'application/json','X-Requested-With':'XMLHttpRequest'}
+      });
+      const contentType=res.headers.get('content-type') || '';
+      if(!contentType.includes('application/json'))throw new Error('The server returned an invalid response.');
+      const payload=await res.json();
+      if(!res.ok || payload.success === false)throw new Error(payload.message || 'Permissions could not be saved.');
+      resetButtonLoading(btn);
+      toast(payload.message || 'Permissions saved.','success');
+      tracsSwapFragment('.um-permission-panel');
+    }catch(error){
+      resetButtonLoading(btn);
+      toast(error.message || 'Permissions could not be saved.','error');
+    }
+  });
+  return false;
 }
 async function umPromptText(options){
   const value=await tracsPrompt({

@@ -548,7 +548,7 @@ include __DIR__ . '/includes/header.php';
 
 <?php if($schema_ready && $can_create): ?>
 <div class="modal-overlay hidden" id="tmTaskModal">
-  <form method="post" class="modal modal-lg" data-tracs-modal-ajax data-close-delay="1000" enctype="multipart/form-data">
+  <form method="post" class="modal modal-lg" data-tracs-modal-ajax data-refresh-selector=".tm-split-layout" data-close-delay="1000" enctype="multipart/form-data">
     <?=csrf_input()?><input type="hidden" name="action" value="create_task"><input type="hidden" name="return_tab" value="<?=esc($tab)?>">
     <div class="modal-head"><div><div class="modal-title">Add Task Assignment</div><div class="modal-sub">Assign once or daily, with checklist and reminder sync.</div></div><button type="button" class="modal-close" onclick="closeModal('tmTask')"><i data-lucide="x"></i></button></div>
     <div class="modal-body tm-form">
@@ -613,7 +613,7 @@ include __DIR__ . '/includes/header.php';
 
 <?php if($schema_ready): ?>
 <div class="modal-overlay hidden" id="tmUpdateModal">
-  <form method="post" class="modal" data-tracs-modal-ajax data-close-delay="1000">
+  <form method="post" class="modal" data-tracs-modal-ajax data-refresh-selector=".tm-split-layout" data-close-delay="1000">
     <?=csrf_input()?><input type="hidden" name="action" value="update_assignment"><input type="hidden" name="assignment_id" id="tmAssignmentId"><input type="hidden" name="return_tab" value="<?=esc($tab)?>">
     <div class="modal-head"><div><div class="modal-title">Update Task</div><div class="modal-sub">Progress is saved to the assignment history.</div></div><button type="button" class="modal-close" onclick="closeModal('tmUpdate')"><i data-lucide="x"></i></button></div>
     <div class="modal-body">
@@ -632,7 +632,7 @@ function tmOpenUpdate(id,status){document.getElementById('tmAssignmentId').value
 <?php if($schema_ready && ($can_monitor || $can_create)): ?>
 <!-- EDIT TASK MODAL -->
 <div class="modal-overlay hidden" id="tmEditModal">
-  <form method="post" class="modal modal-lg" data-tracs-modal-ajax data-close-delay="1000">
+  <form method="post" class="modal modal-lg" data-tracs-modal-ajax data-refresh-selector=".tm-split-layout" data-close-delay="1000">
     <?=csrf_input()?><input type="hidden" name="action" value="update_task"><input type="hidden" name="task_id" id="tmEditTaskId"><input type="hidden" name="return_tab" value="<?=esc($tab)?>">
     <div class="modal-head"><div><div class="modal-title">Edit Task</div><div class="modal-sub">Changes sync to the linked checklist items and reminders.</div></div><button type="button" class="modal-close" onclick="closeModal('tmEdit')"><i data-lucide="x"></i></button></div>
     <div class="modal-body tm-form">
@@ -673,7 +673,7 @@ function tmOpenUpdate(id,status){document.getElementById('tmAssignmentId').value
 
 <!-- REASSIGN MODAL -->
 <div class="modal-overlay hidden" id="tmReassignModal">
-  <form method="post" class="modal" data-tracs-modal-ajax data-close-delay="1000">
+  <form method="post" class="modal" data-tracs-modal-ajax data-refresh-selector=".tm-split-layout" data-close-delay="1000">
     <?=csrf_input()?><input type="hidden" name="action" value="reassign_task"><input type="hidden" name="task_id" id="tmReassignTaskId"><input type="hidden" name="return_tab" value="<?=esc($tab)?>">
     <div class="modal-head"><div><div class="modal-title">Reassign Task</div><div class="modal-sub" id="tmReassignSub">Add more people to this task.</div></div><button type="button" class="modal-close" onclick="closeModal('tmReassign')"><i data-lucide="x"></i></button></div>
     <div class="modal-body">
@@ -684,17 +684,17 @@ function tmOpenUpdate(id,status){document.getElementById('tmAssignmentId').value
 </div>
 
 <!-- DELETE TASK (hidden form posted after confirm) -->
-<form method="post" id="tmDeleteForm" class="hidden" data-tracs-modal-ajax>
+<form method="post" id="tmDeleteForm" class="hidden" data-tracs-modal-ajax data-refresh-selector=".tm-split-layout">
   <?=csrf_input()?><input type="hidden" name="action" value="delete_task"><input type="hidden" name="task_id" id="tmDeleteTaskId"><input type="hidden" name="return_tab" value="<?=esc($tab)?>">
 </form>
 
 <!-- UNASSIGN USER (hidden form posted after confirm) -->
-<form method="post" id="tmUnassignForm" class="hidden" data-tracs-modal-ajax>
+<form method="post" id="tmUnassignForm" class="hidden" data-tracs-modal-ajax data-refresh-selector=".tm-split-layout">
   <?=csrf_input()?><input type="hidden" name="action" value="unassign_user"><input type="hidden" name="task_id" id="tmUnassignTaskId"><input type="hidden" name="assignment_id" id="tmUnassignAssignmentId"><input type="hidden" name="return_tab" value="<?=esc($tab)?>">
 </form>
 
 <!-- MARK DONE (hidden form, one-click quick action) -->
-<form method="post" id="tmMarkDoneForm" class="hidden" data-tracs-modal-ajax>
+<form method="post" id="tmMarkDoneForm" class="hidden" data-tracs-modal-ajax data-refresh-selector=".tm-split-layout">
   <?=csrf_input()?><input type="hidden" name="action" value="update_assignment"><input type="hidden" name="status" value="completed"><input type="hidden" name="assignment_id" id="tmMarkDoneAssignmentId"><input type="hidden" name="progress_note" value=""><input type="hidden" name="return_tab" value="<?=esc($tab)?>">
 </form>
 <script>

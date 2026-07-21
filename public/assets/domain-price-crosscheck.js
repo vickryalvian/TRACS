@@ -248,6 +248,27 @@ function dpcReloadAfterNotice(delay = 620) {
     window.setTimeout(() => window.location.reload(), delay);
 }
 
+/* Refreshes the price-matrix panel in place instead of reloading the page.
+   The panel is only actionable while visible, so its hidden/visible state
+   is preserved across the swap; other tab panels aren't touched. */
+function dpcRefreshMatrixPanel(delay = 0) {
+    window.setTimeout(async () => {
+        const panel = document.getElementById('price-matrix');
+        if (!panel || typeof tracsSwapFragment !== 'function') {
+            dpcReloadAfterNotice(0);
+            return;
+        }
+        const wasHidden = panel.hidden;
+        const ok = await tracsSwapFragment('#price-matrix');
+        if (!ok) {
+            dpcReloadAfterNotice(0);
+            return;
+        }
+        const fresh = document.getElementById('price-matrix');
+        if (fresh) fresh.hidden = wasHidden;
+    }, delay);
+}
+
 function dpcMatrixSavedNotice(message) {
     const raw = String(message || '');
     const match = raw.match(/updated\s+(\d+)\s+cells?\s+and\s+cleared\s+(\d+)\s+cells?/i);
@@ -1279,7 +1300,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.success) {
                     dpcToast('success', 'Note saved', 'TLD note saved successfully.');
                     notesForm.dispatchEvent(new CustomEvent('tracs:save-success', { bubbles: true, detail: { root: notesForm } }));
-                    dpcReloadAfterNotice();
+                    dpcRefreshMatrixPanel();
                 } else {
                     notesForm.dispatchEvent(new CustomEvent('tracs:save-error', { bubbles: true }));
                     dpcToast('error', 'Save failed', data.message || 'The note could not be saved. Please try again.');
@@ -1330,7 +1351,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         button: btnSave,
                         message: 'Task assigned successfully.',
                         close: () => closeAssignTaskModal(),
-                        onAfterClose: () => window.location.reload()
+                        onAfterClose: () => dpcRefreshMatrixPanel()
                     });
                 } else {
                     handleModalError({
@@ -1405,7 +1426,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     const saved = dpcMatrixSavedNotice(data.message);
                     dpcToast('success', saved.title, saved.message);
                     btn.dispatchEvent(new CustomEvent('tracs:save-success', { bubbles: true, detail: { root: document.getElementById('price-matrix') } }));
-                    dpcReloadAfterNotice();
+                    dpcRefreshMatrixPanel();
                 } else {
                     btn.dispatchEvent(new CustomEvent('tracs:save-error', { bubbles: true }));
                     dpcToast('error', 'Matrix save failed', data.message || 'The matrix could not be saved. Please try again.');
@@ -1445,7 +1466,7 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(data => {
                 if (data.success) {
                     dpcToast('success', 'Summary recalculated', data.data?.message || data.message || 'Summary recalculated successfully.');
-                    dpcReloadAfterNotice();
+                    dpcRefreshMatrixPanel();
                 } else {
                     dpcToast('error', 'Recalculation failed', data.message || 'Recalculation failed.');
                 }

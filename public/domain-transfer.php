@@ -623,7 +623,7 @@ include 'includes/header.php';
   <div class="month-select-wrap">
     <label>Month</label>
     <select class="form-select compact-select"
-            onchange="location.href='?s=<?= esc($filter_status) ?>&q=<?= urlencode($q) ?>&m='+this.value">
+            onchange="tracsFilterNavigate('?s=<?= esc($filter_status) ?>&q=<?= urlencode($q) ?>&m='+this.value)">
       <option value="">All months</option>
       <?php foreach ($month_options as $mo): ?>
       <option value="<?= esc($mo['ym']) ?>" <?= $month === $mo['ym'] ? 'selected' : '' ?>>
