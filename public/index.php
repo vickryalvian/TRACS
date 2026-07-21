@@ -1388,11 +1388,11 @@ include 'includes/header.php';
       <section class="panel task-monitoring-panel dashboard-widget-tabs-panel" data-task-monitoring>
         <div class="panel-head task-monitoring-head">
           <div class="task-monitoring-title">
-            <span class="panel-title">Dashboard Widgets</span>
+            <span class="panel-title">Quick Tools</span>
           </div>
         </div>
 
-        <div class="task-monitoring-tabs" role="tablist" aria-label="Dashboard widgets">
+        <div class="task-monitoring-tabs" role="tablist" aria-label="Quick Tools">
           <button type="button" class="task-monitoring-tab active" role="tab" aria-selected="true" aria-controls="dashboard-pane-shift-handover" data-task-monitor-tab="shift-handover"><i data-lucide="refresh-cw" class="icon-xs"></i>Shift Handover</button>
           <button type="button" class="task-monitoring-tab" role="tab" aria-selected="false" aria-controls="dashboard-pane-screenshot" data-task-monitor-tab="screenshot"><i data-lucide="camera" class="icon-xs"></i>Website Screenshot</button>
           <button type="button" class="task-monitoring-tab" role="tab" aria-selected="false" aria-controls="dashboard-pane-currency" data-task-monitor-tab="currency"><i data-lucide="arrow-right-left" class="icon-xs"></i>Currency Converter</button>
@@ -1515,13 +1515,14 @@ include 'includes/header.php';
                 <div class="panel-right">
                   <select id="screenshot-region" class="form-select" aria-label="Capture region" data-unsaved-ignore>
                     <option value="">Auto region</option>
-                    <option value="id-1">🇮🇩 ID — Jakarta</option>
-                    <option value="us-1">🇺🇸 US — Oregon</option>
                     <option value="all" selected>🌐 All regions</option>
                   </select>
                 </div>
               </div>
               <div class="screenshot-body">
+                <div class="screenshot-history" id="screenshot-history" data-state="loading" aria-live="polite">
+                  <div class="skeleton-block screenshot-history-skeleton"></div>
+                </div>
                 <div class="screenshot-input-row">
                   <input type="text" id="screenshot-url" class="form-input" placeholder="Enter domain, URL, or IP — e.g. example.com" autocomplete="off" spellcheck="false" data-unsaved-ignore>
                   <button type="button" class="btn btn-primary" id="screenshot-btn">
@@ -1540,6 +1541,10 @@ include 'includes/header.php';
                 <span class="panel-title">Currency Converter</span>
               </div>
               <div class="currency-body">
+                <div class="currency-rate-card" id="currency-rate-card" data-state="loading" aria-live="polite">
+                  <div class="skeleton-block currency-rate-skeleton"></div>
+                </div>
+                <div class="currency-last-converted" id="currency-last-converted" hidden></div>
                 <div class="currency-row">
                   <select id="currency-from" class="form-select" data-unsaved-ignore>
                     <option value="IDR">IDR</option>
@@ -1560,6 +1565,7 @@ include 'includes/header.php';
                   <small id="currency-rate"></small>
                 </div>
                 <div class="currency-updated">Updated: <span id="currency-time">—</span></div>
+                <div class="currency-history" id="currency-history-list"></div>
               </div>
             </div><!-- /currency -->
           </section>

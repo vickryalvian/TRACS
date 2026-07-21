@@ -37,17 +37,7 @@ function convertCurrency($conn, $from, $to, $amount)
     $result = $data['rates'][$to];
     $rate = $result / $amount;
 
-    // SAVE DB
-    $conn->query("CREATE TABLE IF NOT EXISTS tracs_currency_history (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        from_currency VARCHAR(10),
-        to_currency VARCHAR(10),
-        amount DECIMAL(15,2),
-        result DECIMAL(15,2),
-        rate DECIMAL(15,6),
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )");
-
+    // Schema owned by config/migrations/2026_07_21_dashboard_quick_tools_widgets.sql
     $stmt = $conn->prepare("
         INSERT INTO tracs_currency_history
         (from_currency, to_currency, amount, result, rate)

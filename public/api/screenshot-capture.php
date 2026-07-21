@@ -11,6 +11,7 @@
  */
 
 require '_bootstrap.php';
+require_once __DIR__ . '/screenshot-history-lib.php';
 
 // Release the session file lock before the (slow) outbound capture call so
 // concurrent per-region requests from the same browser session don't queue
@@ -21,6 +22,7 @@ const PAGEFLEETS_ENDPOINT = 'https://api.pagefleets.com/api/v1/screenshot';
 
 $rawUrl = trim((string)($_GET['url'] ?? ''));
 $region = trim((string)($_GET['region'] ?? ''));
+$regionLabel = mb_substr(trim((string)($_GET['region_label'] ?? '')), 0, 64);
 $width  = (int)($_GET['width'] ?? 0);
 $height = (int)($_GET['height'] ?? 0);
 
@@ -110,14 +112,19 @@ if ($status < 200 || $status >= 300 || stripos($contentType, 'image/png') === fa
 
 logAct($conn, $uid, 'capture', 'dashboard', 'Captured website screenshot: ' . $host);
 
+$meta = [
+    'load' => $responseHeaders['x-load-time-ms'] ?? null,
+    'dns'  => $responseHeaders['x-dns-time-ms'] ?? null,
+    'tcp'  => $responseHeaders['x-tcp-time-ms'] ?? null,
+    'ssl'  => $responseHeaders['x-ssl-time-ms'] ?? null,
+    'ttfb' => $responseHeaders['x-ttfb-time-ms'] ?? null,
+];
+
+$history = screenshot_history_persist($conn, $body, $uid, $rawUrl, $host, $region, $regionLabel !== '' ? $regionLabel : $region, $meta);
+
 ok([
-    'image' => 'data:image/png;base64,' . base64_encode($body),
-    'host'  => $host,
-    'meta'  => [
-        'load' => $responseHeaders['x-load-time-ms'] ?? null,
-        'dns'  => $responseHeaders['x-dns-time-ms'] ?? null,
-        'tcp'  => $responseHeaders['x-tcp-time-ms'] ?? null,
-        'ssl'  => $responseHeaders['x-ssl-time-ms'] ?? null,
-        'ttfb' => $responseHeaders['x-ttfb-time-ms'] ?? null,
-    ],
+    'image'   => 'data:image/png;base64,' . base64_encode($body),
+    'host'    => $host,
+    'meta'    => $meta,
+    'history' => $history,
 ], 'Screenshot captured');

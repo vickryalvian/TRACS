@@ -5530,6 +5530,7 @@ async function convertCurrency() {
     }
 
     if (!data.success) {
+      handleRequestError({ message: data.message }, 'page', 'Could not convert currency.');
       return;
     }
 
@@ -5550,8 +5551,14 @@ async function convertCurrency() {
     document.getElementById('currency-time').textContent =
       data.time;
 
+    const converted = { from, to, amount: parseFloat(amount), result, rate, created_at: data.time };
+    renderCurrencyLastConverted(converted);
+    currencyHistoryItems = [converted, ...currencyHistoryItems].slice(0, 5);
+    renderCurrencyHistory();
+
   } catch (err) {
     console.error("FETCH ERROR:", err);
+    handleRequestError(err, 'page', 'Could not convert currency.');
   }
 }
 
@@ -5568,15 +5575,367 @@ function formatCurrencyConverterNumber(value, allowSmallMarker = false) {
   });
 }
 
+/* ── Currency Converter widget: realtime rate + history ────── */
+
+const CURRENCY_RATE_REFRESH_MS = 5 * 60 * 1000;
+let currencyRateTimer = null;
+let currencyHistoryItems = [];
+
+function tracsRelativeTime(input) {
+  if (!input) return '';
+  const iso = typeof input === 'string' && input.includes(' ') && !input.includes('T') ? input.replace(' ', 'T') : input;
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '';
+  const diffSec = Math.round((Date.now() - then) / 1000);
+  if (diffSec < 5) return 'just now';
+  if (diffSec < 60) return `${diffSec} seconds ago`;
+  const diffMin = Math.round(diffSec / 60);
+  if (diffMin < 60) return `${diffMin} minute${diffMin === 1 ? '' : 's'} ago`;
+  const diffHr = Math.round(diffMin / 60);
+  if (diffHr < 24) return `${diffHr} hour${diffHr === 1 ? '' : 's'} ago`;
+  const diffDay = Math.round(diffHr / 24);
+  return `${diffDay} day${diffDay === 1 ? '' : 's'} ago`;
+}
+
+async function fetchCurrencyRate(from = 'USD', to = 'IDR') {
+  const res = await fetch(`/api/currency-rate.php?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, {
+    headers: { Accept: 'application/json' },
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !data || !data.success) {
+    throw new Error(data?.message || `Could not load exchange rate (HTTP ${res.status}).`);
+  }
+  return data.data;
+}
+
+function renderCurrencyRateCard(rate) {
+  const card = document.getElementById('currency-rate-card');
+  if (!card) return;
+  card.dataset.state = 'ready';
+  const updated = new Date(rate.fetched_at);
+  const timeText = Number.isNaN(updated.getTime())
+    ? '—'
+    : updated.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }) + ' WIB';
+  card.innerHTML = `
+    <div class="crc-head">
+      <span class="crc-label">Realtime Rate</span>
+      <button type="button" class="btn btn-ghost btn-icon crc-refresh" id="currency-rate-refresh" title="Refresh rate" aria-label="Refresh rate"><i data-lucide="refresh-cw" class="icon-sm"></i></button>
+    </div>
+    <div class="crc-pair">${escapeHtml(rate.from)} / ${escapeHtml(rate.to)}</div>
+    <div class="crc-value">${formatCurrencyConverterNumber(rate.rate, true)}</div>
+    <div class="crc-updated">Updated: ${escapeHtml(timeText)}</div>
+  `;
+  tracsRefreshIcons(card);
+}
+
+function renderCurrencyRateError() {
+  const card = document.getElementById('currency-rate-card');
+  if (!card) return;
+  card.dataset.state = 'error';
+  card.innerHTML = `
+    <div class="crc-error">
+      <span>Could not load the realtime rate.</span>
+      <button type="button" class="cf-as-retry-btn" data-action="retry-rate">Retry</button>
+    </div>
+  `;
+}
+
+async function loadCurrencyRate() {
+  const card = document.getElementById('currency-rate-card');
+  if (card && card.dataset.state !== 'ready') card.dataset.state = 'loading';
+  try {
+    const rate = await fetchCurrencyRate('USD', 'IDR');
+    renderCurrencyRateCard(rate);
+  } catch (err) {
+    console.error('Currency rate error:', err);
+    renderCurrencyRateError();
+  }
+}
+
+function renderCurrencyLastConverted(item) {
+  const host = document.getElementById('currency-last-converted');
+  if (!host) return;
+  if (!item) {
+    host.hidden = true;
+    host.innerHTML = '';
+    return;
+  }
+  host.hidden = false;
+  host.innerHTML = `
+    <div class="clc-label">Last Converted</div>
+    <div class="clc-row">
+      <span>${formatCurrencyConverterNumber(item.amount)} ${escapeHtml(item.from)}</span>
+      <i data-lucide="arrow-right" class="icon-xs"></i>
+      <span>${formatCurrencyConverterNumber(item.result)} ${escapeHtml(item.to)}</span>
+    </div>
+    <div class="clc-meta">1 ${escapeHtml(item.from)} = ${formatCurrencyConverterNumber(item.rate, true)} ${escapeHtml(item.to)} · ${escapeHtml(tracsRelativeTime(item.created_at))}</div>
+  `;
+  tracsRefreshIcons(host);
+}
+
+function currencyHistoryRowHtml(item) {
+  return `
+    <div class="currency-history-row">
+      <span class="chr-pair">${escapeHtml(item.from)} → ${escapeHtml(item.to)}</span>
+      <span class="chr-amounts">${formatCurrencyConverterNumber(item.amount)} → ${formatCurrencyConverterNumber(item.result)}</span>
+      <span class="chr-time">${escapeHtml(tracsRelativeTime(item.created_at))}</span>
+    </div>
+  `;
+}
+
+function renderCurrencyHistory() {
+  const host = document.getElementById('currency-history-list');
+  if (!host) return;
+  host.innerHTML = currencyHistoryItems.length
+    ? currencyHistoryItems.map(currencyHistoryRowHtml).join('')
+    : `<div class="currency-history-empty">No conversion history</div>`;
+}
+
+async function loadCurrencyHistory() {
+  try {
+    const res = await fetch('/api/currency-history.php', { headers: { Accept: 'application/json' } });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data || !data.success) {
+      throw new Error(data?.message || `Could not load conversion history (HTTP ${res.status}).`);
+    }
+    currencyHistoryItems = Array.isArray(data.data?.items) ? data.data.items : [];
+    renderCurrencyLastConverted(data.data?.latest || null);
+    renderCurrencyHistory();
+  } catch (err) {
+    console.error('Currency history error:', err);
+    const host = document.getElementById('currency-history-list');
+    if (host) {
+      host.innerHTML = `
+        <div class="currency-history-error">
+          <span>Could not load conversion history.</span>
+          <button type="button" class="cf-as-retry-btn" data-action="retry-currency-history">Retry</button>
+        </div>
+      `;
+    }
+  }
+}
+
+function startCurrencyRateAutoRefresh() {
+  if (currencyRateTimer) clearInterval(currencyRateTimer);
+  currencyRateTimer = setInterval(() => {
+    if (document.hidden) return;
+    loadCurrencyRate();
+  }, CURRENCY_RATE_REFRESH_MS);
+}
+
+function initCurrencyWidget() {
+  loadCurrencyRate();
+  loadCurrencyHistory();
+  startCurrencyRateAutoRefresh();
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) loadCurrencyRate();
+  });
+
+  document.getElementById('currency-rate-card')?.addEventListener('click', (e) => {
+    if (e.target.closest('#currency-rate-refresh') || e.target.closest('[data-action="retry-rate"]')) {
+      loadCurrencyRate();
+    }
+  });
+
+  document.getElementById('currency-history-list')?.addEventListener('click', (e) => {
+    if (e.target.closest('[data-action="retry-currency-history"]')) loadCurrencyHistory();
+  });
+}
+
 /* ── Website Screenshot widget ─────────────────── */
 
-// Concrete capture regions PageFleets supports; "all" fans out to each of these.
-const SCREENSHOT_REGIONS = [
-  { value: 'id-1', label: '🇮🇩 ID — Jakarta' },
-  { value: 'us-1', label: '🇺🇸 US — Oregon' },
-];
+// Capture regions come from PageFleets' /api/v1/regions — never hardcoded,
+// so the dropdown always reflects whatever the API currently serves.
+let screenshotRegionsCache = null;
+let screenshotRegionsPromise = null;
+let screenshotHistoryItems = [];
+let screenshotCaptureInFlight = false;
+let lastScreenshotCapture = null; // { raw, region }
 
-const screenshotResults = new Map(); // 'single' or region value -> { dataUrl, host }
+const screenshotResults = new Map(); // 'single' or region value -> { dataUrl, host, imageUrl }
+
+async function fetchScreenshotRegions(force = false) {
+  if (screenshotRegionsCache && !force) return screenshotRegionsCache;
+  if (screenshotRegionsPromise) return screenshotRegionsPromise;
+  screenshotRegionsPromise = (async () => {
+    try {
+      const res = await fetch('/api/screenshot-regions.php', { headers: { Accept: 'application/json' } });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data || !data.success || !Array.isArray(data.data?.regions)) {
+        throw new Error(data?.message || `Could not load capture regions (HTTP ${res.status}).`);
+      }
+      screenshotRegionsCache = data.data.regions.map((r) => ({ value: r.code, label: r.name }));
+      return screenshotRegionsCache;
+    } finally {
+      screenshotRegionsPromise = null;
+    }
+  })();
+  return screenshotRegionsPromise;
+}
+
+function populateScreenshotRegionSelect(regions) {
+  const select = document.getElementById('screenshot-region');
+  if (!select) return;
+  [...select.querySelectorAll('option[data-region-option]')].forEach((o) => o.remove());
+  const allOpt = select.querySelector('option[value="all"]');
+  regions.forEach(({ value, label }) => {
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = label;
+    opt.dataset.regionOption = '1';
+    select.insertBefore(opt, allOpt || null);
+  });
+}
+
+async function loadScreenshotRegionOptions() {
+  try {
+    populateScreenshotRegionSelect(await fetchScreenshotRegions());
+  } catch (err) {
+    console.error('Screenshot regions error:', err);
+    // Auto/All options still work without the per-region list; the widget
+    // just won't offer individual regions until this succeeds (retried the
+    // next time the dropdown is repopulated).
+  }
+}
+
+function screenshotRegionLabel(value) {
+  const found = (screenshotRegionsCache || []).find((r) => r.value === value);
+  return found ? found.label : value;
+}
+
+function screenshotFileSizeText(bytes) {
+  if (!bytes || bytes <= 0) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+}
+
+function screenshotTimingText(meta) {
+  const m = meta || {};
+  const bits = [];
+  if (m.load != null) bits.push(`Load ${m.load}ms`);
+  if (m.dns != null) bits.push(`DNS ${m.dns}ms`);
+  if (m.tcp != null) bits.push(`TCP ${m.tcp}ms`);
+  if (m.ssl != null) bits.push(`SSL ${m.ssl}ms`);
+  if (m.ttfb != null) bits.push(`TTFB ${m.ttfb}ms`);
+  return bits.join(' · ');
+}
+
+function screenshotHistoryCardHtml(item, isLatest) {
+  const statusBadge = item.status === 'failed'
+    ? '<span class="badge badge-sm b-hold">Failed</span>'
+    : '<span class="badge badge-sm b-resolved">Captured</span>';
+  const region = item.region_label || item.region || 'Auto';
+  const sizeText = screenshotFileSizeText(item.file_size_bytes);
+  const dims = item.width && item.height ? `${item.width}×${item.height}` : '';
+  return `
+    <div class="screenshot-history-item ${isLatest ? 'is-latest' : ''}" data-history-id="${item.id}">
+      <button type="button" class="screenshot-history-thumb" data-action="view" data-history-id="${item.id}">
+        <img src="${escapeHtml(item.thumbnail_url)}" alt="Screenshot of ${escapeHtml(item.host)}" loading="lazy">
+      </button>
+      <div class="screenshot-history-info">
+        <div class="screenshot-history-host">${escapeHtml(item.host)}</div>
+        <div class="screenshot-history-meta">
+          ${statusBadge}
+          <span>${escapeHtml(region)}</span>
+          ${dims ? `<span>${dims}</span>` : ''}
+          ${sizeText ? `<span>${sizeText}</span>` : ''}
+        </div>
+        <div class="screenshot-history-time">${escapeHtml(tracsRelativeTime(item.created_at))}</div>
+      </div>
+      <div class="screenshot-history-actions">
+        <button type="button" class="btn btn-ghost btn-icon" data-action="view" data-history-id="${item.id}" title="Open full image" aria-label="Open full image"><i data-lucide="maximize-2" class="icon-sm"></i></button>
+        <button type="button" class="btn btn-ghost btn-icon" data-action="recapture" data-history-id="${item.id}" title="Capture again" aria-label="Capture again"><i data-lucide="rotate-cw" class="icon-sm"></i></button>
+        <button type="button" class="btn btn-ghost btn-icon" data-action="copy-url" data-history-id="${item.id}" title="Copy URL" aria-label="Copy URL"><i data-lucide="copy" class="icon-sm"></i></button>
+      </div>
+    </div>
+  `;
+}
+
+function renderScreenshotHistory() {
+  const host = document.getElementById('screenshot-history');
+  if (!host) return;
+  if (!screenshotHistoryItems.length) {
+    host.dataset.state = 'empty';
+    host.innerHTML = `
+      <div class="empty screenshot-history-empty">
+        <div class="empty-ic"><i data-lucide="camera" class="icon-sm"></i></div>
+        <div class="empty-t">No screenshots captured yet</div>
+        <div class="empty-s">Capture a website below to see it here.</div>
+      </div>
+    `;
+  } else {
+    host.dataset.state = 'ready';
+    const [latest, ...rest] = screenshotHistoryItems;
+    host.innerHTML = `
+      ${screenshotHistoryCardHtml(latest, true)}
+      ${rest.length ? `<div class="screenshot-history-strip">${rest.map((item) => screenshotHistoryCardHtml(item, false)).join('')}</div>` : ''}
+    `;
+  }
+  tracsRefreshIcons(host);
+}
+
+async function loadScreenshotHistory() {
+  const host = document.getElementById('screenshot-history');
+  if (host && host.dataset.state !== 'ready') host.dataset.state = 'loading';
+  try {
+    const res = await fetch('/api/screenshot-history-list.php', { headers: { Accept: 'application/json' } });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data || !data.success) {
+      throw new Error(data?.message || `Could not load screenshot history (HTTP ${res.status}).`);
+    }
+    screenshotHistoryItems = Array.isArray(data.data?.items) ? data.data.items : [];
+    renderScreenshotHistory();
+  } catch (err) {
+    console.error('Screenshot history error:', err);
+    if (host) {
+      host.dataset.state = 'error';
+      host.innerHTML = `
+        <div class="screenshot-history-error">
+          <span>Could not load screenshot history.</span>
+          <button type="button" class="cf-as-retry-btn" data-action="retry-history">Retry</button>
+        </div>
+      `;
+    }
+  }
+}
+
+async function screenshotHistoryAction(action, id) {
+  const item = screenshotHistoryItems.find((it) => String(it.id) === String(id));
+  if (!item) return;
+  if (action === 'view') {
+    window.open(item.image_url, '_blank', 'noopener');
+  } else if (action === 'recapture') {
+    const input = document.getElementById('screenshot-url');
+    if (input) input.value = item.raw_input || item.host;
+    await captureSingleRegion(item.raw_input || item.host, item.region || '');
+  } else if (action === 'copy-url') {
+    try {
+      await navigator.clipboard.writeText(item.raw_input || item.host);
+      showToast('URL copied to clipboard.', 'success', { context: 'page' });
+    } catch (err) {
+      console.error('Copy URL error:', err);
+      showToast('Could not copy the URL.', 'error', { context: 'page' });
+    }
+  }
+}
+
+function initScreenshotWidget() {
+  loadScreenshotRegionOptions();
+  loadScreenshotHistory();
+
+  document.getElementById('screenshot-history')?.addEventListener('click', (e) => {
+    if (e.target.closest('[data-action="retry-history"]')) {
+      loadScreenshotHistory();
+      return;
+    }
+    const actionEl = e.target.closest('[data-action]');
+    if (!actionEl) return;
+    const id = actionEl.dataset.historyId;
+    if (id) screenshotHistoryAction(actionEl.dataset.action, id);
+  });
+}
 
 function setScreenshotStatus(message, isError = false) {
   const el = document.getElementById('screenshot-status');
@@ -5602,7 +5961,10 @@ function screenshotMetaText(host, meta) {
 
 async function fetchScreenshot(raw, region) {
   const params = new URLSearchParams({ url: raw });
-  if (region) params.set('region', region);
+  if (region) {
+    params.set('region', region);
+    params.set('region_label', screenshotRegionLabel(region));
+  }
   const res = await fetch(`/api/screenshot-capture.php?${params.toString()}`, {
     headers: { 'Accept': 'application/json' },
   });
@@ -5687,6 +6049,7 @@ function failScreenshotCard(body, key, message) {
 }
 
 async function captureScreenshot() {
+  if (screenshotCaptureInFlight) return;
   const input = document.getElementById('screenshot-url');
   const btn = document.getElementById('screenshot-btn');
   const label = btn?.querySelector('.screenshot-btn-label');
@@ -5699,6 +6062,7 @@ async function captureScreenshot() {
     return;
   }
 
+  screenshotCaptureInFlight = true;
   if (btn) btn.disabled = true;
   if (label) label.textContent = 'Capturing…';
   const statStrip = document.querySelector('.dashboard-stat-strip');
@@ -5710,6 +6074,7 @@ async function captureScreenshot() {
       await captureSingleRegion(raw, region);
     }
   } finally {
+    screenshotCaptureInFlight = false;
     if (btn) btn.disabled = false;
     if (label) label.textContent = 'Capture';
     statStrip?.classList.remove('is-scanning');
@@ -5719,24 +6084,41 @@ async function captureScreenshot() {
 async function captureSingleRegion(raw, region) {
   screenshotResults.clear();
   setScreenshotStatus('Capturing screenshot…');
+  lastScreenshotCapture = { raw, region };
 
   try {
     const payload = await fetchScreenshot(raw, region);
     const host = payload.host || 'screenshot';
-    screenshotResults.set('single', { dataUrl: payload.image, host });
+    const historyMeta = payload.history || null;
+    const imageUrl = historyMeta ? window.location.origin + historyMeta.image_url : null;
+    screenshotResults.set('single', { dataUrl: payload.image, host, imageUrl });
 
     const body = document.getElementById('screenshotResultBody');
     if (body) {
+      const regionLabel = region ? screenshotRegionLabel(region) : 'Auto';
+      const dims = historyMeta?.width && historyMeta?.height ? `${historyMeta.width}×${historyMeta.height}` : '';
+      const sizeText = screenshotFileSizeText(historyMeta?.file_size_bytes);
+      const timingText = screenshotTimingText(payload.meta);
       body.innerHTML = `
-        <button type="button" class="screenshot-preview" data-action="view" data-region="single">
-          <img alt="Captured website screenshot">
-        </button>
-        <div class="screenshot-toolbar">
-          <span class="screenshot-meta">${escapeHtml(screenshotMetaText(host, payload.meta))}</span>
-          <div class="screenshot-actions">
-            <button type="button" class="btn btn-ghost screenshot-action" data-action="view" data-region="single"><i data-lucide="maximize-2" class="icon-sm"></i> View</button>
+        <div class="screenshot-result-image">
+          <button type="button" class="screenshot-preview" data-action="view" data-region="single">
+            <img alt="Captured website screenshot">
+          </button>
+        </div>
+        <div class="screenshot-result-meta">
+          <dl class="screenshot-result-fields">
+            <div><dt>URL</dt><dd>${escapeHtml(host)}</dd></div>
+            <div><dt>Region</dt><dd>${escapeHtml(regionLabel)}</dd></div>
+            <div><dt>Captured</dt><dd>${escapeHtml(new Date().toLocaleString())}</dd></div>
+            ${dims ? `<div><dt>Resolution</dt><dd>${escapeHtml(dims)}</dd></div>` : ''}
+            ${sizeText ? `<div><dt>Size</dt><dd>${escapeHtml(sizeText)}</dd></div>` : ''}
+          </dl>
+          ${timingText ? `<div class="screenshot-result-timing">${escapeHtml(timingText)}</div>` : ''}
+          <div class="screenshot-result-actions">
             <button type="button" class="btn btn-ghost screenshot-action" data-action="download" data-region="single"><i data-lucide="download" class="icon-sm"></i> Download</button>
-            <button type="button" class="btn btn-ghost screenshot-action" data-action="copy" data-region="single"><i data-lucide="copy" class="icon-sm"></i> <span class="screenshot-copy-label">Copy</span></button>
+            <button type="button" class="btn btn-ghost screenshot-action" data-action="view" data-region="single"><i data-lucide="maximize-2" class="icon-sm"></i> Open Full Size</button>
+            <button type="button" class="btn btn-ghost screenshot-action" data-action="copy-url" data-region="single"><i data-lucide="copy" class="icon-sm"></i> Copy Image URL</button>
+            <button type="button" class="btn btn-ghost screenshot-action" data-action="recapture-modal"><i data-lucide="rotate-cw" class="icon-sm"></i> Capture Again</button>
           </div>
         </div>
       `;
@@ -5752,29 +6134,41 @@ async function captureSingleRegion(raw, region) {
       if (window.lucide?.createIcons) window.lucide.createIcons();
     }
     setScreenshotStatus('');
+    showToast('Screenshot captured.', 'success', { context: 'page' });
     openScreenshotResultModal(host);
+    loadScreenshotHistory();
   } catch (err) {
     console.error('Screenshot capture error:', err);
     setScreenshotStatus(err.message || 'Could not reach the screenshot service.', true);
+    handleRequestError(err, 'page', 'Could not capture the screenshot.');
   }
 }
 
 async function captureAllRegions(raw) {
   screenshotResults.clear();
-  setScreenshotStatus(`Capturing from ${SCREENSHOT_REGIONS.length} regions…`);
+  lastScreenshotCapture = { raw, region: 'all' };
+  let regions;
+  try {
+    regions = await fetchScreenshotRegions();
+  } catch (err) {
+    console.error('Screenshot regions error:', err);
+    setScreenshotStatus(err.message || 'Could not load capture regions.', true);
+    return;
+  }
+  setScreenshotStatus(`Capturing from ${regions.length} regions…`);
 
   const body = document.getElementById('screenshotResultBody');
   if (!body) return;
-  body.innerHTML = `<div class="screenshot-grid">${SCREENSHOT_REGIONS.map(({ value, label }) => screenshotCardHtml(value, label)).join('')}</div>`;
+  body.innerHTML = `<div class="screenshot-grid">${regions.map(({ value, label }) => screenshotCardHtml(value, label)).join('')}</div>`;
   if (window.lucide?.createIcons) window.lucide.createIcons();
   openScreenshotResultModal(`${raw} · All regions`);
 
   const settled = await Promise.allSettled(
-    SCREENSHOT_REGIONS.map(({ value }) => fetchScreenshot(raw, value))
+    regions.map(({ value }) => fetchScreenshot(raw, value))
   );
 
   settled.forEach((outcome, i) => {
-    const { value, label } = SCREENSHOT_REGIONS[i];
+    const { value, label } = regions[i];
     if (outcome.status === 'rejected') {
       failScreenshotCard(body, value, outcome.reason?.message);
     } else {
@@ -5790,6 +6184,7 @@ async function captureAllRegions(raw) {
   } else {
     setScreenshotStatus('');
   }
+  loadScreenshotHistory();
 }
 
 async function screenshotResultAction(action, key) {
@@ -5821,6 +6216,15 @@ async function screenshotResultAction(action, key) {
     } catch (err) {
       console.error('Screenshot copy failed:', err);
       setScreenshotStatus('Copy not supported in this browser — use Download instead.', true);
+    }
+  } else if (action === 'copy-url') {
+    const url = entry.imageUrl || entry.dataUrl;
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast('Image URL copied to clipboard.', 'success', { context: 'modal' });
+    } catch (err) {
+      console.error('Copy image URL failed:', err);
+      showToast('Could not copy the image URL.', 'error', { context: 'modal' });
     }
   }
 }
@@ -6344,10 +6748,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
   if (document.getElementById('currency-result')) {
-    convertCurrency();
+    initCurrencyWidget();
   }
 
   /* ── Website Screenshot widget ────────────── */
+
+  if (document.getElementById('screenshot-history')) {
+    initScreenshotWidget();
+  }
 
   document.getElementById('screenshot-btn')
     ?.addEventListener('click', captureScreenshot);
@@ -6364,6 +6772,10 @@ document.addEventListener('DOMContentLoaded', () => {
     ?.addEventListener('click', (e) => {
       const actionEl = e.target.closest('[data-action]');
       if (!actionEl || actionEl.disabled) return;
+      if (actionEl.dataset.action === 'recapture-modal') {
+        if (lastScreenshotCapture) captureSingleRegion(lastScreenshotCapture.raw, lastScreenshotCapture.region);
+        return;
+      }
       const key = actionEl.dataset.region || actionEl.closest('.screenshot-grid-item')?.dataset.region;
       if (key) screenshotResultAction(actionEl.dataset.action, key);
     });

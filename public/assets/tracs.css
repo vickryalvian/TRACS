@@ -1582,12 +1582,16 @@ input, select, textarea { font-family: inherit }
 }
 
 .dashboard-case-panel {
+  /* Fills whatever height the grid stretches .col-left to (which tracks the
+     taller .dashboard-workspace stack: Quick Tools panel + Task Monitoring +
+     Dobby), instead of a fixed clamp that left dead space below the card.
+     The clamp's old lower bound becomes a floor so the panel never collapses
+     when the workspace stack is unusually short. */
   --dashboard-widget-padding: var(--panel-padding);
   display: flex;
   flex: 1 1 auto;
-  height: var(--dashboard-primary-panel-height);
-  max-height: var(--dashboard-primary-panel-height);
-  min-height: 0;
+  min-height: 430px;
+  max-height: none;
   flex-direction: column;
   margin: 0;
   overflow: hidden;
@@ -3509,6 +3513,128 @@ input[type="checkbox"]:not([data-native-checkbox]):disabled,
 .currency-result small { font-size: 9.5px; color: var(--tx3); font-weight: 400 }
 .currency-updated { font-size: 9.5px; color: var(--tx2); font-family: var(--mono) }
 
+/* Realtime rate card — shown immediately on load so the widget never opens
+   on a bare form; skeleton while the first fetch is in flight. */
+.currency-rate-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--bd1) 76%, transparent);
+  border-radius: var(--r2);
+  background: color-mix(in srgb, var(--blue) 6%, var(--s2));
+}
+.currency-rate-card[data-state="error"] {
+  background: var(--s2);
+}
+.crc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.crc-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--tx3);
+  font-family: var(--mono);
+}
+.crc-refresh {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+}
+.crc-pair {
+  font-size: 11px;
+  color: var(--tx2);
+  font-family: var(--mono);
+}
+.crc-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--tx1);
+  font-family: var(--mono);
+}
+.crc-updated {
+  font-size: 9.5px;
+  color: var(--tx3);
+  font-family: var(--mono);
+}
+.crc-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--tx3);
+}
+
+/* Last-converted summary — populated after any manual conversion, or from
+   history on load, so the widget shows prior context immediately. */
+.currency-last-converted {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 12px;
+  border-radius: var(--r2);
+  background: var(--s2);
+}
+.clc-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--tx3);
+  font-family: var(--mono);
+}
+.clc-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tx1);
+  font-family: var(--mono);
+}
+.clc-row i { color: var(--tx3); flex: 0 0 auto; }
+.clc-meta { font-size: 9.5px; color: var(--tx3); font-family: var(--mono); }
+
+/* Compact recent-conversion list. */
+.currency-history {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.currency-history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--r1);
+  font-size: 11px;
+  font-family: var(--mono);
+}
+.currency-history-row:nth-child(odd) { background: color-mix(in srgb, var(--s2) 60%, transparent); }
+.chr-pair { color: var(--tx2); font-weight: 600; flex: 0 0 auto; }
+.chr-amounts { color: var(--tx3); flex: 1 1 auto; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chr-time { color: var(--tx4); flex: 0 0 auto; }
+.currency-history-empty {
+  font-size: 11px;
+  color: var(--tx4);
+  padding: 4px 8px;
+}
+.currency-history-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--tx3);
+  padding: 4px 8px;
+}
+
 /* ══════════════════════════════════════
    WEBSITE SCREENSHOT WIDGET
 ══════════════════════════════════════ */
@@ -3696,6 +3822,205 @@ input[type="checkbox"]:not([data-native-checkbox]):disabled,
   }
   .screenshot-actions {
     width: 100%;
+  }
+}
+
+/* Generic shimmer placeholder for first-load skeleton states (history cards,
+   realtime rate card) — distinct from the radar-sweep used for the
+   in-progress "Capturing…" state, which is specific to that action. */
+.skeleton-block {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--r2);
+  background: var(--s2);
+}
+.skeleton-block::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg,
+    transparent 30%,
+    color-mix(in srgb, var(--tx1) 8%, transparent) 50%,
+    transparent 70%
+  );
+  animation: skeletonShimmer 1.5s ease-in-out infinite;
+}
+@keyframes skeletonShimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-block::after { animation: none; display: none; }
+}
+.screenshot-history-skeleton { height: 84px; }
+.currency-rate-skeleton { height: 78px; }
+
+/* Screenshot history — the "last capture" card shown by default instead of
+   an empty panel, plus a compact strip of the 4 captures before it. */
+.screenshot-history {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.screenshot-history[data-state="empty"] .empty {
+  padding: 14px 10px;
+}
+.screenshot-history-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--r2);
+  background: var(--s2);
+  font-size: 11.5px;
+  color: var(--tx3);
+}
+.screenshot-history-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--bd1) 76%, transparent);
+  border-radius: var(--r2);
+  background: var(--s2);
+}
+.screenshot-history-item.is-latest {
+  background: color-mix(in srgb, var(--blue) 5%, var(--s2));
+}
+.screenshot-history-thumb {
+  flex: 0 0 auto;
+  width: 68px;
+  height: 46px;
+  padding: 0;
+  border: 1px solid var(--bd2);
+  border-radius: var(--r1);
+  background: var(--s1);
+  overflow: hidden;
+  cursor: zoom-in;
+}
+.screenshot-history-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  display: block;
+}
+.screenshot-history-info {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.screenshot-history-host {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tx1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.screenshot-history-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 10px;
+  color: var(--tx3);
+  font-family: var(--mono);
+}
+.screenshot-history-time {
+  font-size: 9.5px;
+  color: var(--tx4);
+  font-family: var(--mono);
+}
+.screenshot-history-actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 2px;
+}
+.screenshot-history-actions .btn-icon {
+  width: 26px;
+  height: 26px;
+}
+.screenshot-history-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-gutter: stable;
+  padding-bottom: 2px;
+}
+.screenshot-history-strip .screenshot-history-item {
+  flex: 0 0 auto;
+  width: 180px;
+}
+.screenshot-history-strip .screenshot-history-actions {
+  display: none;
+}
+
+/* Two-column preview modal (image left, capture metadata right) — reuses
+   the .case-image-frame.screenshot-result-frame override already in place,
+   widened via :has() when the single-capture layout is present. The
+   multi-region grid keeps the original single-column body. */
+.case-image-frame.screenshot-result-frame:has(.screenshot-result-image) {
+  width: min(920px, 94vw);
+}
+.screenshot-result-body:has(.screenshot-result-image) {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(220px, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.screenshot-result-image .screenshot-preview img {
+  max-height: 60vh;
+}
+.screenshot-result-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.screenshot-result-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.screenshot-result-fields > div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.screenshot-result-fields dt {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--tx4);
+  font-family: var(--mono);
+}
+.screenshot-result-fields dd {
+  font-size: 12px;
+  color: var(--tx1);
+  margin: 0;
+  overflow-wrap: break-word;
+}
+.screenshot-result-timing {
+  font-size: 10.5px;
+  color: var(--tx3);
+  font-family: var(--mono);
+}
+.screenshot-result-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.screenshot-result-actions .screenshot-action {
+  justify-content: flex-start;
+}
+@media (max-width: 720px) {
+  .screenshot-result-body:has(.screenshot-result-image) {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
