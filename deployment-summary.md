@@ -4,6 +4,24 @@ Status: Deployed successfully (remediated)
 Completed: 2026-07-15 19:13 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Website Screenshot Widget Hierarchy Refinement (2026-07-21)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `e74fdd4`.
+3 files, deployed via `scp` + `sha256sum` drift-check/verify, backed up to `/opt/tracs/backups/screenshot-widget-refinement-20260721-141121/` before overwrite. No migration in this pass (frontend/layout only).
+
+### Changes Deployed
+1. Moved the URL input, Capture button, and region selector to the top of the Website Screenshot widget (above history) so starting a new capture never requires scrolling past prior results.
+2. Simplified history cards to thumbnail, status badge, region, and timestamp only — resolution, size, and full URL moved out of the compact grid.
+3. History is now a uniform grid of equally-sized cards (larger thumbnail, hover/focus lift animation) instead of an enlarged "latest" card plus a smaller strip.
+4. Clicking any history card opens the same two-column detail modal a fresh capture uses (full URL, region, timestamp, resolution, size, capture duration, Download/Open Full Size/Copy Image URL/Capture Again) — reuses the already-fetched history row, no extra request.
+
+### Verification
+- Pre-deploy drift-check: all 3 files matched the previous deploy (`c130758`) exactly, no drift.
+- Post-deploy `sha256sum` of all 3 files matches local exactly.
+- `php -l` clean on `index.php`; `php8.3-fpm` reloaded cleanly, no errors in the journal since deploy.
+- `https://tracs.vickry.id/` → `200`, `/login.php` → `200`.
+- **Not** verified: an authenticated browser walkthrough — local Docker remains unusable this session (disk space has since dropped further, to ~491MB free / 96% used, independent of this work). Shipped on static review only (JS syntax check, CSS brace balance, PHP lint, ID cross-checks). Recommend a manual pass once the disk-space issue is resolved.
+
 ## Deployed — Dashboard Quick Tools: Website Screenshot & Currency Converter Overhaul (2026-07-21)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `dbe9802` (also carries the previously-committed, not-yet-deployed `fix/cases-status-access-audit` case-status-permission fix, commit `9e4831f`, since both landed in the same `tracs.js`/`index.php` file-copy).
