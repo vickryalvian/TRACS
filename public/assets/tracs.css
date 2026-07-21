@@ -1444,8 +1444,21 @@ input, select, textarea { font-family: inherit }
 }
 
 .dash-grid {
+  /* Row 1's height must be explicit, not auto/content-sized: .col-left now
+     stacks Infrastructure Pulse + Cases, and an auto row takes the max
+     natural (unstretched) height of every item in it — if Cases' own
+     content were allowed to size that computation, an unbounded case count
+     would inflate the row itself and defeat internal scrolling entirely
+     (this exact bug shipped and was reported live). Fixing the row height
+     to the .dashboard-workspace stack's genuinely bounded total (two
+     clamp(430px,48vh,540px) task-monitoring-panel instances + the Dobby
+     filler + two row-gaps) makes both columns' available height a known
+     constant, so .col-left's children can correctly flex/clip within it
+     regardless of how much content either side has. */
+  --dashboard-row1-height: calc(var(--dashboard-primary-panel-height) * 2 + var(--dashboard-row-gap) * 2 + 44px);
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-rows: var(--dashboard-row1-height);
   column-gap: var(--dashboard-column-gap);
   row-gap: var(--dashboard-row-gap);
   align-items: stretch;
@@ -1484,6 +1497,11 @@ input, select, textarea { font-family: inherit }
   grid-column: 1 / 4;
   grid-row: 1;
   align-self: stretch;
+  overflow: hidden;
+}
+
+.col-left > .infra-dashboard-widget {
+  flex: 0 0 auto;
 }
 
 .col-dashboard-tabs {
@@ -1582,23 +1600,15 @@ input, select, textarea { font-family: inherit }
 }
 
 .dashboard-case-panel {
-  /* Matches the *actual bounded* height of the .dashboard-workspace stack
-     beside it: two clamp(430px,48vh,540px) panels (Quick Tools tabs panel +
-     Task Monitoring, both already capped via .task-monitoring-panel) plus
-     the Dobby filler (44px) and the two row-gaps between them. This must be
-     an explicit height, not a flex-grow/min-height floor — an unbounded
-     Cases list previously made .dashboard-case-panel's own intrinsic height
-     unbounded too, which fed back into the grid row's auto-sizing and
-     defeated internal scrolling entirely (the whole list rendered inline
-     instead of clipping). Capping here is what lets .dashboard-case-list's
-     overflow-y:auto actually do its job regardless of case count. */
+  /* .col-left's overall height is now externally fixed by .dash-grid's
+     explicit row height (see --dashboard-row1-height), not by its own
+     content — so this can safely flex to fill whatever space remains after
+     the Infrastructure Pulse widget above it, and .dashboard-case-list's
+     overflow-y:auto below correctly clips/scrolls regardless of case count. */
   --dashboard-widget-padding: var(--panel-padding);
-  --dashboard-case-panel-height: calc(var(--dashboard-primary-panel-height) * 2 + var(--dashboard-row-gap) * 2 + 44px);
   display: flex;
   flex: 1 1 auto;
-  height: var(--dashboard-case-panel-height);
-  max-height: var(--dashboard-case-panel-height);
-  min-height: 430px;
+  min-height: 0;
   flex-direction: column;
   margin: 0;
   overflow: hidden;
@@ -7799,12 +7809,14 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
   }
   .dash-grid {
     grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
     align-items: start;
   }
   .col-left {
     grid-column: 1;
     grid-row: 1;
     height: auto;
+    overflow: visible;
   }
   .col-dashboard-tabs {
     grid-area: dashboard-tabs;
