@@ -1597,6 +1597,10 @@ input, select, textarea { font-family: inherit }
   overflow: hidden;
 }
 
+.dashboard-case-panel > .panel-head {
+  flex: 0 0 auto;
+}
+
 .dashboard-case-panel > .empty {
   flex: 1 1 auto;
 }

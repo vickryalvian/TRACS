@@ -3906,6 +3906,11 @@ async function deleteCase(id,button=null){
       }
       caseBoardState.rawCases=caseBoardState.rawCases.filter(item=>Number(item.id)!==caseId);
       renderCaseWorkspace();
+      /* renderCaseWorkspace() is a no-op on the dashboard (no #caseWorkspace
+         there — see caseRefreshFromServer()'s comment), so the compact Cases
+         widget needs its own fragment swap or a deleted row silently stays
+         visible until a manual reload. */
+      if(document.querySelector('.dashboard-case-panel'))tracsSwapFragment('.dashboard-case-panel');
       showToast('Case deleted.','success',{context:'page'});
     }
     else handleRequestError({message:d.message,status:d.status},'page','The case could not be deleted. Please try again.');
@@ -5474,14 +5479,14 @@ async function editHandoverSummary(id,btn){
   const next=await tracsPrompt({title:'Edit shift summary',message:'Shift summary for this handover (what to watch, how the shift went):',defaultValue:current,inputLabel:'Shift summary',required:true});
   if(next===null || next===undefined)return;
   const d=await api(API.SHIFT.HANDOVER_UPDATE,{id,summary:next});
-  if(d&&d.success){showToast('Handover summary updated.','success',{context:'page'});_reload();}
+  if(d&&d.success){showToast('Handover summary updated.','success',{context:'page'});tracsRefreshTaskMonitoringPanel('#dashboard-pane-shift-handover');}
   else handleRequestError({message:d?.message,status:d?.status},'page','The summary could not be updated. Please try again.');
 }
 async function resolveShiftReport(id,button=null){
   tracsConfirm('Mark this shift report as resolved?',async()=>{
     const d=await withLoadingState(button,'Resolving...',()=>api(API.SHIFT.RESOLVE,{id}));
     if(!d)return;
-    if(d.success){showToast('Report resolved.','success',{context:'page'});_reload();}
+    if(d.success){showToast('Report resolved.','success',{context:'page'});tracsRefreshTaskMonitoringPanel('#dashboard-pane-shift-handover');}
     else handleRequestError({message:d.message,status:d.status},'page','The shift report could not be resolved. Please try again.');
   });
 }

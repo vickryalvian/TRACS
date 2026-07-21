@@ -342,15 +342,9 @@ usort($dashboard_cases, function($a, $b) {
     ?: dashboard_case_time_rank($a) <=> dashboard_case_time_rank($b)
     ?: (int)($b['id'] ?? 0) <=> (int)($a['id'] ?? 0);
 });
-$dashboard_case_widget_cases = array_slice($dashboard_cases, 0, 8);
-$dashboard_case_widget_ids = array_flip(array_map(fn($c)=>(int)($c['id']??0), $dashboard_case_widget_cases));
-foreach($dashboard_cases as $case_for_widget){
-  $case_id_for_widget = (int)($case_for_widget['id'] ?? 0);
-  if(dashboard_case_status($case_for_widget) === 'on_hold' && !isset($dashboard_case_widget_ids[$case_id_for_widget])){
-    $dashboard_case_widget_cases[] = $case_for_widget;
-    $dashboard_case_widget_ids[$case_id_for_widget] = true;
-  }
-}
+// No artificial cap: the widget shows every dashboard-visible case and
+// relies on internal scrolling (.dashboard-case-list) to stay bounded.
+$dashboard_case_widget_cases = $dashboard_cases;
 $attention_cases = array_values(array_filter($active_cases, function($c){
   $time = (string)($c['time_until']??'');
   return ($c['priority']??'') === 'critical' || ($c['status']??'') === 'stuck' || str_starts_with($time, 'Overdue');
@@ -1373,7 +1367,7 @@ include 'includes/header.php';
         </div>
         <?php endif; ?>
 
-        <?php if($total_cases>count($dashboard_case_widget_cases)): ?>
+        <?php if($total_cases>0): ?>
         <div class="case-more-link">
           <a href="cases.php" class="btn btn-ghost btn-sm">View all <?=$total_cases?> cases →</a>
         </div>
