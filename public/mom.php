@@ -59,17 +59,14 @@ $weekly_suggestions=$mom_installed ? $MC->getWeeklySuggestions() : [];
 // Fetch all MOM meetings for list
 $all_moms=$mom_installed ? array_map([$MC,'formatMOM'],$MC->getMOMs()?:[]) : [];
 
-function mom_recent_history(array $mom): bool {
+function mom_is_history(array $mom): bool {
   $status = $mom['status'] ?? '';
-  if(!in_array($status, ['completed','cancelled'], true)) return false;
-  $checked_at = $mom['completed_at'] ?? $mom['cancelled_at'] ?? $mom['updated_at'] ?? null;
-  if(empty($checked_at)) return false;
-  return strtotime((string)$checked_at) >= strtotime('-24 hours');
+  return in_array($status, ['completed','cancelled'], true);
 }
 
 $upcoming_moms=array_values(array_filter($all_moms,fn($m)=>($m['status']??'')==='upcoming'));
 $ongoing_moms=array_values(array_filter($all_moms,fn($m)=>($m['status']??'')==='ongoing'));
-$history_moms=array_values(array_filter($all_moms,fn($m)=>mom_recent_history($m)));
+$history_moms=array_values(array_filter($all_moms,fn($m)=>mom_is_history($m)));
 $total_moms=count($upcoming_moms)+count($ongoing_moms)+count($history_moms);
 usort($ongoing_moms, fn($a,$b)=>strtotime($b['started_at']??$b['meeting_at']??$b['created_at']??'now')<=>strtotime($a['started_at']??$a['meeting_at']??$a['created_at']??'now'));
 usort($upcoming_moms, fn($a,$b)=>strtotime($a['meeting_at']??$a['created_at']??'now')<=>strtotime($b['meeting_at']??$b['created_at']??'now'));
