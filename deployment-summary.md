@@ -4,6 +4,22 @@ Status: Deployed successfully (remediated)
 Completed: 2026-07-15 19:13 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — MoM History 24-Hour Visibility Bug Fix (2026-07-21)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `d460197`.
+1 file (`mom.php`), deployed via `scp` + `sha256sum` drift-check/verify, backed up to `/opt/tracs/backups/mom-history-filter-fix-20260721-162423/` before overwrite. No migration.
+
+### Changes Deployed
+User reported meeting records "missing" from `mom.php`. Investigation on the production VPS (read-only: row counts, `AUTO_INCREMENT` gap check, audit log, nginx/php-fpm logs, DB backups) confirmed no data was ever lost — `tracs_moms` held all 11 records ever created, IDs 1-11 contiguous, no deletions. Root cause was a display bug: `mom_recent_history()` (`mom.php`) only showed `completed`/`cancelled` meetings if `completed_at`/`cancelled_at`/`updated_at` was within the last 24 hours, so every meeting older than a day — including the two real weekly Friday CS meetings among a batch of dev/test entries — silently dropped out of the page and the total count. Fix: renamed to `mom_is_history()` and removed the 24-hour cutoff, keeping only the `completed`/`cancelled` status check, so history shows every past meeting (existing `usort` already sorts newest-first).
+
+### Verification
+- Pre-deploy drift-check: `mom.php` matched the previous deploy (`77a1e48`) exactly, no drift.
+- `php -l` clean locally and on the server.
+- Post-deploy `sha256sum` matches local exactly.
+- `php8.3-fpm` reloaded cleanly (`active`).
+- `https://tracs.vickry.id/mom.php` → `302` (expected login redirect, unauthenticated GET).
+- **Not** verified: an authenticated browser walkthrough confirming "Meeting jumat" and "Meeting Mingguan CS" now render in the history list. Local Docker verification wasn't available (daemon unresponsive on this machine). A manual check on next login is recommended.
+
 ## Deployed — Cases Grid Row Explicit Height Fix (2026-07-21)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `f4a913e`.
