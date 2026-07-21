@@ -38,6 +38,7 @@ if ($stmt) {
     $stmt->close();
 }
 $row['activity'] = $activity;
+$row['can_view'] = tracs_user_can($conn, 'cases.view', $uid);
 $row['can_manage'] = tracs_user_can($conn, 'cases.manage', $uid);
 $row['can_delete'] = tracs_user_can_delete_cases($conn, $uid);
 ok($row);

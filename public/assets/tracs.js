@@ -2884,10 +2884,13 @@ async function openCaseTicket(id){
   const editBtn=document.getElementById('caseTicketEditBtn');
   const deleteBtn=document.getElementById('caseTicketDeleteBtn');
   const moreMenu=document.getElementById('caseTicketMoreMenu');
-  if(resolveBtn)resolveBtn.hidden=!canManage || status==='completed';
-  if(inProgressBtn)inProgressBtn.hidden=!canManage || status==='in_progress' || status==='completed';
-  if(stuckBtn)stuckBtn.hidden=!canManage || status==='stuck' || status==='completed';
-  if(holdBtn)holdBtn.hidden=!canManage || status==='on_hold' || status==='completed';
+  // Status transitions are open to every cases.view holder (drag & drop board
+  // spec, mirrored by case-status.php's endpoint permission); only Edit/Delete
+  // stay gated to cases.manage/cases.delete.
+  if(resolveBtn)resolveBtn.hidden=status==='completed';
+  if(inProgressBtn)inProgressBtn.hidden=status==='in_progress' || status==='completed';
+  if(stuckBtn)stuckBtn.hidden=status==='stuck' || status==='completed';
+  if(holdBtn)holdBtn.hidden=status==='on_hold' || status==='completed';
   if(editBtn)editBtn.hidden=!canManage;
   if(deleteBtn)deleteBtn.hidden=!canDelete;
   if(moreMenu){
@@ -3137,13 +3140,11 @@ function caseCardHtml(caseItem){
         <summary title="Case actions" aria-label="Case actions"><i data-lucide="more-horizontal" class="icon-sm"></i></summary>
         <div class="case-card-popover">
           <button type="button" onclick="openCaseTicket(${id})"><i data-lucide="panel-right-open" class="icon-sm"></i>View detail</button>
-          ${canManage?`
-            <button type="button" onclick="openEditCase(${id})"><i data-lucide="pencil" class="icon-sm"></i>Edit / add note</button>
-            <button type="button" onclick="updateCaseStatusImmediately(${id},'in_progress','quick_action')"><i data-lucide="loader-circle" class="icon-sm"></i>Mark In Progress</button>
-            <button type="button" onclick="updateCaseStatusImmediately(${id},'stuck','quick_action')"><i data-lucide="pause-circle" class="icon-sm"></i>Move to Stuck</button>
-            <button type="button" onclick="updateCaseStatusImmediately(${id},'on_hold','quick_action')"><i data-lucide="archive" class="icon-sm"></i>Move to On Hold</button>
-            <button type="button" onclick="updateCaseStatusImmediately(${id},'completed','quick_action')"><i data-lucide="circle-check" class="icon-sm"></i>Resolve case</button>
-          `:''}
+          ${canManage?`<button type="button" onclick="openEditCase(${id})"><i data-lucide="pencil" class="icon-sm"></i>Edit / add note</button>`:''}
+          <button type="button" onclick="updateCaseStatusImmediately(${id},'in_progress','quick_action')"><i data-lucide="loader-circle" class="icon-sm"></i>Mark In Progress</button>
+          <button type="button" onclick="updateCaseStatusImmediately(${id},'stuck','quick_action')"><i data-lucide="pause-circle" class="icon-sm"></i>Move to Stuck</button>
+          <button type="button" onclick="updateCaseStatusImmediately(${id},'on_hold','quick_action')"><i data-lucide="archive" class="icon-sm"></i>Move to On Hold</button>
+          <button type="button" onclick="updateCaseStatusImmediately(${id},'completed','quick_action')"><i data-lucide="circle-check" class="icon-sm"></i>Resolve case</button>
           ${canDelete?`<button type="button" class="is-danger" onclick="deleteCase(${id},this)"><i data-lucide="trash-2" class="icon-sm"></i>Delete case</button>`:''}
         </div>
       </details>

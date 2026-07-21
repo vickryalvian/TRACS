@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../core/build_signature.php';
 $_tracs_footer_build = tracs_build_public_payload();
 $_tracs_can_view_build_info = isset($conn) && $conn instanceof mysqli && function_exists('tracs_user_can') && tracs_user_can($conn, 'settings.manage');
 $_tracs_case_can_manage = isset($conn) && $conn instanceof mysqli && function_exists('tracs_user_can') && tracs_user_can($conn, 'cases.manage');
+$_tracs_case_can_view = isset($conn) && $conn instanceof mysqli && function_exists('tracs_user_can') && tracs_user_can($conn, 'cases.view');
 $_tracs_case_role = (string)($_SESSION['user_role_slug'] ?? '');
 $_tracs_case_can_delete = isset($conn) && $conn instanceof mysqli && function_exists('tracs_user_can_delete_cases') && tracs_user_can_delete_cases($conn, (int)($_SESSION['user_id'] ?? 0));
 ?>
@@ -174,7 +175,7 @@ $_tracs_case_can_delete = isset($conn) && $conn instanceof mysqli && function_ex
   <div class="modal-foot case-ticket-actions">
     <div class="case-ticket-action-note" id="caseTicketActionNote">View-only ticket preview</div>
     <div class="case-ticket-action-buttons">
-    <?php if($_tracs_case_can_manage): ?>
+    <?php if($_tracs_case_can_view): ?>
     <button class="btn btn-ghost case-ticket-status-btn" type="button" id="caseTicketInProgressBtn" onclick="requestCaseTicketStatus('in_progress')"><i data-lucide="loader-circle" class="icon-sm"></i>In Progress</button>
     <button class="btn btn-ghost case-ticket-status-btn" type="button" id="caseTicketStuckBtn" onclick="requestCaseTicketStatus('stuck')"><i data-lucide="pause-circle" class="icon-sm"></i>Stuck</button>
     <button class="btn btn-ghost case-ticket-status-btn" type="button" id="caseTicketHoldBtn" onclick="requestCaseTicketStatus('on_hold')"><i data-lucide="archive" class="icon-sm"></i>On Hold</button>
@@ -566,7 +567,7 @@ First Deployment Build
 <!-- TRACS System by Vickry -->
 <?php $_tracs_js_v = @filemtime(__DIR__.'/../assets/tracs.js') ?: time(); ?>
 <script>
-window.TRACS_CASE_CAPS = <?=json_encode(['canManage' => $_tracs_case_can_manage, 'canDelete' => $_tracs_case_can_delete], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)?>;
+window.TRACS_CASE_CAPS = <?=json_encode(['canView' => $_tracs_case_can_view, 'canManage' => $_tracs_case_can_manage, 'canDelete' => $_tracs_case_can_delete], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)?>;
 </script>
 <script src="assets/tracs.js?v=<?=$_tracs_js_v?>"></script>
 <?php if(!empty($calendar_script ?? '')): ?>

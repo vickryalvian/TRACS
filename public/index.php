@@ -1291,9 +1291,11 @@ include 'includes/header.php';
             <span class="panel-meta"><?=$total_cases?> total</span>
             <span class="panel-counter <?=dashboard_counter_class($active_case_count)?>" title="<?=$active_case_count?> unresolved cases"><?=$active_case_count?></span>
             <a href="cases.php" class="btn btn-ghost btn-sm">All →</a>
+            <?php if($case_can_manage): ?>
             <button class="btn btn-primary btn-sm btn-add-reveal" onclick="openNewCase()">
               <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span class="btn-add-label">Add</span>
             </button>
+            <?php endif; ?>
           </div>
         </div>
 

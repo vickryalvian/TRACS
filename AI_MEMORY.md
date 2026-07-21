@@ -88,6 +88,15 @@ font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Ro
 - The progress timeline is implemented with Created, Assigned, In Progress, Waiting, and Resolved steps.
 - Keep the line thin and blue-to-cyan, limit animation to the filled/current portion, use smaller passed dots, and emphasize the current dot.
 - Resolved timelines stop animating.
+- Status transitions (drag & drop on the board, the In Progress/Stuck/On
+  Hold/Resolve footer buttons, and the kanban card quick-action menu) are open
+  to every `cases.view` holder — enforced by `case-status.php`/`case-reorder.php`
+  requiring only `cases.view`. `cases.manage` gates create/edit only (Edit
+  button, `case-create.php`, `case-update.php`); deletion is gated separately
+  by `tracs_user_can_delete_cases()`. Keep frontend gating (`footer.php`,
+  `tracs.js` `caseCardHtml`/`openCaseTicket`) matching this split — see
+  `config/migrations/2026_07_21_case_status_permission_revision.sql`, which
+  also grants `intern` `cases.view` so every role can reach `cases.php`.
 
 ## Shift Handover Rules
 
