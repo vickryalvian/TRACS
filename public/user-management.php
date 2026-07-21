@@ -959,18 +959,83 @@ function umCurrentRoleSlug(){
   const select=document.getElementById('umRoleId');
   return select?.selectedOptions?.[0]?.dataset?.roleSlug || '';
 }
+/* Fields flatpickr controls via an altInput (see tracs.js's global date-input
+   initializer). Writing .value directly bypasses flatpickr's own state and its
+   altInput display, so the visible field can keep showing a stale/default date
+   (e.g. today's date from page load) while the real value is actually empty or
+   different — the field looks filled but validation and the payload see
+   nothing. Always go through window.setDateLikeInput for these two. */
+const UM_INTERN_DATE_FIELD_IDS=['umInternStart','umInternEnd'];
+function umInternDateDisplay(value){
+  const [y,m,d]=String(value || '').split('-');
+  return y && m && d ? `${d}-${m}-${y}` : '';
+}
+function umInternFieldSpec(){
+  return [
+    {id:'umUniversityName', label:'University / Campus', test:el=>!!el.value.trim()},
+    {id:'umInternStart', label:'Internship Start Date', test:el=>!!el.value},
+    {id:'umInternEnd', label:'Internship End Date', test:el=>!!el.value},
+  ];
+}
+function umClearInternFieldErrors(){
+  umInternFieldSpec().forEach(({id})=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    el.removeAttribute('aria-invalid');
+    window.tracsValidationTarget?.(el)?.classList.remove('is-invalid');
+  });
+}
 function umToggleInternSection(){
   const isIntern=umCurrentRoleSlug()==='intern';
   const section=document.getElementById('umInternSection');
   if(section) section.hidden=!isIntern;
   section?.querySelectorAll('[data-intern-required]').forEach(el=>{ el.required=isIntern; });
+  if(!isIntern) umClearInternFieldErrors();
   window.TRACSDropdowns?.syncAll();
 }
 function umClearInternFields(){
-  ['umUniversityName','umStudyProgram','umInternStart','umInternEnd','umSpecialNotes'].forEach(id=>umSetValue(id,''));
+  ['umUniversityName','umStudyProgram','umSpecialNotes'].forEach(id=>umSetValue(id,''));
+  UM_INTERN_DATE_FIELD_IDS.forEach(id=>window.setDateLikeInput?.(document.getElementById(id),''));
   umSetValue('umMentorUserId',''); umSetValue('umInternshipStatus','active'); umSetValue('umEvaluationStatus','not_started');
   umSetValue('umSkillLevel','beginner'); umSetValue('umAllowedTaskScope','');
+  umClearInternFieldErrors();
 }
+function umValidateInternFields(form){
+  if(umCurrentRoleSlug()!=='intern'){ umClearInternFieldErrors(); return true; }
+  const modal=form?.closest('.modal-overlay') || form;
+  for(const {id,label,test} of umInternFieldSpec()){
+    const el=document.getElementById(id);
+    if(!el) continue;
+    if(!test(el)){
+      toast(`${label} is required for Intern accounts.`,'error');
+      window.tracsFocusInvalidField?.(el,{modal});
+      return false;
+    }
+    el.removeAttribute('aria-invalid');
+    window.tracsValidationTarget?.(el)?.classList.remove('is-invalid');
+  }
+  const startEl=document.getElementById('umInternStart');
+  const endEl=document.getElementById('umInternEnd');
+  if(new Date(endEl.value) <= new Date(startEl.value)){
+    toast('Internship End Date must be after the Internship Start Date.','error');
+    window.tracsFocusInvalidField?.(endEl,{modal});
+    return false;
+  }
+  return true;
+}
+(function umBindInternLiveValidation(){
+  umInternFieldSpec().forEach(({id,test})=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    const clearIfValid=()=>{
+      if(!test(el)) return;
+      el.removeAttribute('aria-invalid');
+      window.tracsValidationTarget?.(el)?.classList.remove('is-invalid');
+    };
+    el.addEventListener('input',clearIfValid);
+    el.addEventListener('change',clearIfValid);
+  });
+})();
 function umCreateUser(){
   document.getElementById('umUserModalTitle').textContent='Add User';
   document.getElementById('umUserModalSub').textContent='Create a secure TRACS account';
@@ -995,8 +1060,10 @@ function umEditUser(btn){
   umSetValue('umPosition',u.position); umSetValue('umAvatarColor',u.avatar_initials_color); umSetValue('umRoleId',u.role_id);
   umSetAvatarEditor(u);
   umSetValue('umDivisionId',u.division_id || ''); umSetValue('umStatus',u.status); umSetValue('umShift',u.shift_preference);
-  umSetValue('umUniversityName',u.university_name); umSetValue('umStudyProgram',u.study_program); umSetValue('umInternStart',u.internship_start_date);
-  umSetValue('umInternEnd',u.internship_end_date); umSetValue('umMentorUserId',u.mentor_user_id || ''); umSetValue('umInternshipStatus',u.internship_status || 'active');
+  umSetValue('umUniversityName',u.university_name); umSetValue('umStudyProgram',u.study_program);
+  window.setDateLikeInput?.(document.getElementById('umInternStart'), u.internship_start_date || '', umInternDateDisplay(u.internship_start_date));
+  window.setDateLikeInput?.(document.getElementById('umInternEnd'), u.internship_end_date || '', umInternDateDisplay(u.internship_end_date));
+  umSetValue('umMentorUserId',u.mentor_user_id || ''); umSetValue('umInternshipStatus',u.internship_status || 'active');
   umSetValue('umEvaluationStatus',u.evaluation_status || 'not_started'); umSetValue('umSkillLevel',u.skill_level || 'beginner'); umSetValue('umAllowedTaskScope',u.allowed_task_scope || '');
   umSetValue('umSpecialNotes',u.special_notes);
   umSetValue('umPassword',''); document.getElementById('umSecuritySection').style.display='none';
@@ -1137,13 +1204,7 @@ function umUserFormSubmit(form){
   const action=form.querySelector('[name="action"]')?.value;
   const original=form.querySelector('[name="original_status"]')?.value || '';
   const next=form.querySelector('[name="status"]')?.value || '';
-  if(umCurrentRoleSlug()==='intern'){
-    const university=document.getElementById('umUniversityName')?.value.trim();
-    const start=document.getElementById('umInternStart')?.value;
-    const end=document.getElementById('umInternEnd')?.value;
-    if(!university || !start || !end){ toast('University, start date, and end date are required for interns.','error'); return false; }
-    if(new Date(end) <= new Date(start)){ toast('Internship end date must be after start date.','error'); return false; }
-  }
+  if(!umValidateInternFields(form)) return false;
   if(action === 'update_user' && original && original !== next){
     (async()=>{
       if(next !== 'active'){

@@ -1,8 +1,18 @@
 # TRACS Deployment Summary
 
-Status: Deployed successfully
-Completed: 2026-07-15 19:00 WIB
+Status: Deployed successfully (remediated)
+Completed: 2026-07-15 19:13 WIB
 Domain: https://tracs.vickry.id
+
+## Deployed — Hotfix: Minutes of Meeting UI/API Permission Restoration (2026-07-15)
+
+Status: **Remediated in production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`).
+Changes: Restored readable permissions (`644`) on `public/assets/mom-styles.css` and `public/api/api_mom.php` on both local workspace and VPS.
+
+### Changes Deployed
+1. **Hotfix: Stylesheet & API Permission Fix**:
+   - Fixed file permissions of `public/assets/mom-styles.css` and `public/api/api_mom.php` from `600` (restricted) to `644` (readable by `www-data`).
+   - Resolves layout issues (stacked columns) and broken AJAX/API features on `mom.php` due to HTTP `403 Forbidden` errors returned to the client and php-fpm respectively.
 
 ## Deployed — Real-time Auto-Save Workflows, Calendar & Shift Assignment UI Parity (2026-07-15)
 
