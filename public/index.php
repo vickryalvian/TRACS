@@ -1512,24 +1512,24 @@ include 'includes/header.php';
             <div class="panel screenshot-panel dashboard-tab-widget">
               <div class="panel-head">
                 <span class="panel-title">Website Screenshot</span>
-                <div class="panel-right">
-                  <select id="screenshot-region" class="form-select" aria-label="Capture region" data-unsaved-ignore>
-                    <option value="">Auto region</option>
-                    <option value="all" selected>🌐 All regions</option>
-                  </select>
-                </div>
               </div>
               <div class="screenshot-body">
-                <div class="screenshot-history" id="screenshot-history" data-state="loading" aria-live="polite">
-                  <div class="skeleton-block screenshot-history-skeleton"></div>
-                </div>
                 <div class="screenshot-input-row">
                   <input type="text" id="screenshot-url" class="form-input" placeholder="Enter domain, URL, or IP — e.g. example.com" autocomplete="off" spellcheck="false" data-unsaved-ignore>
                   <button type="button" class="btn btn-primary" id="screenshot-btn">
                     <i data-lucide="camera" class="icon-sm"></i> <span class="screenshot-btn-label">Capture</span>
                   </button>
                 </div>
+                <div class="screenshot-region-row">
+                  <select id="screenshot-region" class="form-select" aria-label="Capture region" data-unsaved-ignore>
+                    <option value="">🌍 Auto region</option>
+                    <option value="all" selected>🌐 All regions</option>
+                  </select>
+                </div>
                 <div class="screenshot-status" id="screenshot-status" role="status" hidden></div>
+                <div class="screenshot-history" id="screenshot-history" data-state="loading" aria-live="polite">
+                  <div class="skeleton-block screenshot-history-skeleton"></div>
+                </div>
               </div>
             </div><!-- /screenshot -->
           </section>

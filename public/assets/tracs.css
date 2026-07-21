@@ -3644,9 +3644,6 @@ input[type="checkbox"]:not([data-native-checkbox]):disabled,
   flex-direction: column;
   min-height: 0;
 }
-.screenshot-panel .panel-head .form-select {
-  min-width: 150px;
-}
 .screenshot-body {
   display: flex;
   flex: 1 1 auto;
@@ -3670,6 +3667,10 @@ input[type="checkbox"]:not([data-native-checkbox]):disabled,
   align-items: center;
   gap: 6px;
   white-space: nowrap;
+}
+.screenshot-region-row .form-select {
+  min-width: 180px;
+  width: auto;
 }
 .screenshot-status {
   font-size: 12px;
@@ -3855,12 +3856,12 @@ input[type="checkbox"]:not([data-native-checkbox]):disabled,
 .screenshot-history-skeleton { height: 84px; }
 .currency-rate-skeleton { height: 78px; }
 
-/* Screenshot history — the "last capture" card shown by default instead of
-   an empty panel, plus a compact strip of the 4 captures before it. */
+/* Screenshot history — compact visual cards (thumbnail-first, minimal text).
+   Whole card is a button that opens the full-detail preview modal; anything
+   beyond thumbnail/status/region/time lives in that modal, not here. */
 .screenshot-history {
   display: flex;
   flex-direction: column;
-  gap: 8px;
 }
 .screenshot-history[data-state="empty"] .empty {
   padding: 14px 10px;
@@ -3876,88 +3877,65 @@ input[type="checkbox"]:not([data-native-checkbox]):disabled,
   font-size: 11.5px;
   color: var(--tx3);
 }
-.screenshot-history-item {
-  display: flex;
-  align-items: center;
+.screenshot-history-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 10px;
-  padding: 8px;
+}
+.screenshot-history-card {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
   border: 1px solid color-mix(in srgb, var(--bd1) 76%, transparent);
   border-radius: var(--r2);
   background: var(--s2);
+  overflow: hidden;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  transition: transform var(--dur), box-shadow var(--dur), border-color var(--dur);
 }
-.screenshot-history-item.is-latest {
-  background: color-mix(in srgb, var(--blue) 5%, var(--s2));
+.screenshot-history-card:hover,
+.screenshot-history-card:focus-visible {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--blue) 45%, var(--bd1));
+  box-shadow: 0 6px 16px -8px color-mix(in srgb, var(--blue) 30%, transparent);
 }
-.screenshot-history-thumb {
-  flex: 0 0 auto;
-  width: 68px;
-  height: 46px;
-  padding: 0;
-  border: 1px solid var(--bd2);
-  border-radius: var(--r1);
+.screenshot-history-card:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .screenshot-history-card { transition: none; }
+  .screenshot-history-card:hover, .screenshot-history-card:focus-visible { transform: none; }
+}
+.shc-thumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
   background: var(--s1);
   overflow: hidden;
-  cursor: zoom-in;
 }
-.screenshot-history-thumb img {
+.shc-thumb img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   object-position: top center;
   display: block;
 }
-.screenshot-history-info {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-.screenshot-history-host {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--tx1);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.screenshot-history-meta {
+.shc-foot {
   display: flex;
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
-  font-size: 10px;
+  padding: 8px 10px;
+  font-size: 10.5px;
+  font-family: var(--mono);
   color: var(--tx3);
-  font-family: var(--mono);
 }
-.screenshot-history-time {
-  font-size: 9.5px;
-  color: var(--tx4);
-  font-family: var(--mono);
-}
-.screenshot-history-actions {
-  flex: 0 0 auto;
-  display: flex;
-  gap: 2px;
-}
-.screenshot-history-actions .btn-icon {
-  width: 26px;
-  height: 26px;
-}
-.screenshot-history-strip {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  scrollbar-gutter: stable;
-  padding-bottom: 2px;
-}
-.screenshot-history-strip .screenshot-history-item {
-  flex: 0 0 auto;
-  width: 180px;
-}
-.screenshot-history-strip .screenshot-history-actions {
-  display: none;
-}
+.shc-region { color: var(--tx2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shc-time { margin-left: auto; color: var(--tx4); flex: 0 0 auto; }
 
 /* Two-column preview modal (image left, capture metadata right) — reuses
    the .case-image-frame.screenshot-result-frame override already in place,

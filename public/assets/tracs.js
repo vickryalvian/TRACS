@@ -5822,34 +5822,22 @@ function screenshotTimingText(meta) {
   return bits.join(' · ');
 }
 
-function screenshotHistoryCardHtml(item, isLatest) {
+function screenshotHistoryCardHtml(item) {
   const statusBadge = item.status === 'failed'
     ? '<span class="badge badge-sm b-hold">Failed</span>'
     : '<span class="badge badge-sm b-resolved">Captured</span>';
   const region = item.region_label || item.region || 'Auto';
-  const sizeText = screenshotFileSizeText(item.file_size_bytes);
-  const dims = item.width && item.height ? `${item.width}×${item.height}` : '';
   return `
-    <div class="screenshot-history-item ${isLatest ? 'is-latest' : ''}" data-history-id="${item.id}">
-      <button type="button" class="screenshot-history-thumb" data-action="view" data-history-id="${item.id}">
+    <button type="button" class="screenshot-history-card" data-history-id="${item.id}" title="${escapeHtml(item.host)}">
+      <span class="shc-thumb">
         <img src="${escapeHtml(item.thumbnail_url)}" alt="Screenshot of ${escapeHtml(item.host)}" loading="lazy">
-      </button>
-      <div class="screenshot-history-info">
-        <div class="screenshot-history-host">${escapeHtml(item.host)}</div>
-        <div class="screenshot-history-meta">
-          ${statusBadge}
-          <span>${escapeHtml(region)}</span>
-          ${dims ? `<span>${dims}</span>` : ''}
-          ${sizeText ? `<span>${sizeText}</span>` : ''}
-        </div>
-        <div class="screenshot-history-time">${escapeHtml(tracsRelativeTime(item.created_at))}</div>
-      </div>
-      <div class="screenshot-history-actions">
-        <button type="button" class="btn btn-ghost btn-icon" data-action="view" data-history-id="${item.id}" title="Open full image" aria-label="Open full image"><i data-lucide="maximize-2" class="icon-sm"></i></button>
-        <button type="button" class="btn btn-ghost btn-icon" data-action="recapture" data-history-id="${item.id}" title="Capture again" aria-label="Capture again"><i data-lucide="rotate-cw" class="icon-sm"></i></button>
-        <button type="button" class="btn btn-ghost btn-icon" data-action="copy-url" data-history-id="${item.id}" title="Copy URL" aria-label="Copy URL"><i data-lucide="copy" class="icon-sm"></i></button>
-      </div>
-    </div>
+      </span>
+      <span class="shc-foot">
+        ${statusBadge}
+        <span class="shc-region">${escapeHtml(region)}</span>
+        <span class="shc-time">${escapeHtml(tracsRelativeTime(item.created_at))}</span>
+      </span>
+    </button>
   `;
 }
 
@@ -5862,16 +5850,12 @@ function renderScreenshotHistory() {
       <div class="empty screenshot-history-empty">
         <div class="empty-ic"><i data-lucide="camera" class="icon-sm"></i></div>
         <div class="empty-t">No screenshots captured yet</div>
-        <div class="empty-s">Capture a website below to see it here.</div>
+        <div class="empty-s">Capture a website above to see it here.</div>
       </div>
     `;
   } else {
     host.dataset.state = 'ready';
-    const [latest, ...rest] = screenshotHistoryItems;
-    host.innerHTML = `
-      ${screenshotHistoryCardHtml(latest, true)}
-      ${rest.length ? `<div class="screenshot-history-strip">${rest.map((item) => screenshotHistoryCardHtml(item, false)).join('')}</div>` : ''}
-    `;
+    host.innerHTML = `<div class="screenshot-history-grid">${screenshotHistoryItems.map(screenshotHistoryCardHtml).join('')}</div>`;
   }
   tracsRefreshIcons(host);
 }
@@ -5901,24 +5885,49 @@ async function loadScreenshotHistory() {
   }
 }
 
-async function screenshotHistoryAction(action, id) {
+/* Clicking a history card opens the same two-column modal a fresh capture
+   uses, populated from the already-fetched history row — no extra request
+   needed since screenshot-history-list.php already returns dims/size/timing. */
+function openScreenshotHistoryModal(id) {
   const item = screenshotHistoryItems.find((it) => String(it.id) === String(id));
   if (!item) return;
-  if (action === 'view') {
-    window.open(item.image_url, '_blank', 'noopener');
-  } else if (action === 'recapture') {
-    const input = document.getElementById('screenshot-url');
-    if (input) input.value = item.raw_input || item.host;
-    await captureSingleRegion(item.raw_input || item.host, item.region || '');
-  } else if (action === 'copy-url') {
-    try {
-      await navigator.clipboard.writeText(item.raw_input || item.host);
-      showToast('URL copied to clipboard.', 'success', { context: 'page' });
-    } catch (err) {
-      console.error('Copy URL error:', err);
-      showToast('Could not copy the URL.', 'error', { context: 'page' });
-    }
-  }
+
+  const imageUrl = window.location.origin + item.image_url;
+  screenshotResults.set('single', { dataUrl: item.image_url, host: item.host, imageUrl });
+  lastScreenshotCapture = { raw: item.raw_input || item.host, region: item.region || '' };
+
+  const body = document.getElementById('screenshotResultBody');
+  if (!body) return;
+  const regionLabel = item.region_label || item.region || 'Auto';
+  const dims = item.width && item.height ? `${item.width}×${item.height}` : '';
+  const sizeText = screenshotFileSizeText(item.file_size_bytes);
+  const timingText = screenshotTimingText(item.meta);
+  const capturedAt = new Date((item.created_at || '').replace(' ', 'T'));
+  body.innerHTML = `
+    <div class="screenshot-result-image">
+      <button type="button" class="screenshot-preview" data-action="view" data-region="single">
+        <img src="${escapeHtml(item.image_url)}" alt="Captured website screenshot">
+      </button>
+    </div>
+    <div class="screenshot-result-meta">
+      <dl class="screenshot-result-fields">
+        <div><dt>URL</dt><dd>${escapeHtml(item.raw_input || item.host)}</dd></div>
+        <div><dt>Region</dt><dd>${escapeHtml(regionLabel)}</dd></div>
+        <div><dt>Captured</dt><dd>${escapeHtml(Number.isNaN(capturedAt.getTime()) ? item.created_at : capturedAt.toLocaleString())}</dd></div>
+        ${dims ? `<div><dt>Resolution</dt><dd>${escapeHtml(dims)}</dd></div>` : ''}
+        ${sizeText ? `<div><dt>Size</dt><dd>${escapeHtml(sizeText)}</dd></div>` : ''}
+      </dl>
+      ${timingText ? `<div class="screenshot-result-timing">Capture duration: ${escapeHtml(timingText)}</div>` : ''}
+      <div class="screenshot-result-actions">
+        <button type="button" class="btn btn-ghost screenshot-action" data-action="download" data-region="single"><i data-lucide="download" class="icon-sm"></i> Download</button>
+        <button type="button" class="btn btn-ghost screenshot-action" data-action="view" data-region="single"><i data-lucide="maximize-2" class="icon-sm"></i> Open Full Size</button>
+        <button type="button" class="btn btn-ghost screenshot-action" data-action="copy-url" data-region="single"><i data-lucide="copy" class="icon-sm"></i> Copy Image URL</button>
+        <button type="button" class="btn btn-ghost screenshot-action" data-action="recapture-modal"><i data-lucide="rotate-cw" class="icon-sm"></i> Capture Again</button>
+      </div>
+    </div>
+  `;
+  if (window.lucide?.createIcons) window.lucide.createIcons();
+  openScreenshotResultModal(item.host);
 }
 
 function initScreenshotWidget() {
@@ -5930,10 +5939,8 @@ function initScreenshotWidget() {
       loadScreenshotHistory();
       return;
     }
-    const actionEl = e.target.closest('[data-action]');
-    if (!actionEl) return;
-    const id = actionEl.dataset.historyId;
-    if (id) screenshotHistoryAction(actionEl.dataset.action, id);
+    const card = e.target.closest('.screenshot-history-card');
+    if (card?.dataset.historyId) openScreenshotHistoryModal(card.dataset.historyId);
   });
 }
 
