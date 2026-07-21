@@ -4,6 +4,22 @@ Status: Deployed successfully (remediated)
 Completed: 2026-07-15 19:13 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Cases Widget Adaptive Layout & No-Reload Gap Closures (2026-07-21)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `578d8e4`.
+3 files, deployed via `scp` + `sha256sum` drift-check/verify, backed up to `/opt/tracs/backups/cases-widget-noreload-audit-20260721-151912/` before overwrite. No migration in this pass.
+
+### Changes Deployed
+1. **Cases widget**: removed the hardcoded `array_slice($dashboard_cases, 0, 8)` cap (and the on-hold backfill loop it required) — the widget now renders every dashboard-visible case and relies on the existing scrollable `.dashboard-case-list` to stay bounded instead of an arbitrary item limit. "View all cases" footer is now unconditional (was previously only shown when the old cap caused overflow), giving a true sticky footer. `.panel-head` pinned to `flex: 0 0 auto` so it can't be squeezed.
+2. **No-reload audit found two real gaps** left from the earlier no-reload pass: `deleteCase()` updated `cases.php`'s board state but never touched the dashboard's Cases widget, so deleting a case from the dashboard showed a success toast while the row silently stayed on screen until manual reload — now swaps `.dashboard-case-panel` when present. Shift Handover's `editHandoverSummary()` and `resolveShiftReport()` still called a full `location.reload()` — both now use the same `tracsRefreshTaskMonitoringPanel('#dashboard-pane-shift-handover')` pattern the sibling shift-item-edit function already used. Checklist, Reminder, and the Quick Tools widgets (Screenshot/Currency) were already reload-free — audited, no changes needed.
+
+### Verification
+- Pre-deploy drift-check: all 3 files matched the previous deploy (`dfb9468`) exactly, no drift.
+- Post-deploy `sha256sum` of all 3 files matches local exactly.
+- `php -l` clean on `index.php`; `php8.3-fpm` reloaded cleanly, no errors in the journal since deploy.
+- `https://tracs.vickry.id/` → `200`, `/login.php` → `200`.
+- **Not** verified: an authenticated browser walkthrough of the adaptive Cases scroll behavior or the delete/resolve/edit-summary flows — shipped on static review only (JS syntax check, CSS brace balance, PHP lint, cross-references to confirm no other call sites still reference the removed variables/functions). Recommend a manual pass covering: adding enough cases to trigger internal scroll, deleting a case from the dashboard widget, and resolving/editing a shift handover summary from the dashboard tab.
+
 ## Deployed — Currency Converter Workflow Prioritization (2026-07-21)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `cbadbcc`.
