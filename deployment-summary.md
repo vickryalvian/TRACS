@@ -4,6 +4,28 @@ Status: Deployed successfully (remediated)
 Completed: 2026-07-15 19:13 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — No-Reload Save Flow Audit (2026-07-21)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `fix/intern-user-creation-audit`, commit `492e2c3`.
+6 files, deployed via `scp` + `sha256sum` drift-check/verify, backed up to `/opt/tracs/backups/no-reload-audit-20260721-034024/` before overwrite.
+
+### Changes Deployed
+1. **Eliminated page-reload-after-save across the dashboard, User Management, Monitoring, and Domain Price Crosscheck**:
+   - New `tracsSwapFragment`/`tracsFetchDocument` helpers in `tracs.js` refetch the current URL and swap only the affected DOM section instead of reloading.
+   - Case, Reminder, Task, Shift Handover, and Ticker saves on the dashboard now patch their widgets in place.
+   - Ops-status marquee slider extracted out of its `DOMContentLoaded` closure into module scope so it can be safely re-bound after a save without stacking duplicate listeners.
+   - Fixed `bindModalAjaxForms` (used by `user-management.php` and `monitoring.php`) comparing raw redirect strings instead of resolved pathnames — the old check silently forced a real reload on every save for these two pages. Auto-generated temporary passwords still force a real navigation via a `force_navigate` flag, since that reveal is a show-once session-flash banner.
+   - `domain-price-crosscheck.js` matrix/notes/task-assignment saves and the `finance.php`/`domain-transfer.php` month filter converted to the same fragment-refresh pattern.
+   - Also picked up the previously-committed, not-yet-deployed intern-field validation fix (`ee48853`) on `user-management.php`.
+
+### Verification
+- Pre-deploy drift-check: 5 of 6 files matched the expected prior-commit baseline exactly; `user-management.php` matched one commit further back (`ee48853` not yet deployed) — expected, not unexplained drift.
+- Post-deploy `sha256sum` of all 6 files matches local exactly.
+- `php -l` clean on all 4 PHP files.
+- `php8.3-fpm` reloaded successfully.
+- `https://tracs.vickry.id/` → `302`, `/login.php` → `200`, `/user-management.php` → `302` (auth redirect, expected), `/assets/tracs.js` → `200`.
+- Save-flow fixes were live-tested against a local Docker replica (not prod) before this deploy — see branch history for details.
+
 ## Deployed — Hotfix: Minutes of Meeting UI/API Permission Restoration (2026-07-15)
 
 Status: **Remediated in production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`).
