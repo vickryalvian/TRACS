@@ -4,6 +4,22 @@ Status: Deployed successfully (remediated)
 Completed: 2026-07-15 19:13 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Cases Grid Row Explicit Height Fix (2026-07-21)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `f4a913e`.
+1 file (`tracs.css`), deployed via `scp` + `sha256sum` drift-check/verify, backed up to `/opt/tracs/backups/cases-grid-row-height-fix-20260721-155511/` before overwrite. No migration.
+
+### Changes Deployed
+Second attempt at the Cases scroll fix — the previous one (`8ef7ff2`) capped only `.dashboard-case-panel`'s own height, missing that `.col-left` actually stacks Infrastructure Pulse *above* Cases (not Cases alone), so `.col-left`'s total natural height could still exceed `.dashboard-workspace`'s, re-poisoning `.dash-grid`'s auto row-height calculation the same way — confirmed live via a follow-up screenshot showing the list still rendering uncapped.
+
+Root cause: `.dash-grid`'s row had no explicit height, so it was sized from the max natural (unstretched) height of every item in it, including whatever `.col-left` contains. Fix: give the row an explicit `--dashboard-row1-height` (the `.dashboard-workspace` stack's genuinely bounded total — two `clamp(430px,48vh,540px)` panels + Dobby + two row-gaps), independent of either column's content. `.col-left` now has a real external height ceiling (`overflow:hidden`); Infrastructure Pulse stays `flex:0 0 auto`; `.dashboard-case-panel` flexes to fill the remainder, with `.dashboard-case-list` clipping/scrolling internally regardless of case count. The `<960px` mobile breakpoint (single-column stacked layout) resets `grid-template-rows` back to `auto auto` and `overflow:visible`, since that layout already intentionally lets Cases flow without internal scrolling.
+
+### Verification
+- Pre-deploy drift-check: `tracs.css` matched the previous deploy (`87561d3`) exactly, no drift.
+- Post-deploy `sha256sum` matches local exactly.
+- `https://tracs.vickry.id/` → `200`.
+- **Not** verified: an authenticated browser walkthrough confirming the Cases list now genuinely clips at the fixed row height with both columns' bottom edges aligned. Given this is the second attempt at the same bug (the first shipped without catching the Infrastructure Pulse interaction), a manual visual check is strongly recommended before considering this closed.
+
 ## Deployed — Cases Scroll Regression Fix & Currency Rate Header Move (2026-07-21)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `8ef7ff2`.
