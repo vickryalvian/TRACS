@@ -5608,6 +5608,8 @@ async function fetchCurrencyRate(from = 'USD', to = 'IDR') {
   return data.data;
 }
 
+/* Compact inline status line, not a card — contextual metadata for the
+   conversion form above it, not the widget's primary focus. */
 function renderCurrencyRateCard(rate) {
   const card = document.getElementById('currency-rate-card');
   if (!card) return;
@@ -5617,13 +5619,10 @@ function renderCurrencyRateCard(rate) {
     ? '—'
     : updated.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }) + ' WIB';
   card.innerHTML = `
-    <div class="crc-head">
-      <span class="crc-label">Realtime Rate</span>
-      <button type="button" class="btn btn-ghost btn-icon crc-refresh" id="currency-rate-refresh" title="Refresh rate" aria-label="Refresh rate"><i data-lucide="refresh-cw" class="icon-sm"></i></button>
-    </div>
-    <div class="crc-pair">${escapeHtml(rate.from)} / ${escapeHtml(rate.to)}</div>
-    <div class="crc-value">${formatCurrencyConverterNumber(rate.rate, true)}</div>
-    <div class="crc-updated">Updated: ${escapeHtml(timeText)}</div>
+    <span class="cri-pair">${escapeHtml(rate.from)} → ${escapeHtml(rate.to)}</span>
+    <span class="cri-rate">1 ${escapeHtml(rate.from)} = ${formatCurrencyConverterNumber(rate.rate, true)} ${escapeHtml(rate.to)}</span>
+    <span class="cri-updated">Updated ${escapeHtml(timeText)}</span>
+    <button type="button" class="btn btn-ghost btn-icon cri-refresh" id="currency-rate-refresh" title="Refresh rate" aria-label="Refresh rate"><i data-lucide="refresh-cw" class="icon-xs"></i></button>
   `;
   tracsRefreshIcons(card);
 }
@@ -5633,10 +5632,8 @@ function renderCurrencyRateError() {
   if (!card) return;
   card.dataset.state = 'error';
   card.innerHTML = `
-    <div class="crc-error">
-      <span>Could not load the realtime rate.</span>
-      <button type="button" class="cf-as-retry-btn" data-action="retry-rate">Retry</button>
-    </div>
+    <span class="cri-error">Rate unavailable</span>
+    <button type="button" class="cf-as-retry-btn" data-action="retry-rate">Retry</button>
   `;
 }
 
@@ -5668,7 +5665,7 @@ function renderCurrencyLastConverted(item) {
       <i data-lucide="arrow-right" class="icon-xs"></i>
       <span>${formatCurrencyConverterNumber(item.result)} ${escapeHtml(item.to)}</span>
     </div>
-    <div class="clc-meta">1 ${escapeHtml(item.from)} = ${formatCurrencyConverterNumber(item.rate, true)} ${escapeHtml(item.to)} · ${escapeHtml(tracsRelativeTime(item.created_at))}</div>
+    <div class="clc-time">${escapeHtml(tracsRelativeTime(item.created_at))}</div>
   `;
   tracsRefreshIcons(host);
 }

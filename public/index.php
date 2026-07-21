@@ -1541,10 +1541,6 @@ include 'includes/header.php';
                 <span class="panel-title">Currency Converter</span>
               </div>
               <div class="currency-body">
-                <div class="currency-rate-card" id="currency-rate-card" data-state="loading" aria-live="polite">
-                  <div class="skeleton-block currency-rate-skeleton"></div>
-                </div>
-                <div class="currency-last-converted" id="currency-last-converted" hidden></div>
                 <div class="currency-row">
                   <select id="currency-from" class="form-select" data-unsaved-ignore>
                     <option value="IDR">IDR</option>
@@ -1565,6 +1561,10 @@ include 'includes/header.php';
                   <small id="currency-rate"></small>
                 </div>
                 <div class="currency-updated">Updated: <span id="currency-time">—</span></div>
+                <div class="currency-last-converted" id="currency-last-converted" hidden></div>
+                <div class="currency-rate-card" id="currency-rate-card" data-state="loading" aria-live="polite">
+                  <div class="skeleton-block currency-rate-skeleton"></div>
+                </div>
                 <div class="currency-history" id="currency-history-list"></div>
               </div>
             </div><!-- /currency -->

@@ -3472,7 +3472,7 @@ input[type="checkbox"]:not([data-native-checkbox]):disabled,
 .currency-body {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   padding: var(--panel-padding);
 }
 .currency-row {
@@ -3513,92 +3513,57 @@ input[type="checkbox"]:not([data-native-checkbox]):disabled,
 .currency-result small { font-size: 9.5px; color: var(--tx3); font-weight: 400 }
 .currency-updated { font-size: 9.5px; color: var(--tx2); font-family: var(--mono) }
 
-/* Realtime rate card — shown immediately on load so the widget never opens
-   on a bare form; skeleton while the first fetch is in flight. */
+/* Realtime rate — compact inline metadata line (not a card), secondary to
+   the conversion form above it. Skeleton is a single short bar while the
+   first fetch is in flight. */
 .currency-rate-card {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 10px 12px;
-  border: 1px solid color-mix(in srgb, var(--bd1) 76%, transparent);
-  border-radius: var(--r2);
-  background: color-mix(in srgb, var(--blue) 6%, var(--s2));
-}
-.currency-rate-card[data-state="error"] {
-  background: var(--s2);
-}
-.crc-head {
-  display: flex;
   align-items: center;
-  justify-content: space-between;
-}
-.crc-label {
-  font-size: 9.5px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .08em;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 2px 0;
+  font-size: 10.5px;
   color: var(--tx3);
   font-family: var(--mono);
 }
-.crc-refresh {
-  width: 24px;
-  height: 24px;
+.cri-pair { color: var(--tx2); font-weight: 600; }
+.cri-rate { color: var(--tx3); }
+.cri-updated { color: var(--tx4); margin-left: auto; }
+.cri-refresh {
+  width: 20px;
+  height: 20px;
   flex: 0 0 auto;
 }
-.crc-pair {
-  font-size: 11px;
-  color: var(--tx2);
-  font-family: var(--mono);
-}
-.crc-value {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--tx1);
-  font-family: var(--mono);
-}
-.crc-updated {
-  font-size: 9.5px;
-  color: var(--tx3);
-  font-family: var(--mono);
-}
-.crc-error {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 11.5px;
-  color: var(--tx3);
-}
+.cri-error { color: var(--tx3); }
 
 /* Last-converted summary — populated after any manual conversion, or from
-   history on load, so the widget shows prior context immediately. */
+   history on load. Lighter weight than the conversion result above it; no
+   rate text here (already shown by the realtime line). */
 .currency-last-converted {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 8px 12px;
-  border-radius: var(--r2);
-  background: var(--s2);
+  gap: 2px;
+  padding: 2px 0;
 }
 .clc-label {
-  font-size: 9.5px;
+  font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .08em;
-  color: var(--tx3);
+  color: var(--tx4);
   font-family: var(--mono);
 }
 .clc-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
+  gap: 6px;
+  font-size: 12px;
   font-weight: 600;
-  color: var(--tx1);
+  color: var(--tx2);
   font-family: var(--mono);
 }
-.clc-row i { color: var(--tx3); flex: 0 0 auto; }
-.clc-meta { font-size: 9.5px; color: var(--tx3); font-family: var(--mono); }
+.clc-row i { color: var(--tx4); flex: 0 0 auto; }
+.clc-time { font-size: 9.5px; color: var(--tx4); font-family: var(--mono); }
 
 /* Compact recent-conversion list. */
 .currency-history {
@@ -3854,7 +3819,7 @@ input[type="checkbox"]:not([data-native-checkbox]):disabled,
   .skeleton-block::after { animation: none; display: none; }
 }
 .screenshot-history-skeleton { height: 84px; }
-.currency-rate-skeleton { height: 78px; }
+.currency-rate-skeleton { height: 16px; max-width: 260px; }
 
 /* Screenshot history — compact visual cards (thumbnail-first, minimal text).
    Whole card is a button that opens the full-detail preview modal; anything
