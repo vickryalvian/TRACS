@@ -4,6 +4,22 @@ Status: Deployed successfully (remediated)
 Completed: 2026-07-15 19:13 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Cases Scroll Regression Fix & Currency Rate Header Move (2026-07-21)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `8ef7ff2`.
+3 files, deployed via `scp` + `sha256sum` drift-check/verify, backed up to `/opt/tracs/backups/cases-scroll-currency-header-fix-20260721-154009/` before overwrite. No migration.
+
+### Changes Deployed
+1. **Regression fix**: the previous deploy (`578d8e4`) removed the Cases widget's hardcoded 8-item cap but left `.dashboard-case-panel` with only a `min-height` floor and no real ceiling. With 21 cases, the panel's own intrinsic height ballooned to fit every row, which fed back into the CSS Grid row's auto-sizing and defeated `.dashboard-case-list`'s internal scroll entirely — the full list rendered inline instead of clipping, making the widget (and page) excessively tall, as reported by the user from a live screenshot. Fixed by giving `.dashboard-case-panel` an explicit `height`/`max-height` matching the *actually bounded* `.dashboard-workspace` stack beside it (two `clamp(430px,48vh,540px)` `.task-monitoring-panel` instances + the Dobby filler + two row-gaps) via `calc()`, so the list scrolls internally regardless of case count.
+2. **Currency Converter**: moved the realtime rate indicator from the widget body into the panel-head's `.panel-right` (matching the Cases panel-head's existing total/counter/All/Add convention), per user feedback that the previous placement wasn't visible/obvious as a header-level update. Compacted to a single line (pair + rate); exact updated time moved to a `title` tooltip to fit the header's single-row height.
+
+### Verification
+- Pre-deploy drift-check: all 3 files matched the previous deploy (`9c7a5e8`) exactly, no drift.
+- Post-deploy `sha256sum` of all 3 files matches local exactly.
+- `php -l` clean on `index.php`; `php8.3-fpm` reloaded cleanly, no errors in the journal since deploy.
+- `https://tracs.vickry.id/` → `200`.
+- **Not** verified: an authenticated browser walkthrough confirming the Cases list now actually clips/scrolls at the intended height and the currency rate renders correctly in the header — shipped on static review only (JS syntax check, CSS brace balance, PHP lint, CSS custom-property scope check). Given this fixes a regression the user caught live, a manual visual check on next login is strongly recommended.
+
 ## Deployed — Cases Widget Adaptive Layout & No-Reload Gap Closures (2026-07-21)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `578d8e4`.
