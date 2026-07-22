@@ -1413,9 +1413,14 @@ const TRACSDropdowns = (() => {
 window.TRACSDropdowns = TRACSDropdowns;
 
 /* ── Icon popup menus ───────────────────────────────────── */
+// .user-menu-wrap and .nav-menu-wrap are deliberately NOT included here:
+// bindSidebarMenus() already owns their open/close lifecycle (mutual
+// exclusion, outside-click, Escape-with-refocus). Having both this
+// generic system and that dedicated one independently toggle the same
+// <details> elements caused the sidebar accordion to occasionally
+// double-fire on open/close, cutting the grid-template-rows transition
+// short mid-animation.
 const TRACS_POPUP_DETAILS_SELECTOR = [
-  '.user-menu-wrap',
-  '.nav-menu-wrap',
   '.report-export-menu',
   '.row-action-menu',
   '.tm-more-filters'
@@ -6697,6 +6702,21 @@ function bindSidebarMenus() {
   allMenus.forEach(menu => {
     menu.addEventListener('toggle', () => {
       if (menu.open) closeMenus(menu);
+    });
+  });
+
+  // On a short viewport, the sidebar's own scroll container can leave a
+  // just-expanded submenu (e.g. User Management's two links) below the
+  // visible area, so opening it looks like nothing happened until the user
+  // manually scrolls. Scroll the whole <details> into view once the
+  // grid-template-rows expand transition finishes (scrolling immediately
+  // would compute against the pre-expansion, still-collapsed height).
+  navMenus.forEach(menu => {
+    const track = menu.querySelector('.nav-submenu-track');
+    if (!track) return;
+    track.addEventListener('transitionend', event => {
+      if (event.propertyName !== 'grid-template-rows' || !menu.open) return;
+      menu.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     });
   });
 
