@@ -765,7 +765,7 @@ include 'includes/header.php';
         <th>Status</th>
         <th>Start Date</th>
         <th>End Date</th>
-        <th>Move Domain</th>
+        <th>Registrar</th>
         <th>Notes</th>
         
       </tr>
