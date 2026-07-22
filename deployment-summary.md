@@ -4,6 +4,55 @@ Status: Deployed successfully (remediated)
 Completed: 2026-07-15 19:13 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Server Insights Panel (Server Health) (2026-07-22)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `2b854aa`.
+11 files (`public/api/server-health.php`, `public/assets/tracs.css`, `public/server-health.php`, `core/server_insights.php`, 7 files under `core/insights/`), deployed via `scp` + `sha256sum` drift-check/verify, backed up to `/opt/tracs/backups/server-insights-20260722-221459/` before overwrite. No migration.
+
+### Changes Deployed
+Replaced the Server Health page's "Recommendations" panel (which only ever
+showed metric-threshold warnings, and read "No warning or critical resource
+recommendations" on a healthy server) with an always-populated "Server
+Insights" panel: live IDCloudHost billing balance, resource summary, capacity
+overview, security/maintenance checks, deployment info, suggested actions,
+and a weighted overall health score. Built as an independently-registerable
+provider system (`core/server_insights.php` aggregator + `core/insights/*.php`
+providers, one file per signal) so future signals (SSL/domain expiry,
+backups, Docker, Redis, cron, AI insights) can be added without touching the
+aggregator or the frontend. Each provider is wrapped in try/catch so one
+failing provider (e.g. the billing API) never blanks the rest of the panel.
+
+- Secret: `IDCLOUDHOST_API_KEY` added to `/opt/tracs/config/.env` (backed up
+  to `/opt/tracs/backups/server-insights-20260722-221459/config/.env.bak`
+  first). PHP reads `.env` per request, so no FPM reload was required for the
+  key itself; `php8.3-fpm` was still reloaded for the new/changed PHP files.
+- Billing balance is cached in-session for 300s to avoid hitting the
+  IDCloudHost API on every Server Health refresh.
+
+### Verification
+- Pre-deploy drift-check: 1 of 3 modified files (`public/api/server-health.php`)
+  matched the stale `commit deployed` baseline (`7037c97`) exactly; the other
+  2 (`tracs.css`, `server-health.php`) matched this branch's tip as of the
+  prior commit (`cf536ad`) instead — expected, since several unrelated fixes
+  on this branch were deployed after `7037c97` without that field being
+  updated. No unexpected drift.
+- `php -l` clean on all 8 PHP files, on both PHP 8.2 (local Docker test) and
+  PHP 8.3 (production).
+- Full end-to-end functional test in a local Docker Compose stack (real
+  MySQL, migrations applied, a real super-admin session) before deploying:
+  confirmed the panel renders all 7 sections with real data, a genuinely
+  failing billing call (wrong IDCloudHost endpoint, caught during testing)
+  degrades to "Unavailable" without breaking the other sections, and no
+  `IDCLOUDHOST_API_KEY` value leaks into the API response. Fixed the billing
+  endpoint (`/v1/payment/billing_account/list`, not `/v1/payment/credit/list`)
+  and a `restriction_level: "CLEAR"` misinterpretation (was flagging a
+  healthy account as restricted) based on that live test, before deploying.
+- Post-deploy `sha256sum` matches local exactly for all 11 files.
+- `https://tracs.vickry.id/` → `302`, `/login.php` → `200`,
+  `/server-health.php` → `302` (expected, unauthenticated) — all healthy.
+  `php8.3-fpm`/`nginx` both `active`; no new entries in
+  `/opt/tracs/logs/error.log` after the verification requests.
+
 ## Deployed — Sidebar Submenu Duplicate-Handler + Scroll-Into-View Fix (2026-07-22)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `215fcd8`.
