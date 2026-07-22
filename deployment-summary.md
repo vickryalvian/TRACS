@@ -4,6 +4,25 @@ Status: Deployed successfully (remediated)
 Completed: 2026-07-15 19:13 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Font-Weight Synthesis Fix (Windows/macOS Consistency) (2026-07-22)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `8cf1fdf`.
+4 files (`tracs.css`, `infrastructure-pulse.css`, `domain-price-crosscheck.css`, `tv-mode.css`), deployed via `scp` + `sha256sum` drift-check/verify, backed up to `/opt/tracs/backups/font-weight-synthesis-fix-20260722-143603/` before overwrite. No migration.
+
+### Changes Deployed
+From the user's request to check font hierarchy consistency between Windows and macOS. `header.php`'s Google Fonts `<link>` only loads Inter at weights 400/500/600/700/800 and IBM Plex Mono (`var(--mono)`) at 400/500/600/700 — no 900 for either, no 800 for mono. Found 50 rules across the app requesting a weight that isn't loaded:
+
+- 35 rules (stat numbers, badges, build-info labels, form labels — `tracs.css`, `infrastructure-pulse.css`, `domain-price-crosscheck.css`, `tv-mode.css`) declared `font-weight: 800` on `var(--mono)` text, which only goes up to 700.
+- 15 rules (mostly small uppercase label/caption text, some also mono, some inheriting Inter which tops out at 800) declared `font-weight: 900`.
+
+When a requested weight isn't loaded, the browser fake-bolds (synthesizes) the nearest available weight instead — and Windows and macOS implement that synthesis differently, which is the concrete mechanism behind text looking heavier/inconsistent across the two OSes for identical CSS. Every one of the 50 rules was verified individually (selector + actual `font-family` in scope, not blind text replacement) and capped at the real loaded weight: 700 for mono contexts, 800 for the genuinely Inter-context 900s. Confirmed no remaining unloaded-weight combination anywhere in the 8 CSS files after the fix. `-webkit-font-smoothing`/`-moz-osx-font-smoothing`/`text-rendering: optimizeLegibility` were already present globally (`tracs.css` body rule) — no change needed there.
+
+### Verification
+- Pre-deploy drift-check: all 4 files matched `HEAD~1` exactly, no drift.
+- Brace-balance clean on all 4 files (2542/388/610/266 open==close, matching known-good pre-change counts).
+- Post-deploy `sha256sum` of all 4 files matches local exactly; live-served assets via `curl` also match.
+- **Not** verified visually side-by-side on an actual Windows machine (no such environment available this session) — this is a code-level fix removing a well-documented cross-browser/cross-OS font-synthesis mechanism, not a guess at how something looks. Recommend a real side-by-side check (Windows Chrome/Edge vs. macOS Safari/Chrome) when convenient to confirm the perceived improvement.
+
 ## Deployed — MoM Card/Section Spacing Restored (2026-07-22)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `8692870`.
