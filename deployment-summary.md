@@ -4,6 +4,28 @@ Status: Deployed successfully (remediated)
 Completed: 2026-07-15 19:13 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Role-Gated Meeting Minutes Delete (2026-07-22)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `2fd0f92`.
+8 files, deployed via `scp` + `sha256sum` drift-check/verify, backed up to `/opt/tracs/backups/mom-role-gated-delete-20260722-101038/` before overwrite. No migration.
+
+### Changes Deployed
+Added a safe, role-gated delete for Minutes of Meeting (MOM) items, requested by the user:
+
+- **Role gating**: new `tracs_user_can_delete_moms()` in `core/access_control.php` — hard-coded to supervisor-tier roles and above (`super_admin`/`admin`/`supervisor`), mirroring the existing `tracs_user_can_delete_cases()` pattern rather than relying on the editable `moms.manage` permission (which agents/interns also hold by default). Enforced server-side on both `public/api/api_mom.php` (`delete_mom`, returns 403/404 with proper HTTP status codes) and the legacy `public/api/mom-action.php` (`delete_meeting`) so no endpoint is a bypass — not just hidden in the UI.
+- **Placement**: removed the two previously always-visible Delete affordances (row-action-menu in the list, delete icon in the "Current Schedule" queue) — both were also silently dead code (compared `created_by` against an undefined `$uid` inside that function scope). Delete now lives only inside the History table's `mom-preview-panel`, gated by the new PHP-side permission check so unauthorized roles never see the button at all.
+- **Confirmation**: uses the existing TRACS system dialog (`tracsConfirm`/`tracsOpenSystemDialog`) with the requested title/message and destructive red styling — no native `confirm()`. Fixed two related gaps in that shared dialog so "Cancel default/focused" actually holds for every destructive confirm app-wide, not just MOM: default focus now goes to Cancel (not the destructive action) when a confirm is marked destructive, and pressing Enter now respects whichever button is actually focused instead of always triggering the destructive action.
+- **Deletion flow**: `deleteMOM(mom_id, button)` uses the existing `withLoadingState` helper (disables the button, shows a spinner, restores state on failure), removes the row/preview on success, decrements the History count/topbar total/KPI strip counters, and toasts success/error. No page reload.
+- **Data integrity**: rewrote `MOMController::deleteMOM()` to delete by role authority instead of `created_by` ownership (a supervisor must be able to delete anyone's MOM, not just their own), and fixed the linked-reminder cleanup query, which previously only removed action-linked reminders when the deleter happened to also own both the MOM and the reminder — it now removes all of a MOM's action-linked reminders on delete regardless of owner, closing an existing orphan-record gap.
+
+### Verification
+- Pre-deploy drift-check: all 8 files matched their last-known-deployed state exactly (verified against `HEAD~1` in git and the corresponding prod `sha256sum`), no drift.
+- `php -l` clean on all 5 PHP files, both locally and on the server. `node --check` clean on both JS files. CSS brace-balance check clean.
+- Post-deploy `sha256sum` of all 8 files matches local exactly; live-served `tracs.js` and `mom-functions.js` content hashes via `curl` also match exactly (no stale cache/proxy copy).
+- `php8.3-fpm` reloaded cleanly (`active`), no errors in the journal since reload.
+- `https://tracs.vickry.id/` and `/mom.php` → `302` (expected login redirect, unauthenticated); `/api/api_mom.php` → `401` (expected, confirms the endpoint is alive and enforcing auth rather than erroring); nginx error log shows only pre-existing, unrelated bot-scanning noise (`.env`/`.git` probes from before the deploy), nothing new.
+- **Not** verified: an authenticated browser walkthrough confirming the Delete button appears only for supervisor+ roles inside the preview panel, the confirmation dialog focuses Cancel by default, and the full delete flow (toast, counter updates, row removal) works end-to-end. Local Docker verification wasn't available (daemon unresponsive on this machine) — shipped on static PHP/JS lint checks and manual logic tracing only, including a full trace of the role-permission, orphan-cleanup, and HTTP-status-code paths. Given this changes shared dialog focus/Enter-key behavior used by every destructive confirm in the app (case delete, reminder delete, task delete, etc.), a manual click-through — including at least one non-MOM destructive confirm — is recommended on next login.
+
 ## Deployed — Cases Widget Padding Alignment Fix (2026-07-22)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `059f224`.
