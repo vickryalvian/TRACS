@@ -4,6 +4,19 @@ Status: Deployed successfully (remediated)
 Completed: 2026-07-15 19:13 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Duplicate Dashboard Gap Rule Removed (Root Cause) (2026-07-22)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `52540d0`.
+1 file (`tracs-spacing.css`), deployed via `scp` + `sha256sum` drift-check/verify, backed up to `/opt/tracs/backups/dashboard-row-gap-duplicate-css-fix-20260722-121645/` before overwrite. No migration.
+
+### Changes Deployed
+The user reported the Shift Summary/Infrastructure Pulse-to-Cases gap still looked unchanged after two prior fixes (`2d32154`, `84d8ade`) and asked to check for duplicated CSS — which turned up the actual root cause. `tracs-spacing.css` ("shared spacing and layout consistency layer") independently declared `.dashboard-content, .dash-grid, .col-left, .dashboard-workspace, .col-productivity, .col-center, .col-right { gap: var(--card-gap); }`. `header.php` links this stylesheet *after* `tracs.css`, and with equal selector specificity the later rule wins outright — so every one of those containers' carefully token-driven gap (`--dashboard-row-gap`/`--dashboard-column-gap`, both changes made this session) was being silently discarded back to the generic 16px `--card-gap`, regardless of what those tokens were set to. For `.dash-grid` specifically, the duplicate's `gap` shorthand was even overwriting its separately tuned `row-gap`/`column-gap` longhands. Removed the duplicate rule entirely — every affected selector already has its own correct declaration in `tracs.css`.
+
+### Verification
+- Pre-deploy drift-check: matched `HEAD` exactly, no drift. Brace-balance clean (113/113 in this file).
+- Post-deploy `sha256sum` matches local exactly; live-served asset via `curl` matches too.
+- **Not** verified visually (no authenticated render available this session — see prior two entries). This is a much higher-confidence fix than the previous two, though: it's a cascade-mechanics root cause (a literal duplicate override), not a guessed token value, so the 20px row-gap set two commits ago should now actually be the one that renders. A visual check on next login is still recommended, given how many containers this duplicate touched.
+
 ## Deployed — Row Gap / Widget Padding Breakpoint Sync Fix (2026-07-22)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `84d8ade`.
