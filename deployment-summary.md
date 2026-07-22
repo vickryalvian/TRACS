@@ -4,6 +4,42 @@ Status: Deployed successfully (remediated)
 Completed: 2026-07-15 19:13 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Billing Balance Fix + Insights UX Polish (2026-07-22)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `93ce534`.
+3 files (`core/insights/billing.php`, `public/server-health.php`, `public/assets/tracs.css`), deployed via `git fetch origin` + `git show origin/feat/dashboard-quick-tools-widgets:<path> > <path>` per file, same as the previous deploy. Backed up to `/opt/tracs/backups/billing-fix-uiux-20260722-231114/` before overwrite. No migration.
+
+### Changes Deployed
+- **Correctness fix**: `billing.php` was reading `credit_amount` (the gross
+  prepaid figure) instead of `running_totals.ongoing` (that figure minus
+  this cycle's accrued-but-unbilled usage — the real spendable balance).
+  Live account showed **Rp 232,937** where the actual remaining balance is
+  **Rp 31,172**, which also silently hid a genuinely critical ~3-day runway
+  at the account's current burn rate. Verified directly against the live
+  API for billing_account_id `1200254418` before and after the fix.
+- **Global low-balance banner**: reuses the existing `.tracs-unsaved-bar`
+  component verbatim (same markup/classes as the Unsaved Changes Guard),
+  shown whenever the real balance drops below Rp 50,000, hidden
+  automatically once it recovers — no dismiss state to manage.
+- **Removed the left accent border** on Insights section cards per
+  feedback that it read as generic-dashboard clutter; severity is now
+  signaled through the status badge and a colored header icon only.
+- **Sanitized Error Log**: now a fixed-max-height scrollable panel with a
+  sticky severity-count row (previously grew the whole page as entries
+  accumulated); the severity badges are now clickable filters using counts
+  already being fetched — no new endpoint.
+
+### Verification
+- `php -l` clean on all 3 files on production (PHP 8.3).
+- `sha256sum` matches local exactly for all 3 files.
+- Billing math re-verified against the live IDCloudHost API for the
+  specific account ID before deploying: Rp 31,172 balance, 3-day estimate,
+  status correctly `critical`.
+- `https://tracs.vickry.id/` → `302`, `/login.php` → `200`,
+  `/server-health.php` → `302` (expected, unauthenticated); `php8.3-fpm`/
+  `nginx` both `active`; no new entries in `logs/error.log` after the
+  verification requests.
+
 ## Deployed — Server Insights Redesign (Action-Oriented IA) (2026-07-22)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `c451ead`.
