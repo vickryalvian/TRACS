@@ -4,6 +4,19 @@ Status: Deployed successfully (remediated)
 Completed: 2026-07-15 19:13 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Row Gap / Widget Padding Breakpoint Sync Fix (2026-07-22)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `84d8ade`.
+1 file (`tracs.css`), deployed via `scp` + `sha256sum` drift-check/verify, backed up to `/opt/tracs/backups/dashboard-row-gap-breakpoint-fix-20260722-121317/` before overwrite. No migration.
+
+### Changes Deployed
+Found while investigating why the row-gap widening above still looked unfixed in a user screenshot: `--dashboard-row-gap: 20px` (previous commit) was a literal, but `@media (max-width: 1024px) { :root { --dashboard-row-gap: var(--gap); } }` unconditionally reset it back to 16px on any narrower viewport/window — the fix silently only applied above 1024px. Changed the base rule to `--dashboard-row-gap: var(--dashboard-widget-padding)` and removed the now-redundant override in the breakpoint block (which already drops `--dashboard-widget-padding` to its compact 18px value), so the two stay equal at every breakpoint without two hardcoded numbers to keep in sync by hand.
+
+### Verification
+- Pre-deploy drift-check: matched `HEAD` exactly, no drift. Brace-balance clean (2542/2542).
+- Post-deploy `sha256sum` matches local exactly; live-served asset via `curl` matches too.
+- **Not** verified visually. The user's screenshot that prompted this looked wider than the 1024px breakpoint, so this fix likely isn't the reason their screenshot still looked unchanged — logged as a real, separate bug found along the way, not a claimed fix for their specific report. Local Docker was tried again (fresh volume) to get a real render, but the login POST returned a bare 500 with nothing in the Apache/PHP log, unrelated to any change made this session — abandoned rather than debugged further, given the known-tight Docker image (`README.md`: no GD extension) as a plausible cause. Still waiting on a concrete pixel measurement or computed-style value from the user's own authenticated session.
+
 ## Deployed — Dashboard Stacked-Widget Row Gap Widened (2026-07-22)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`.
