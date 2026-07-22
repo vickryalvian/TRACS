@@ -13419,7 +13419,18 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
       color-mix(in srgb, var(--amber-lt) 72%, var(--s1)) 12px 24px
     );
   color: var(--tx1);
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-lg);
+}
+
+/* Glassy, iOS/macOS-style frosted fill -- only where backdrop-filter is
+   actually supported, so browsers without it keep the solid striped
+   background above instead of a too-sheer, unblurred tint. */
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .tracs-unsaved-bar {
+    background: color-mix(in srgb, var(--amber-lt) 55%, transparent);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    backdrop-filter: blur(16px) saturate(180%);
+  }
 }
 
 .tracs-unsaved-bar[hidden] {
