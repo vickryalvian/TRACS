@@ -4,6 +4,20 @@ Status: Deployed successfully (remediated)
 Completed: 2026-07-15 19:13 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Dashboard Stacked-Widget Row Gap Widened (2026-07-22)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`.
+1 file (`tracs.css`), deployed via `scp` + `sha256sum` drift-check/verify, backed up to `/opt/tracs/backups/dashboard-row-gap-fix-20260722-115913/` before overwrite. No migration.
+
+### Changes Deployed
+Follow-up to the two Cases-widget padding fixes above, from a live screenshot the user shared showing the Shift Summary (`is-clear` state) and Cases widgets sitting visibly too close together in `.col-left`, despite the earlier top-padding fix. Root cause: `--dashboard-row-gap` (the gap between every pair of stacked widgets in a dashboard column — Shift/Infra↔Cases, and also Currency↔Recent Activity, Productivity↔Quick Tools↔Dobby, etc.) was aliased to `--card-gap` (16px), 4px less than `--dashboard-widget-padding` (20px, the padding each widget already uses on every internal side). That made the gap *between* cards read as tighter than the padding *inside* each card, an inconsistent visual rhythm. Changed `--dashboard-row-gap` to a literal `20px` so it matches `--dashboard-widget-padding` everywhere this token is used; `--dashboard-column-gap` (horizontal, between `.col-left`/`.dashboard-workspace`) was left untouched at 16px since the reported issue was specifically vertical.
+
+### Verification
+- Pre-deploy drift-check: `tracs.css` matched `HEAD` exactly, no drift.
+- Brace-balance check clean (2542 open / 2542 close).
+- Post-deploy `sha256sum` of the file matches local exactly, and the live-served asset via `curl` hashes to the same value.
+- **Not** verified: an authenticated visual render. A local Docker login attempt hit a math CAPTCHA after a couple of attempts (`tracs_login_attempts` rate-limiting); per policy this agent does not complete or bypass CAPTCHAs, so the fix shipped on token-value reasoning alone, at the user's explicit direction to skip further verification. A visual check on next login is recommended, since `--dashboard-row-gap` is shared by several other stacked-widget pairs beyond Cases.
+
 ## Deployed — Calendar UX and Toast Pause-on-Hover Fix (2026-07-22)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `a505fd5`.
