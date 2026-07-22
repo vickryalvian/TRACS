@@ -234,18 +234,18 @@ include 'includes/header.php';
         <div class="dt-inline-group fb-field-reference">
           <label class="fb-inline-lbl">Reference</label>
           <input type="text" class="form-input fb-inline-input" id="inRef"
-                 data-autosave-field="whmcs_reference"
+                 data-autosave-field="whmcs_reference" data-unsaved-ignore
                  placeholder="Domain, invoice, or service reference, e.g. exampledomain.com" autocomplete="off">
         </div>
         <div class="dt-inline-group fb-field-email">
           <label class="fb-inline-lbl">Customer Email</label>
           <input type="text" class="form-input fb-inline-input" id="inEmail"
-                 data-autosave-field="email_address"
+                 data-autosave-field="email_address" data-unsaved-ignore
                  placeholder="Customer email, e.g. client@domain.com" autocomplete="off">
         </div>
         <div class="dt-inline-group fb-field-service">
           <label class="fb-inline-lbl">Service <span class="req-star">*</span></label>
-          <div class="cf-choice-box" id="inService" data-multi-choice data-autosave-field="cancelled_service">
+          <div class="cf-choice-box" id="inService" data-multi-choice data-autosave-field="cancelled_service" data-unsaved-ignore>
             <?php foreach($services as $s): ?>
             <label class="cf-choice-option">
               <input type="checkbox" value="<?=esc($s)?>">
@@ -257,7 +257,7 @@ include 'includes/header.php';
         </div>
         <div class="dt-inline-group fb-field-reason">
           <label class="fb-inline-lbl">Reason <span class="req-star">*</span></label>
-          <div class="cf-choice-box" id="inReason" data-multi-choice data-autosave-field="cancellation_reason">
+          <div class="cf-choice-box" id="inReason" data-multi-choice data-autosave-field="cancellation_reason" data-unsaved-ignore>
             <?php foreach($reasons as $r): ?>
             <label class="cf-choice-option">
               <input type="checkbox" value="<?=esc($r)?>">
@@ -270,7 +270,7 @@ include 'includes/header.php';
         <div class="dt-inline-group fb-field-resolution">
           <label class="fb-inline-lbl">Resolution</label>
           <select class="form-select fb-inline-input" id="inResolution"
-                  data-autosave-field="payment_resolution">
+                  data-autosave-field="payment_resolution" data-unsaved-ignore>
             <option value="">— Select —</option>
             <?php foreach($resolutions as $res): ?><option value="<?=esc($res)?>"><?=esc($res)?></option><?php endforeach; ?>
           </select>
@@ -278,7 +278,7 @@ include 'includes/header.php';
         <div class="dt-inline-group fb-field-details">
           <label class="fb-inline-lbl">Additional Details / Context</label>
           <textarea class="form-textarea fb-inline-input fb-details-input" id="inDetails"
-                    data-autosave-field="additional_details"
+                    data-autosave-field="additional_details" data-unsaved-ignore
                     placeholder="Add cancellation context, retention effort, or follow-up action"></textarea>
         </div>
         <div class="fb-inline-action">
