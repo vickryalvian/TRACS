@@ -721,8 +721,8 @@ include __DIR__ . '/includes/header.php';
           <div class="form-group"><label class="form-label">Study Program / Major</label><input class="form-input" name="study_program" id="umStudyProgram"></div>
         </div>
         <div class="form-row">
-          <div class="form-group"><label class="form-label">Internship Start Date</label><input class="form-input" type="date" name="internship_start_date" id="umInternStart" data-intern-required></div>
-          <div class="form-group"><label class="form-label">Internship End Date</label><input class="form-input" type="date" name="internship_end_date" id="umInternEnd" data-intern-required></div>
+          <div class="form-group"><label class="form-label">Internship Start Date</label><input class="form-input" type="date" name="internship_start_date" id="umInternStart" data-intern-required data-allow-past-dates></div>
+          <div class="form-group"><label class="form-label">Internship End Date</label><input class="form-input" type="date" name="internship_end_date" id="umInternEnd" data-intern-required data-allow-past-dates><div class="form-hint" id="umInternDateWarning" hidden>End date must be on or after the start date.</div></div>
         </div>
         <div class="form-row">
           <div class="form-group"><label class="form-label">Mentor / Supervisor</label><select class="form-select" name="mentor_user_id" id="umMentorUserId"><option value="">No Mentor</option><?php foreach($mentor_options as $mentor): ?><option value="<?=$mentor['id']?>"><?=esc($mentor['display_name'])?></option><?php endforeach; ?></select></div>
@@ -1041,6 +1041,26 @@ function umClearInternFields(){
   umSetValue('umSkillLevel','beginner'); umSetValue('umAllowedTaskScope','');
   umClearInternFieldErrors();
 }
+function umInternDateRangeValid(){
+  const startEl=document.getElementById('umInternStart');
+  const endEl=document.getElementById('umInternEnd');
+  if(!startEl?.value || !endEl?.value) return true;
+  return new Date(endEl.value) > new Date(startEl.value);
+}
+function umUpdateInternDateRangeHint(){
+  const endEl=document.getElementById('umInternEnd');
+  const warning=document.getElementById('umInternDateWarning');
+  if(!endEl || !warning) return;
+  const valid=umInternDateRangeValid();
+  warning.hidden=valid;
+  endEl.classList.toggle('is-invalid',!valid);
+  window.tracsValidationTarget?.(endEl)?.classList.toggle('is-invalid',!valid);
+  if(valid){
+    endEl.removeAttribute('aria-invalid');
+  }else{
+    endEl.setAttribute('aria-invalid','true');
+  }
+}
 function umValidateInternFields(form){
   if(umCurrentRoleSlug()!=='intern'){ umClearInternFieldErrors(); return true; }
   const modal=form?.closest('.modal-overlay') || form;
@@ -1055,9 +1075,9 @@ function umValidateInternFields(form){
     el.removeAttribute('aria-invalid');
     window.tracsValidationTarget?.(el)?.classList.remove('is-invalid');
   }
-  const startEl=document.getElementById('umInternStart');
-  const endEl=document.getElementById('umInternEnd');
-  if(new Date(endEl.value) <= new Date(startEl.value)){
+  if(!umInternDateRangeValid()){
+    umUpdateInternDateRangeHint();
+    const endEl=document.getElementById('umInternEnd');
     toast('Internship End Date must be after the Internship Start Date.','error');
     window.tracsFocusInvalidField?.(endEl,{modal});
     return false;
@@ -1075,6 +1095,12 @@ function umValidateInternFields(form){
     };
     el.addEventListener('input',clearIfValid);
     el.addEventListener('change',clearIfValid);
+  });
+  ['umInternStart','umInternEnd'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    el.addEventListener('input',umUpdateInternDateRangeHint);
+    el.addEventListener('change',umUpdateInternDateRangeHint);
   });
 })();
 function umCreateUser(){

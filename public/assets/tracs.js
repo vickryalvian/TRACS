@@ -423,7 +423,29 @@ function showToast(...args){
   const dismiss=()=>tracsDismissToast(t);
   close.addEventListener('click',dismiss);
   tracsRefreshIcons(t);
-  if(duration > 0)setTimeout(dismiss,duration);
+  if(duration > 0){
+    // Pause the auto-dismiss clock while the user is reading/hovering/
+    // focused on the toast, so it can't disappear mid-read — resume the
+    // remaining time (not a fresh full duration) once they move away.
+    let remaining=duration;
+    let timerId=null;
+    let startedAt=0;
+    const start=()=>{
+      startedAt=Date.now();
+      timerId=setTimeout(dismiss,remaining);
+    };
+    const pause=()=>{
+      if(timerId===null)return;
+      clearTimeout(timerId);
+      timerId=null;
+      remaining=Math.max(0,remaining-(Date.now()-startedAt));
+    };
+    t.addEventListener('mouseenter',pause);
+    t.addEventListener('mouseleave',start);
+    t.addEventListener('focusin',pause);
+    t.addEventListener('focusout',start);
+    start();
+  }
   return t;
 }
 function toast(msg,type='info',ms){
@@ -7572,6 +7594,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const isDateTime = el.type === 'datetime-local' || el.classList.contains('quick-datetime');
     const isTimeOnly = el.type === 'time' || el.classList.contains('split-time');
     const isDateOnly = el.type === 'date' || el.classList.contains('split-date');
+    // Fields like a person's internship/employment start date routinely need
+    // a date already in the past (paperwork trails the real start date), so
+    // the blanket minDate:"today" floor below must not apply to them.
+    const allowPastDates = el.hasAttribute('data-allow-past-dates');
 
     // Default to 'Now' for new split inputs if empty
     let defDate = null;
@@ -7596,7 +7622,7 @@ document.addEventListener('DOMContentLoaded', () => {
       altInputClass: altClass,
       placeholder: isTimeOnly ? "HH:MM" : (isDateTime ? "DD-MM-YYYY --:--" : "DD-MM-YYYY"),
       defaultDate: defDate,
-      minDate: "today",
+      minDate: allowPastDates ? null : "today",
       onOpen: function(selectedDates, dateStr, instance) {
         const theme = document.documentElement.getAttribute('data-theme') || 'light';
         instance.calendarContainer.classList.add('tracs-flatpickr-' + theme);
