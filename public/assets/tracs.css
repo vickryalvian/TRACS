@@ -1605,7 +1605,6 @@ input, select, textarea { font-family: inherit }
      content — so this can safely flex to fill whatever space remains after
      the Infrastructure Pulse widget above it, and .dashboard-case-list's
      overflow-y:auto below correctly clips/scrolls regardless of case count. */
-  --dashboard-widget-padding: var(--panel-padding);
   display: flex;
   flex: 1 1 auto;
   min-height: 0;
@@ -1614,8 +1613,14 @@ input, select, textarea { font-family: inherit }
   overflow: hidden;
 }
 
+/* Cases sits directly under the Shift Summary / Infrastructure Pulse widgets
+   in .col-left, so its title and row content must share their horizontal
+   inset (--dashboard-widget-padding) instead of the tighter generic
+   --card-header-padding-x, or the left/right edges visibly misalign between
+   stacked widgets in the same column. */
 .dashboard-case-panel > .panel-head {
   flex: 0 0 auto;
+  padding-inline: var(--dashboard-widget-padding);
 }
 
 .dashboard-case-panel > .empty {
