@@ -4,6 +4,23 @@ Status: Deployed successfully (remediated)
 Completed: 2026-07-15 19:13 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Sidebar Submenu Duplicate-Handler + Scroll-Into-View Fix (2026-07-22)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `215fcd8`.
+1 file (`tracs.js`), deployed via `scp` + `sha256sum` drift-check/verify, backed up to `/opt/tracs/backups/sidebar-menu-fix-20260722-150552/` before overwrite. No migration.
+
+### Changes Deployed
+User reported the sidebar's "User Management" submenu animation felt buggy and, on a shorter viewport, expanding it didn't bring the two revealed links into view (required manual scrolling).
+
+- Found `.user-menu-wrap`/`.nav-menu-wrap` were listed in the generic `TRACS_POPUP_DETAILS_SELECTOR` (meant for `.report-export-menu`/`.row-action-menu`/`.tm-more-filters`) *and* independently owned by `bindSidebarMenus()` — two separate systems both toggling the same `<details>` elements' open state (mutual exclusion, outside-click, Escape) could double-fire, cutting the `grid-template-rows` expand/collapse CSS transition short mid-animation. Removed both from the generic selector so `bindSidebarMenus()` is the sole owner.
+- Added scroll-into-view: `.nav-submenu-track`'s `transitionend` (filtered to the `grid-template-rows` property specifically, not the child `.nav-submenu`'s opacity/visibility transition bubbling up) now scrolls the `<details>` into view (`block: 'nearest'`) once the expand animation actually finishes — not before, since scrolling immediately would compute against the still-collapsed height and undershoot.
+
+### Verification
+- Pre-deploy drift-check: matched `HEAD~1` exactly, no drift. `node --check` clean.
+- Functional test via an isolated static repro (real `tracs.css`/`tracs.js`, no auth needed — a `<details>` sidebar structure served from a plain PHP static file server, not the full app): clicking the summary correctly triggered `scrollIntoView({block:'nearest'})` exactly once, only after the transition completed, no console errors.
+- Post-deploy `sha256sum` matches local exactly; live-served asset via `curl` matches too.
+- **Not** verified inside the actual authenticated app UI (no working login available this session) — the isolated repro proves the JS logic and timing are correct, but the full sidebar (hover-to-expand width, real nav items, actual scroll container height) wasn't visually walked through end-to-end. Recommend a real click-through on next login.
+
 ## Deployed — Font-Weight Synthesis Fix (Windows/macOS Consistency) (2026-07-22)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `8cf1fdf`.
