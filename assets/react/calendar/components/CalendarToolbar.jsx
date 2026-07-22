@@ -83,7 +83,7 @@ export function CalendarToolbar({ filters, setFilter, metadata, onReset, onOpenD
         />
         <TracsButton icon={Filter} onClick={onOpenDrawer}>Filters</TracsButton>
       </div>
-      <p className="cal:mt-2 cal:font-mono cal:text-[9px] cal:text-tracs-muted">{resultCount} matching calendar items</p>
+      <p className="cal:truncate cal:font-mono cal:text-[10px] cal:text-tracs-muted">{resultCount} matching calendar items</p>
     </div>
   );
 }
