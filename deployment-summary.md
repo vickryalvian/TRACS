@@ -4,6 +4,26 @@ Status: Deployed successfully (remediated)
 Completed: 2026-07-15 19:13 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Calendar UX and Toast Pause-on-Hover Fix (2026-07-22)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `a505fd5`.
+2 files (`tracs.js`, `user-management.php`), deployed via `scp` + `sha256sum` drift-check/verify, backed up to `/opt/tracs/backups/calendar-toast-ux-fix-20260722-110706/` before overwrite. No migration. `php8.3-fpm` reloaded to clear opcache.
+
+### Changes Deployed
+Follow-up fixes from the calendar/toast UX audit requested alongside the intern account provisioning above:
+
+- **Calendar**: the shared flatpickr initializer in `tracs.js` applied `minDate: "today"` to every date input, including the intern create/edit form's Internship Start/End Date — silently blocking a legitimate past start date (exactly the kind this session just needed: 2026-07-20, entered two days later). Added a `data-allow-past-dates` opt-out attribute, applied only to `#umInternStart`/`#umInternEnd` in `user-management.php`, so this doesn't loosen the floor on other date fields where "no past dates" is correct (e.g. scheduling something future-dated).
+- **Calendar**: End-before-Start was previously only caught by a toast after clicking Save. Added live inline validation (`umInternDateRangeValid()`/`umUpdateInternDateRangeHint()`) that shows a `.form-hint` warning under End Date and marks it `.is-invalid` the moment an invalid range is picked, reusing the app's existing field-error styling rather than introducing new CSS.
+- **Toasts**: the existing toast system (severity-tuned duration, dedupe, 3-toast stacking cap, `aria-live`/`role`, friendly error rewriting) had no way to pause auto-dismiss — a 7-9s warning/error toast could vanish mid-read despite having a close button. `showToast()` now pauses the remaining time on `mouseenter`/`focusin` and resumes (not restarts) on `mouseleave`/`focusout`.
+
+### Verification
+- Pre-deploy drift-check: both files matched `HEAD~1` (pre-fix) exactly, no drift.
+- `php -l` clean on `user-management.php`; `node --check` clean on `tracs.js`.
+- Post-deploy `sha256sum` of both files matches local exactly; live-served `tracs.js` via `curl` also matches exactly (no stale cache/proxy copy).
+- `php8.3-fpm` reloaded cleanly (`active`).
+- `https://tracs.vickry.id/` and `/user-management.php` → `302` (expected login redirect, unauthenticated).
+- **Not** verified: an authenticated browser walkthrough of the Add/Edit Intern form (picking a past start date, triggering the live range-error hint, watching a toast pause on hover). No login was performed anywhere in this session by design (see the intern-provisioning entry above) — shipped on code-reading, static lint, and manual logic tracing only. A manual click-through is recommended on next login, particularly since the toast pause/resume touches the shared `showToast()` used by every toast app-wide.
+
 ## Deployed — Nusa Putra University Intern Account Provisioning (2026-07-22)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`.
