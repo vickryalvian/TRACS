@@ -51,7 +51,17 @@ try {
       $ok ? mom_legacy_ok() : mom_legacy_fail('Failed to update meeting');
 
     case 'delete_meeting':
-      $MC->deleteMOM((int)($input['mid'] ?? 0)) ? mom_legacy_ok() : mom_legacy_fail('Failed to delete meeting');
+      // Deletion is restricted to supervisor-tier roles and above — see
+      // tracs_user_can_delete_moms(). This legacy endpoint has no frontend
+      // caller today but must not be a bypass around the api_mom.php check.
+      if(!tracs_user_can_delete_moms($conn, $uid)) {
+        mom_legacy_fail('You do not have permission to delete meeting minutes.', 403);
+      }
+      $legacy_mom_id = (int)($input['mid'] ?? 0);
+      if(!$MC->getMOM($legacy_mom_id)) {
+        mom_legacy_fail('Meeting not found', 404);
+      }
+      $MC->deleteMOM($legacy_mom_id) ? mom_legacy_ok() : mom_legacy_fail('Failed to delete meeting');
 
     case 'add_note':
       $id = $MC->addDiscussionNote((int)($input['mid'] ?? 0), trim($input['note_text'] ?? ''), trim($input['note_type'] ?? 'discussion'));

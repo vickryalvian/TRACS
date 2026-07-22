@@ -199,13 +199,21 @@ else if($action === 'save_summary') {
 }
 
 else if($action === 'delete_mom') {
+  // Deletion is restricted to supervisor-tier roles and above, enforced here
+  // regardless of frontend visibility — see tracs_user_can_delete_moms().
+  if(!tracs_user_can_delete_moms($conn, $uid)) {
+    http_response_code(403);
+    respond(false, [], 'You do not have permission to delete meeting minutes.');
+  }
+
   $mom_id = (int)($input['mom_id'] ?? 0);
-  
+
   $mom = $MC->getMOM($mom_id);
   if(!$mom) {
+    http_response_code(404);
     respond(false, [], 'Meeting not found');
   }
-  
+
   if($MC->deleteMOM($mom_id)) {
     respond(true, [], 'Meeting deleted');
   }

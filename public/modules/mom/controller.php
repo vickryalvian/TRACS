@@ -463,29 +463,33 @@ class MOMController {
     return false;
   }
 
+  // MoM deletion is role-gated (tracs_user_can_delete_moms), not creator-gated —
+  // a supervisor/admin must be able to delete any shared MoM, not just their own.
   public function deleteMOM($mom_id) {
     $mom_id = (int)$mom_id;
     $mom = $this->getMOM($mom_id);
     if(!$mom) return false;
 
+    // Action-item-linked reminders have no DB-level FK to the mom, so they'd
+    // orphan silently once tracs_mom_actions cascades away with the mom row.
+    // Delete them regardless of who owns the reminder or created the mom.
     $rem = $this->conn->prepare("
       DELETE r FROM tracs_reminders r
       INNER JOIN tracs_mom_actions a ON a.linked_reminder_id=r.id
-      INNER JOIN tracs_moms m ON m.id=a.mom_id AND m.created_by=?
-      WHERE m.id=? AND r.user_id=?
+      WHERE a.mom_id=?
     ");
-    $rem->bind_param('iii', $this->uid, $mom_id, $this->uid);
+    $rem->bind_param('i', $mom_id);
     $rem->execute();
 
-    $stmt = $this->conn->prepare("DELETE FROM tracs_moms WHERE id=? AND created_by=?");
-    $stmt->bind_param('ii', $mom_id, $this->uid);
+    $stmt = $this->conn->prepare("DELETE FROM tracs_moms WHERE id=?");
+    $stmt->bind_param('i', $mom_id);
     $ok = $stmt->execute();
     if($ok && $stmt->affected_rows > 0) {
       if(!empty($mom['scheduled_reminder_id'])) {
         $rid = (int)$mom['scheduled_reminder_id'];
-        $scheduled = $this->conn->prepare("UPDATE tracs_reminders SET is_completed=1, updated_at=NOW() WHERE id=? AND user_id=?");
+        $scheduled = $this->conn->prepare("UPDATE tracs_reminders SET is_completed=1, updated_at=NOW() WHERE id=?");
         if($scheduled) {
-          $scheduled->bind_param('ii', $rid, $this->uid);
+          $scheduled->bind_param('i', $rid);
           $scheduled->execute();
         }
       }

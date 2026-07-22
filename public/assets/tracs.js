@@ -975,7 +975,7 @@ function tracsOpenSystemDialog(options={},mode='alert'){
       }
       if(event.key === 'Enter' && mode !== 'prompt'){
         event.preventDefault();
-        ok.click();
+        (document.activeElement === cancel ? cancel : ok).click();
         return;
       }
       if(event.key !== 'Tab')return;
@@ -991,7 +991,9 @@ function tracsOpenSystemDialog(options={},mode='alert'){
         first.focus();
       }
     };
-    window.setTimeout(()=>{(mode === 'prompt' ? input : ok).focus();},30);
+    // Destructive confirms default focus to Cancel, not the destructive
+    // action, so a stray Enter press never triggers the irreversible option.
+    window.setTimeout(()=>{(mode === 'prompt' ? input : (mode === 'confirm' && options.destructive ? cancel : ok)).focus();},30);
   });
 }
 

@@ -89,6 +89,16 @@ function tracs_user_can_delete_cases(mysqli $conn, ?int $userId = null): bool {
     return tracs_is_supervisor_or_above($conn, $userId);
 }
 
+/**
+ * MoM deletion is restricted to supervisor-tier roles and above, hard-coded
+ * by role slug for the same reason as tracs_user_can_delete_cases(): a
+ * misconfigured moms.manage grant must not let an agent/intern delete a
+ * shared meeting record.
+ */
+function tracs_user_can_delete_moms(mysqli $conn, ?int $userId = null): bool {
+    return tracs_is_supervisor_or_above($conn, $userId);
+}
+
 function tracs_require_super_admin_page(mysqli $conn): array {
     $user = tracs_get_user_by_id($conn, (int)($_SESSION['user_id'] ?? 0));
     if ($user && tracs_user_can_login($user) && (string)($user['role_slug'] ?? '') === 'super_admin') {

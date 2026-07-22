@@ -544,19 +544,44 @@ function saveMOMSummary(mom_id) {
   }).catch(e => toast(e.message || "The change didn't go through. Please try again.", 'error'));
 }
 
-function deleteMOM(mom_id) {
-  tracsConfirm('Delete this meeting? This cannot be undone.', () => {
-    api('api/api_mom.php', {
+function momDecrementLeadingNumber(el) {
+  if(!el) return;
+  const match = el.textContent.match(/^(\s*)(\d+)/);
+  if(!match) return;
+  const next = Math.max(0, parseInt(match[2], 10) - 1);
+  el.textContent = el.textContent.replace(/^(\s*)\d+/, `$1${next}`);
+}
+
+function momApplyMOMDeletedCounters(mom_id) {
+  const row = document.querySelector(`[data-mid="${mom_id}"]`);
+  const isUrgent = row?.dataset.momType === 'urgent';
+  momDecrementLeadingNumber(document.getElementById('momHistoryCount'));
+  momDecrementLeadingNumber(document.getElementById('momTopbarSub'));
+  momDecrementLeadingNumber(document.getElementById('momKpiTotal'));
+  momDecrementLeadingNumber(document.getElementById('momKpiHistory'));
+  if(isUrgent) momDecrementLeadingNumber(document.getElementById('momKpiUrgent'));
+}
+
+function deleteMOM(mom_id, button = null) {
+  tracsConfirm({
+    title: 'Delete Meeting Item?',
+    message: 'Are you sure you want to permanently delete this meeting item? This action cannot be undone.',
+    type: 'warning',
+    destructive: true,
+    confirmText: 'Delete'
+  }, async () => {
+    const r = await withLoadingState(button, 'Deleting...', () => api('api/api_mom.php', {
       action: 'delete_mom',
       mom_id: mom_id
-    }).then(r => {
-      if(r.ok) {
-        toast('Meeting deleted', 'success');
-        document.querySelectorAll(`[data-mid="${mom_id}"], [data-preview-for="${mom_id}"]`).forEach(momRemoveNode);
-      } else {
-        toast(r.msg || 'Failed to delete meeting', 'error');
-      }
-    }).catch(e => toast(e.message || "The change didn't go through. Please try again.", 'error'));
+    }));
+    if(!r) return;
+    if(r.ok) {
+      toast('Meeting deleted', 'success');
+      momApplyMOMDeletedCounters(mom_id);
+      document.querySelectorAll(`[data-mid="${mom_id}"], [data-preview-for="${mom_id}"]`).forEach(momRemoveNode);
+    } else {
+      toast(r.msg || 'Failed to delete meeting', 'error');
+    }
   });
 }
 

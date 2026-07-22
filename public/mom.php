@@ -21,6 +21,7 @@ $RC=new ReminderController($conn,$uid);
 $CC=new CaseController($conn,$uid);
 $TC=new AlertTickerController($conn,$uid);
 $mom_installed=$MC->isInstalled();
+$mom_can_delete=tracs_user_can_delete_moms($conn,$uid);
 
 // Get MOM ID from URL, or start new. Invalid/direct-forbidden IDs are generic 404s.
 $mom_id = 0;
@@ -537,11 +538,11 @@ include 'includes/header.php';
      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
 
 <div class="topbar">
-  <div><div class="page-title">Minutes of Meeting</div><div class="page-sub"><?=$total_moms?> total · <?=count($upcoming_moms)?> upcoming · <?=count($ongoing_moms)?> ongoing</div></div>
+  <div><div class="page-title">Minutes of Meeting</div><div class="page-sub" id="momTopbarSub"><?=$total_moms?> total · <?=count($upcoming_moms)?> upcoming · <?=count($ongoing_moms)?> ongoing</div></div>
 </div>
 
 <?php
-function render_mom_table($items, $MC, $mode='upcoming') {
+function render_mom_table($items, $MC, $mode='upcoming', $canDelete=false) {
   if(empty($items)) {
     echo '<div class="empty"><div class="empty-ic"><i data-lucide="clipboard-list"></i></div><div class="empty-t">No meetings here</div><div class="empty-s">Operational meetings will appear automatically by lifecycle status.</div></div>';
     return;
@@ -562,7 +563,7 @@ function render_mom_table($items, $MC, $mode='upcoming') {
     return compact('participants', 'agenda', 'notes', 'decisions', 'actions', 'cases', 'screenshots', 'objective', 'summary', 'meeting_url');
   };
 
-  $render_preview = function($mid, $preview) use ($mode) {
+  $render_preview = function($mid, $preview) use ($mode, $canDelete) {
     if(!$preview) return;
 ?>
     <tr class="mom-preview-row mom-preview-surface hidden" id="momPreview<?=$mid?>" data-mom-preview-row data-preview-for="<?=$mid?>">
@@ -686,6 +687,11 @@ function render_mom_table($items, $MC, $mode='upcoming') {
             </div>
             <?php endif; ?>
           </div>
+          <?php if($canDelete): ?>
+          <div class="mom-preview-block mom-preview-wide mom-preview-footer">
+            <button type="button" class="btn btn-danger btn-sm mom-preview-delete-btn" onclick="deleteMOM(<?=$mid?>, this)"><i data-lucide="trash-2" class="icon-sm"></i>Delete Meeting</button>
+          </div>
+          <?php endif; ?>
         </div><!-- /mom-preview-panel -->
         </div><!-- /mom-preview-inner -->
       </td>
@@ -725,7 +731,6 @@ function render_mom_table($items, $MC, $mode='upcoming') {
         <a href="?mom_id=<?=$mid?>" class="btn btn-ghost btn-sm mom-schedule-open">View</a>
         <?php endif; ?>
         <a href="?mom_id=<?=$mid?>" class="btn btn-ghost btn-icon" title="View MOM" aria-label="View MOM"><i data-lucide="external-link" class="icon-sm"></i></a>
-        <?php if($mstat!=='completed' && (int)($m['created_by']??0)===(int)$uid): ?><button class="btn btn-ghost btn-icon mom-schedule-delete" onclick="deleteMOM(<?=$mid?>)" title="Delete" aria-label="Delete meeting"><i data-lucide="trash-2" class="icon-sm"></i></button><?php endif; ?>
       </div>
     </div>
     <?php endforeach; ?>
@@ -773,7 +778,7 @@ function render_mom_table($items, $MC, $mode='upcoming') {
 	          $mparts_short=strlen($mparts)>30?substr($mparts,0,27).'…':$mparts;
 	          $msearch=esc(strtolower(trim($mid.' '.($m['title']??'').' '.$mtype.' '.$mstat.' '.$mparts.' '.($m['objective']??''))));
 	        ?>
-	          <tr data-mid="<?=$mid?>" data-meeting-at="<?=esc($mlocal)?>" <?=$mode==='history'?'data-mom-history-row data-mom-search="'.$msearch.'"':''?>>
+	          <tr data-mid="<?=$mid?>" data-mom-type="<?=esc($mtype)?>" data-meeting-at="<?=esc($mlocal)?>" <?=$mode==='history'?'data-mom-history-row data-mom-search="'.$msearch.'"':''?>>
             <?php if($mode !== 'history'): ?><td class="tracs-rownum"><?=$mid?></td><?php endif; ?>
             <td class="mom-table-title-cell">
               <div class="mom-table-title" title="<?=$mtitle?>"><?=$mtitle?></div>
@@ -800,9 +805,6 @@ function render_mom_table($items, $MC, $mode='upcoming') {
                 <summary class="btn btn-ghost btn-icon" title="Actions" aria-label="Row actions"><i data-lucide="edit-2" class="icon-sm"></i></summary>
                 <div class="row-action-popover">
                   <a class="btn btn-ghost btn-sm" href="?mom_id=<?=$mid?>">Open MOM</a>
-                  <?php if((int)($m['created_by']??0)===(int)$uid): ?>
-                  <button class="btn btn-danger btn-sm" type="button" onclick="deleteMOM(<?=$mid?>)">Delete</button>
-                  <?php endif; ?>
                 </div>
               </details>
               <?php endif; ?>
@@ -822,7 +824,7 @@ function render_mom_table($items, $MC, $mode='upcoming') {
 		      <div class="mom-history-title">
 		        <span class="panel-title">Meeting History</span>
 		      </div>
-		      <span class="panel-meta mom-history-count"><?=count($history_moms)?> completed/cancelled</span>
+		      <span class="panel-meta mom-history-count" id="momHistoryCount"><?=count($history_moms)?> completed/cancelled</span>
 		      <div class="search-wrap mom-history-search">
 		        <i data-lucide="search"></i>
 		        <input class="search-input" type="search" placeholder="Search meeting title, participant, decision, or action" oninput="filterMOMHistory(this.value);document.getElementById('momExportQ').value=this.value">
@@ -846,9 +848,9 @@ function render_mom_table($items, $MC, $mode='upcoming') {
 		      </details>
 		      <button class="btn btn-primary toolbar-add-btn" onclick="openNewMOM()"><i data-lucide="plus-circle" class="icon-sm"></i>Add New Meeting</button>
 		    </div>
-	    <?php render_mom_table($history_moms, $MC, 'history'); ?>
+	    <?php render_mom_table($history_moms, $MC, 'history', $mom_can_delete); ?>
 	  </div>
-	
+
 	  <div class="mom-side-stack">
 	    <div class="panel mom-queue-panel">
 	      <div class="panel-head">
@@ -861,11 +863,11 @@ function render_mom_table($items, $MC, $mode='upcoming') {
 	    <div class="tm-cluster mom-kpi-strip">
 	      <div class="tm-cluster-head">Meetings</div>
 	      <div class="tm-cluster-body">
-	        <div class="tm-kpi"><span>Total</span><strong><?=$total_moms?></strong></div>
+	        <div class="tm-kpi"><span>Total</span><strong id="momKpiTotal"><?=$total_moms?></strong></div>
 	        <div class="tm-kpi"><span>Upcoming</span><strong><?=count($upcoming_moms)?></strong></div>
 	        <div class="tm-kpi"><span>Ongoing</span><strong><?=count($ongoing_moms)?></strong></div>
-	        <div class="tm-kpi"><span>History</span><strong><?=count($history_moms)?></strong></div>
-	        <div class="tm-kpi"><span>Urgent</span><strong><?=count(array_filter($all_moms,fn($m)=>($m['type']??'')==='urgent'))?></strong></div>
+	        <div class="tm-kpi"><span>History</span><strong id="momKpiHistory"><?=count($history_moms)?></strong></div>
+	        <div class="tm-kpi"><span>Urgent</span><strong id="momKpiUrgent"><?=count(array_filter($all_moms,fn($m)=>($m['type']??'')==='urgent'))?></strong></div>
 	      </div>
 	    </div>
 
