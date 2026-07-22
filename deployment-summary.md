@@ -4,6 +4,20 @@ Status: Deployed successfully (remediated)
 Completed: 2026-07-15 19:13 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — MoM Card/Section Spacing Restored (2026-07-22)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `8692870`.
+1 file (`mom-styles.css`), deployed via `scp` + `sha256sum` drift-check/verify, backed up to `/opt/tracs/backups/mom-card-spacing-fix-20260722-142143/` before overwrite. No migration.
+
+### Changes Deployed
+Found during an app-wide gap-consistency audit requested by the user (using the same duplicate-CSS-rule detection technique that found the dashboard row-gap bug): `tracs-spacing.css` also declares bare `.section-head`/`.section-title` and `.card-head`/`.card-title`/`.card-body` — same specificity as `mom-styles.css`'s own rules for the same classes, and it loads after `mom-styles.css`, so it always won. Checked which pages actually render these classes (`mom.php`, `server-health.php`, `domain-price-crosscheck.php`) — only MoM has its own competing declaration, so only MoM was affected: its section headers were rendering at 10px vertical padding + a forced 44px `min-height` instead of the intended 12px/no forced height, and its sidebar cards at 16px body padding / 44px header height / 8px title gap instead of the intended compact 8-10px / 38px / 4px. Scoped `mom-styles.css`'s rules under `.mom-workspace`/`.mom-sidebar` (their actual DOM ancestors, confirmed by reading `mom.php`) so they win on specificity instead of relying on load order.
+
+### Verification
+- Pre-deploy drift-check: matched `HEAD` exactly, no drift. Brace-balance clean (327/327).
+- Post-deploy `sha256sum` matches local exactly; live-served asset via `curl` matches too.
+- **Not** verified visually (no authenticated render available this session). Unlike the earlier dashboard fix, this one was never visually confirmed as "still wrong" by the user first — it was found via static cascade analysis alone, so there's a real chance the current (overridden) 16px/44px look is what MoM has actually shipped with and been fine at; this restores what `mom-styles.css`'s own source says was *intended*, not a user-reported complaint. Recommend a visual check of `mom.php`'s sidebar cards and section headers on next login before treating this as final.
+
+
 ## Deployed — Calendar Caption, Registrar Column Rename, Feedback Unsaved-Bar Fix (2026-07-22)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commits `798770c`, `6f071d5`, `0a78e53`.
