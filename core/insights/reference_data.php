@@ -11,8 +11,25 @@ const TRACS_PHP_EOL_DATES = [
     '8.4' => '2028-12-31',
 ];
 
+const TRACS_INSIGHT_PHP_EOL_WARNING_DAYS = 90;
+
 function tracs_insight_php_eol(string $version): ?string {
     $parts = explode('.', $version);
     $minor = ($parts[0] ?? '0') . '.' . ($parts[1] ?? '0');
     return TRACS_PHP_EOL_DATES[$minor] ?? null;
+}
+
+function tracs_insight_php_support_status(string $version): array {
+    $eol = tracs_insight_php_eol($version);
+    if ($eol === null) {
+        return ['healthy', 'Supported'];
+    }
+    $daysLeft = (strtotime($eol) - time()) / 86400;
+    if ($daysLeft < 0) {
+        return ['critical', 'End-of-Life'];
+    }
+    if ($daysLeft < TRACS_INSIGHT_PHP_EOL_WARNING_DAYS) {
+        return ['warning', 'Approaching End-of-Life'];
+    }
+    return ['healthy', 'Supported'];
 }

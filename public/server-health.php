@@ -40,31 +40,29 @@ include __DIR__ . '/includes/header.php';
 
   <div class="server-health-grid" id="serverHealthGrid" aria-live="polite"></div>
 
-  <div class="server-health-columns">
-    <section class="panel">
-      <div class="panel-head">
-        <span class="panel-title"><i data-lucide="server" class="icon-sm"></i>Runtime Details</span>
+  <section class="panel">
+    <div class="panel-head">
+      <span class="panel-title"><i data-lucide="gauge" class="icon-sm"></i>Server Insights</span>
+    </div>
+    <div class="server-insights" id="serverHealthInsights">
+      <div class="server-insight-section">
+        <div class="skeleton-block server-insight-skeleton-line"></div>
+        <div class="skeleton-block server-insight-skeleton-line"></div>
+        <div class="skeleton-block server-insight-skeleton-line"></div>
       </div>
-      <div class="server-detail-list" id="serverHealthVersions"></div>
-    </section>
+      <div class="server-insight-section">
+        <div class="skeleton-block server-insight-skeleton-line"></div>
+        <div class="skeleton-block server-insight-skeleton-line"></div>
+      </div>
+    </div>
+  </section>
 
-    <section class="panel">
-      <div class="panel-head">
-        <span class="panel-title"><i data-lucide="gauge" class="icon-sm"></i>Server Insights</span>
-      </div>
-      <div class="server-insights" id="serverHealthInsights">
-        <div class="server-insight-section">
-          <div class="skeleton-block server-insight-skeleton-line"></div>
-          <div class="skeleton-block server-insight-skeleton-line"></div>
-          <div class="skeleton-block server-insight-skeleton-line"></div>
-        </div>
-        <div class="server-insight-section">
-          <div class="skeleton-block server-insight-skeleton-line"></div>
-          <div class="skeleton-block server-insight-skeleton-line"></div>
-        </div>
-      </div>
-    </section>
-  </div>
+  <section class="panel">
+    <div class="panel-head">
+      <span class="panel-title"><i data-lucide="server" class="icon-sm"></i>Runtime Details</span>
+    </div>
+    <div class="server-detail-list" id="serverHealthVersions"></div>
+  </section>
 
   <section class="panel">
     <div class="panel-head">
@@ -85,6 +83,7 @@ include __DIR__ . '/includes/header.php';
   const badgeClass = status => status === 'critical' ? 'b-critical' : status === 'warning' ? 'b-warning' : status === 'healthy' ? 'b-active' : 'b-done';
   const safeVersion = value => value ? escapeHtml(value) : 'Unavailable';
   const refreshButton = document.getElementById('serverHealthRefresh');
+  let lastPayload = null;
 
   function renderMetric(metric, key) {
     const percent = metric.percent === null || metric.percent === undefined ? null : Math.max(0, Math.min(100, Number(metric.percent)));
@@ -99,53 +98,84 @@ include __DIR__ . '/includes/header.php';
     </article>`;
   }
 
-  function renderInsightKv(items) {
-    return `<div class="server-detail-list">${(items || []).map(row =>
-      `<div><span>${escapeHtml(row.label)}</span><strong>${escapeHtml(row.value)}</strong></div>`
-    ).join('')}</div>`;
+  function isEmptyItems(items) {
+    if (Array.isArray(items)) return items.length === 0;
+    if (items && typeof items === 'object') return Object.keys(items).length === 0;
+    return !items;
   }
 
-  function renderInsightList(items) {
-    return `<div class="server-insight-list">${(items || []).map(row =>
+  function renderInsightList(section) {
+    return `<div class="server-insight-list">${(section.items || []).map(row =>
       `<p>${escapeHtml(row.text)}</p>`
     ).join('')}</div>`;
   }
 
-  function renderInsightBadges(items) {
-    return `<div class="server-detail-list">${(items || []).map(row =>
-      `<div><span>${escapeHtml(row.label)}</span><span class="badge ${escapeHtml(row.badge_class || 'b-done')}">${escapeHtml(row.badge_text)}</span></div>`
+  function renderInsightWarnings(section) {
+    return `<div class="server-recommendations">${(section.items || []).map(row =>
+      `<div class="server-recommendation ${escapeHtml(row.severity || 'warning')}"><strong>${escapeHtml(row.title)}</strong>${row.detail ? `<span>${escapeHtml(row.detail)}</span>` : ''}</div>`
     ).join('')}</div>`;
   }
 
-  function renderInsightActions(items) {
-    return `<div class="server-recommendations">${(items || []).map(row =>
-      `<div class="server-recommendation ${escapeHtml(row.severity || 'healthy')}"><strong>${escapeHtml(row.title)}</strong>${row.detail ? `<span>${escapeHtml(row.detail)}</span>` : ''}</div>`
+  function renderInsightBilling(section) {
+    const items = section.items || {};
+    const rows = [
+      ['Billing Balance', items.balance_display],
+      ['Estimated Days Remaining', (items.days_remaining ?? null) !== null ? `${items.days_remaining} day${items.days_remaining === 1 ? '' : 's'}` : 'Not enough data yet'],
+      ['Monthly Spend So Far', items.monthly_spend_display || 'Not available'],
+      ['Status', items.status_label],
+      ['Last Updated', items.last_updated],
+    ];
+    const kv = `<div class="server-detail-list">${rows.map(([label, value]) =>
+      `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`
     ).join('')}</div>`;
+    const breakdown = Array.isArray(items.resources) && items.resources.length
+      ? `<div class="server-insight-subgroup"><span class="server-insight-subgroup-title">Cost Breakdown</span><div class="server-detail-list">${items.resources.map(row =>
+          `<div><span>${escapeHtml(row.label)}</span><strong>${escapeHtml(row.value)}</strong></div>`
+        ).join('')}</div></div>`
+      : '';
+    const note = items.recommendation
+      ? `<div class="server-recommendation ${escapeHtml(section.status === 'critical' ? 'critical' : 'warning')}"><span>${escapeHtml(items.recommendation)}</span></div>`
+      : '';
+    return kv + breakdown + note;
   }
 
-  function renderInsightScore(items) {
-    const score = Number(items?.score ?? 0);
-    return `<div class="server-health-score">
-      <strong>${escapeHtml(score)} <small>/ 100</small></strong>
-      <span>${escapeHtml(items?.label || 'Unavailable')}</span>
-    </div>`;
+  function renderInsightActionsRow(section) {
+    return `<div class="server-quick-actions">${(section.items || []).map(action => {
+      const icon = `<i data-lucide="${escapeHtml(action.icon || 'circle')}" class="icon-sm"></i>`;
+      if (action.kind === 'link') {
+        return `<a class="btn btn-sm" href="${escapeHtml(action.href)}" target="_blank" rel="noopener noreferrer">${icon}${escapeHtml(action.label)}</a>`;
+      }
+      return `<button type="button" class="btn btn-sm" data-quick-action="${escapeHtml(action.kind)}" data-target-id="${escapeHtml(action.target_id || '')}">${icon}${escapeHtml(action.label)}</button>`;
+    }).join('')}</div>`;
   }
 
   const insightRenderers = {
-    kv: renderInsightKv,
+    billing: renderInsightBilling,
+    warnings: renderInsightWarnings,
     list: renderInsightList,
-    badges: renderInsightBadges,
-    actions: renderInsightActions,
-    score: renderInsightScore,
+    placeholder: renderInsightList,
+    actions_row: renderInsightActionsRow,
   };
+
+  function sectionBadge(section) {
+    if (section.type === 'actions_row') return '';
+    if (section.type === 'placeholder') return '<span class="badge b-done">Planned</span>';
+    return `<span class="badge ${badgeClass(section.status)}">${escapeHtml(section.status || 'healthy')}</span>`;
+  }
 
   function renderInsightSection(section) {
     const renderer = insightRenderers[section.type];
-    const body = renderer ? renderer(section.items) : '';
-    return `<article class="server-insight-section ${escapeHtml(section.status || 'unavailable')}">
+    let body;
+    if (section.empty_state && isEmptyItems(section.items)) {
+      body = `<div class="server-insight-empty"><i data-lucide="check-circle-2" class="icon-sm"></i><span>${escapeHtml(section.empty_state)}</span></div>`;
+    } else {
+      body = renderer ? renderer(section) : '';
+    }
+    const reserved = section.type === 'placeholder' ? ' reserved' : '';
+    return `<article class="server-insight-section${reserved} ${escapeHtml(section.status || 'healthy')}">
       <div class="server-insight-section-head">
         <span><i data-lucide="${escapeHtml(section.icon || 'circle')}" class="icon-sm"></i>${escapeHtml(section.title || '')}</span>
-        <span class="badge ${badgeClass(section.status)}">${escapeHtml(section.status || 'unavailable')}</span>
+        ${sectionBadge(section)}
       </div>
       ${body}
     </article>`;
@@ -159,7 +189,32 @@ include __DIR__ . '/includes/header.php';
     if (window.lucide?.createIcons) window.lucide.createIcons();
   }
 
+  function downloadDiagnostics() {
+    if (!lastPayload) return;
+    const blob = new Blob([JSON.stringify(lastPayload, null, 2)], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `tracs-server-health-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  document.getElementById('serverHealthInsights').addEventListener('click', (event) => {
+    const button = event.target.closest('[data-quick-action]');
+    if (!button) return;
+    const kind = button.dataset.quickAction;
+    if (kind === 'anchor') {
+      document.getElementById(button.dataset.targetId || '')?.scrollIntoView({behavior: 'smooth', block: 'start'});
+    } else if (kind === 'download') {
+      downloadDiagnostics();
+    }
+  });
+
   function render(data) {
+    lastPayload = data;
     const metrics = data.metrics || {};
     document.getElementById('serverHealthGrid').innerHTML = metricOrder.map(key => renderMetric(metrics[key] || {label:key,display:'Unavailable',status:'unavailable'}, key)).join('');
     document.getElementById('serverHealthChecked').textContent = data.checked_at ? `Checked ${new Date(data.checked_at).toLocaleString()}` : 'Check unavailable';
