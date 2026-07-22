@@ -4,6 +4,25 @@ Status: Deployed successfully (remediated)
 Completed: 2026-07-15 19:13 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Unsaved-Bar Glass Effect (2026-07-22)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `36f06c2`.
+1 file (`public/assets/tracs.css`), deployed via `git fetch origin` + `git show origin/feat/dashboard-quick-tools-widgets:<path> > <path>`, backed up to `/opt/tracs/backups/unsaved-bar-glass-20260722-231658/` before overwrite. No migration, no PHP-FPM reload needed (static asset served directly by nginx).
+
+### Changes Deployed
+`.tracs-unsaved-bar` (the Unsaved Changes Guard bar, now also reused by the
+billing low-balance banner) gets an iOS/macOS-style frosted glass fill:
+translucent amber tint + `backdrop-filter: blur(16px) saturate(180%)`, and
+a bigger, softer `--shadow-lg` drop shadow for a floating-panel feel.
+Reuses the exact `@supports`-gated pattern already established by
+`.sidebar-flyout` — non-supporting browsers keep the original solid
+striped background unchanged.
+
+### Verification
+- `sha256sum` matches local exactly.
+- Confirmed via direct `curl` of the live stylesheet that the new
+  `@supports` block and glass rule are present and correctly served.
+
 ## Deployed — Billing Balance Fix + Insights UX Polish (2026-07-22)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `93ce534`.
