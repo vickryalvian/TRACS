@@ -130,7 +130,11 @@
   --panel-padding: var(--card-body-padding);
   --dashboard-widget-gap: var(--card-gap);
   --dashboard-column-gap: var(--card-gap);
-  --dashboard-row-gap: var(--card-gap);
+  /* Matches --dashboard-widget-padding (20px, not --card-gap's 16px) so the
+     gap between stacked widgets (e.g. Shift Summary/Infrastructure Pulse
+     sitting directly above Cases in .col-left) reads as proportionate to
+     each widget's own internal padding, instead of visually tighter than it. */
+  --dashboard-row-gap: 20px;
   --dashboard-widget-padding: 20px;
   --dashboard-widget-padding-compact: 18px;
   --dashboard-widget-padding-sm: 16px;
