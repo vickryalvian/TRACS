@@ -25,6 +25,16 @@ try {
 include __DIR__ . '/includes/header.php';
 ?>
 <main class="main"><div class="main-inner server-health-page">
+  <section class="tracs-unsaved-bar" id="billingLowBalanceBar" hidden role="status" aria-live="polite">
+    <div class="tracs-unsaved-bar__message">
+      <i data-lucide="triangle-alert" aria-hidden="true"></i>
+      <span><strong>Low Billing Balance</strong><small id="billingLowBalanceMessage"></small></span>
+    </div>
+    <div class="tracs-unsaved-bar__actions">
+      <a class="btn btn-primary btn-sm" href="https://my.idcloudhost.com" target="_blank" rel="noopener noreferrer">Open Billing Portal</a>
+    </div>
+  </section>
+
   <div class="topbar">
     <div class="topbar-left">
       <div class="page-title">Server Health & Logs</div>
@@ -69,9 +79,11 @@ include __DIR__ . '/includes/header.php';
       <span class="panel-title"><i data-lucide="scroll-text" class="icon-sm"></i>Sanitized Error Log</span>
       <span class="panel-meta">Paths, IPs, credentials, SQL details, and stack data are redacted</span>
     </div>
-    <div class="server-log-summary" id="serverLogSummary"></div>
-    <div class="server-log-list" id="serverLogList">
-      <div class="empty-sub">Loading safe log summary...</div>
+    <div class="server-log-scroll">
+      <div class="server-log-summary" id="serverLogSummary"></div>
+      <div class="server-log-list" id="serverLogList">
+        <div class="empty-sub">Loading safe log summary...</div>
+      </div>
     </div>
   </section>
 </div></main>
@@ -83,7 +95,23 @@ include __DIR__ . '/includes/header.php';
   const badgeClass = status => status === 'critical' ? 'b-critical' : status === 'warning' ? 'b-warning' : status === 'healthy' ? 'b-active' : 'b-done';
   const safeVersion = value => value ? escapeHtml(value) : 'Unavailable';
   const refreshButton = document.getElementById('serverHealthRefresh');
+  const LOW_BALANCE_THRESHOLD = 50000;
   let lastPayload = null;
+  let lastLogEntries = [];
+  let lastLogAvailable = false;
+  let logSeverityFilter = null;
+
+  function updateBillingBanner(sections) {
+    const bar = document.getElementById('billingLowBalanceBar');
+    const messageEl = document.getElementById('billingLowBalanceMessage');
+    const billing = (Array.isArray(sections) ? sections : []).find(section => section.key === 'billing');
+    const balance = billing?.items?.balance;
+    const isLow = typeof balance === 'number' && balance < LOW_BALANCE_THRESHOLD;
+    bar.hidden = !isLow;
+    if (isLow) {
+      messageEl.textContent = `The remaining IDCloudHost billing balance is below Rp 50.000 (currently ${billing.items.balance_display}). Please top up soon to avoid service interruption.`;
+    }
+  }
 
   function renderMetric(metric, key) {
     const percent = metric.percent === null || metric.percent === undefined ? null : Math.max(0, Math.min(100, Number(metric.percent)));
@@ -213,6 +241,36 @@ include __DIR__ . '/includes/header.php';
     }
   });
 
+  function renderLogSummary(counts) {
+    document.getElementById('serverLogSummary').innerHTML = ['critical', 'error', 'warning', 'notice'].map(level => {
+      const active = logSeverityFilter === level ? ' is-active-filter' : '';
+      return `<button type="button" class="badge ${badgeClass(level === 'error' ? 'critical' : level)}${active}" data-severity="${escapeHtml(level)}">${escapeHtml(level)} ${Number(counts[level] || 0)}</button>`;
+    }).join('');
+  }
+
+  function renderLogEntries() {
+    const list = document.getElementById('serverLogList');
+    if (!lastLogAvailable) {
+      list.innerHTML = '<div class="empty-sub">Error log is unavailable with current safe permissions.</div>';
+      return;
+    }
+    const entries = logSeverityFilter
+      ? lastLogEntries.filter(entry => entry.severity === logSeverityFilter)
+      : lastLogEntries;
+    list.innerHTML = entries.length
+      ? entries.map(entry => `<div class="server-log-row"><span class="badge ${badgeClass(entry.severity === 'error' ? 'critical' : entry.severity)}">${escapeHtml(entry.severity)}</span><div><strong>${escapeHtml(entry.timestamp || 'Recent')}</strong><p>${escapeHtml(entry.message)}</p></div></div>`).join('')
+      : `<div class="empty-sub">No ${logSeverityFilter ? escapeHtml(logSeverityFilter) + ' ' : ''}entries found.</div>`;
+  }
+
+  document.getElementById('serverLogSummary').addEventListener('click', (event) => {
+    const button = event.target.closest('[data-severity]');
+    if (!button) return;
+    const severity = button.dataset.severity;
+    logSeverityFilter = logSeverityFilter === severity ? null : severity;
+    renderLogSummary(lastPayload?.logs?.counts || {});
+    renderLogEntries();
+  });
+
   function render(data) {
     lastPayload = data;
     const metrics = data.metrics || {};
@@ -230,18 +288,13 @@ include __DIR__ . '/includes/header.php';
     ].map(([label,value]) => `<div><span>${escapeHtml(label)}</span><strong>${safeVersion(value)}</strong></div>`).join('');
 
     renderInsights(data.insights);
+    updateBillingBanner(data.insights);
 
     const logs = data.logs || {};
-    const counts = logs.counts || {};
-    document.getElementById('serverLogSummary').innerHTML = ['critical','error','warning','notice'].map(level =>
-      `<span class="badge ${badgeClass(level === 'error' ? 'critical' : level)}">${escapeHtml(level)} ${Number(counts[level] || 0)}</span>`
-    ).join('');
-    const entries = Array.isArray(logs.entries) ? logs.entries : [];
-    document.getElementById('serverLogList').innerHTML = !logs.available
-      ? '<div class="empty-sub">Error log is unavailable with current safe permissions.</div>'
-      : entries.length
-        ? entries.map(entry => `<div class="server-log-row"><span class="badge ${badgeClass(entry.severity === 'error' ? 'critical' : entry.severity)}">${escapeHtml(entry.severity)}</span><div><strong>${escapeHtml(entry.timestamp || 'Recent')}</strong><p>${escapeHtml(entry.message)}</p></div></div>`).join('')
-        : '<div class="empty-sub">No recent error entries found.</div>';
+    lastLogAvailable = !!logs.available;
+    lastLogEntries = Array.isArray(logs.entries) ? logs.entries : [];
+    renderLogSummary(logs.counts || {});
+    renderLogEntries();
   }
 
   async function loadHealth() {

@@ -35,9 +35,13 @@ function tracs_insight_billing_fetch(string $apiKey): array {
         return tracs_insight_billing_unavailable('Billing balance response was not recognized.');
     }
 
-    $balance = is_numeric($account['credit_amount'] ?? null)
-        ? (float)$account['credit_amount']
-        : (float)($account['running_totals']['credit_available'] ?? 0);
+    // "ongoing" is the account's real remaining balance after this cycle's
+    // accrued-but-not-yet-invoiced usage is netted out (credit_amount minus
+    // running_totals.subtotal). credit_amount alone is the gross prepaid
+    // figure and overstates what's actually left to spend.
+    $balance = is_numeric($account['running_totals']['ongoing'] ?? null)
+        ? (float)$account['running_totals']['ongoing']
+        : (float)($account['credit_amount'] ?? 0);
     $restrictionLevel = strtoupper(trim((string)($account['restriction_level'] ?? '')));
     $restricted = $restrictionLevel !== '' && $restrictionLevel !== 'CLEAR';
 
@@ -56,6 +60,7 @@ function tracs_insight_billing_fetch(string $apiKey): array {
         'type' => 'billing',
         'status' => $status,
         'items' => [
+            'balance' => $balance,
             'balance_display' => tracs_insight_billing_format_rupiah($balance),
             'days_remaining' => $daysRemaining,
             'monthly_spend_display' => $usage !== null ? tracs_insight_billing_format_rupiah($usage['monthly_spend']) : null,
@@ -199,6 +204,7 @@ function tracs_insight_billing_unavailable(string $message): array {
         'type' => 'billing',
         'status' => 'unavailable',
         'items' => [
+            'balance' => null,
             'balance_display' => 'Unavailable',
             'days_remaining' => null,
             'monthly_spend_display' => null,
