@@ -4,6 +4,24 @@ Status: Deployed successfully (remediated)
 Completed: 2026-07-15 19:13 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Calendar Caption, Registrar Column Rename, Feedback Unsaved-Bar Fix (2026-07-22)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commits `798770c`, `6f071d5`, `0a78e53`.
+Deployed via `scp` + `sha256sum` drift-check/verify, backed up to `/opt/tracs/backups/calendar-caption-domain-feedback-fix-20260722-135959/` (full `calendar-dist/` tree, `domain-transfer.php`, `cancellation_feedback.php`) before overwrite. No migration.
+
+### Changes Deployed
+Three independent user-requested fixes:
+
+- **Calendar caption**: `CalendarToolbar.jsx`'s "N matching calendar items" line changed from `cal:mt-2 cal:font-mono cal:text-[9px] cal:text-tracs-muted` to `cal:truncate cal:font-mono cal:text-[10px] cal:text-tracs-muted`. Rebuilt with `npm run build:calendar` (vite) — new hashed bundle `calendar-C8IC3otw.js`/`calendar-BXELjzSX.css`. Also removed 7 stale hashed bundle files from `public/assets/calendar-dist/assets/` left behind by past builds on the server (Vite's `emptyOutDir` cleans these locally on every build, but nothing had cleaned the already-deployed server copy) — the manifest only ever referenced the current build, so the old files were inert, unreferenced cruft.
+- **`domain-transfer.php`**: renamed the `<th>Move Domain</th>` table column header to `Registrar` — the column already renders a per-row registrar-select dropdown (backed by `webnic_reseller_transfer`), so the old label was a naming leftover, not a data/behavior change.
+- **`cancellation_feedback.php`**: added `data-unsaved-ignore` to the six inline quick-entry fields (`#inRef`, `#inEmail`, `#inService`, `#inReason`, `#inResolution`, `#inDetails`). Root cause: those fields already autosave per-field (debounced, own status badge) via `feedback-autosave.js`, and `quickSaveFeedback()` already applies successful saves in place without a reload — but the generic site-wide `unsaved-changes-guard.js` had no way to know that and kept showing "You have unsaved changes" the moment any field was touched, sometimes indefinitely (a new record can't be created until Service+Reason, both required, are filled, so typing an optional field first left nothing to actually save yet). Used the same `data-unsaved-ignore` opt-out already established elsewhere in the app for other real-time-saved controls. The edit modal's fields are deliberately left protected by the generic guard (a traditional single-shot edit, where warning before an accidental close is correct).
+
+### Verification
+- Pre-deploy drift-check: all three source files and the calendar manifest matched their pre-fix commit exactly, no drift.
+- `php -l` clean on both PHP files.
+- Post-deploy `sha256sum` of every deployed file matches local exactly; live-served `calendar-C8IC3otw.js` via `curl` also matches. `domain-transfer.php`/`cancellation_feedback.php` return the expected `302` login redirect unauthenticated.
+- **Not** verified visually/interactively (calendar caption truncation, the Registrar column header, or the feedback form no longer showing the unsaved bar) — no authenticated browser session available this session. A manual check is recommended on next login for all three.
+
 ## Deployed — Duplicate Dashboard Gap Rule Removed (Root Cause) (2026-07-22)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `52540d0`.
