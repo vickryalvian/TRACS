@@ -4,6 +4,65 @@ Status: Deployed successfully (remediated)
 Completed: 2026-07-15 19:13 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Server Insights Redesign (Action-Oriented IA) (2026-07-22)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `c451ead`.
+16 files (5 deleted, 6 created, 5 modified under `core/insights/`, plus `core/server_insights.php`, `public/server-health.php`, `public/assets/tracs.css`). **Deployed via `git fetch origin` on the server + `git show origin/feat/dashboard-quick-tools-widgets:<path> > <path>` per file, not `scp`** — production's git checkout has extensive uncommitted drift (hundreds of files differ from `main`, going back months of file-copy-only deploys), so a real `git pull`/`checkout` was ruled out as unsafe; `git show` pulls a specific blob straight from GitHub without touching the drifted working tree, index, or branch. Backed up to `/opt/tracs/backups/server-insights-redesign-20260722-224958/` before overwrite. No migration.
+
+### Changes Deployed
+Full UX/IA audit of the Server Insights panel: removed every field that only
+restated the metrics grid or Runtime Details (resource summary, capacity
+overview, deployment info, badge-list security checks, the derived health
+score — all deleted). Replaced with six full-width sections answering "what
+needs attention" instead of "what's the number": **Billing** (real balance +
+a genuine days-remaining estimate computed from the account's live hourly
+burn rate via `charging/usage`, cost breakdown, top-up recommendation),
+**Active Warnings** (real problems only — billing, DB, storage, backups,
+HTTPS, a new live SSL-expiry check via `stream_socket_client`, PHP EOL
+reached — collapses to a compact healthy state instead of an empty box),
+**Maintenance** (PHP approaching-EOL only; deliberately not fabricating
+package/cron/migration checks with no real tracking anywhere in this
+codebase), **Recent Changes** (deployment timeline entry + newest error-log
+issue), **Quick Actions** (View Sanitized Logs, Open Billing Portal,
+Download Diagnostics — no fabricated actions), **AI Insights** (disabled,
+visually de-emphasized placeholder). The panel also moved out of the
+two-column layout into its own full-width section above Runtime Details.
+
+### Infrastructure fix found and applied during this deploy
+`/opt/tracs/config/.env` was owned `vickry:vickry` (mode 640) — since
+`php8.3-fpm`'s pool runs as `www-data:www-data`, the group bit never actually
+applied to the PHP-FPM worker, so `config/env.php`'s `file()` call had been
+silently failing with `Permission denied` (visible in `logs/error.log`)
+before this deploy too. This meant the real `IDCLOUDHOST_API_KEY` (and
+`PAGEFLEETS_API_KEY`) added in earlier sessions were likely never actually
+readable by the live app despite being present in the file. Fixed with
+`sudo chgrp www-data /opt/tracs/config/.env`, matching the ownership model
+`README.md` already documents (`deploy-user:www-data`, `640`). Confirmed
+fixed: fresh requests no longer produce the permission warning in
+`logs/error.log`.
+
+### Verification
+- `php -l` clean on all 11 deployed PHP files on production (PHP 8.3).
+- `sha256sum` matches local exactly for all 11 files, and the
+  `core/insights/` directory listing on the server matches the intended 8
+  files exactly (no leftover deleted providers).
+- Live-tested the billing math directly against the real IDCloudHost API
+  (not through the full app) before deploying: real balance (Rp 232,937),
+  real 24-day estimate from the account's actual hourly burn rate, and a
+  correct 3-line cost breakdown (`tracs-prod` VM + its storage, plus an
+  unrelated VM's storage on the same billing account).
+- `https://tracs.vickry.id/` → `302`, `/login.php` → `200`,
+  `/server-health.php` → `302` (expected, unauthenticated) — all healthy.
+  `php8.3-fpm`/`nginx` both `active`.
+- Per this session's explicit instruction, skipped the full local
+  docker/browser re-test cycle used for the previous deploy — production
+  verification here is curl + error-log inspection + the direct live-API
+  billing check above, not a rendered-page walkthrough. **Not** verified:
+  the actual rendered page in a browser this round (would require an
+  authenticated super-admin session, which I deliberately did not forge on
+  production — that's appropriate for local testing, not prod). Recommend a
+  real click-through on next login.
+
 ## Deployed — Server Insights Panel (Server Health) (2026-07-22)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `2b854aa`.
