@@ -50,10 +50,18 @@ include __DIR__ . '/includes/header.php';
 
     <section class="panel">
       <div class="panel-head">
-        <span class="panel-title"><i data-lucide="shield-alert" class="icon-sm"></i>Recommendations</span>
+        <span class="panel-title"><i data-lucide="gauge" class="icon-sm"></i>Server Insights</span>
       </div>
-      <div class="server-recommendations" id="serverHealthRecommendations">
-        <div class="empty-sub">Recommendations appear when usage reaches warning or critical thresholds.</div>
+      <div class="server-insights" id="serverHealthInsights">
+        <div class="server-insight-section">
+          <div class="skeleton-block server-insight-skeleton-line"></div>
+          <div class="skeleton-block server-insight-skeleton-line"></div>
+          <div class="skeleton-block server-insight-skeleton-line"></div>
+        </div>
+        <div class="server-insight-section">
+          <div class="skeleton-block server-insight-skeleton-line"></div>
+          <div class="skeleton-block server-insight-skeleton-line"></div>
+        </div>
       </div>
     </section>
   </div>
@@ -91,6 +99,66 @@ include __DIR__ . '/includes/header.php';
     </article>`;
   }
 
+  function renderInsightKv(items) {
+    return `<div class="server-detail-list">${(items || []).map(row =>
+      `<div><span>${escapeHtml(row.label)}</span><strong>${escapeHtml(row.value)}</strong></div>`
+    ).join('')}</div>`;
+  }
+
+  function renderInsightList(items) {
+    return `<div class="server-insight-list">${(items || []).map(row =>
+      `<p>${escapeHtml(row.text)}</p>`
+    ).join('')}</div>`;
+  }
+
+  function renderInsightBadges(items) {
+    return `<div class="server-detail-list">${(items || []).map(row =>
+      `<div><span>${escapeHtml(row.label)}</span><span class="badge ${escapeHtml(row.badge_class || 'b-done')}">${escapeHtml(row.badge_text)}</span></div>`
+    ).join('')}</div>`;
+  }
+
+  function renderInsightActions(items) {
+    return `<div class="server-recommendations">${(items || []).map(row =>
+      `<div class="server-recommendation ${escapeHtml(row.severity || 'healthy')}"><strong>${escapeHtml(row.title)}</strong>${row.detail ? `<span>${escapeHtml(row.detail)}</span>` : ''}</div>`
+    ).join('')}</div>`;
+  }
+
+  function renderInsightScore(items) {
+    const score = Number(items?.score ?? 0);
+    return `<div class="server-health-score">
+      <strong>${escapeHtml(score)} <small>/ 100</small></strong>
+      <span>${escapeHtml(items?.label || 'Unavailable')}</span>
+    </div>`;
+  }
+
+  const insightRenderers = {
+    kv: renderInsightKv,
+    list: renderInsightList,
+    badges: renderInsightBadges,
+    actions: renderInsightActions,
+    score: renderInsightScore,
+  };
+
+  function renderInsightSection(section) {
+    const renderer = insightRenderers[section.type];
+    const body = renderer ? renderer(section.items) : '';
+    return `<article class="server-insight-section ${escapeHtml(section.status || 'unavailable')}">
+      <div class="server-insight-section-head">
+        <span><i data-lucide="${escapeHtml(section.icon || 'circle')}" class="icon-sm"></i>${escapeHtml(section.title || '')}</span>
+        <span class="badge ${badgeClass(section.status)}">${escapeHtml(section.status || 'unavailable')}</span>
+      </div>
+      ${body}
+    </article>`;
+  }
+
+  function renderInsights(sections) {
+    const list = Array.isArray(sections) ? sections : [];
+    document.getElementById('serverHealthInsights').innerHTML = list.length
+      ? list.map(renderInsightSection).join('')
+      : '<div class="empty-sub">Server insights are temporarily unavailable.</div>';
+    if (window.lucide?.createIcons) window.lucide.createIcons();
+  }
+
   function render(data) {
     const metrics = data.metrics || {};
     document.getElementById('serverHealthGrid').innerHTML = metricOrder.map(key => renderMetric(metrics[key] || {label:key,display:'Unavailable',status:'unavailable'}, key)).join('');
@@ -106,12 +174,7 @@ include __DIR__ . '/includes/header.php';
       ['Last Deployment', versions.last_deploy_at ? new Date(versions.last_deploy_at).toLocaleString() : null],
     ].map(([label,value]) => `<div><span>${escapeHtml(label)}</span><strong>${safeVersion(value)}</strong></div>`).join('');
 
-    const recommendations = Object.values(metrics).filter(metric => metric && metric.recommendation).map(metric =>
-      `<div class="server-recommendation ${escapeHtml(metric.status)}"><strong>${escapeHtml(metric.label)}</strong><span>${escapeHtml(metric.recommendation)}</span></div>`
-    );
-    document.getElementById('serverHealthRecommendations').innerHTML = recommendations.length
-      ? recommendations.join('')
-      : '<div class="empty-sub">No warning or critical resource recommendations.</div>';
+    renderInsights(data.insights);
 
     const logs = data.logs || {};
     const counts = logs.counts || {};

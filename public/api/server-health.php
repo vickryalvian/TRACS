@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/_bootstrap.php';
 require_once __DIR__ . '/../../core/server_monitoring.php';
+require_once __DIR__ . '/../../core/server_insights.php';
 
 api_require_super_admin();
 
@@ -24,6 +25,7 @@ $_SESSION['tracs_server_health_last_refresh'] = $now;
 
 try {
     $data = tracs_collect_server_monitoring($conn);
+    $data['insights'] = tracs_collect_server_insights($conn, $data);
     logAct($conn, $uid, 'viewed', 'Server Health', 'Refreshed server health and sanitized error log summary');
     ok($data);
 } catch (Throwable $error) {
