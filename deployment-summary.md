@@ -4,6 +4,21 @@ Status: Deployed successfully (remediated)
 Completed: 2026-07-15 19:13 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Cases Widget Padding Alignment Fix (2026-07-22)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `059f224`.
+1 file (`tracs.css`), deployed via `scp` + `sha256sum` drift-check/verify, backed up to `/opt/tracs/backups/cases-widget-padding-alignment-fix-20260722-093139/` before overwrite. No migration.
+
+### Changes Deployed
+Dashboard spacing audit requested by the user, focused on the Cases widget in `index.php` looking inconsistent next to its neighbors. Root cause: `.dashboard-case-panel` locally overrode the shared `--dashboard-widget-padding` custom property (20px, used by the Shift Summary and Infrastructure Pulse widgets stacked directly above it in the same `.col-left` column) down to `--panel-padding` (16px) — the only widget-scoped override of that token anywhere in the stylesheet. That made the Cases panel's title and row content sit 4px tighter than the widgets immediately above it, visibly misaligning the left/right edges down the column, and diverging from the shared responsive curve (Shift/Infra drop to 18px at `≤1024px` via `--dashboard-widget-padding-compact`; Cases was pinned to a separate 16px/12px curve regardless of viewport). Fix: removed the override so Cases inherits the same token as its column siblings at every breakpoint, and added `padding-inline: var(--dashboard-widget-padding)` to `.dashboard-case-panel > .panel-head` so the "Cases" title lines up with the row content beneath it (which already consumed the same token via `.case-body`/`.case-right`/`.case-more-link`). No other panel, grid, or gap token was touched — every other dashboard widget's spacing was already consistent.
+
+### Verification
+- Pre-deploy drift-check: `tracs.css` matched the previous deploy (`f4a913e`) exactly, no drift.
+- `php -l` clean; brace-balance check clean (2542 open / 2542 close) before deploy.
+- Post-deploy `sha256sum` of the file on disk matches local exactly, and `curl`ing the live asset URL (`https://tracs.vickry.id/assets/tracs.css`) hashes to the same value — confirms no stale cache/proxy copy is being served.
+- `https://tracs.vickry.id/` → `302` (expected login redirect, unauthenticated). `php8.3-fpm` reloaded cleanly (`active`).
+- **Not** verified: an authenticated browser walkthrough confirming the Cases panel title and rows now visually align with the Shift Summary/Infrastructure Pulse widgets above them. Local Docker verification wasn't available (daemon unresponsive on this machine) — shipped on static CSS custom-property scope tracing only. A manual visual check on next login is recommended.
+
 ## Deployed — MoM History 24-Hour Visibility Bug Fix (2026-07-21)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `d460197`.
