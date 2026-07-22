@@ -4,6 +4,38 @@ Status: Deployed successfully (remediated)
 Completed: 2026-07-15 19:13 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Nusa Putra University Intern Account Provisioning (2026-07-22)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`.
+New idempotent script `bin/create-intern-users.php`, deployed via `scp`, run once with `--apply`. DB backed up first to `/opt/tracs/backups/intern-seed-20260722-105713/pre-intern-seed-backup.sql.gz` (`tracs_users`, `user_intern_profiles`, `tracs_roles`, `tracs_user_activity_logs`). No migration; both required tables/role already existed.
+
+### Changes Deployed
+Requested by the user: create 4 intern accounts (Nusa Putra University, Teknik Informatika, role/position Intern, internship period 2026-07-20 to 2027-01-21) with credentials they supplied directly.
+
+- New script mirrors the existing `bin/seed-default-shift-schedule.php` pattern (dry-run by default, `--apply` to commit, raw prepared-statement SQL, transaction-wrapped) so no admin-panel password entry was needed for provisioning — it reuses the same `password_hash()`/schema shape as `UserManagementController::createUser()`.
+- Skips any account whose email or username already exists (ignoring `removed` rows), per the user's "skip existing" instruction — never updates a pre-existing row.
+- Dry run surfaced that 2 of the 4 accounts already existed on production (`fauzi@idcloudhost.co.id` id 24, `ghibran@idcloudhost.co.id` id 25, both created 2026-07-21) — left untouched. Only `hamdi@idcloudhost.co.id` (id 26) and `rangga@idcloudhost.co.id` (id 27) were newly created.
+- **Flagged, not changed**: the 2 pre-existing accounts have `position = 'Customer Support'` (requested: `Intern`) and internship period `2026-07-21`→`2027-01-20` (requested: `2026-07-20`→`2027-01-21`, one day off both ends). Reported to the user; needs an explicit decision before editing real account data outside the "just create the missing ones" scope.
+
+### Verification
+- Read-only DB query confirmed both new accounts: role `intern`, `status=active`, `is_active=1`, position `Intern`, university/study program/dates all exactly as requested.
+- Offline `password_verify()` against the stored bcrypt hashes confirmed both new accounts' passwords match exactly what was supplied — done without touching any login form.
+- No admin-panel or login-page password entry was used anywhere in this flow (script runs server-side over the existing SSH key-based deploy access).
+
+## Deployed — Cases Widget Top Padding Follow-up Fix (2026-07-22)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`.
+1 file (`tracs.css`), deployed via `scp` + `sha256sum` drift-check/verify, backed up to `/opt/tracs/backups/cases-widget-top-padding-fix-20260722-105910/` before overwrite. No migration.
+
+### Changes Deployed
+Follow-up to `059f224` (Cases Widget Padding Alignment Fix), which only fixed the horizontal (`padding-inline`) inset. The user flagged the *top* gap/padding on the Cases widget as still inconsistent. Root cause: the Shift Summary / Infrastructure Pulse widgets stacked directly above Cases in `.col-left` apply `--dashboard-widget-padding` (20px) on every side of their own widget box (their `__head` elements use `padding: 0`), so their titles sit 20px below their card's top edge. `.dashboard-case-panel > .panel-head` only overrode the horizontal padding — its vertical padding still came from the generic `.panel-head { padding: 10px var(--panel-padding) }` rule, leaving the Cases title only 10px from its own top edge, half the inset of the widgets above it. Added `padding-block-start: var(--dashboard-widget-padding)` to `.dashboard-case-panel > .panel-head` so the top inset now matches too.
+
+### Verification
+- Pre-deploy drift-check: `tracs.css` matched `HEAD` (`a949b72`) exactly, no drift.
+- Brace-balance check clean (2542 open / 2542 close) before deploy.
+- Post-deploy `sha256sum` of the file on disk matches local exactly, and `curl`ing the live asset URL (`https://tracs.vickry.id/assets/tracs.css`) hashes to the same value.
+- **Not** verified: an authenticated browser screenshot of the rendered dashboard. Local Docker wasn't spun up for this change, so this shipped on code-reading (comparing the exact CSS rules governing each widget's top inset) rather than a visual check — a quick look at `https://tracs.vickry.id/` next login is recommended to confirm the Cases title now sits flush with Shift Summary/Infrastructure Pulse above it.
+
 ## Deployed — Role-Gated Meeting Minutes Delete (2026-07-22)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `2fd0f92`.
