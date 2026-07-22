@@ -1617,10 +1617,17 @@ input, select, textarea { font-family: inherit }
    in .col-left, so its title and row content must share their horizontal
    inset (--dashboard-widget-padding) instead of the tighter generic
    --card-header-padding-x, or the left/right edges visibly misalign between
-   stacked widgets in the same column. */
+   stacked widgets in the same column. Shift/Infra apply
+   --dashboard-widget-padding on all sides of their own widget box (their
+   __head has padding:0), so their titles sit --dashboard-widget-padding
+   below the card's top edge; the generic .panel-head's hardcoded 10px top
+   padding left Cases' title noticeably tighter against its own top edge, so
+   pull the top inset up to the same token too.
+*/
 .dashboard-case-panel > .panel-head {
   flex: 0 0 auto;
   padding-inline: var(--dashboard-widget-padding);
+  padding-block-start: var(--dashboard-widget-padding);
 }
 
 .dashboard-case-panel > .empty {
