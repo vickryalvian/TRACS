@@ -5069,6 +5069,15 @@ async function archiveTickerMsg(id){
 
         removeRow(`#tmgr-${id}`);
         refreshTickerBar();
+        const list=document.querySelector('.ticker-entry-list');
+        if(list){
+          setTimeout(()=>{
+            if(!list.querySelector('.tmgr-row')){
+              list.innerHTML='<div class="empty"><div class="empty-ic"><i data-lucide="megaphone"></i></div><div class="empty-t">No custom announcements</div></div>';
+              tracsRefreshIcons(list);
+            }
+          },190);
+        }
 
       } else {
 

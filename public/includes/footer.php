@@ -379,15 +379,21 @@ $_tracs_case_can_delete = isset($conn) && $conn instanceof mysqli && function_ex
     </div>
     <div class="ticker-entry-list">
       <?php
-      $mgr=array_filter($ticker_items??[],fn($t)=>isset($t['id']));
+      // Only true custom announcements (SmartTickerEngine tags their merged-feed
+      // id as "custom-{tracs_ticker_messages.id}"); every other alert type
+      // (reminder-, checklist-, case-, ...) also carries a non-null id and must
+      // not leak in here, since this list's delete button only works for rows
+      // that actually exist in tracs_ticker_messages.
+      $mgr=array_filter($ticker_items??[],fn($t)=>str_starts_with((string)($t['id']??''),'custom-'));
       if(empty($mgr)):?>
       <div class="empty"><div class="empty-ic"><i data-lucide="megaphone"></i></div><div class="empty-t">No custom announcements</div></div>
-      <?php else: foreach($mgr as $i=>$it):
-        $iid=$it['id']??$i;
+      <?php else: foreach($mgr as $it):
+        // Strip the "custom-" tag back to the raw tracs_ticker_messages.id the
+        // delete API expects; the tagged id also can't be interpolated
+        // unquoted into onclick below (it isn't a valid JS numeric literal).
+        $iid=(int)substr((string)$it['id'],7);
         $cls=htmlspecialchars($it['class']??'normal');
         $txt=htmlspecialchars($it['text']??'');
-        // Only show custom messages (those with an id), not auto-generated
-        if(!isset($it['id']))continue;
       ?>
       <div class="tmgr-row" id="tmgr-<?=$iid?>">
         <span class="tmgr-type <?=$cls?>"><?=$cls?></span>

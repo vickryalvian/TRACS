@@ -6,5 +6,7 @@ $stmt=$conn->prepare("DELETE FROM tracs_ticker_messages WHERE id=?");
 if(!$stmt) fail('Database error',500);
 $stmt->bind_param('i',$id);
 $stmt->execute();
+$deleted=$stmt->affected_rows>0;
 $stmt->close();
+if(!$deleted) fail_not_found();
 ok(null,'Deleted');
