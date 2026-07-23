@@ -4,6 +4,54 @@ Status: Deployed successfully (remediated)
 Completed: 2026-07-15 19:13 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Manage Announcements Modal Fixes (2026-07-24)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `707186f`.
+3 files (`public/api/ticker-delete.php`, `public/assets/tracs.js`, `public/includes/footer.php`), deployed via `git fetch origin` + `git show origin/feat/dashboard-quick-tools-widgets:<path> > <path>` on the server, same drift-safe pattern as recent deploys. Backed up to `/opt/tracs/backups/ticker-manage-fix-20260724-044011/` before overwrite. No migration. `php8.3-fpm` reloaded (opcache) for the two PHP files.
+
+### Changes Deployed
+Full audit of the "Manage Announcements" modal (opened via the ticker bar's
+MANAGE link, defined in `footer.php` and shared across every page) found and
+fixed:
+- **Remove button was completely dead.** Every manual announcement's id from
+  `SmartTickerEngine` is a string like `"custom-2"`, but `footer.php`
+  interpolated it unquoted into `onclick="archiveTickerMsg(<?=$iid?>)"`,
+  producing invalid JS (`archiveTickerMsg(custom-2)` parses as `custom - 2`,
+  an undefined variable) that threw a `ReferenceError` on every click — no
+  request was ever sent. Fixed by filtering to only `custom-`-prefixed feed
+  ids and stripping the prefix back to the raw `tracs_ticker_messages.id`
+  the delete API expects.
+- **Auto-generated alerts leaked into the list.** The old filter
+  (`isset($t['id'])`) matched any ticker item with an id — reminders,
+  overdue cases, checklist items, etc. all carry non-null prefixed ids too.
+  Reproduced with a real overdue reminder, which showed up in the modal
+  with a delete button, directly contradicting the modal's own disclaimer
+  ("System alerts... cannot be removed here"). Same fix as above resolves
+  this too.
+- **Empty state didn't reappear after archiving the last item.**
+  `archiveTickerMsg` removed the row client-side but never re-inserted the
+  "No custom announcements" placeholder, leaving a blank gap until the
+  modal was reopened. Now re-renders the empty state in place.
+- **False-positive success toast on stale/nonexistent ids.**
+  `ticker-delete.php` always returned success regardless of whether a row
+  was actually deleted. Added an `affected_rows` check so a stale id now
+  correctly returns 404 and the client shows an error toast.
+
+### Verification
+- Full flow re-tested against a local Docker DB (not production): add
+  (validation, loading state, success toast, modal auto-close, live
+  ticker bar refresh, Type dropdown, Enter-to-submit), archive (confirm
+  dialog, success + error toasts, list/empty-state update), Close/X — all
+  confirmed working before deploying.
+- `php -l` clean on both PHP files on production (PHP 8.3).
+- `sha256sum` matches local exactly for all 3 files.
+- Live-fetched `https://tracs.vickry.id/assets/tracs.js` and confirmed
+  byte-identical sha256 to the deployed file.
+- `https://tracs.vickry.id/` → `302`, `/login.php` → `200`, `/mom.php` →
+  `302` (expected, unauthenticated); `php8.3-fpm`/`nginx` both `active`;
+  no new entries in `logs/error.log` after the reload (pre-existing
+  unrelated warnings only, all timestamped before this deploy).
+
 ## Deployed — MOM Delete Toast Fix (2026-07-24)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `cf5b3f7`.
