@@ -4,6 +4,39 @@ Status: Deployed successfully (remediated)
 Completed: 2026-07-15 19:13 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — MOM Delete Toast Fix (2026-07-24)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `cf5b3f7`.
+1 file (`public/assets/tracs.js`), deployed via `git fetch origin` + `git show origin/feat/dashboard-quick-tools-widgets:<path> > <path>` on the server, same drift-safe pattern as recent deploys. Backed up to `/opt/tracs/backups/toast-modal-fix-20260724-041142/` before overwrite. No migration, no PHP-FPM reload needed (static asset served directly by nginx).
+
+### Changes Deployed
+Fixed `mom.php` → deleting a MOM item ("Delete Meeting") succeeded but showed
+no toast. Root cause was in the shared `tracsVisibleModal()` helper (used by
+the whole toast/dialog system, not MOM-specific): it checked
+`getComputedStyle(node).display` on the confirm dialog's *inner* `.tracs-dialog`
+node, but the `hidden` class is applied to its *parent* overlay — so the
+inner node's computed display never reflected the ancestor being hidden.
+Once `tracsConfirm()` had opened once, it was permanently misreported as
+"visible." `deleteMOM()`'s flow (`tracsConfirm` → `withLoadingState` disabling
+and blurring the trigger button → `toast()` with no explicit source) hit this
+exact fallback, so the success/error toast got appended inside the hidden
+dialog subtree — created in the DOM, never visible. One-line fix: swapped the
+check to `node.getClientRects().length>0`, which correctly reflects actual
+rendering regardless of ancestor `display`.
+
+### Verification
+- Reproduced and confirmed the fix locally first with a standalone harness
+  (real `tracs.js`/`tracs.css`, no DB) that replays `deleteMOM()`'s exact
+  confirm → disable-button → toast sequence — confirmed `visibly rendered:
+  false` on the original code and `true` after the fix, with no page reload
+  and no duplicate toasts.
+- `sha256sum` matches local exactly on production
+  (`edca0683143a5d93f2a731f10c675bec46f10967c8a376b5e8d3c0166c8141de`).
+- Live-fetched `https://tracs.vickry.id/assets/tracs.js` and confirmed the
+  fixed line is being served (byte-identical sha256 to local/prod file).
+- `https://tracs.vickry.id/` → `302`, `/login.php` → `200`, `/mom.php` →
+  `302` (expected, unauthenticated); `php8.3-fpm`/`nginx` both `active`.
+
 ## Deployed — Unsaved-Bar Glass Effect (2026-07-22)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `36f06c2`.
