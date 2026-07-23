@@ -178,7 +178,7 @@ async function tracsFilterNavigate(url,{target='.main-inner',preserveScroll=true
 }
 function tracsVisibleModal(){
   return Array.from(document.querySelectorAll('.modal-overlay:not(.hidden), .dpc-modal, .infra-modal:not([hidden]), .cf-modal, [role="dialog"]:not([hidden])'))
-    .find(node=>!node.hidden && !node.classList.contains('hidden') && getComputedStyle(node).display!=='none') || null;
+    .find(node=>!node.hidden && !node.classList.contains('hidden') && node.getClientRects().length>0) || null;
 }
 function tracsSourceElement(sourceElement){
   if(sourceElement instanceof Element)return sourceElement;
