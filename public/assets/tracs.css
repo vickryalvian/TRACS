@@ -6433,6 +6433,10 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
 
 .server-health-card.warning { border-color: var(--amber-bd); }
 .server-health-card.critical { border-color: var(--red-bd); }
+.server-health-card-billing {
+  grid-column: -2 / -1;
+  grid-row: 1;
+}
 
 .server-health-card-head {
   display: flex;
@@ -6442,6 +6446,11 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
   color: var(--tx2);
   font-size: 11px;
   font-weight: 700;
+}
+.server-health-card-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .server-health-card > strong {
@@ -6676,6 +6685,7 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
 
 @media (max-width: 780px) {
   .server-health-grid { grid-template-columns: 1fr; }
+  .server-health-card-billing { grid-column: auto; grid-row: auto; }
   .server-health-actions { justify-content: flex-start; margin-left: 0; width: 100%; }
 }
 @media (max-width: 520px) {

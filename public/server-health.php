@@ -90,7 +90,7 @@ include __DIR__ . '/includes/header.php';
 
 <script>
 (() => {
-  const metricOrder = ['cpu','memory','disk','disk_free','project_size','uploads_size','logs_size','backups_size','database_size','uptime'];
+  const metricOrder = ['cpu','memory','disk','disk_free','project_size','uploads_size','logs_size','database_size','uptime'];
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[char]));
   const badgeClass = status => status === 'critical' ? 'b-critical' : status === 'warning' ? 'b-warning' : status === 'healthy' ? 'b-active' : 'b-done';
   const safeVersion = value => value ? escapeHtml(value) : 'Unavailable';
@@ -123,6 +123,28 @@ include __DIR__ . '/includes/header.php';
       <strong>${escapeHtml(metric.display || 'Unavailable')}</strong>
       ${metric.detail ? `<small>${escapeHtml(metric.detail)}</small>` : ''}
       ${percent === null ? '' : `<div class="server-health-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><span style="width:${percent}%"></span></div>`}
+    </article>`;
+  }
+
+  function getBillingInsight(sections) {
+    return (Array.isArray(sections) ? sections : []).find(section => section.key === 'billing') || null;
+  }
+
+  function renderBillingMetric(section) {
+    const items = section?.items || {};
+    const status = section?.status || 'unavailable';
+    const daysRemaining = (items.days_remaining ?? null) !== null
+      ? `${items.days_remaining} day${items.days_remaining === 1 ? '' : 's'} remaining`
+      : (items.status_label || 'Not enough data yet');
+    const detailParts = [daysRemaining, items.last_updated ? `Updated ${items.last_updated}` : null].filter(Boolean);
+
+    return `<article class="server-health-card server-health-card-billing ${escapeHtml(status)}">
+      <div class="server-health-card-head">
+        <span class="server-health-card-title"><i data-lucide="credit-card" class="icon-sm"></i>Billing Balance</span>
+        <span class="badge ${badgeClass(status)}">${escapeHtml(status)}</span>
+      </div>
+      <strong>${escapeHtml(items.balance_display || 'Unavailable')}</strong>
+      <small>${escapeHtml(detailParts.join(' - ') || 'Billing balance is unavailable.')}</small>
     </article>`;
   }
 
@@ -210,7 +232,7 @@ include __DIR__ . '/includes/header.php';
   }
 
   function renderInsights(sections) {
-    const list = Array.isArray(sections) ? sections : [];
+    const list = (Array.isArray(sections) ? sections : []).filter(section => section.key !== 'billing');
     document.getElementById('serverHealthInsights').innerHTML = list.length
       ? list.map(renderInsightSection).join('')
       : '<div class="empty-sub">Server insights are temporarily unavailable.</div>';
@@ -274,7 +296,11 @@ include __DIR__ . '/includes/header.php';
   function render(data) {
     lastPayload = data;
     const metrics = data.metrics || {};
-    document.getElementById('serverHealthGrid').innerHTML = metricOrder.map(key => renderMetric(metrics[key] || {label:key,display:'Unavailable',status:'unavailable'}, key)).join('');
+    const billing = getBillingInsight(data.insights);
+    document.getElementById('serverHealthGrid').innerHTML = [
+      renderBillingMetric(billing),
+      ...metricOrder.map(key => renderMetric(metrics[key] || {label:key,display:'Unavailable',status:'unavailable'}, key)),
+    ].join('');
     document.getElementById('serverHealthChecked').textContent = data.checked_at ? `Checked ${new Date(data.checked_at).toLocaleString()}` : 'Check unavailable';
 
     const versions = data.versions || {};
