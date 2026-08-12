@@ -13,6 +13,7 @@ require_once __DIR__.'/../core/access_control.php';
 tracs_require_page_permission($conn, 'dashboard.view');
 
 require_once __DIR__.'/../modules/case/controller.php';
+require_once __DIR__.'/../modules/abuse-report/controller.php';
 require_once __DIR__.'/../modules/reminder/controller.php';
 require_once __DIR__.'/../modules/checklist/controller.php';
 require_once __DIR__.'/../modules/alert-ticker/controller.php';
@@ -36,6 +37,7 @@ $user_email = $_SESSION['user_email']??'operator@tracs.local';
 $case_can_manage = tracs_user_can($conn, 'cases.manage');
 $case_role = (string)($_SESSION['user_role_slug'] ?? '');
 $case_can_delete = tracs_user_can_delete_cases($conn, $uid);
+$abuse_can_view = tracs_user_can($conn, 'abuse_reports.view');
 tracs_ensure_creator_columns($conn, 'tracs_cases', 'user_id');
 tracs_ensure_creator_columns($conn, 'tracs_reminders', 'user_id');
 tracs_ensure_creator_columns($conn, 'tracs_side_tasks', 'user_id');
@@ -50,6 +52,7 @@ $SC = new ShiftReportController($conn,$uid);
 $MC = new MOMController($conn,$uid);
 $TM = new TaskManagementController($conn,$uid);
 $task_monitor_base_href = tracs_user_can($conn, 'tasks.monitor') ? 'monitoring.php' : 'tasks.php';
+$AR = $abuse_can_view ? new AbuseReportController($conn,$uid) : null;
 
 $opsStatus = getOpsStatus($conn);
 $shift_reports = $SC->getDashboardByShift();
@@ -62,6 +65,7 @@ $tasks      = $KC->getTasks()?:[];
 $activities = [];
 foreach($AC->getRecentActivity(20)?:[] as $a){try{$activities[]=$AC->formatActivity($a);}catch(Exception $e){}}
 $ticker_items = $TC->formatAlertsForTicker();
+$abuse_summary = $AR ? $AR->dashboardSummary() : null;
 $mom_dashboard = [];
 $weekly_suggestions = [];
 if($MC->isInstalled()){
@@ -132,6 +136,9 @@ $stuck_cases    = count(array_filter($cases,fn($c)=>($c['status']??'')==='stuck'
 $overdue_rem    = count(array_filter($reminders,fn($r)=>($r['status']??'')==='Overdue'));
 $today_rem      = count(array_filter($reminders,fn($r)=>($r['status']??'')==='Today'));
 $critical_count = $critical_cases + $overdue_rem;
+if($abuse_summary){
+  $critical_count += (int)($abuse_summary['critical'] ?? 0) + (int)($abuse_summary['over_sla'] ?? 0);
+}
 
 $total_tasks = count($tasks);
 $done_tasks  = count(array_filter($tasks,fn($t)=>!empty($t['is_completed'])));
@@ -399,6 +406,7 @@ usort($notification_alerts, fn($a,$b)=>(int)($a['sort_key']??0) <=> (int)($b['so
 $notification_alerts = array_slice($notification_alerts, 0, 6);
 $notif_count = count($notification_alerts);
 tracs_notifications_schedule_shift_handover($conn);
+if(function_exists('tracs_notifications_schedule_abuse_sla')) tracs_notifications_schedule_abuse_sla($conn);
 $notification_center = tracs_notification_recent($conn, $uid, 8);
 $notification_unread_count = (int)($notification_center['unread_count'] ?? 0);
 $notification_items = array_slice($notification_center['items'] ?? [], 0, 6);
@@ -437,6 +445,17 @@ $notification_groups = [
     'href' => 'mom.php',
   ],
 ];
+if($abuse_summary){
+  $abuse_open = (int)($abuse_summary['open'] ?? 0);
+  $notification_groups[] = [
+    'status' => 'abuse',
+    'label' => 'Abuse',
+    'count' => $abuse_open,
+    'title' => $abuse_open.' open abuse '.($abuse_open===1?'report':'reports'),
+    'meta' => (int)($abuse_summary['critical'] ?? 0).' critical · '.(int)($abuse_summary['over_sla'] ?? 0).' over SLA',
+    'href' => 'abuse-reports.php',
+  ];
+}
 
 function dashboard_counter_class(int $count): string {
   if($count <= 0) return 'is-zero';
@@ -1373,6 +1392,43 @@ include 'includes/header.php';
         </div>
         <?php endif; ?>
       </div><!-- /cases panel -->
+
+      <?php if($abuse_summary):
+        $abuse_open = (int)($abuse_summary['open'] ?? 0);
+        $abuse_critical = (int)($abuse_summary['critical'] ?? 0);
+        $abuse_over_sla = (int)($abuse_summary['over_sla'] ?? 0);
+        $abuse_resolved_today = (int)($abuse_summary['resolved_today'] ?? 0);
+        $abuse_oldest = is_array($abuse_summary['oldest_open'] ?? null) ? $abuse_summary['oldest_open'] : null;
+        $abuse_href = $abuse_oldest ? 'abuse-reports.php?id='.(int)$abuse_oldest['id'] : 'abuse-reports.php';
+      ?>
+      <a class="panel dashboard-abuse-panel <?=$abuse_over_sla > 0 || $abuse_critical > 0 ? 'is-alert' : ''?>" href="<?=esc($abuse_href)?>">
+        <div class="panel-head">
+          <span class="panel-title">Abuse Reports</span>
+          <div class="panel-right">
+            <span class="panel-meta"><?=$abuse_open?> open</span>
+            <span class="panel-counter <?=dashboard_counter_class($abuse_over_sla ?: $abuse_critical)?>"><?=min($abuse_over_sla ?: $abuse_critical,99)?></span>
+          </div>
+        </div>
+        <div class="dashboard-abuse-grid" aria-label="Abuse report summary">
+          <span><b><?=$abuse_open?></b><em>Open</em></span>
+          <span><b><?=$abuse_critical?></b><em>Critical</em></span>
+          <span><b><?=$abuse_over_sla?></b><em>Over SLA</em></span>
+          <span><b><?=$abuse_resolved_today?></b><em>Resolved Today</em></span>
+        </div>
+        <div class="dashboard-abuse-focus">
+          <i data-lucide="<?=$abuse_over_sla > 0 ? 'timer-off' : 'shield-alert'?>" class="icon-sm"></i>
+          <span>
+            <?php if($abuse_oldest): ?>
+            <strong><?=esc($abuse_oldest['report_number'] ?? ('#'.(int)$abuse_oldest['id']))?></strong>
+            <?=esc(dashboard_context_excerpt($abuse_oldest['title'] ?? 'Untitled abuse report', 70))?>
+            <?php else: ?>
+            <strong>Queue clear</strong>
+            No open abuse report needs attention.
+            <?php endif; ?>
+          </span>
+        </div>
+      </a>
+      <?php endif; ?>
 
     </div><!-- /col-left -->
 

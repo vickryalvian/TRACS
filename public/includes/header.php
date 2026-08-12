@@ -16,6 +16,7 @@ $_cnt = (int)($critical_count??0);
 $_can_um = false;
 $_can_monitoring = false;
 $_can_dpc = false;
+$_can_abuse_reports = false;
 $_can_shifts = false;
 $_can_finance = true;
 $_can_domains = true;
@@ -32,6 +33,7 @@ if (isset($conn) && $conn instanceof mysqli && !empty($_SESSION['user_id'])) {
   $_can_um = tracs_user_can($conn, 'users.view') || tracs_user_can($conn, 'divisions.view') || tracs_user_can($conn, 'roles.view');
   $_can_monitoring = tracs_user_can($conn, 'tasks.view_own') || tracs_user_can($conn, 'tasks.monitor');
   $_can_dpc = tracs_user_can($conn, 'domain_price.view');
+  $_can_abuse_reports = tracs_user_can($conn, 'abuse_reports.view');
   $_can_shifts = tracs_user_can($conn, 'shifts.view');
   $_can_finance = tracs_user_can($conn, 'finance.view');
   $_can_domains = tracs_user_can($conn, 'domains.view');
@@ -86,6 +88,13 @@ $_task_monitoring_items = [
     'icon' => 'kanban-square',
     'active_pages' => ['monitoring', 'tasks'],
     'visible' => $_can_monitoring,
+  ],
+  [
+    'label' => 'Abuse Reports',
+    'href' => 'abuse-reports.php',
+    'icon' => 'shield-alert',
+    'active_page' => 'abuse-reports',
+    'visible' => $_can_abuse_reports,
   ],
   [
     'label' => 'Finance',
@@ -164,6 +173,9 @@ $_show_admin_group = $_can_um || in_array((string)($_header_user['role_slug'] ??
 <?php endif; ?>
 <?php if(($active_page??'') === 'domain_price_crosscheck'): $_dpc_css_v = @filemtime(__DIR__.'/../assets/domain-price-crosscheck.css') ?: time(); ?>
 <link rel="stylesheet" href="assets/domain-price-crosscheck.css?v=<?=$_dpc_css_v?>">
+<?php endif; ?>
+<?php if(($active_page??'') === 'abuse-reports'): $_abuse_css_v = @filemtime(__DIR__.'/../assets/abuse-reports.css') ?: time(); ?>
+<link rel="stylesheet" href="assets/abuse-reports.css?v=<?=$_abuse_css_v?>">
 <?php endif; ?>
 <?php if(($active_page??'') === 'shifting-assignment'): $_shift_assignment_css_v = @filemtime(__DIR__.'/../assets/shifting-assignment.css') ?: time(); ?>
 <link rel="stylesheet" href="assets/shifting-assignment.css?v=<?=$_shift_assignment_css_v?>">

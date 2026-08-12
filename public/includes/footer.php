@@ -587,6 +587,10 @@ window.TRACS_CASE_CAPS = <?=json_encode(['canView' => $_tracs_case_can_view, 'ca
 <?php $_shift_assignment_js_v = @filemtime(__DIR__.'/../assets/shifting-assignment.js') ?: time(); ?>
 <script src="assets/shifting-assignment.js?v=<?=$_shift_assignment_js_v?>"></script>
 <?php endif; ?>
+<?php if(($active_page??'') === 'abuse-reports'): ?>
+<?php $_abuse_js_v = @filemtime(__DIR__.'/../assets/abuse-reports.js') ?: time(); ?>
+<script src="assets/abuse-reports.js?v=<?=$_abuse_js_v?>"></script>
+<?php endif; ?>
 <?php if(in_array(($active_page??''), ['mom','dashboard'], true)): ?>
 <?php $_mom_js_v = @filemtime(__DIR__.'/../assets/mom-functions.js') ?: time(); ?>
 <script src="assets/mom-functions.js?v=<?=$_mom_js_v?>"></script>

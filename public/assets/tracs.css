@@ -1450,6 +1450,84 @@ input, select, textarea { font-family: inherit }
   --dashboard-primary-panel-height: clamp(430px, 48vh, 540px);
 }
 
+.dashboard-abuse-panel {
+  display: grid;
+  gap: 12px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.dashboard-abuse-panel:hover {
+  border-color: color-mix(in srgb, var(--red) 24%, var(--bd1));
+  box-shadow: var(--shadow);
+}
+
+.dashboard-abuse-panel.is-alert {
+  border-color: color-mix(in srgb, var(--red) 28%, var(--bd1));
+}
+
+.dashboard-abuse-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.dashboard-abuse-grid span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--bd1);
+  border-radius: var(--r2);
+  background: var(--s2);
+}
+
+.dashboard-abuse-grid b {
+  color: var(--tx1);
+  font-family: var(--mono);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.dashboard-abuse-grid em {
+  overflow: hidden;
+  color: var(--tx3);
+  font-size: 10px;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-abuse-focus {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--bd1);
+  border-radius: var(--r2);
+  background: color-mix(in srgb, var(--s2) 72%, transparent);
+  color: var(--tx2);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.dashboard-abuse-focus svg {
+  flex: 0 0 auto;
+  color: var(--red);
+}
+
+.dashboard-abuse-focus span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-abuse-focus strong {
+  color: var(--tx1);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
 .dash-grid {
   /* Row 1's height must be explicit, not auto/content-sized: .col-left now
      stacks Infrastructure Pulse + Cases, and an auto row takes the max
@@ -13181,6 +13259,7 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
 .notif-drop-status.status-now { background: var(--red); box-shadow: 0 0 6px var(--red); }
 .notif-drop-status.status-soon { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
 .notif-drop-status.status-cases { background: var(--blue); box-shadow: 0 0 6px var(--blue); }
+.notif-drop-status.status-abuse { background: var(--red); box-shadow: 0 0 6px var(--red); }
 .notif-drop-status.status-checklist { background: var(--green); box-shadow: 0 0 6px var(--green); }
 .notif-drop-status.status-meeting { background: var(--purple); box-shadow: 0 0 6px var(--purple); }
 .notif-drop-status.status-mom { background: var(--purple); box-shadow: 0 0 6px var(--purple); }
