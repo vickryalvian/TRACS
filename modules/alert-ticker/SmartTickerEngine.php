@@ -24,6 +24,7 @@ class SmartTickerEngine {
         $items = array_merge($items, $this->reminderItems());
         $items = array_merge($items, $this->checklistItems());
         $items = array_merge($items, $this->caseItems());
+        $items = array_merge($items, $this->abuseReportItems());
         $items = array_merge($items, $this->domainItems());
         $items = array_merge($items, $this->financeItems());
         $items = array_merge($items, $this->meetingItems());
@@ -230,6 +231,52 @@ class SmartTickerEngine {
                 $items[] = $this->item('case', 'medium', 'new', 'New case', 'New case added: '.$r['title'], $created, null, 'case-'.$r['id']);
             } else {
                 $items[] = $this->item('case', 'medium', 'updated', 'Case updated', 'Case updated: '.$r['title'].' moved to '.ucfirst($r['status']), $created, null, 'case-'.$r['id']);
+            }
+        }
+        return $items;
+    }
+
+    private function abuseReportItems(): array {
+        if (!$this->tableExists('tracs_abuse_reports')) return [];
+        if (function_exists('tracs_user_can') && !tracs_user_can($this->conn, 'abuse_reports.view', $this->uid)) return [];
+
+        $stmt = $this->conn->prepare("
+            SELECT id, report_number, title, status, priority, sla_due_at, created_at, updated_at
+            FROM tracs_abuse_reports
+            WHERE status NOT IN ('resolved','closed')
+              AND (
+                priority IN ('critical','high')
+                OR (sla_due_at IS NOT NULL AND sla_due_at < NOW())
+                OR updated_at >= DATE_SUB(NOW(), INTERVAL " . self::RECENT_HOURS . " HOUR)
+                OR created_at >= DATE_SUB(NOW(), INTERVAL " . self::RECENT_HOURS . " HOUR)
+              )
+            ORDER BY
+              CASE
+                WHEN sla_due_at IS NOT NULL AND sla_due_at < NOW() THEN 1
+                WHEN priority='critical' THEN 2
+                WHEN priority='high' THEN 3
+                ELSE 4
+              END,
+              updated_at DESC
+            LIMIT 8
+        ");
+        if (!$stmt) return [];
+        $stmt->execute();
+        $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+
+        $items = [];
+        foreach ($rows as $r) {
+            $created = $r['updated_at'] ?: $r['created_at'];
+            $ref = trim((string)($r['report_number'] ?? '')) ?: ('AR #'.$r['id']);
+            if (!empty($r['sla_due_at']) && strtotime((string)$r['sla_due_at']) < time()) {
+                $items[] = $this->item('abuse_report', 'critical', 'overdue', 'Abuse report over SLA', 'Over SLA abuse report: '.$ref.' '.$r['title'], $created, null, 'abuse-'.$r['id']);
+            } elseif ($r['priority'] === 'critical') {
+                $items[] = $this->item('abuse_report', 'critical', 'pending', 'Critical abuse report', 'Critical abuse report: '.$ref.' '.$r['title'], $created, null, 'abuse-'.$r['id']);
+            } elseif ($r['priority'] === 'high') {
+                $items[] = $this->item('abuse_report', 'high', 'pending', 'High abuse report', 'High abuse report: '.$ref.' '.$r['title'], $created, null, 'abuse-'.$r['id']);
+            } else {
+                $items[] = $this->item('abuse_report', 'medium', 'updated', 'Abuse report updated', 'Abuse report updated: '.$ref.' '.$r['title'], $created, null, 'abuse-'.$r['id']);
             }
         }
         return $items;

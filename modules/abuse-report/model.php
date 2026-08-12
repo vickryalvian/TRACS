@@ -1,0 +1,892 @@
+<?php
+/**
+ * Abuse Report module data model.
+ */
+
+require_once __DIR__ . '/../../core/user_management.php';
+
+class AbuseReportModel {
+    public const STATUSES = ['incoming', 'investigating', 'waiting_external', 'action_taken', 'resolved', 'closed'];
+    public const PRIORITIES = ['low', 'medium', 'high', 'critical'];
+
+    private mysqli $conn;
+
+    public function __construct(mysqli $connection) {
+        $this->conn = $connection;
+        $this->ensureSchema();
+    }
+
+    public function ensureSchema(): bool {
+        $ddl = [
+            "CREATE TABLE IF NOT EXISTS `tracs_abuse_reports` (
+              `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+              `report_number` VARCHAR(32) DEFAULT NULL,
+              `title` VARCHAR(220) NOT NULL,
+              `report_type` VARCHAR(60) NOT NULL DEFAULT 'phishing',
+              `status` ENUM('incoming','investigating','waiting_external','action_taken','resolved','closed') NOT NULL DEFAULT 'incoming',
+              `priority` ENUM('low','medium','high','critical') NOT NULL DEFAULT 'medium',
+              `affected_domain` VARCHAR(255) DEFAULT NULL,
+              `affected_ip` VARCHAR(64) DEFAULT NULL,
+              `reporter` VARCHAR(160) DEFAULT NULL,
+              `reporter_contact` VARCHAR(190) DEFAULT NULL,
+              `customer_name` VARCHAR(190) DEFAULT NULL,
+              `customer_reference` VARCHAR(190) DEFAULT NULL,
+              `assigned_user_id` INT UNSIGNED DEFAULT NULL,
+              `assigned_staff_name` VARCHAR(150) DEFAULT NULL,
+              `description` TEXT DEFAULT NULL,
+              `tags` VARCHAR(500) DEFAULT NULL,
+              `sla_due_at` DATETIME DEFAULT NULL,
+              `related_domain_id` INT UNSIGNED DEFAULT NULL,
+              `related_server_id` INT UNSIGNED DEFAULT NULL,
+              `related_case_id` INT UNSIGNED DEFAULT NULL,
+              `related_shift_report_id` INT UNSIGNED DEFAULT NULL,
+              `board_order` INT NOT NULL DEFAULT 0,
+              `created_by` INT UNSIGNED DEFAULT NULL,
+              `created_by_name` VARCHAR(150) DEFAULT NULL,
+              `updated_by` INT UNSIGNED DEFAULT NULL,
+              `resolved_at` DATETIME DEFAULT NULL,
+              `closed_at` DATETIME DEFAULT NULL,
+              `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              PRIMARY KEY (`id`),
+              UNIQUE KEY `uq_abuse_report_number` (`report_number`),
+              INDEX `idx_abuse_reports_board` (`status`, `board_order`),
+              INDEX `idx_abuse_reports_priority` (`priority`, `status`, `sla_due_at`),
+              INDEX `idx_abuse_reports_assigned` (`assigned_user_id`, `status`),
+              INDEX `idx_abuse_reports_reporter` (`reporter`),
+              INDEX `idx_abuse_reports_domain` (`affected_domain`),
+              INDEX `idx_abuse_reports_created` (`created_at`),
+              INDEX `idx_abuse_reports_related_case` (`related_case_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+            "CREATE TABLE IF NOT EXISTS `tracs_abuse_report_events` (
+              `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+              `report_id` INT UNSIGNED NOT NULL,
+              `user_id` INT UNSIGNED DEFAULT NULL,
+              `actor_name` VARCHAR(150) DEFAULT NULL,
+              `event_type` VARCHAR(80) NOT NULL,
+              `field_name` VARCHAR(80) DEFAULT NULL,
+              `old_value` TEXT DEFAULT NULL,
+              `new_value` TEXT DEFAULT NULL,
+              `note` TEXT DEFAULT NULL,
+              `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              PRIMARY KEY (`id`),
+              INDEX `idx_abuse_events_report` (`report_id`, `created_at`),
+              INDEX `idx_abuse_events_type` (`event_type`, `created_at`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+            "CREATE TABLE IF NOT EXISTS `tracs_abuse_report_notes` (
+              `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+              `report_id` INT UNSIGNED NOT NULL,
+              `body` TEXT NOT NULL,
+              `body_format` ENUM('plain','markdown') NOT NULL DEFAULT 'markdown',
+              `created_by` INT UNSIGNED DEFAULT NULL,
+              `created_by_name` VARCHAR(150) DEFAULT NULL,
+              `edited_at` DATETIME DEFAULT NULL,
+              `edit_history_json` TEXT DEFAULT NULL,
+              `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              PRIMARY KEY (`id`),
+              INDEX `idx_abuse_notes_report` (`report_id`, `created_at`),
+              INDEX `idx_abuse_notes_created_by` (`created_by`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+            "CREATE TABLE IF NOT EXISTS `tracs_abuse_report_evidence` (
+              `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+              `report_id` INT UNSIGNED NOT NULL,
+              `evidence_type` ENUM('screenshot','email','header','log','document','image','other') NOT NULL DEFAULT 'other',
+              `original_filename` VARCHAR(255) NOT NULL,
+              `stored_filename` VARCHAR(255) NOT NULL,
+              `file_path` VARCHAR(255) NOT NULL,
+              `mime_type` VARCHAR(120) NOT NULL,
+              `file_size` INT UNSIGNED NOT NULL,
+              `uploaded_by` INT UNSIGNED DEFAULT NULL,
+              `uploaded_by_name` VARCHAR(150) DEFAULT NULL,
+              `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              PRIMARY KEY (`id`),
+              INDEX `idx_abuse_evidence_report` (`report_id`, `created_at`),
+              INDEX `idx_abuse_evidence_uploaded_by` (`uploaded_by`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+        ];
+
+        try {
+            foreach ($ddl as $sql) {
+                if ($this->conn->query($sql) !== true) {
+                    error_log('TRACS abuse report schema failed: ' . $this->conn->error);
+                    return false;
+                }
+            }
+        } catch (Throwable $e) {
+            error_log('TRACS abuse report schema exception: ' . $e->getMessage());
+            return false;
+        }
+
+        return tracs_table_exists($this->conn, 'tracs_abuse_reports')
+            && tracs_table_exists($this->conn, 'tracs_abuse_report_events')
+            && tracs_table_exists($this->conn, 'tracs_abuse_report_notes')
+            && tracs_table_exists($this->conn, 'tracs_abuse_report_evidence');
+    }
+
+    public static function clean(mixed $value, int $max = 500): string {
+        $text = trim((string)($value ?? ''));
+        $text = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $text) ?? '';
+        $text = preg_replace('/\s+/', ' ', $text) ?? '';
+        if (function_exists('mb_substr')) {
+            return mb_substr($text, 0, $max);
+        }
+        return substr($text, 0, $max);
+    }
+
+    public static function cleanLong(mixed $value, int $max = 8000): string {
+        $text = trim((string)($value ?? ''));
+        $text = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $text) ?? '';
+        if (function_exists('mb_substr')) {
+            return mb_substr($text, 0, $max);
+        }
+        return substr($text, 0, $max);
+    }
+
+    public static function statusLabel(string $status): string {
+        return match ($status) {
+            'incoming' => 'Incoming',
+            'investigating' => 'Investigating',
+            'waiting_external' => 'Waiting External',
+            'action_taken' => 'Action Taken',
+            'resolved' => 'Resolved',
+            'closed' => 'Closed',
+            default => ucwords(str_replace('_', ' ', $status)),
+        };
+    }
+
+    public static function normalizeStatus(mixed $status): string {
+        $status = strtolower(trim((string)$status));
+        return in_array($status, self::STATUSES, true) ? $status : 'incoming';
+    }
+
+    public static function normalizePriority(mixed $priority): string {
+        $priority = strtolower(trim((string)$priority));
+        return in_array($priority, self::PRIORITIES, true) ? $priority : 'medium';
+    }
+
+    public static function normalizeDateTime(mixed $value): ?string {
+        $raw = trim((string)($value ?? ''));
+        if ($raw === '' || strtotime($raw) === false) {
+            return null;
+        }
+        return date('Y-m-d H:i:s', strtotime($raw));
+    }
+
+    public static function normalizeTags(mixed $tags): string {
+        $raw = is_array($tags) ? implode(',', $tags) : (string)($tags ?? '');
+        $parts = preg_split('/[,#]+/', $raw) ?: [];
+        $clean = [];
+        foreach ($parts as $part) {
+            $tag = self::clean($part, 32);
+            if ($tag !== '') {
+                $clean[strtolower($tag)] = $tag;
+            }
+        }
+        return self::clean(implode(', ', array_values($clean)), 500);
+    }
+
+    public static function reportNumber(int $id): string {
+        return 'TRACS-AR-' . str_pad((string)$id, 6, '0', STR_PAD_LEFT);
+    }
+
+    private function defaultSla(string $priority): string {
+        $hours = match ($priority) {
+            'critical' => 4,
+            'high' => 8,
+            'low' => 72,
+            default => 24,
+        };
+        return date('Y-m-d H:i:s', strtotime('+' . $hours . ' hours'));
+    }
+
+    private function nullableInt(mixed $value): ?int {
+        $id = (int)($value ?? 0);
+        return $id > 0 ? $id : null;
+    }
+
+    private function userName(?int $userId): string {
+        if (!$userId) {
+            return '';
+        }
+        $stmt = $this->conn->prepare("SELECT COALESCE(NULLIF(name,''), email, username) AS label FROM tracs_users WHERE id = ? LIMIT 1");
+        if (!$stmt) {
+            return '';
+        }
+        $stmt->bind_param('i', $userId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        return trim((string)($row['label'] ?? ''));
+    }
+
+    public function getReports(): array {
+        $sql = "
+            SELECT r.*,
+                   COALESCE(NULLIF(au.name,''), au.email, r.assigned_staff_name, '') AS assigned_staff,
+                   COALESCE(NULLIF(cu.name,''), cu.email, r.created_by_name, 'System') AS creator_name,
+                   COALESCE(ev.evidence_count, 0) AS evidence_count,
+                   le.created_at AS last_activity_at,
+                   le.event_type AS last_activity_type
+            FROM tracs_abuse_reports r
+            LEFT JOIN tracs_users au ON au.id = r.assigned_user_id
+            LEFT JOIN tracs_users cu ON cu.id = r.created_by
+            LEFT JOIN (
+                SELECT report_id, COUNT(*) AS evidence_count
+                FROM tracs_abuse_report_evidence
+                GROUP BY report_id
+            ) ev ON ev.report_id = r.id
+            LEFT JOIN (
+                SELECT e.report_id, e.event_type, e.created_at
+                FROM tracs_abuse_report_events e
+                INNER JOIN (
+                    SELECT report_id, MAX(id) AS max_id
+                    FROM tracs_abuse_report_events
+                    GROUP BY report_id
+                ) latest ON latest.max_id = e.id
+            ) le ON le.report_id = r.id
+            ORDER BY FIELD(r.status, 'incoming','investigating','waiting_external','action_taken','resolved','closed'),
+                     r.board_order ASC,
+                     FIELD(r.priority, 'critical','high','medium','low'),
+                     r.created_at DESC
+        ";
+        $result = $this->conn->query($sql);
+        if (!$result) {
+            return [];
+        }
+        return array_map([$this, 'formatReport'], $result->fetch_all(MYSQLI_ASSOC));
+    }
+
+    public function getReportById(int $id): ?array {
+        if ($id <= 0) {
+            return null;
+        }
+        $stmt = $this->conn->prepare("
+            SELECT r.*,
+                   COALESCE(NULLIF(au.name,''), au.email, r.assigned_staff_name, '') AS assigned_staff,
+                   COALESCE(NULLIF(cu.name,''), cu.email, r.created_by_name, 'System') AS creator_name,
+                   COALESCE(ev.evidence_count, 0) AS evidence_count
+            FROM tracs_abuse_reports r
+            LEFT JOIN tracs_users au ON au.id = r.assigned_user_id
+            LEFT JOIN tracs_users cu ON cu.id = r.created_by
+            LEFT JOIN (
+                SELECT report_id, COUNT(*) AS evidence_count
+                FROM tracs_abuse_report_evidence
+                GROUP BY report_id
+            ) ev ON ev.report_id = r.id
+            WHERE r.id = ?
+            LIMIT 1
+        ");
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        return $row ? $this->formatReport($row) : null;
+    }
+
+    public function getReportDetail(int $id): ?array {
+        $report = $this->getReportById($id);
+        if (!$report) {
+            return null;
+        }
+        $report['timeline'] = $this->getEvents($id);
+        $report['notes'] = $this->getNotes($id);
+        $report['evidence'] = $this->getEvidence($id);
+        return $report;
+    }
+
+    public function createReport(array $input, int $uid, string $actorName): int {
+        $title = self::clean($input['title'] ?? '', 220);
+        if ($title === '') {
+            throw new RuntimeException('Title is required');
+        }
+
+        $priority = self::normalizePriority($input['priority'] ?? 'medium');
+        $status = self::normalizeStatus($input['status'] ?? 'incoming');
+        $assignedUserId = $this->nullableInt($input['assigned_user_id'] ?? null);
+        $assignedName = $assignedUserId ? $this->userName($assignedUserId) : self::clean($input['assigned_staff_name'] ?? '', 150);
+        $sla = self::normalizeDateTime($input['sla_due_at'] ?? null) ?? $this->defaultSla($priority);
+        $resolvedAt = $status === 'resolved' ? date('Y-m-d H:i:s') : null;
+        $closedAt = $status === 'closed' ? date('Y-m-d H:i:s') : null;
+
+        $values = [
+            'report_type' => self::clean($input['report_type'] ?? 'phishing', 60) ?: 'phishing',
+            'affected_domain' => self::clean($input['affected_domain'] ?? '', 255) ?: null,
+            'affected_ip' => self::clean($input['affected_ip'] ?? '', 64) ?: null,
+            'reporter' => self::clean($input['reporter'] ?? '', 160) ?: null,
+            'reporter_contact' => self::clean($input['reporter_contact'] ?? '', 190) ?: null,
+            'customer_name' => self::clean($input['customer_name'] ?? '', 190) ?: null,
+            'customer_reference' => self::clean($input['customer_reference'] ?? '', 190) ?: null,
+            'description' => self::cleanLong($input['description'] ?? '', 8000) ?: null,
+            'tags' => self::normalizeTags($input['tags'] ?? '') ?: null,
+            'related_domain_id' => $this->nullableInt($input['related_domain_id'] ?? null),
+            'related_server_id' => $this->nullableInt($input['related_server_id'] ?? null),
+            'related_case_id' => $this->nullableInt($input['related_case_id'] ?? null),
+            'related_shift_report_id' => $this->nullableInt($input['related_shift_report_id'] ?? null),
+        ];
+
+        $stmt = $this->conn->prepare("
+            INSERT INTO tracs_abuse_reports
+              (title, report_type, status, priority, affected_domain, affected_ip, reporter, reporter_contact,
+               customer_name, customer_reference, assigned_user_id, assigned_staff_name, description, tags,
+               sla_due_at, related_domain_id, related_server_id, related_case_id, related_shift_report_id,
+               created_by, created_by_name, updated_by, resolved_at, closed_at, created_at, updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NOW(),NOW())
+        ");
+        if (!$stmt) {
+            throw new RuntimeException('Database error');
+        }
+        $stmt->bind_param(
+            'ssssssssssissssiiiiisiss',
+            $title,
+            $values['report_type'],
+            $status,
+            $priority,
+            $values['affected_domain'],
+            $values['affected_ip'],
+            $values['reporter'],
+            $values['reporter_contact'],
+            $values['customer_name'],
+            $values['customer_reference'],
+            $assignedUserId,
+            $assignedName,
+            $values['description'],
+            $values['tags'],
+            $sla,
+            $values['related_domain_id'],
+            $values['related_server_id'],
+            $values['related_case_id'],
+            $values['related_shift_report_id'],
+            $uid,
+            $actorName,
+            $uid,
+            $resolvedAt,
+            $closedAt
+        );
+        if (!$stmt->execute()) {
+            $stmt->close();
+            throw new RuntimeException('Database error');
+        }
+        $id = (int)$stmt->insert_id;
+        $stmt->close();
+
+        $number = self::reportNumber($id);
+        $update = $this->conn->prepare("UPDATE tracs_abuse_reports SET report_number = ?, board_order = ? WHERE id = ?");
+        if ($update) {
+            $order = $id;
+            $update->bind_param('sii', $number, $order, $id);
+            $update->execute();
+            $update->close();
+        }
+        $this->recordEvent($id, $uid, $actorName, 'report_received', null, null, $number, $title);
+        if ($assignedUserId) {
+            $this->recordEvent($id, $uid, $actorName, 'assigned', 'assigned_user_id', null, (string)$assignedUserId, $assignedName);
+        }
+        return $id;
+    }
+
+    public function updateReport(int $id, array $input, int $uid, string $actorName): array {
+        $old = $this->rawReport($id, true);
+        if (!$old) {
+            throw new RuntimeException('Not found');
+        }
+
+        $title = self::clean($input['title'] ?? $old['title'], 220);
+        if ($title === '') {
+            throw new RuntimeException('Title is required');
+        }
+        $priority = self::normalizePriority($input['priority'] ?? $old['priority']);
+        $status = self::normalizeStatus($input['status'] ?? $old['status']);
+        $assignedUserId = $this->nullableInt($input['assigned_user_id'] ?? ($old['assigned_user_id'] ?? null));
+        $assignedName = $assignedUserId ? $this->userName($assignedUserId) : self::clean($input['assigned_staff_name'] ?? ($old['assigned_staff_name'] ?? ''), 150);
+        $sla = self::normalizeDateTime($input['sla_due_at'] ?? ($old['sla_due_at'] ?? null));
+        $resolvedAt = $old['resolved_at'];
+        $closedAt = $old['closed_at'];
+        if ($status === 'resolved' && empty($resolvedAt)) {
+            $resolvedAt = date('Y-m-d H:i:s');
+        } elseif (!in_array($status, ['resolved', 'closed'], true)) {
+            $resolvedAt = null;
+            $closedAt = null;
+        }
+        if ($status === 'closed' && empty($closedAt)) {
+            $closedAt = date('Y-m-d H:i:s');
+            $resolvedAt = $resolvedAt ?: $closedAt;
+        }
+
+        $next = [
+            'title' => $title,
+            'report_type' => self::clean($input['report_type'] ?? $old['report_type'], 60) ?: 'phishing',
+            'status' => $status,
+            'priority' => $priority,
+            'affected_domain' => self::clean($input['affected_domain'] ?? $old['affected_domain'], 255) ?: null,
+            'affected_ip' => self::clean($input['affected_ip'] ?? $old['affected_ip'], 64) ?: null,
+            'reporter' => self::clean($input['reporter'] ?? $old['reporter'], 160) ?: null,
+            'reporter_contact' => self::clean($input['reporter_contact'] ?? $old['reporter_contact'], 190) ?: null,
+            'customer_name' => self::clean($input['customer_name'] ?? $old['customer_name'], 190) ?: null,
+            'customer_reference' => self::clean($input['customer_reference'] ?? $old['customer_reference'], 190) ?: null,
+            'assigned_user_id' => $assignedUserId,
+            'assigned_staff_name' => $assignedName ?: null,
+            'description' => self::cleanLong($input['description'] ?? $old['description'], 8000) ?: null,
+            'tags' => self::normalizeTags($input['tags'] ?? $old['tags']) ?: null,
+            'sla_due_at' => $sla,
+            'related_domain_id' => $this->nullableInt($input['related_domain_id'] ?? ($old['related_domain_id'] ?? null)),
+            'related_server_id' => $this->nullableInt($input['related_server_id'] ?? ($old['related_server_id'] ?? null)),
+            'related_case_id' => $this->nullableInt($input['related_case_id'] ?? ($old['related_case_id'] ?? null)),
+            'related_shift_report_id' => $this->nullableInt($input['related_shift_report_id'] ?? ($old['related_shift_report_id'] ?? null)),
+            'resolved_at' => $resolvedAt,
+            'closed_at' => $closedAt,
+        ];
+
+        $stmt = $this->conn->prepare("
+            UPDATE tracs_abuse_reports
+            SET title=?, report_type=?, status=?, priority=?, affected_domain=?, affected_ip=?, reporter=?, reporter_contact=?,
+                customer_name=?, customer_reference=?, assigned_user_id=?, assigned_staff_name=?, description=?, tags=?,
+                sla_due_at=?, related_domain_id=?, related_server_id=?, related_case_id=?, related_shift_report_id=?,
+                updated_by=?, resolved_at=?, closed_at=?, updated_at=NOW()
+            WHERE id=?
+        ");
+        if (!$stmt) {
+            throw new RuntimeException('Database error');
+        }
+        $stmt->bind_param(
+            'ssssssssssissssiiiiissi',
+            $next['title'],
+            $next['report_type'],
+            $next['status'],
+            $next['priority'],
+            $next['affected_domain'],
+            $next['affected_ip'],
+            $next['reporter'],
+            $next['reporter_contact'],
+            $next['customer_name'],
+            $next['customer_reference'],
+            $next['assigned_user_id'],
+            $next['assigned_staff_name'],
+            $next['description'],
+            $next['tags'],
+            $next['sla_due_at'],
+            $next['related_domain_id'],
+            $next['related_server_id'],
+            $next['related_case_id'],
+            $next['related_shift_report_id'],
+            $uid,
+            $next['resolved_at'],
+            $next['closed_at'],
+            $id
+        );
+        if (!$stmt->execute()) {
+            $stmt->close();
+            throw new RuntimeException('Database error');
+        }
+        $stmt->close();
+
+        $changes = [];
+        foreach ($next as $field => $value) {
+            $oldValue = $old[$field] ?? null;
+            if ((string)($oldValue ?? '') !== (string)($value ?? '')) {
+                $changes[$field] = ['old' => $oldValue, 'new' => $value];
+                $event = $field === 'status' ? 'status_changed' : ($field === 'priority' ? 'priority_changed' : ($field === 'assigned_user_id' ? 'assigned' : 'updated'));
+                $this->recordEvent($id, $uid, $actorName, $event, $field, $oldValue, $value, $title);
+            }
+        }
+        if (!$changes) {
+            $this->recordEvent($id, $uid, $actorName, 'updated', null, null, null, $title);
+        }
+
+        return $changes;
+    }
+
+    public function updateStatus(int $id, string $status, int $uid, string $actorName, string $source = 'manual'): array {
+        $old = $this->rawReport($id, true);
+        if (!$old) {
+            throw new RuntimeException('Not found');
+        }
+        $status = self::normalizeStatus($status);
+        $previous = (string)$old['status'];
+        if ($previous === $status) {
+            return [];
+        }
+        $resolvedAt = $old['resolved_at'];
+        $closedAt = $old['closed_at'];
+        if ($status === 'resolved' && empty($resolvedAt)) {
+            $resolvedAt = date('Y-m-d H:i:s');
+        } elseif (!in_array($status, ['resolved', 'closed'], true)) {
+            $resolvedAt = null;
+            $closedAt = null;
+        }
+        if ($status === 'closed' && empty($closedAt)) {
+            $closedAt = date('Y-m-d H:i:s');
+            $resolvedAt = $resolvedAt ?: $closedAt;
+        }
+
+        $stmt = $this->conn->prepare("UPDATE tracs_abuse_reports SET status=?, updated_by=?, resolved_at=?, closed_at=?, updated_at=NOW() WHERE id=?");
+        if (!$stmt) {
+            throw new RuntimeException('Database error');
+        }
+        $stmt->bind_param('sissi', $status, $uid, $resolvedAt, $closedAt, $id);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            throw new RuntimeException('Database error');
+        }
+        $stmt->close();
+        $this->recordEvent($id, $uid, $actorName, 'status_changed', 'status', $previous, $status, 'via ' . $source);
+        return ['status' => ['old' => $previous, 'new' => $status]];
+    }
+
+    public function reorder(string $status, array $orderedIds, int $uid, string $actorName): array {
+        $status = self::normalizeStatus($status);
+        $ids = [];
+        $seen = [];
+        foreach ($orderedIds as $raw) {
+            $id = (int)$raw;
+            if ($id > 0 && !isset($seen[$id])) {
+                $seen[$id] = true;
+                $ids[] = $id;
+            }
+        }
+        if (count($ids) > 2000) {
+            throw new RuntimeException('Too many reports in one column');
+        }
+        if (!$ids) {
+            return ['reordered' => 0, 'moved' => 0];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $types = str_repeat('i', count($ids));
+        $stmt = $this->conn->prepare("SELECT id, status, title FROM tracs_abuse_reports WHERE id IN ($placeholders) FOR UPDATE");
+        if (!$stmt) {
+            throw new RuntimeException('Database error');
+        }
+        $stmt->bind_param($types, ...$ids);
+        $stmt->execute();
+        $existing = [];
+        $res = $stmt->get_result();
+        while ($row = $res->fetch_assoc()) {
+            $existing[(int)$row['id']] = $row;
+        }
+        $stmt->close();
+
+        $update = $this->conn->prepare("UPDATE tracs_abuse_reports SET board_order=?, status=?, updated_by=?, updated_at=NOW() WHERE id=?");
+        if (!$update) {
+            throw new RuntimeException('Database error');
+        }
+        $moved = 0;
+        $position = 0;
+        foreach ($ids as $reportId) {
+            if (!isset($existing[$reportId])) {
+                continue;
+            }
+            $previous = (string)$existing[$reportId]['status'];
+            if ($previous !== $status) {
+                $moved++;
+                $this->recordEvent($reportId, $uid, $actorName, 'status_changed', 'status', $previous, $status, 'drag_drop');
+            }
+            $update->bind_param('isii', $position, $status, $uid, $reportId);
+            if (!$update->execute()) {
+                $update->close();
+                throw new RuntimeException('Database error');
+            }
+            $position++;
+        }
+        $update->close();
+
+        return ['reordered' => count($ids), 'moved' => $moved];
+    }
+
+    public function addNote(int $reportId, string $body, int $uid, string $actorName): int {
+        $body = self::cleanLong($body, 8000);
+        if ($body === '') {
+            throw new RuntimeException('Note is required');
+        }
+        if (!$this->rawReport($reportId, false)) {
+            throw new RuntimeException('Not found');
+        }
+        $stmt = $this->conn->prepare("
+            INSERT INTO tracs_abuse_report_notes (report_id, body, created_by, created_by_name, created_at)
+            VALUES (?, ?, ?, ?, NOW())
+        ");
+        if (!$stmt) {
+            throw new RuntimeException('Database error');
+        }
+        $stmt->bind_param('isis', $reportId, $body, $uid, $actorName);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            throw new RuntimeException('Database error');
+        }
+        $id = (int)$stmt->insert_id;
+        $stmt->close();
+        $this->recordEvent($reportId, $uid, $actorName, 'note_added', null, null, null, $body);
+        return $id;
+    }
+
+    public function getEvents(int $reportId, int $limit = 80): array {
+        $limit = max(1, min(200, $limit));
+        $stmt = $this->conn->prepare("
+            SELECT id, event_type, field_name, old_value, new_value, note, created_at,
+                   COALESCE(NULLIF(actor_name,''), NULLIF(u.name,''), u.email, 'System') AS actor_name
+            FROM tracs_abuse_report_events e
+            LEFT JOIN tracs_users u ON u.id = e.user_id
+            WHERE e.report_id = ?
+            ORDER BY e.created_at DESC, e.id DESC
+            LIMIT ?
+        ");
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('ii', $reportId, $limit);
+        $stmt->execute();
+        $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+        return $rows;
+    }
+
+    public function getNotes(int $reportId): array {
+        $stmt = $this->conn->prepare("
+            SELECT n.id, n.body, n.body_format, n.edited_at, n.edit_history_json, n.created_at,
+                   COALESCE(NULLIF(n.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS author_name
+            FROM tracs_abuse_report_notes n
+            LEFT JOIN tracs_users u ON u.id = n.created_by
+            WHERE n.report_id = ?
+            ORDER BY n.created_at DESC, n.id DESC
+        ");
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('i', $reportId);
+        $stmt->execute();
+        $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+        return $rows;
+    }
+
+    public function getEvidence(int $reportId): array {
+        $stmt = $this->conn->prepare("
+            SELECT id, report_id, evidence_type, original_filename, mime_type, file_size, uploaded_by, uploaded_by_name, created_at
+            FROM tracs_abuse_report_evidence
+            WHERE report_id = ?
+            ORDER BY created_at DESC, id DESC
+        ");
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('i', $reportId);
+        $stmt->execute();
+        $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+        foreach ($rows as &$row) {
+            $row['download_url'] = '/api/abuse-report-evidence.php?id=' . (int)$row['id'] . '&download=1';
+            $row['preview_url'] = str_starts_with((string)$row['mime_type'], 'image/')
+                ? '/api/abuse-report-evidence.php?id=' . (int)$row['id']
+                : '';
+        }
+        return $rows;
+    }
+
+    public function recordEvidence(int $reportId, array $file, string $type, int $uid, string $actorName): int {
+        $stmt = $this->conn->prepare("
+            INSERT INTO tracs_abuse_report_evidence
+              (report_id, evidence_type, original_filename, stored_filename, file_path, mime_type, file_size, uploaded_by, uploaded_by_name, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+        ");
+        if (!$stmt) {
+            throw new RuntimeException('Database error');
+        }
+        $stmt->bind_param(
+            'isssssiis',
+            $reportId,
+            $type,
+            $file['original_filename'],
+            $file['stored_filename'],
+            $file['file_path'],
+            $file['mime_type'],
+            $file['file_size'],
+            $uid,
+            $actorName
+        );
+        if (!$stmt->execute()) {
+            $stmt->close();
+            throw new RuntimeException('Database error');
+        }
+        $id = (int)$stmt->insert_id;
+        $stmt->close();
+        $this->recordEvent($reportId, $uid, $actorName, 'evidence_uploaded', null, null, $file['original_filename'], $type);
+        return $id;
+    }
+
+    public function fetchEvidence(int $evidenceId): ?array {
+        if ($evidenceId <= 0) {
+            return null;
+        }
+        $stmt = $this->conn->prepare("SELECT * FROM tracs_abuse_report_evidence WHERE id = ? LIMIT 1");
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('i', $evidenceId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        return $row ?: null;
+    }
+
+    public function recordEvent(int $reportId, int $uid, string $actorName, string $eventType, mixed $field, mixed $oldValue, mixed $newValue, mixed $note = null): void {
+        $eventType = self::clean($eventType, 80) ?: 'updated';
+        $field = self::clean($field, 80) ?: null;
+        $old = $oldValue === null ? null : self::cleanLong($oldValue, 4000);
+        $new = $newValue === null ? null : self::cleanLong($newValue, 4000);
+        $note = $note === null ? null : self::cleanLong($note, 4000);
+        $actor = self::clean($actorName, 150) ?: 'System';
+        $stmt = $this->conn->prepare("
+            INSERT INTO tracs_abuse_report_events
+              (report_id, user_id, actor_name, event_type, field_name, old_value, new_value, note, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+        ");
+        if (!$stmt) {
+            return;
+        }
+        $stmt->bind_param('iissssss', $reportId, $uid, $actor, $eventType, $field, $old, $new, $note);
+        $stmt->execute();
+        $stmt->close();
+    }
+
+    public function dashboardSummary(): array {
+        $summary = [
+            'open' => 0,
+            'critical' => 0,
+            'over_sla' => 0,
+            'resolved_today' => 0,
+            'oldest_open' => null,
+        ];
+        $result = $this->conn->query("
+            SELECT
+              SUM(status NOT IN ('resolved','closed')) AS open_count,
+              SUM(status NOT IN ('resolved','closed') AND priority='critical') AS critical_count,
+              SUM(status NOT IN ('resolved','closed') AND sla_due_at IS NOT NULL AND sla_due_at < NOW()) AS over_sla_count,
+              SUM(status='resolved' AND DATE(resolved_at)=CURDATE()) AS resolved_today_count
+            FROM tracs_abuse_reports
+        ");
+        if ($result && ($row = $result->fetch_assoc())) {
+            $summary['open'] = (int)($row['open_count'] ?? 0);
+            $summary['critical'] = (int)($row['critical_count'] ?? 0);
+            $summary['over_sla'] = (int)($row['over_sla_count'] ?? 0);
+            $summary['resolved_today'] = (int)($row['resolved_today_count'] ?? 0);
+        }
+        $oldest = $this->conn->query("
+            SELECT id, report_number, title, created_at
+            FROM tracs_abuse_reports
+            WHERE status NOT IN ('resolved','closed')
+            ORDER BY created_at ASC
+            LIMIT 1
+        ");
+        if ($oldest && ($row = $oldest->fetch_assoc())) {
+            $summary['oldest_open'] = $row;
+        }
+        return $summary;
+    }
+
+    public function selectableUsers(): array {
+        $where = "1=1";
+        if (tracs_column_exists($this->conn, 'tracs_users', 'is_active')) {
+            $where .= " AND is_active=1";
+        }
+        if (tracs_column_exists($this->conn, 'tracs_users', 'status')) {
+            $where .= " AND COALESCE(status,'active')='active'";
+        }
+        $result = $this->conn->query("
+            SELECT id, COALESCE(NULLIF(name,''), email, username) AS label
+            FROM tracs_users
+            WHERE {$where}
+            ORDER BY label ASC
+            LIMIT 300
+        ");
+        return $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+    }
+
+    public function relationshipOptions(): array {
+        return [
+            'domains' => $this->simpleOptions('tracs_domains', 'id', 'domain', 'domain'),
+            'cases' => $this->simpleOptions('tracs_cases', 'id', 'title', 'id', 150, 'Case #'),
+            'servers' => $this->simpleOptions('infrastructure_servers', 'id', 'name', 'name'),
+        ];
+    }
+
+    private function simpleOptions(string $table, string $idColumn, string $labelColumn, string $orderColumn, int $limit = 150, string $prefix = ''): array {
+        if (!tracs_table_exists($this->conn, $table) || !tracs_column_exists($this->conn, $table, $idColumn) || !tracs_column_exists($this->conn, $table, $labelColumn)) {
+            return [];
+        }
+        $tableSql = tracs_identifier($table);
+        $idSql = tracs_identifier($idColumn);
+        $labelSql = tracs_identifier($labelColumn);
+        $orderSql = tracs_identifier($orderColumn);
+        $limit = max(1, min(300, $limit));
+        $result = $this->conn->query("SELECT {$idSql} AS id, {$labelSql} AS label FROM {$tableSql} ORDER BY {$orderSql} ASC LIMIT {$limit}");
+        if (!$result) {
+            return [];
+        }
+        $rows = $result->fetch_all(MYSQLI_ASSOC);
+        if ($prefix !== '') {
+            foreach ($rows as &$row) {
+                $row['label'] = $prefix . (int)$row['id'] . ' - ' . (string)$row['label'];
+            }
+        }
+        return $rows;
+    }
+
+    private function rawReport(int $id, bool $lock): ?array {
+        $sql = "SELECT * FROM tracs_abuse_reports WHERE id = ? LIMIT 1" . ($lock ? " FOR UPDATE" : "");
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        return $row ?: null;
+    }
+
+    private function formatReport(array $row): array {
+        $id = (int)($row['id'] ?? 0);
+        $status = self::normalizeStatus($row['status'] ?? 'incoming');
+        $priority = self::normalizePriority($row['priority'] ?? 'medium');
+        $sla = (string)($row['sla_due_at'] ?? '');
+        $done = in_array($status, ['resolved', 'closed'], true);
+        $overSla = !$done && $sla !== '' && strtotime($sla) !== false && strtotime($sla) < time();
+        $row['id'] = $id;
+        $row['report_number'] = (string)($row['report_number'] ?: self::reportNumber($id));
+        $row['status'] = $status;
+        $row['status_label'] = self::statusLabel($status);
+        $row['priority'] = $priority;
+        $row['assigned_staff'] = trim((string)($row['assigned_staff'] ?? $row['assigned_staff_name'] ?? ''));
+        $row['evidence_count'] = (int)($row['evidence_count'] ?? 0);
+        $row['over_sla'] = $overSla;
+        $row['sla_label'] = $sla !== '' ? $this->relativeTime($sla, 'SLA') : 'No SLA';
+        $row['open_age'] = $this->relativeTime((string)($row['created_at'] ?? ''), 'Open', true);
+        $row['created_display'] = !empty($row['created_at']) ? date('d M Y H:i', strtotime((string)$row['created_at'])) : '';
+        $row['updated_display'] = !empty($row['updated_at']) ? date('d M Y H:i', strtotime((string)$row['updated_at'])) : '';
+        $row['tag_list'] = array_values(array_filter(array_map('trim', explode(',', (string)($row['tags'] ?? '')))));
+        return $row;
+    }
+
+    private function relativeTime(string $value, string $prefix = '', bool $since = false): string {
+        if ($value === '' || strtotime($value) === false) {
+            return '—';
+        }
+        $target = new DateTimeImmutable($value);
+        $now = new DateTimeImmutable('now');
+        $past = $target < $now;
+        $diff = $target->diff($now);
+        if ($diff->d > 0) {
+            $text = $diff->d . 'd ' . $diff->h . 'h';
+        } elseif ($diff->h > 0) {
+            $text = $diff->h . 'h ' . $diff->i . 'm';
+        } else {
+            $text = max(0, $diff->i) . 'm';
+        }
+        if ($since) {
+            return $text;
+        }
+        return trim($prefix . ' ' . ($past ? 'over by ' : 'in ') . $text);
+    }
+}

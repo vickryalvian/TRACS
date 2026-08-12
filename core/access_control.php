@@ -160,6 +160,7 @@ function tracs_record_owner_ids(array $record, array $ownerColumns): array {
 function tracs_can_view_owned_record(mysqli $conn, string $table, int $id, array $ownerColumns, ?string $permission = null): bool {
     static $allowedTables = [
         'tracs_moms' => true,
+        'tracs_abuse_reports' => true,
         'tracs_cases' => true,
         'tracs_reminders' => true,
         'tracs_side_tasks' => true,

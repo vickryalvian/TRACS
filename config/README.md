@@ -63,6 +63,8 @@ Current migrations:
 - `2026_06_30_user_removal_release.sql` — safe user removal (archive + identity
   release) plus `dashboard.view` repair for operational roles. Idempotent;
   supersedes the status-only migration above by also ensuring the enum.
+- `2026_08_04_abuse_reports.sql` — abuse report workflow tables, evidence,
+  timeline/audit storage, and permissions.
 
 ## File Structure
 
@@ -74,6 +76,7 @@ config/
     auth.sql
     users.sql
     cases.sql
+    abuse_reports.sql
     reminders.sql
     checklist.sql
     finance.sql
@@ -97,6 +100,7 @@ config/
 | --- | --- |
 | Users/Auth | `tracs_users`, `tracs_login_attempts`, `tracs_auth_events` |
 | Cases | `tracs_cases`, `case_attachments` |
+| Abuse Reports | `tracs_abuse_reports`, `tracs_abuse_report_events`, `tracs_abuse_report_notes`, `tracs_abuse_report_evidence` |
 | Reminders | `tracs_reminders` |
 | Checklist | `tracs_side_tasks`, `tracs_side_task_logs` |
 | Finance | `balance_transfers`, `tracs_finance_transfers` |
