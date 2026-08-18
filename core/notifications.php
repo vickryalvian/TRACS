@@ -666,12 +666,12 @@ function tracs_notifications_schedule_shift_handover(mysqli $conn): int {
 function tracs_notifications_schedule_abuse_sla(mysqli $conn): int {
     if (!tracs_table_exists($conn, 'tracs_abuse_reports')) return 0;
     $result = $conn->query("
-        SELECT id, report_number, title, sla_due_at
+        SELECT id, report_number, title, affected_domain, affected_ip, waiting_hours, waiting_until
         FROM tracs_abuse_reports
         WHERE status NOT IN ('resolved','closed')
-          AND sla_due_at IS NOT NULL
-          AND sla_due_at < NOW()
-        ORDER BY sla_due_at ASC
+          AND waiting_until IS NOT NULL
+          AND waiting_until < NOW()
+        ORDER BY waiting_until ASC
         LIMIT 100
     ");
     if (!$result) return 0;
@@ -684,16 +684,21 @@ function tracs_notifications_schedule_abuse_sla(mysqli $conn): int {
         $reportId = (int)$row['id'];
         $number = trim((string)($row['report_number'] ?? '')) ?: ('#' . $reportId);
         $title = trim((string)($row['title'] ?? 'Abuse report'));
+        $target = trim((string)($row['affected_domain'] ?? '')) ?: trim((string)($row['affected_ip'] ?? ''));
+        $hours = (int)($row['waiting_hours'] ?? 24);
+        $hours = in_array($hours, [24, 48], true) ? $hours : 24;
+        $message = $number . ($target !== '' ? ' for ' . $target : '') . ' exceeded its ' . $hours . '-hour waiting period. Review and update status.';
         foreach ($targets as $targetUserId) {
             $nid = tracs_create_notification($conn, [
-                'notification_type' => 'abuse_report_over_sla',
+                'notification_type' => 'abuse_report_action_required',
                 'target_user_id' => $targetUserId,
                 'related_module' => 'abuse_reports',
                 'related_entity_id' => $reportId,
-                'trigger_type' => 'over_sla',
-                'title' => 'Abuse report over SLA',
-                'message' => tracs_notification_clean_text($number . ' - ' . $title, 160),
-                'scheduled_at' => $row['sla_due_at'] ?? null,
+                'trigger_type' => 'action_required',
+                'dedupe_key' => tracs_notification_dedupe_key($targetUserId, 'abuse_report_action_required', 'abuse_reports', $reportId, 'action_required|' . (string)($row['waiting_until'] ?? '')),
+                'title' => 'Abuse report requires action',
+                'message' => tracs_notification_clean_text($message . ' ' . $title, 220),
+                'scheduled_at' => $row['waiting_until'] ?? null,
             ]);
             if ($nid) $created++;
         }

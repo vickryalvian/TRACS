@@ -25,6 +25,7 @@ $users = $AR->selectableUsers();
 $relationships = $AR->relationshipOptions();
 $ticker_items = $TC->formatAlertsForTicker();
 $critical_count = (int)($summary['critical'] ?? 0);
+$critical_count += (int)($summary['action_required'] ?? $summary['over_sla'] ?? 0);
 $can_manage = tracs_user_can($conn, 'abuse_reports.manage', $uid);
 $selected_id = tracs_is_positive_int($_GET['id'] ?? null) ? (int)$_GET['id'] : 0;
 
@@ -32,9 +33,16 @@ $status_labels = [
   'incoming' => 'Incoming',
   'investigating' => 'Investigating',
   'waiting_external' => 'Waiting External',
-  'action_taken' => 'Action Taken',
+  'action_taken' => 'Action Required',
   'resolved' => 'Resolved',
   'closed' => 'Closed',
+];
+$board_columns = [
+  'incoming' => ['label' => 'Incoming', 'status' => 'incoming'],
+  'investigating' => ['label' => 'Investigating', 'status' => 'investigating'],
+  'waiting_external' => ['label' => 'Waiting External', 'status' => 'waiting_external'],
+  'action_required' => ['label' => 'Action Required', 'status' => 'action_taken'],
+  'resolved' => ['label' => 'Resolved', 'status' => 'resolved'],
 ];
 $priority_labels = [
   'critical' => 'Critical',
@@ -64,9 +72,14 @@ include 'includes/header.php';
   <div class="topbar abuse-page-head">
     <div>
       <div class="page-title">Abuse Reports</div>
-      <div class="page-sub" id="abusePageSummary"><?=count($reports)?> total · <?=esc((string)$summary['open'])?> open · <?=esc((string)$summary['critical'])?> critical · <?=esc((string)$summary['over_sla'])?> over SLA</div>
+      <div class="page-sub" id="abusePageSummary"><?=count($reports)?> total · <?=esc((string)$summary['open'])?> open · <?=esc((string)$summary['critical'])?> critical · <?=esc((string)($summary['action_required'] ?? $summary['over_sla']))?> action required</div>
     </div>
-    <div class="abuse-health"><span class="<?=((int)$summary['over_sla'] > 0 || (int)$summary['critical'] > 0) ? 'is-alert' : ''?>"></span><strong id="abuseQueueHealth"><?=esc((string)$summary['over_sla'])?> over SLA · <?=esc((string)$summary['resolved_today'])?> resolved today</strong></div>
+    <div class="abuse-page-actions">
+      <div class="abuse-health"><span class="<?=((int)($summary['action_required'] ?? $summary['over_sla']) > 0 || (int)$summary['critical'] > 0) ? 'is-alert' : ''?>"></span><strong id="abuseQueueHealth"><?=esc((string)($summary['action_required'] ?? $summary['over_sla']))?> action required · <?=esc((string)$summary['resolved_today'])?> resolved today</strong></div>
+      <?php if($can_manage): ?>
+      <button class="btn btn-primary abuse-new-btn" type="button" id="abuseNewBtn"><i data-lucide="plus-circle" class="icon-sm"></i>Add Abuse Report</button>
+      <?php endif; ?>
+    </div>
   </div>
 
   <section class="abuse-toolbar panel">
@@ -76,7 +89,7 @@ include 'includes/header.php';
     </form>
     <select class="form-select compact-select" id="abuseStatusFilter" aria-label="Status filter">
       <option value="">All Status</option>
-      <?php foreach($status_labels as $key => $label): ?><option value="<?=esc($key)?>"><?=esc($label)?></option><?php endforeach; ?>
+      <?php foreach($board_columns as $key => $column): ?><option value="<?=esc($key)?>"><?=esc($column['label'])?></option><?php endforeach; ?>
     </select>
     <select class="form-select compact-select" id="abusePriorityFilter" aria-label="Priority filter">
       <option value="">All Priority</option>
@@ -99,49 +112,41 @@ include 'includes/header.php';
       'class' => 'abuse-date-range',
     ])?>
     <label class="abuse-check"><input type="checkbox" id="abuseHasAttachmentFilter"> Evidence</label>
-    <label class="abuse-check"><input type="checkbox" id="abuseOverSlaFilter"> Over SLA</label>
+    <label class="abuse-check"><input type="checkbox" id="abuseActionRequiredFilter"> Action Required</label>
     <div class="abuse-toolbar-stats">
       <span><b id="abuseOpenStat"><?=esc((string)$summary['open'])?></b> Open</span>
       <span><b id="abuseCriticalStat"><?=esc((string)$summary['critical'])?></b> Critical</span>
-      <span><b id="abuseSlaStat"><?=esc((string)$summary['over_sla'])?></b> SLA</span>
+      <span><b id="abuseActionStat"><?=esc((string)($summary['action_required'] ?? $summary['over_sla']))?></b> Action</span>
     </div>
-    <?php if($can_manage): ?>
-    <button class="btn btn-primary abuse-new-btn" type="button" id="abuseNewBtn"><i data-lucide="plus-circle" class="icon-sm"></i>New Abuse Report</button>
-    <?php endif; ?>
   </section>
 
-  <div class="abuse-workspace-grid">
-    <section class="abuse-board-wrap" aria-label="Abuse report workflow board">
-      <div class="abuse-board" id="abuseBoard">
-        <?php foreach($status_labels as $status => $label): ?>
-        <section class="abuse-column" data-abuse-column="<?=esc($status)?>">
+  <section class="abuse-board-wrap" aria-label="Abuse report workflow board">
+    <div class="abuse-board" id="abuseBoard">
+      <?php foreach($board_columns as $stage => $column): ?>
+        <section class="abuse-column <?=$stage === 'action_required' ? 'is-action-required' : ''?>" data-abuse-column="<?=esc($stage)?>" data-abuse-status="<?=esc($column['status'])?>">
           <header class="abuse-column-head">
             <div>
-              <strong><?=esc($label)?></strong>
+              <strong><?=esc($column['label'])?></strong>
               <small data-column-summary>0 reports</small>
             </div>
             <span data-column-count>0</span>
           </header>
-          <div class="abuse-column-list" data-abuse-dropzone="<?=esc($status)?>"></div>
+          <div class="abuse-column-list" data-abuse-dropzone="<?=esc($stage)?>"></div>
         </section>
-        <?php endforeach; ?>
-      </div>
-    </section>
+      <?php endforeach; ?>
+    </div>
+  </section>
 
-    <aside class="abuse-detail-panel" id="abuseDetailPanel" aria-live="polite">
-      <div class="abuse-detail-empty" id="abuseDetailEmpty">
-        <div class="empty-ic"><i data-lucide="shield-alert"></i></div>
-        <div class="empty-t">Select an abuse report</div>
-        <div class="empty-s">Details, timeline, evidence, notes, and actions stay here while you move through the board.</div>
-      </div>
-
-      <div class="abuse-detail-content" id="abuseDetailContent" hidden>
-        <header class="abuse-detail-head">
+  <div class="modal-overlay hidden abuse-detail-modal" id="abuseDetailModal" aria-hidden="true">
+    <div class="modal modal-ticket abuse-modal" id="abuseDetailPanel" aria-live="polite">
+      <div class="abuse-detail-content" id="abuseDetailContent">
+        <header class="modal-head abuse-detail-head">
           <div>
             <span class="abuse-detail-ref" id="abuseDetailRef">TRACS-AR</span>
-            <h2 id="abuseDetailTitle">Abuse report</h2>
+            <div class="modal-title" id="abuseDetailTitle">Abuse report</div>
+            <div class="modal-sub" id="abuseDetailSub">Operational workflow detail</div>
           </div>
-          <button class="btn btn-ghost btn-icon" type="button" id="abuseClosePanel" aria-label="Close detail panel"><i data-lucide="x" class="icon-sm"></i></button>
+          <button class="modal-close" type="button" id="abuseClosePanel" aria-label="Close detail"><i data-lucide="x"></i></button>
         </header>
 
         <div class="abuse-detail-tabs" role="tablist" aria-label="Abuse report detail tabs">
@@ -168,7 +173,17 @@ include 'includes/header.php';
             <div class="form-group"><label class="form-label">SLA Due</label><input type="datetime-local" class="form-input" id="abuseSlaDue" <?=$can_manage ? '' : 'disabled'?>></div>
             <div class="form-group"><label class="form-label">Customer</label><input class="form-input" id="abuseCustomer" maxlength="190" <?=$can_manage ? '' : 'disabled'?>></div>
             <div class="form-group"><label class="form-label">Customer Ref</label><input class="form-input" id="abuseCustomerRef" maxlength="190" <?=$can_manage ? '' : 'disabled'?>></div>
+            <div class="form-group"><label class="form-label">Ticket</label><select class="form-select" id="abuseTicketStatus" <?=$can_manage ? '' : 'disabled'?>> <option value="not_sent">Not Sent</option><option value="sent">Sent</option></select></div>
+            <div class="form-group"><label class="form-label">Ticket Reference</label><input class="form-input" id="abuseTicketRef" maxlength="190" <?=$can_manage ? '' : 'disabled'?>></div>
+            <div class="form-group"><label class="form-label">Ticket Link</label><input class="form-input" id="abuseTicketUrl" maxlength="255" <?=$can_manage ? '' : 'disabled'?>></div>
+            <div class="form-group"><label class="form-label">Ticket Sent</label><input type="datetime-local" class="form-input" id="abuseTicketSentAt" <?=$can_manage ? '' : 'disabled'?>></div>
+            <div class="form-group"><label class="form-label">Waiting Period</label><select class="form-select" id="abuseWaitingHours" <?=$can_manage ? '' : 'disabled'?>> <option value="24">24 hours</option><option value="48">48 hours</option></select></div>
+            <div class="form-group"><label class="form-label">Waiting Started</label><input type="datetime-local" class="form-input" id="abuseWaitingStartedAt" <?=$can_manage ? '' : 'disabled'?>></div>
+            <div class="form-group"><label class="form-label">Waiting Until</label><input type="datetime-local" class="form-input" id="abuseWaitingUntil" <?=$can_manage ? '' : 'disabled'?>></div>
+            <div class="form-group"><label class="form-label">Waiting Status</label><div class="abuse-readonly-metric" id="abuseWaitingStatus">-</div></div>
             <div class="form-group is-wide"><label class="form-label">Tags</label><input class="form-input" id="abuseTags" maxlength="500" placeholder="phishing, domain, urgent" <?=$can_manage ? '' : 'disabled'?>></div>
+            <div class="form-group is-wide"><label class="form-label">Nameserver Snapshot</label><textarea class="form-textarea" id="abuseNameservers" placeholder="ns1.example.com&#10;ns2.example.com" <?=$can_manage ? '' : 'disabled'?>></textarea></div>
+            <div class="form-group"><label class="form-label">Snapshot Taken</label><input type="datetime-local" class="form-input" id="abuseNameserverAt" <?=$can_manage ? '' : 'disabled'?>></div>
             <div class="form-group is-wide"><label class="form-label">Description</label><textarea class="form-textarea" id="abuseDescription" <?=$can_manage ? '' : 'disabled'?>></textarea></div>
           </div>
           <?php if($can_manage): ?>
@@ -228,15 +243,15 @@ include 'includes/header.php';
             <?php foreach($status_labels as $status => $label): ?>
             <button type="button" class="btn btn-ghost" data-abuse-move="<?=esc($status)?>"><?=esc($label)?></button>
             <?php endforeach; ?>
-            <button type="button" class="btn btn-ghost" data-abuse-placeholder="notify_customer"><i data-lucide="mail" class="icon-sm"></i>Notify Customer</button>
-            <button type="button" class="btn btn-ghost" data-abuse-placeholder="notify_reporter"><i data-lucide="send" class="icon-sm"></i>Notify Reporter</button>
+            <button type="button" class="btn btn-ghost" data-abuse-ticket-sent><i data-lucide="send" class="icon-sm"></i>Mark Ticket Sent</button>
+            <button type="button" class="btn btn-ghost" data-abuse-snapshot-now><i data-lucide="server" class="icon-sm"></i>Stamp Nameserver Snapshot</button>
             <button type="button" class="btn btn-ghost" data-abuse-placeholder="suspend"><i data-lucide="ban" class="icon-sm"></i>Suspend Service</button>
             <button type="button" class="btn btn-ghost" data-abuse-placeholder="unsuspend"><i data-lucide="rotate-ccw" class="icon-sm"></i>Unsuspend Service</button>
           </div>
           <div class="abuse-activity-log" id="abuseActivityLog"></div>
         </section>
       </div>
-    </aside>
+    </div>
   </div>
 
   <script type="application/json" id="abuseDataset"><?=json_encode($reports, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)?></script>

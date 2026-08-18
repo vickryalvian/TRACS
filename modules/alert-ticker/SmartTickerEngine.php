@@ -241,18 +241,19 @@ class SmartTickerEngine {
         if (function_exists('tracs_user_can') && !tracs_user_can($this->conn, 'abuse_reports.view', $this->uid)) return [];
 
         $stmt = $this->conn->prepare("
-            SELECT id, report_number, title, status, priority, sla_due_at, created_at, updated_at
+            SELECT id, report_number, title, status, priority, waiting_until, created_at, updated_at
             FROM tracs_abuse_reports
             WHERE status NOT IN ('resolved','closed')
               AND (
                 priority IN ('critical','high')
-                OR (sla_due_at IS NOT NULL AND sla_due_at < NOW())
+                OR status='action_taken'
+                OR (waiting_until IS NOT NULL AND waiting_until < NOW())
                 OR updated_at >= DATE_SUB(NOW(), INTERVAL " . self::RECENT_HOURS . " HOUR)
                 OR created_at >= DATE_SUB(NOW(), INTERVAL " . self::RECENT_HOURS . " HOUR)
               )
             ORDER BY
               CASE
-                WHEN sla_due_at IS NOT NULL AND sla_due_at < NOW() THEN 1
+                WHEN status='action_taken' OR (waiting_until IS NOT NULL AND waiting_until < NOW()) THEN 1
                 WHEN priority='critical' THEN 2
                 WHEN priority='high' THEN 3
                 ELSE 4
@@ -269,8 +270,8 @@ class SmartTickerEngine {
         foreach ($rows as $r) {
             $created = $r['updated_at'] ?: $r['created_at'];
             $ref = trim((string)($r['report_number'] ?? '')) ?: ('AR #'.$r['id']);
-            if (!empty($r['sla_due_at']) && strtotime((string)$r['sla_due_at']) < time()) {
-                $items[] = $this->item('abuse_report', 'critical', 'overdue', 'Abuse report over SLA', 'Over SLA abuse report: '.$ref.' '.$r['title'], $created, null, 'abuse-'.$r['id']);
+            if (($r['status'] ?? '') === 'action_taken' || (!empty($r['waiting_until']) && strtotime((string)$r['waiting_until']) < time())) {
+                $items[] = $this->item('abuse_report', 'critical', 'overdue', 'Abuse action required', 'Abuse report requires action: '.$ref.' '.$r['title'], $created, null, 'abuse-'.$r['id']);
             } elseif ($r['priority'] === 'critical') {
                 $items[] = $this->item('abuse_report', 'critical', 'pending', 'Critical abuse report', 'Critical abuse report: '.$ref.' '.$r['title'], $created, null, 'abuse-'.$r['id']);
             } elseif ($r['priority'] === 'high') {

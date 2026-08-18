@@ -31,11 +31,20 @@ class AbuseReportModel {
               `reporter_contact` VARCHAR(190) DEFAULT NULL,
               `customer_name` VARCHAR(190) DEFAULT NULL,
               `customer_reference` VARCHAR(190) DEFAULT NULL,
+              `ticket_status` ENUM('not_sent','sent') NOT NULL DEFAULT 'not_sent',
+              `ticket_reference` VARCHAR(190) DEFAULT NULL,
+              `ticket_url` VARCHAR(255) DEFAULT NULL,
+              `ticket_sent_at` DATETIME DEFAULT NULL,
               `assigned_user_id` INT UNSIGNED DEFAULT NULL,
               `assigned_staff_name` VARCHAR(150) DEFAULT NULL,
               `description` TEXT DEFAULT NULL,
               `tags` VARCHAR(500) DEFAULT NULL,
+              `nameserver_snapshot` TEXT DEFAULT NULL,
+              `nameserver_snapshot_at` DATETIME DEFAULT NULL,
               `sla_due_at` DATETIME DEFAULT NULL,
+              `waiting_started_at` DATETIME DEFAULT NULL,
+              `waiting_hours` SMALLINT UNSIGNED NOT NULL DEFAULT 24,
+              `waiting_until` DATETIME DEFAULT NULL,
               `related_domain_id` INT UNSIGNED DEFAULT NULL,
               `related_server_id` INT UNSIGNED DEFAULT NULL,
               `related_case_id` INT UNSIGNED DEFAULT NULL,
@@ -52,6 +61,7 @@ class AbuseReportModel {
               UNIQUE KEY `uq_abuse_report_number` (`report_number`),
               INDEX `idx_abuse_reports_board` (`status`, `board_order`),
               INDEX `idx_abuse_reports_priority` (`priority`, `status`, `sla_due_at`),
+              INDEX `idx_abuse_reports_waiting` (`status`, `waiting_until`),
               INDEX `idx_abuse_reports_assigned` (`assigned_user_id`, `status`),
               INDEX `idx_abuse_reports_reporter` (`reporter`),
               INDEX `idx_abuse_reports_domain` (`affected_domain`),
@@ -112,6 +122,7 @@ class AbuseReportModel {
                     return false;
                 }
             }
+            $this->ensureWorkflowColumns();
         } catch (Throwable $e) {
             error_log('TRACS abuse report schema exception: ' . $e->getMessage());
             return false;
@@ -147,7 +158,7 @@ class AbuseReportModel {
             'incoming' => 'Incoming',
             'investigating' => 'Investigating',
             'waiting_external' => 'Waiting External',
-            'action_taken' => 'Action Taken',
+            'action_taken', 'action_required' => 'Action Required',
             'resolved' => 'Resolved',
             'closed' => 'Closed',
             default => ucwords(str_replace('_', ' ', $status)),
@@ -156,12 +167,19 @@ class AbuseReportModel {
 
     public static function normalizeStatus(mixed $status): string {
         $status = strtolower(trim((string)$status));
+        if ($status === 'action_required') {
+            return 'action_taken';
+        }
         return in_array($status, self::STATUSES, true) ? $status : 'incoming';
     }
 
     public static function normalizePriority(mixed $priority): string {
         $priority = strtolower(trim((string)$priority));
         return in_array($priority, self::PRIORITIES, true) ? $priority : 'medium';
+    }
+
+    public static function normalizeTicketStatus(mixed $status): string {
+        return strtolower(trim((string)$status)) === 'sent' ? 'sent' : 'not_sent';
     }
 
     public static function normalizeDateTime(mixed $value): ?string {
@@ -197,6 +215,60 @@ class AbuseReportModel {
             default => 24,
         };
         return date('Y-m-d H:i:s', strtotime('+' . $hours . ' hours'));
+    }
+
+    private function ensureWorkflowColumns(): void {
+        $columns = [
+            'ticket_status' => "ALTER TABLE `tracs_abuse_reports` ADD COLUMN `ticket_status` ENUM('not_sent','sent') NOT NULL DEFAULT 'not_sent' AFTER `customer_reference`",
+            'ticket_reference' => "ALTER TABLE `tracs_abuse_reports` ADD COLUMN `ticket_reference` VARCHAR(190) DEFAULT NULL AFTER `ticket_status`",
+            'ticket_url' => "ALTER TABLE `tracs_abuse_reports` ADD COLUMN `ticket_url` VARCHAR(255) DEFAULT NULL AFTER `ticket_reference`",
+            'ticket_sent_at' => "ALTER TABLE `tracs_abuse_reports` ADD COLUMN `ticket_sent_at` DATETIME DEFAULT NULL AFTER `ticket_url`",
+            'nameserver_snapshot' => "ALTER TABLE `tracs_abuse_reports` ADD COLUMN `nameserver_snapshot` TEXT DEFAULT NULL AFTER `tags`",
+            'nameserver_snapshot_at' => "ALTER TABLE `tracs_abuse_reports` ADD COLUMN `nameserver_snapshot_at` DATETIME DEFAULT NULL AFTER `nameserver_snapshot`",
+            'waiting_started_at' => "ALTER TABLE `tracs_abuse_reports` ADD COLUMN `waiting_started_at` DATETIME DEFAULT NULL AFTER `sla_due_at`",
+            'waiting_hours' => "ALTER TABLE `tracs_abuse_reports` ADD COLUMN `waiting_hours` SMALLINT UNSIGNED NOT NULL DEFAULT 24 AFTER `waiting_started_at`",
+            'waiting_until' => "ALTER TABLE `tracs_abuse_reports` ADD COLUMN `waiting_until` DATETIME DEFAULT NULL AFTER `waiting_hours`",
+        ];
+        foreach ($columns as $column => $sql) {
+            if (!tracs_column_exists($this->conn, 'tracs_abuse_reports', $column)) {
+                $this->conn->query($sql);
+            }
+        }
+        $this->conn->query("
+            UPDATE tracs_abuse_reports
+            SET waiting_started_at = COALESCE(waiting_started_at, created_at),
+                waiting_hours = CASE WHEN waiting_hours IN (24,48) THEN waiting_hours ELSE 24 END,
+                waiting_until = COALESCE(waiting_until, DATE_ADD(COALESCE(waiting_started_at, created_at), INTERVAL CASE WHEN waiting_hours IN (24,48) THEN waiting_hours ELSE 24 END HOUR))
+            WHERE waiting_until IS NULL
+        ");
+    }
+
+    private function waitingHours(mixed $value): int {
+        $hours = (int)($value ?? 24);
+        return in_array($hours, [24, 48], true) ? $hours : 24;
+    }
+
+    private function waitingDeadline(?string $startedAt, int $hours): ?string {
+        if (!$startedAt || strtotime($startedAt) === false) {
+            return null;
+        }
+        return date('Y-m-d H:i:s', strtotime($startedAt . ' +' . $hours . ' hours'));
+    }
+
+    private function cleanNameservers(mixed $value): ?string {
+        $raw = trim((string)($value ?? ''));
+        if ($raw === '') {
+            return null;
+        }
+        $lines = preg_split('/[\r\n,]+/', $raw) ?: [];
+        $clean = [];
+        foreach ($lines as $line) {
+            $ns = strtolower(self::clean($line, 253));
+            if ($ns !== '') {
+                $clean[$ns] = $ns;
+            }
+        }
+        return $clean ? self::cleanLong(implode("\n", array_values($clean)), 1200) : null;
     }
 
     private function nullableInt(mixed $value): ?int {
@@ -308,6 +380,15 @@ class AbuseReportModel {
         $assignedUserId = $this->nullableInt($input['assigned_user_id'] ?? null);
         $assignedName = $assignedUserId ? $this->userName($assignedUserId) : self::clean($input['assigned_staff_name'] ?? '', 150);
         $sla = self::normalizeDateTime($input['sla_due_at'] ?? null) ?? $this->defaultSla($priority);
+        $ticketStatus = self::normalizeTicketStatus($input['ticket_status'] ?? 'not_sent');
+        $ticketSentAt = $ticketStatus === 'sent'
+            ? (self::normalizeDateTime($input['ticket_sent_at'] ?? null) ?? date('Y-m-d H:i:s'))
+            : null;
+        $nameservers = $this->cleanNameservers($input['nameserver_snapshot'] ?? null);
+        $nameserverAt = $nameservers ? (self::normalizeDateTime($input['nameserver_snapshot_at'] ?? null) ?? date('Y-m-d H:i:s')) : null;
+        $waitingStarted = self::normalizeDateTime($input['waiting_started_at'] ?? null) ?? date('Y-m-d H:i:s');
+        $waitingHours = $this->waitingHours($input['waiting_hours'] ?? 24);
+        $waitingUntil = self::normalizeDateTime($input['waiting_until'] ?? null) ?? $this->waitingDeadline($waitingStarted, $waitingHours);
         $resolvedAt = $status === 'resolved' ? date('Y-m-d H:i:s') : null;
         $closedAt = $status === 'closed' ? date('Y-m-d H:i:s') : null;
 
@@ -319,52 +400,70 @@ class AbuseReportModel {
             'reporter_contact' => self::clean($input['reporter_contact'] ?? '', 190) ?: null,
             'customer_name' => self::clean($input['customer_name'] ?? '', 190) ?: null,
             'customer_reference' => self::clean($input['customer_reference'] ?? '', 190) ?: null,
+            'ticket_status' => $ticketStatus,
+            'ticket_reference' => self::clean($input['ticket_reference'] ?? '', 190) ?: null,
+            'ticket_url' => self::clean($input['ticket_url'] ?? '', 255) ?: null,
+            'ticket_sent_at' => $ticketSentAt,
             'description' => self::cleanLong($input['description'] ?? '', 8000) ?: null,
             'tags' => self::normalizeTags($input['tags'] ?? '') ?: null,
+            'nameserver_snapshot' => $nameservers,
+            'nameserver_snapshot_at' => $nameserverAt,
+            'waiting_started_at' => $waitingStarted,
+            'waiting_hours' => $waitingHours,
+            'waiting_until' => $waitingUntil,
             'related_domain_id' => $this->nullableInt($input['related_domain_id'] ?? null),
             'related_server_id' => $this->nullableInt($input['related_server_id'] ?? null),
             'related_case_id' => $this->nullableInt($input['related_case_id'] ?? null),
             'related_shift_report_id' => $this->nullableInt($input['related_shift_report_id'] ?? null),
         ];
 
+        $fields = [
+            ['title', 's', $title],
+            ['report_type', 's', $values['report_type']],
+            ['status', 's', $status],
+            ['priority', 's', $priority],
+            ['affected_domain', 's', $values['affected_domain']],
+            ['affected_ip', 's', $values['affected_ip']],
+            ['reporter', 's', $values['reporter']],
+            ['reporter_contact', 's', $values['reporter_contact']],
+            ['customer_name', 's', $values['customer_name']],
+            ['customer_reference', 's', $values['customer_reference']],
+            ['ticket_status', 's', $values['ticket_status']],
+            ['ticket_reference', 's', $values['ticket_reference']],
+            ['ticket_url', 's', $values['ticket_url']],
+            ['ticket_sent_at', 's', $values['ticket_sent_at']],
+            ['assigned_user_id', 'i', $assignedUserId],
+            ['assigned_staff_name', 's', $assignedName],
+            ['description', 's', $values['description']],
+            ['tags', 's', $values['tags']],
+            ['nameserver_snapshot', 's', $values['nameserver_snapshot']],
+            ['nameserver_snapshot_at', 's', $values['nameserver_snapshot_at']],
+            ['sla_due_at', 's', $sla],
+            ['waiting_started_at', 's', $values['waiting_started_at']],
+            ['waiting_hours', 'i', $values['waiting_hours']],
+            ['waiting_until', 's', $values['waiting_until']],
+            ['related_domain_id', 'i', $values['related_domain_id']],
+            ['related_server_id', 'i', $values['related_server_id']],
+            ['related_case_id', 'i', $values['related_case_id']],
+            ['related_shift_report_id', 'i', $values['related_shift_report_id']],
+            ['created_by', 'i', $uid],
+            ['created_by_name', 's', $actorName],
+            ['updated_by', 'i', $uid],
+            ['resolved_at', 's', $resolvedAt],
+            ['closed_at', 's', $closedAt],
+        ];
+        $columns = implode(', ', array_map(fn($field) => '`' . $field[0] . '`', $fields));
+        $placeholders = implode(',', array_fill(0, count($fields), '?'));
         $stmt = $this->conn->prepare("
-            INSERT INTO tracs_abuse_reports
-              (title, report_type, status, priority, affected_domain, affected_ip, reporter, reporter_contact,
-               customer_name, customer_reference, assigned_user_id, assigned_staff_name, description, tags,
-               sla_due_at, related_domain_id, related_server_id, related_case_id, related_shift_report_id,
-               created_by, created_by_name, updated_by, resolved_at, closed_at, created_at, updated_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NOW(),NOW())
+            INSERT INTO tracs_abuse_reports ({$columns}, created_at, updated_at)
+            VALUES ({$placeholders}, NOW(), NOW())
         ");
         if (!$stmt) {
             throw new RuntimeException('Database error');
         }
-        $stmt->bind_param(
-            'ssssssssssissssiiiiisiss',
-            $title,
-            $values['report_type'],
-            $status,
-            $priority,
-            $values['affected_domain'],
-            $values['affected_ip'],
-            $values['reporter'],
-            $values['reporter_contact'],
-            $values['customer_name'],
-            $values['customer_reference'],
-            $assignedUserId,
-            $assignedName,
-            $values['description'],
-            $values['tags'],
-            $sla,
-            $values['related_domain_id'],
-            $values['related_server_id'],
-            $values['related_case_id'],
-            $values['related_shift_report_id'],
-            $uid,
-            $actorName,
-            $uid,
-            $resolvedAt,
-            $closedAt
-        );
+        $types = implode('', array_column($fields, 1));
+        $params = array_column($fields, 2);
+        $stmt->bind_param($types, ...$params);
         if (!$stmt->execute()) {
             $stmt->close();
             throw new RuntimeException('Database error');
@@ -402,6 +501,18 @@ class AbuseReportModel {
         $assignedUserId = $this->nullableInt($input['assigned_user_id'] ?? ($old['assigned_user_id'] ?? null));
         $assignedName = $assignedUserId ? $this->userName($assignedUserId) : self::clean($input['assigned_staff_name'] ?? ($old['assigned_staff_name'] ?? ''), 150);
         $sla = self::normalizeDateTime($input['sla_due_at'] ?? ($old['sla_due_at'] ?? null));
+        $ticketStatus = self::normalizeTicketStatus($input['ticket_status'] ?? ($old['ticket_status'] ?? 'not_sent'));
+        $ticketSentAt = $ticketStatus === 'sent'
+            ? (self::normalizeDateTime($input['ticket_sent_at'] ?? ($old['ticket_sent_at'] ?? null)) ?? date('Y-m-d H:i:s'))
+            : null;
+        $nameservers = $this->cleanNameservers($input['nameserver_snapshot'] ?? ($old['nameserver_snapshot'] ?? null));
+        $nameserverAt = $nameservers
+            ? (self::normalizeDateTime($input['nameserver_snapshot_at'] ?? ($old['nameserver_snapshot_at'] ?? null)) ?? date('Y-m-d H:i:s'))
+            : null;
+        $waitingStarted = self::normalizeDateTime($input['waiting_started_at'] ?? ($old['waiting_started_at'] ?? ($old['created_at'] ?? null))) ?? date('Y-m-d H:i:s');
+        $waitingHours = $this->waitingHours($input['waiting_hours'] ?? ($old['waiting_hours'] ?? 24));
+        $waitingUntil = self::normalizeDateTime($input['waiting_until'] ?? null)
+            ?? $this->waitingDeadline($waitingStarted, $waitingHours);
         $resolvedAt = $old['resolved_at'];
         $closedAt = $old['closed_at'];
         if ($status === 'resolved' && empty($resolvedAt)) {
@@ -426,11 +537,20 @@ class AbuseReportModel {
             'reporter_contact' => self::clean($input['reporter_contact'] ?? $old['reporter_contact'], 190) ?: null,
             'customer_name' => self::clean($input['customer_name'] ?? $old['customer_name'], 190) ?: null,
             'customer_reference' => self::clean($input['customer_reference'] ?? $old['customer_reference'], 190) ?: null,
+            'ticket_status' => $ticketStatus,
+            'ticket_reference' => self::clean($input['ticket_reference'] ?? ($old['ticket_reference'] ?? ''), 190) ?: null,
+            'ticket_url' => self::clean($input['ticket_url'] ?? ($old['ticket_url'] ?? ''), 255) ?: null,
+            'ticket_sent_at' => $ticketSentAt,
             'assigned_user_id' => $assignedUserId,
             'assigned_staff_name' => $assignedName ?: null,
             'description' => self::cleanLong($input['description'] ?? $old['description'], 8000) ?: null,
             'tags' => self::normalizeTags($input['tags'] ?? $old['tags']) ?: null,
+            'nameserver_snapshot' => $nameservers,
+            'nameserver_snapshot_at' => $nameserverAt,
             'sla_due_at' => $sla,
+            'waiting_started_at' => $waitingStarted,
+            'waiting_hours' => $waitingHours,
+            'waiting_until' => $waitingUntil,
             'related_domain_id' => $this->nullableInt($input['related_domain_id'] ?? ($old['related_domain_id'] ?? null)),
             'related_server_id' => $this->nullableInt($input['related_server_id'] ?? ($old['related_server_id'] ?? null)),
             'related_case_id' => $this->nullableInt($input['related_case_id'] ?? ($old['related_case_id'] ?? null)),
@@ -439,43 +559,52 @@ class AbuseReportModel {
             'closed_at' => $closedAt,
         ];
 
+        $fields = [
+            ['title', 's', $next['title']],
+            ['report_type', 's', $next['report_type']],
+            ['status', 's', $next['status']],
+            ['priority', 's', $next['priority']],
+            ['affected_domain', 's', $next['affected_domain']],
+            ['affected_ip', 's', $next['affected_ip']],
+            ['reporter', 's', $next['reporter']],
+            ['reporter_contact', 's', $next['reporter_contact']],
+            ['customer_name', 's', $next['customer_name']],
+            ['customer_reference', 's', $next['customer_reference']],
+            ['ticket_status', 's', $next['ticket_status']],
+            ['ticket_reference', 's', $next['ticket_reference']],
+            ['ticket_url', 's', $next['ticket_url']],
+            ['ticket_sent_at', 's', $next['ticket_sent_at']],
+            ['assigned_user_id', 'i', $next['assigned_user_id']],
+            ['assigned_staff_name', 's', $next['assigned_staff_name']],
+            ['description', 's', $next['description']],
+            ['tags', 's', $next['tags']],
+            ['nameserver_snapshot', 's', $next['nameserver_snapshot']],
+            ['nameserver_snapshot_at', 's', $next['nameserver_snapshot_at']],
+            ['sla_due_at', 's', $next['sla_due_at']],
+            ['waiting_started_at', 's', $next['waiting_started_at']],
+            ['waiting_hours', 'i', $next['waiting_hours']],
+            ['waiting_until', 's', $next['waiting_until']],
+            ['related_domain_id', 'i', $next['related_domain_id']],
+            ['related_server_id', 'i', $next['related_server_id']],
+            ['related_case_id', 'i', $next['related_case_id']],
+            ['related_shift_report_id', 'i', $next['related_shift_report_id']],
+            ['updated_by', 'i', $uid],
+            ['resolved_at', 's', $next['resolved_at']],
+            ['closed_at', 's', $next['closed_at']],
+        ];
+        $sets = implode(', ', array_map(fn($field) => '`' . $field[0] . '`=?', $fields));
         $stmt = $this->conn->prepare("
             UPDATE tracs_abuse_reports
-            SET title=?, report_type=?, status=?, priority=?, affected_domain=?, affected_ip=?, reporter=?, reporter_contact=?,
-                customer_name=?, customer_reference=?, assigned_user_id=?, assigned_staff_name=?, description=?, tags=?,
-                sla_due_at=?, related_domain_id=?, related_server_id=?, related_case_id=?, related_shift_report_id=?,
-                updated_by=?, resolved_at=?, closed_at=?, updated_at=NOW()
+            SET {$sets}, updated_at=NOW()
             WHERE id=?
         ");
         if (!$stmt) {
             throw new RuntimeException('Database error');
         }
-        $stmt->bind_param(
-            'ssssssssssissssiiiiissi',
-            $next['title'],
-            $next['report_type'],
-            $next['status'],
-            $next['priority'],
-            $next['affected_domain'],
-            $next['affected_ip'],
-            $next['reporter'],
-            $next['reporter_contact'],
-            $next['customer_name'],
-            $next['customer_reference'],
-            $next['assigned_user_id'],
-            $next['assigned_staff_name'],
-            $next['description'],
-            $next['tags'],
-            $next['sla_due_at'],
-            $next['related_domain_id'],
-            $next['related_server_id'],
-            $next['related_case_id'],
-            $next['related_shift_report_id'],
-            $uid,
-            $next['resolved_at'],
-            $next['closed_at'],
-            $id
-        );
+        $types = implode('', array_column($fields, 1)) . 'i';
+        $params = array_column($fields, 2);
+        $params[] = $id;
+        $stmt->bind_param($types, ...$params);
         if (!$stmt->execute()) {
             $stmt->close();
             throw new RuntimeException('Database error');
@@ -487,7 +616,15 @@ class AbuseReportModel {
             $oldValue = $old[$field] ?? null;
             if ((string)($oldValue ?? '') !== (string)($value ?? '')) {
                 $changes[$field] = ['old' => $oldValue, 'new' => $value];
-                $event = $field === 'status' ? 'status_changed' : ($field === 'priority' ? 'priority_changed' : ($field === 'assigned_user_id' ? 'assigned' : 'updated'));
+                $event = match ($field) {
+                    'status' => 'status_changed',
+                    'priority' => 'priority_changed',
+                    'assigned_user_id' => 'assigned',
+                    'ticket_status', 'ticket_reference', 'ticket_url', 'ticket_sent_at' => 'ticket_updated',
+                    'nameserver_snapshot', 'nameserver_snapshot_at' => 'nameserver_saved',
+                    'waiting_started_at', 'waiting_hours', 'waiting_until' => 'waiting_updated',
+                    default => 'updated',
+                };
                 $this->recordEvent($id, $uid, $actorName, $event, $field, $oldValue, $value, $title);
             }
         }
@@ -755,6 +892,7 @@ class AbuseReportModel {
             'open' => 0,
             'critical' => 0,
             'over_sla' => 0,
+            'action_required' => 0,
             'resolved_today' => 0,
             'oldest_open' => null,
         ];
@@ -762,21 +900,23 @@ class AbuseReportModel {
             SELECT
               SUM(status NOT IN ('resolved','closed')) AS open_count,
               SUM(status NOT IN ('resolved','closed') AND priority='critical') AS critical_count,
-              SUM(status NOT IN ('resolved','closed') AND sla_due_at IS NOT NULL AND sla_due_at < NOW()) AS over_sla_count,
+              SUM(status NOT IN ('resolved','closed') AND (status='action_taken' OR (waiting_until IS NOT NULL AND waiting_until < NOW()))) AS action_required_count,
               SUM(status='resolved' AND DATE(resolved_at)=CURDATE()) AS resolved_today_count
             FROM tracs_abuse_reports
         ");
         if ($result && ($row = $result->fetch_assoc())) {
             $summary['open'] = (int)($row['open_count'] ?? 0);
             $summary['critical'] = (int)($row['critical_count'] ?? 0);
-            $summary['over_sla'] = (int)($row['over_sla_count'] ?? 0);
+            $summary['action_required'] = (int)($row['action_required_count'] ?? 0);
+            $summary['over_sla'] = $summary['action_required'];
             $summary['resolved_today'] = (int)($row['resolved_today_count'] ?? 0);
         }
         $oldest = $this->conn->query("
-            SELECT id, report_number, title, created_at
+            SELECT id, report_number, title, created_at, waiting_until
             FROM tracs_abuse_reports
             WHERE status NOT IN ('resolved','closed')
-            ORDER BY created_at ASC
+            ORDER BY CASE WHEN status='action_taken' OR (waiting_until IS NOT NULL AND waiting_until < NOW()) THEN 0 ELSE 1 END,
+                     COALESCE(waiting_until, created_at) ASC
             LIMIT 1
         ");
         if ($oldest && ($row = $oldest->fetch_assoc())) {
@@ -853,13 +993,30 @@ class AbuseReportModel {
         $sla = (string)($row['sla_due_at'] ?? '');
         $done = in_array($status, ['resolved', 'closed'], true);
         $overSla = !$done && $sla !== '' && strtotime($sla) !== false && strtotime($sla) < time();
+        $waitingStarted = self::normalizeDateTime($row['waiting_started_at'] ?? null)
+            ?? self::normalizeDateTime($row['created_at'] ?? null);
+        $waitingHours = $this->waitingHours($row['waiting_hours'] ?? 24);
+        $waitingUntil = self::normalizeDateTime($row['waiting_until'] ?? null) ?? $this->waitingDeadline($waitingStarted, $waitingHours);
+        $waitingExpired = $waitingUntil !== null && strtotime($waitingUntil) !== false && strtotime($waitingUntil) < time();
+        $actionRequired = !$done && ($status === 'action_taken' || $waitingExpired);
+        $workflowStage = $done ? 'resolved' : ($actionRequired ? 'action_required' : $status);
         $row['id'] = $id;
         $row['report_number'] = (string)($row['report_number'] ?: self::reportNumber($id));
         $row['status'] = $status;
         $row['status_label'] = self::statusLabel($status);
+        $row['workflow_stage'] = $workflowStage;
+        $row['workflow_label'] = $workflowStage === 'action_required' ? 'Action Required' : self::statusLabel($status);
         $row['priority'] = $priority;
         $row['assigned_staff'] = trim((string)($row['assigned_staff'] ?? $row['assigned_staff_name'] ?? ''));
         $row['evidence_count'] = (int)($row['evidence_count'] ?? 0);
+        $row['ticket_status'] = self::normalizeTicketStatus($row['ticket_status'] ?? 'not_sent');
+        $row['ticket_sent'] = $row['ticket_status'] === 'sent';
+        $row['nameserver_saved'] = trim((string)($row['nameserver_snapshot'] ?? '')) !== '';
+        $row['waiting_started_at'] = $waitingStarted;
+        $row['waiting_hours'] = $waitingHours;
+        $row['waiting_until'] = $waitingUntil;
+        $row['action_required'] = $actionRequired;
+        $row['waiting_label'] = $this->waitingLabel($waitingUntil, $done);
         $row['over_sla'] = $overSla;
         $row['sla_label'] = $sla !== '' ? $this->relativeTime($sla, 'SLA') : 'No SLA';
         $row['open_age'] = $this->relativeTime((string)($row['created_at'] ?? ''), 'Open', true);
@@ -867,6 +1024,27 @@ class AbuseReportModel {
         $row['updated_display'] = !empty($row['updated_at']) ? date('d M Y H:i', strtotime((string)$row['updated_at'])) : '';
         $row['tag_list'] = array_values(array_filter(array_map('trim', explode(',', (string)($row['tags'] ?? '')))));
         return $row;
+    }
+
+    private function waitingLabel(?string $value, bool $done): string {
+        if ($done) {
+            return 'Completed';
+        }
+        if (!$value || strtotime($value) === false) {
+            return 'No waiting deadline';
+        }
+        $target = new DateTimeImmutable($value);
+        $now = new DateTimeImmutable('now');
+        $past = $target < $now;
+        $diff = $target->diff($now);
+        if ($diff->d > 0) {
+            $text = $diff->d . 'd ' . $diff->h . 'h';
+        } elseif ($diff->h > 0) {
+            $text = $diff->h . 'h ' . $diff->i . 'm';
+        } else {
+            $text = max(0, $diff->i) . 'm';
+        }
+        return $past ? $text . ' overdue' : $text . ' remaining';
     }
 
     private function relativeTime(string $value, string $prefix = '', bool $since = false): string {

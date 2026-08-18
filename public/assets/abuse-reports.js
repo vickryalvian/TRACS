@@ -5,12 +5,29 @@
   if (!root || root.dataset.abuseInitialized === '1') return;
   root.dataset.abuseInitialized = '1';
 
+  const stages = ['incoming', 'investigating', 'waiting_external', 'action_required', 'resolved'];
   const statuses = ['incoming', 'investigating', 'waiting_external', 'action_taken', 'resolved', 'closed'];
+  const stageStatus = {
+    incoming: 'incoming',
+    investigating: 'investigating',
+    waiting_external: 'waiting_external',
+    action_required: 'action_taken',
+    resolved: 'resolved',
+  };
+  const statusStage = {
+    incoming: 'incoming',
+    investigating: 'investigating',
+    waiting_external: 'waiting_external',
+    action_taken: 'action_required',
+    resolved: 'resolved',
+    closed: 'resolved',
+  };
   const statusLabels = {
     incoming: 'Incoming',
     investigating: 'Investigating',
     waiting_external: 'Waiting External',
-    action_taken: 'Action Taken',
+    action_required: 'Action Required',
+    action_taken: 'Action Required',
     resolved: 'Resolved',
     closed: 'Closed',
   };
@@ -71,19 +88,45 @@
   };
   const dateKey = value => String(value || '').slice(0, 10);
   const datetimeLocal = value => value ? String(value).replace(' ', 'T').slice(0, 16) : '';
+  const nowLocalInput = () => {
+    const date = new Date();
+    date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+    return date.toISOString().slice(0, 16);
+  };
+  const addHoursLocal = (value, hours) => {
+    const base = value ? new Date(value) : new Date();
+    if (Number.isNaN(base.getTime())) return '';
+    base.setHours(base.getHours() + (Number.parseInt(hours, 10) || 24));
+    base.setMinutes(base.getMinutes() - base.getTimezoneOffset());
+    return base.toISOString().slice(0, 16);
+  };
   const eventLabel = value => String(value || 'updated').replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
   const reportTarget = report => [report.affected_domain, report.affected_ip].filter(Boolean).join(' / ') || 'No target set';
+  const truthy = value => value === true || value === 1 || value === '1';
+  const stageForStatus = status => statusStage[status] || (stages.includes(status) ? status : 'incoming');
+  const statusForStage = stage => stageStatus[stage] || (statuses.includes(stage) ? stage : 'incoming');
+  const stageAndStatus = value => {
+    const raw = String(value || 'incoming');
+    const status = statuses.includes(raw) ? raw : statusForStage(raw);
+    return { status, stage: stages.includes(raw) ? raw : stageForStatus(status) };
+  };
   const normalizeReport = report => {
     if (!report || !report.id) return null;
     report.id = toId(report.id);
     report.status = statuses.includes(report.status) ? report.status : 'incoming';
     report.status_label = report.status_label || statusLabels[report.status] || report.status;
+    report.workflow_stage = stages.includes(report.workflow_stage) ? report.workflow_stage : stageForStatus(report.status);
+    report.action_required = truthy(report.action_required) || report.workflow_stage === 'action_required';
+    if (report.action_required && !['resolved', 'closed'].includes(report.status)) report.workflow_stage = 'action_required';
+    report.workflow_label = report.workflow_label || statusLabels[report.workflow_stage] || report.status_label;
     report.priority = ['critical', 'high', 'medium', 'low'].includes(report.priority) ? report.priority : 'medium';
     report.evidence_count = Number(report.evidence_count || 0);
     report.tag_list = Array.isArray(report.tag_list)
       ? report.tag_list
       : String(report.tags || '').split(',').map(tag => tag.trim()).filter(Boolean);
-    report.over_sla = report.over_sla === true || report.over_sla === 1 || report.over_sla === '1';
+    report.ticket_sent = truthy(report.ticket_sent) || report.ticket_status === 'sent';
+    report.nameserver_saved = truthy(report.nameserver_saved) || String(report.nameserver_snapshot || '').trim() !== '';
+    report.waiting_label = report.waiting_label || (report.waiting_until ? `Until ${formatDate(report.waiting_until)}` : 'No waiting window');
     return report;
   };
   state.reports = state.reports.map(normalizeReport).filter(Boolean);
@@ -130,17 +173,17 @@
       start: $('#abuseDateStart')?.value || '',
       end: $('#abuseDateEnd')?.value || '',
       evidence: $('#abuseHasAttachmentFilter')?.checked || false,
-      overSla: $('#abuseOverSlaFilter')?.checked || false,
+      actionRequired: $('#abuseActionRequiredFilter')?.checked || false,
     };
   }
 
   function matchesFilters(report, filters) {
-    if (filters.status && report.status !== filters.status) return false;
+    if (filters.status && report.workflow_stage !== filters.status) return false;
     if (filters.priority && report.priority !== filters.priority) return false;
     if (filters.reporter && String(report.reporter || '') !== filters.reporter) return false;
     if (filters.assigned && String(report.assigned_user_id || '') !== filters.assigned) return false;
     if (filters.evidence && Number(report.evidence_count || 0) <= 0) return false;
-    if (filters.overSla && !report.over_sla) return false;
+    if (filters.actionRequired && !report.action_required) return false;
     const created = dateKey(report.created_at);
     if (filters.start && created && created < filters.start) return false;
     if (filters.end && created && created > filters.end) return false;
@@ -162,10 +205,10 @@
     return String(b.created_at || '').localeCompare(String(a.created_at || ''));
   }
 
-  function renumberStatus(status) {
+  function renumberStage(stage) {
     let position = 0;
     state.reports.forEach(report => {
-      if (report.status === status) {
+      if (report.workflow_stage === stage) {
         report.board_order = position;
         position += 1;
       }
@@ -174,8 +217,13 @@
 
   function renderCard(report) {
     const tags = (report.tag_list || []).slice(0, 3).map(tag => `<span class="abuse-tag">${esc(tag)}</span>`).join('');
+    const indicators = [
+      report.ticket_sent ? 'Ticket sent' : 'Ticket not sent',
+      report.nameserver_saved ? 'NS saved' : 'NS missing',
+    ].map(label => `<span class="abuse-indicator">${esc(label)}</span>`).join('');
+    const alert = report.action_required ? '<div class="abuse-card-alert">Action required</div>' : '';
     return `
-      <article class="abuse-card is-${esc(report.priority)} ${report.over_sla ? 'is-over-sla' : ''} ${state.selectedId === report.id ? 'is-selected' : ''}" data-abuse-id="${report.id}" draggable="${state.canManage ? 'true' : 'false'}">
+      <article class="abuse-card is-${esc(report.priority)} ${report.action_required ? 'is-action-required' : ''} ${state.selectedId === report.id ? 'is-selected' : ''}" data-abuse-id="${report.id}" draggable="${state.canManage ? 'true' : 'false'}">
         <div class="abuse-card-body">
           <div class="abuse-card-top">
             <span class="abuse-card-number">${esc(report.report_number || `#${report.id}`)}</span>
@@ -183,14 +231,16 @@
           </div>
           <h3>${esc(report.title || 'Untitled abuse report')}</h3>
           <div class="abuse-card-target">${esc(reportTarget(report))}</div>
+          ${alert}
           <div class="abuse-card-meta">
             <span>${esc(report.reporter || 'Unknown reporter')}</span>
             <span>${esc(report.assigned_staff || 'Unassigned')}</span>
           </div>
           <div class="abuse-card-sla">
-            <strong class="${report.over_sla ? 'is-over' : ''}">${esc(report.sla_label || 'No SLA')}</strong>
+            <strong class="${report.action_required ? 'is-over' : ''}">${esc(report.waiting_label || 'No waiting window')}</strong>
             <span>${esc(report.open_age || '')}</span>
           </div>
+          <div class="abuse-card-indicators">${indicators}</div>
           ${tags ? `<div class="abuse-card-tags">${tags}</div>` : ''}
           <div class="abuse-card-footer">
             <span>${Number(report.evidence_count || 0)} evidence</span>
@@ -205,18 +255,18 @@
     const visible = state.reports.filter(report => matchesFilters(report, filters));
     const open = visible.filter(report => !['resolved', 'closed'].includes(report.status)).length;
     const critical = visible.filter(report => report.priority === 'critical' && !['resolved', 'closed'].includes(report.status)).length;
-    const overSla = visible.filter(report => report.over_sla).length;
+    const actionRequired = visible.filter(report => report.action_required).length;
 
     $('#abuseOpenStat') && ($('#abuseOpenStat').textContent = open);
     $('#abuseCriticalStat') && ($('#abuseCriticalStat').textContent = critical);
-    $('#abuseSlaStat') && ($('#abuseSlaStat').textContent = overSla);
-    $('#abusePageSummary') && ($('#abusePageSummary').textContent = `${visible.length} shown · ${open} open · ${critical} critical · ${overSla} over SLA`);
+    $('#abuseActionStat') && ($('#abuseActionStat').textContent = actionRequired);
+    $('#abusePageSummary') && ($('#abusePageSummary').textContent = `${visible.length} shown · ${open} open · ${critical} critical · ${actionRequired} action required`);
 
-    statuses.forEach(status => {
-      const column = $(`[data-abuse-column="${status}"]`, root);
-      const list = $(`[data-abuse-dropzone="${status}"]`, root);
+    stages.forEach(stage => {
+      const column = $(`[data-abuse-column="${stage}"]`, root);
+      const list = $(`[data-abuse-dropzone="${stage}"]`, root);
       if (!column || !list) return;
-      const reports = visible.filter(report => report.status === status).sort(sortReports);
+      const reports = visible.filter(report => report.workflow_stage === stage).sort(sortReports);
       $('[data-column-count]', column).textContent = reports.length;
       $('[data-column-summary]', column).textContent = reports.length === 1 ? '1 report' : `${reports.length} reports`;
       list.innerHTML = reports.length
@@ -227,8 +277,17 @@
   }
 
   function setDetailVisible(visible) {
-    $('#abuseDetailEmpty') && ($('#abuseDetailEmpty').hidden = visible);
-    $('#abuseDetailContent') && ($('#abuseDetailContent').hidden = !visible);
+    const modal = $('#abuseDetailModal');
+    if (!modal) return;
+    if (visible) {
+      if (typeof window.tracsOpenModalElement === 'function') window.tracsOpenModalElement(modal);
+      else modal.classList.remove('hidden');
+    } else if (typeof window.tracsCloseModalElement === 'function') {
+      window.tracsCloseModalElement(modal, { bypassUnsaved: true });
+    } else {
+      modal.classList.add('hidden');
+      modal.setAttribute('aria-hidden', 'true');
+    }
   }
 
   function setValue(selector, value) {
@@ -242,6 +301,7 @@
     setDetailVisible(true);
     $('#abuseDetailRef') && ($('#abuseDetailRef').textContent = report.report_number || (report.id ? `#${report.id}` : 'New'));
     $('#abuseDetailTitle') && ($('#abuseDetailTitle').textContent = report.title || 'New abuse report');
+    $('#abuseDetailSub') && ($('#abuseDetailSub').textContent = `${report.workflow_label || statusLabels[report.status] || 'Incoming'} · ${reportTarget(report)}`);
     setValue('#abuseReportId', report.id || '');
     setValue('#abuseTitle', report.title || '');
     setValue('#abuseType', report.report_type || 'phishing');
@@ -255,7 +315,17 @@
     setValue('#abuseSlaDue', datetimeLocal(report.sla_due_at));
     setValue('#abuseCustomer', report.customer_name || '');
     setValue('#abuseCustomerRef', report.customer_reference || '');
+    setValue('#abuseTicketStatus', report.ticket_status || 'not_sent');
+    setValue('#abuseTicketRef', report.ticket_reference || '');
+    setValue('#abuseTicketUrl', report.ticket_url || '');
+    setValue('#abuseTicketSentAt', datetimeLocal(report.ticket_sent_at));
+    setValue('#abuseWaitingHours', report.waiting_hours || '24');
+    setValue('#abuseWaitingStartedAt', datetimeLocal(report.waiting_started_at));
+    setValue('#abuseWaitingUntil', datetimeLocal(report.waiting_until));
+    $('#abuseWaitingStatus') && ($('#abuseWaitingStatus').textContent = report.waiting_label || 'No waiting window');
     setValue('#abuseTags', report.tags || (report.tag_list || []).join(', '));
+    setValue('#abuseNameservers', report.nameserver_snapshot || '');
+    setValue('#abuseNameserverAt', datetimeLocal(report.nameserver_snapshot_at));
     setValue('#abuseDescription', report.description || '');
     setValue('#abuseRelatedDomain', report.related_domain_id || '');
     setValue('#abuseRelatedServer', report.related_server_id || '');
@@ -275,7 +345,13 @@
       title: '',
       report_type: 'phishing',
       status: 'incoming',
+      workflow_stage: 'incoming',
+      workflow_label: 'Incoming',
       priority: 'medium',
+      ticket_status: 'not_sent',
+      waiting_hours: 24,
+      waiting_started_at: nowLocalInput(),
+      waiting_until: addHoursLocal('', 24),
       tag_list: [],
       timeline: [],
       notes: [],
@@ -371,7 +447,16 @@
       sla_due_at: $('#abuseSlaDue')?.value || '',
       customer_name: $('#abuseCustomer')?.value || '',
       customer_reference: $('#abuseCustomerRef')?.value || '',
+      ticket_status: $('#abuseTicketStatus')?.value || 'not_sent',
+      ticket_reference: $('#abuseTicketRef')?.value || '',
+      ticket_url: $('#abuseTicketUrl')?.value || '',
+      ticket_sent_at: $('#abuseTicketSentAt')?.value || '',
+      waiting_hours: $('#abuseWaitingHours')?.value || '24',
+      waiting_started_at: $('#abuseWaitingStartedAt')?.value || '',
+      waiting_until: $('#abuseWaitingUntil')?.value || '',
       tags: $('#abuseTags')?.value || '',
+      nameserver_snapshot: $('#abuseNameservers')?.value || '',
+      nameserver_snapshot_at: $('#abuseNameserverAt')?.value || '',
       description: $('#abuseDescription')?.value || '',
       related_domain_id: $('#abuseRelatedDomain')?.value || '',
       related_server_id: $('#abuseRelatedServer')?.value || '',
@@ -380,7 +465,7 @@
     };
   }
 
-  async function saveReport() {
+  async function saveReport(successMessage = '') {
     const payload = collectReport();
     if (!payload.title.trim()) {
       notify('Title is required.', 'warning');
@@ -394,48 +479,56 @@
       const report = data?.report || data;
       updateReportInState(report);
       fillDetail(report);
-      notify(payload.id ? 'Abuse report updated.' : 'Abuse report created.', 'success');
+      notify(successMessage || (payload.id ? 'Abuse report updated.' : 'Abuse report created.'), 'success');
     } catch (error) {
       notify(error.message || 'Abuse report could not be saved.', 'error');
     }
   }
 
-  function orderedIdsFor(status) {
-    return state.reports.filter(report => report.status === status).sort(sortReports).map(report => report.id);
+  function orderedIdsFor(stage, status) {
+    return state.reports
+      .filter(report => report.workflow_stage === stage && (!status || report.status === status))
+      .sort(sortReports)
+      .map(report => report.id);
   }
 
-  function moveInState(id, status, beforeId = 0) {
+  function moveInState(id, target, beforeId = 0) {
+    const { stage, status } = stageAndStatus(target);
     const index = state.reports.findIndex(report => report.id === id);
     if (index < 0) return null;
     const [report] = state.reports.splice(index, 1);
-    const oldStatus = report.status;
+    const oldStage = report.workflow_stage;
     report.status = status;
+    report.workflow_stage = stage;
     report.status_label = statusLabels[status] || status;
+    report.workflow_label = statusLabels[stage] || report.status_label;
+    report.action_required = stage === 'action_required';
     if (beforeId === id) beforeId = 0;
     let insertAt = beforeId ? state.reports.findIndex(item => item.id === beforeId) : -1;
     if (insertAt < 0) {
-      insertAt = state.reports.reduce((last, item, idx) => item.status === status ? idx + 1 : last, state.reports.length);
+      insertAt = state.reports.reduce((last, item, idx) => item.workflow_stage === stage ? idx + 1 : last, state.reports.length);
     }
     state.reports.splice(insertAt, 0, report);
-    renumberStatus(oldStatus);
-    renumberStatus(status);
+    renumberStage(oldStage);
+    renumberStage(stage);
     return report;
   }
 
-  async function moveReport(id, status, beforeId = 0, source = 'drag_drop') {
-    if (!state.canManage || !statuses.includes(status)) return;
+  async function moveReport(id, target, beforeId = 0, source = 'drag_drop') {
+    const { stage, status } = stageAndStatus(target);
+    if (!state.canManage || !stages.includes(stage)) return;
     const previous = state.reports.find(report => report.id === id);
     if (!previous) return;
     const oldStatus = previous.status;
     const oldReports = state.reports.slice();
-    const moved = moveInState(id, status, beforeId);
+    moveInState(id, status, beforeId);
     renderBoard();
     try {
       if (oldStatus !== status) {
         const report = await jsonPost(apiUrls.status, { id, status, source });
         updateReportInState(report);
       }
-      await jsonPost(apiUrls.reorder, { status, ordered_ids: orderedIdsFor(status) });
+      await jsonPost(apiUrls.reorder, { status, ordered_ids: orderedIdsFor(stage, status) });
       if (state.selectedId === id) openReport(id);
     } catch (error) {
       state.reports = oldReports;
@@ -485,6 +578,14 @@
     }
   }
 
+  function setWaitingDefaults() {
+    const started = $('#abuseWaitingStartedAt')?.value || nowLocalInput();
+    const hours = $('#abuseWaitingHours')?.value || '24';
+    if (!$('#abuseWaitingStartedAt')?.value) setValue('#abuseWaitingStartedAt', started);
+    setValue('#abuseWaitingUntil', addHoursLocal(started, hours));
+    $('#abuseWaitingStatus') && ($('#abuseWaitingStatus').textContent = `Until ${formatDate($('#abuseWaitingUntil')?.value)}`);
+  }
+
   root.addEventListener('click', event => {
     const card = event.target.closest('.abuse-card');
     if (card) {
@@ -505,6 +606,20 @@
     const move = event.target.closest('[data-abuse-move]');
     if (move) {
       moveReport(toId($('#abuseReportId')?.value), move.dataset.abuseMove, 0, 'quick_action');
+      return;
+    }
+    if (event.target.closest('[data-abuse-ticket-sent]')) {
+      if (!toId($('#abuseReportId')?.value)) return notify('Save the report before marking a ticket sent.', 'warning');
+      setValue('#abuseTicketStatus', 'sent');
+      if (!$('#abuseTicketSentAt')?.value) setValue('#abuseTicketSentAt', nowLocalInput());
+      saveReport('Ticket marked sent.');
+      return;
+    }
+    if (event.target.closest('[data-abuse-snapshot-now]')) {
+      if (!toId($('#abuseReportId')?.value)) return notify('Save the report before stamping a snapshot.', 'warning');
+      if (!($('#abuseNameservers')?.value || '').trim()) return notify('Enter nameserver snapshot before stamping.', 'warning');
+      setValue('#abuseNameserverAt', nowLocalInput());
+      saveReport('Nameserver snapshot stamped.');
       return;
     }
     if (event.target.closest('[data-abuse-placeholder]')) {
@@ -572,10 +687,12 @@
   $('#abuseNoteForm')?.addEventListener('submit', addNote);
   $('#abuseEvidenceForm')?.addEventListener('submit', uploadEvidence);
   $('#abuseSearchForm')?.addEventListener('submit', event => event.preventDefault());
+  $('#abuseWaitingHours')?.addEventListener('change', setWaitingDefaults);
+  $('#abuseWaitingStartedAt')?.addEventListener('input', setWaitingDefaults);
   [
     '#abuseSearchInput', '#abuseStatusFilter', '#abusePriorityFilter', '#abuseReporterFilter',
     '#abuseAssignedFilter', '#abuseDateStart', '#abuseDateEnd', '#abuseHasAttachmentFilter',
-    '#abuseOverSlaFilter',
+    '#abuseActionRequiredFilter',
   ].forEach(selector => $(selector)?.addEventListener('input', renderBoard));
   ['#abuseStatusFilter', '#abusePriorityFilter', '#abuseReporterFilter', '#abuseAssignedFilter']
     .forEach(selector => $(selector)?.addEventListener('change', renderBoard));

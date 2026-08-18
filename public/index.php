@@ -137,7 +137,7 @@ $overdue_rem    = count(array_filter($reminders,fn($r)=>($r['status']??'')==='Ov
 $today_rem      = count(array_filter($reminders,fn($r)=>($r['status']??'')==='Today'));
 $critical_count = $critical_cases + $overdue_rem;
 if($abuse_summary){
-  $critical_count += (int)($abuse_summary['critical'] ?? 0) + (int)($abuse_summary['over_sla'] ?? 0);
+  $critical_count += (int)($abuse_summary['critical'] ?? 0) + (int)($abuse_summary['action_required'] ?? $abuse_summary['over_sla'] ?? 0);
 }
 
 $total_tasks = count($tasks);
@@ -447,12 +447,13 @@ $notification_groups = [
 ];
 if($abuse_summary){
   $abuse_open = (int)($abuse_summary['open'] ?? 0);
+  $abuse_action_required = (int)($abuse_summary['action_required'] ?? $abuse_summary['over_sla'] ?? 0);
   $notification_groups[] = [
     'status' => 'abuse',
     'label' => 'Abuse',
     'count' => $abuse_open,
     'title' => $abuse_open.' open abuse '.($abuse_open===1?'report':'reports'),
-    'meta' => (int)($abuse_summary['critical'] ?? 0).' critical · '.(int)($abuse_summary['over_sla'] ?? 0).' over SLA',
+    'meta' => (int)($abuse_summary['critical'] ?? 0).' critical · '.$abuse_action_required.' action required',
     'href' => 'abuse-reports.php',
   ];
 }
@@ -1396,27 +1397,27 @@ include 'includes/header.php';
       <?php if($abuse_summary):
         $abuse_open = (int)($abuse_summary['open'] ?? 0);
         $abuse_critical = (int)($abuse_summary['critical'] ?? 0);
-        $abuse_over_sla = (int)($abuse_summary['over_sla'] ?? 0);
+        $abuse_action_required = (int)($abuse_summary['action_required'] ?? $abuse_summary['over_sla'] ?? 0);
         $abuse_resolved_today = (int)($abuse_summary['resolved_today'] ?? 0);
         $abuse_oldest = is_array($abuse_summary['oldest_open'] ?? null) ? $abuse_summary['oldest_open'] : null;
         $abuse_href = $abuse_oldest ? 'abuse-reports.php?id='.(int)$abuse_oldest['id'] : 'abuse-reports.php';
       ?>
-      <a class="panel dashboard-abuse-panel <?=$abuse_over_sla > 0 || $abuse_critical > 0 ? 'is-alert' : ''?>" href="<?=esc($abuse_href)?>">
+      <a class="panel dashboard-abuse-panel <?=$abuse_action_required > 0 || $abuse_critical > 0 ? 'is-alert' : ''?>" href="<?=esc($abuse_href)?>">
         <div class="panel-head">
           <span class="panel-title">Abuse Reports</span>
           <div class="panel-right">
             <span class="panel-meta"><?=$abuse_open?> open</span>
-            <span class="panel-counter <?=dashboard_counter_class($abuse_over_sla ?: $abuse_critical)?>"><?=min($abuse_over_sla ?: $abuse_critical,99)?></span>
+            <span class="panel-counter <?=dashboard_counter_class($abuse_action_required ?: $abuse_critical)?>"><?=min($abuse_action_required ?: $abuse_critical,99)?></span>
           </div>
         </div>
         <div class="dashboard-abuse-grid" aria-label="Abuse report summary">
           <span><b><?=$abuse_open?></b><em>Open</em></span>
           <span><b><?=$abuse_critical?></b><em>Critical</em></span>
-          <span><b><?=$abuse_over_sla?></b><em>Over SLA</em></span>
+          <span><b><?=$abuse_action_required?></b><em>Action Required</em></span>
           <span><b><?=$abuse_resolved_today?></b><em>Resolved Today</em></span>
         </div>
         <div class="dashboard-abuse-focus">
-          <i data-lucide="<?=$abuse_over_sla > 0 ? 'timer-off' : 'shield-alert'?>" class="icon-sm"></i>
+          <i data-lucide="<?=$abuse_action_required > 0 ? 'timer-off' : 'shield-alert'?>" class="icon-sm"></i>
           <span>
             <?php if($abuse_oldest): ?>
             <strong><?=esc($abuse_oldest['report_number'] ?? ('#'.(int)$abuse_oldest['id']))?></strong>
