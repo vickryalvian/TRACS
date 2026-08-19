@@ -54,6 +54,9 @@ abuse_flow_assert(
         && str_contains($style, '.abuse-list-table th:nth-child(7)')
         && str_contains($style, '.abuse-list-select.is-status')
         && str_contains($style, '.abuse-list-editor-form')
+        && str_contains($style, '.main.abuse-main')
+        && str_contains($style, '.abuse-column-list::-webkit-scrollbar')
+        && str_contains($style, '--abuse-pill-accent')
         && str_contains($page, 'class="abuse-detail-meta"'),
     'List editing must use compact controls, preserve notes editing, and share the normal update API.'
 );

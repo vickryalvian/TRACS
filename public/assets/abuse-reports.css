@@ -273,10 +273,15 @@
 
 .abuse-board-wrap {
   min-width: 0;
+  min-height: 0;
   overflow-x: auto;
   overflow-y: hidden;
   padding-bottom: var(--space-1);
+  overscroll-behavior-x: contain;
+  overscroll-behavior-y: none;
   scrollbar-gutter: stable;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-width: thin;
 }
 
 .abuse-board {
@@ -339,7 +344,32 @@
   flex-direction: column;
   gap: var(--space-2);
   padding: var(--space-2);
+  overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-width: thin;
+}
+
+.abuse-column-list::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+}
+
+.abuse-column-list::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+.abuse-column-list::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--scrollbar-thumb);
+  background-clip: padding-box;
+}
+
+.abuse-column-list::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+  background-clip: padding-box;
 }
 
 .abuse-card {
@@ -507,23 +537,50 @@
   font-size: 10px;
 }
 
-.abuse-tag,
-.abuse-pill {
+.abuse-tag {
   display: inline-flex;
   align-items: center;
   min-height: 20px;
   padding: 2px 6px;
-  border-radius: 999px;
+  border-radius: var(--r);
   border: 1px solid var(--bd1);
   font-size: 10px;
   color: var(--tx2);
   background: var(--s2);
 }
 
-.abuse-pill.is-critical { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 42%, var(--bd1)); }
-.abuse-pill.is-high { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 42%, var(--bd1)); }
-.abuse-pill.is-medium { color: var(--amber); border-color: var(--amber-bd); }
-.abuse-pill.is-low { color: var(--tx3); border-color: color-mix(in srgb, var(--tx3) 38%, var(--bd1)); }
+.abuse-pill {
+  --abuse-pill-accent: var(--tx3);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 16px;
+  padding: 1px 6px;
+  border: 1px solid color-mix(in srgb, var(--abuse-pill-accent) 16%, var(--bd1));
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--abuse-pill-accent) 78%, var(--tx2));
+  background: color-mix(in srgb, var(--abuse-pill-accent) 7%, var(--s2));
+  font-family: var(--mono);
+  font-size: 7.5px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.abuse-pill::before {
+  content: "";
+  width: 4px;
+  height: 4px;
+  flex: 0 0 4px;
+  border-radius: 50%;
+  background: var(--abuse-pill-accent);
+}
+
+.abuse-pill.is-critical { --abuse-pill-accent: var(--danger); }
+.abuse-pill.is-high { --abuse-pill-accent: var(--warning); }
+.abuse-pill.is-medium { --abuse-pill-accent: var(--purple); }
+.abuse-pill.is-low { --abuse-pill-accent: var(--tx3); }
 
 .abuse-status-chip,
 .abuse-clock-badge,
@@ -535,15 +592,35 @@
 }
 
 .abuse-status-chip {
-  min-height: 20px;
-  padding: 2px 6px;
+  gap: 3px;
+  min-height: 18px;
+  padding: 1px 5px;
   border: 1px solid var(--bd1);
-  border-radius: var(--r1);
+  border-radius: var(--r);
   color: var(--tx2);
   background: var(--s2);
-  font-size: 10px;
+  font-family: var(--mono);
+  font-size: 8px;
   font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
+
+.abuse-status-chip::before {
+  content: "";
+  width: 4px;
+  height: 4px;
+  flex: 0 0 4px;
+  border-radius: 50%;
+  background: var(--tx4);
+}
+
+.abuse-status-chip.is-incoming::before { background: var(--blue); }
+.abuse-status-chip.is-investigating::before { background: var(--cyan); }
+.abuse-status-chip.is-waiting_external::before,
+.abuse-status-chip.is-waiting-external::before { background: var(--purple); }
+.abuse-status-chip.is-resolved::before { background: var(--green); }
 
 .abuse-status-chip.is-action_required,
 .abuse-status-chip.is-action-required {
@@ -551,6 +628,9 @@
   border-color: color-mix(in srgb, var(--danger) 40%, var(--bd1));
   background: color-mix(in srgb, var(--danger) 8%, transparent);
 }
+
+.abuse-status-chip.is-action_required::before,
+.abuse-status-chip.is-action-required::before { background: var(--danger); }
 
 .abuse-clock-badge {
   flex: 0 0 auto;
@@ -1466,6 +1546,41 @@
   .abuse-new-btn {
     margin-left: 0;
     justify-self: start;
+  }
+}
+
+@media (min-width: 721px) {
+  .main.abuse-main {
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .abuse-page {
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  .abuse-board-wrap,
+  .abuse-list-wrap {
+    min-height: 0;
+  }
+
+  .abuse-board {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .abuse-column {
+    height: 100%;
+  }
+
+  .abuse-column-list {
+    min-height: 0;
   }
 }
 

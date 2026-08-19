@@ -68,6 +68,11 @@ as urgent.
   and Resolved.
 - Authorized users can drag cards between columns; the server persists status
   and board order.
+- On desktop, the board is constrained to the available workspace height and
+  each column scrolls vertically without growing the whole page. Mobile keeps
+  normal page scrolling and a bounded column list.
+- Priority and status chips follow the compact Cases badge geometry, including
+  severity dots and shared radius/typography tokens.
 - Board cards may show explicit text actions such as **Investigate** or
   **Resolve**. These labels must remain visible because they change workflow
   state.
