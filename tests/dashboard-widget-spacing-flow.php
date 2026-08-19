@@ -7,7 +7,8 @@ if ($style === false
     || !str_contains($style, '--dashboard-column-gap: var(--card-gap);')
     || !str_contains($style, '--dashboard-row-gap: var(--dashboard-widget-gap);')
     || !str_contains($style, '.col-left,')
-    || !str_contains($style, 'gap: var(--dashboard-row-gap);')) {
+    || !str_contains($style, 'gap: var(--dashboard-row-gap);')
+    || !preg_match('/\.dashboard-case-panel\s*\{[^}]*margin:\s*var\(--dashboard-widget-gap\) 0 0;/s', $style)) {
     fwrite(STDERR, "Dashboard widget spacing must use one shared gap token.\n");
     exit(1);
 }
