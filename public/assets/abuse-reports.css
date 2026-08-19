@@ -1017,7 +1017,7 @@
 }
 
 .abuse-modal {
-  width: min(1120px, calc(100vw - 32px));
+  width: min(920px, calc(100vw - 32px));
   max-height: calc(100dvh - 32px);
 }
 
@@ -1241,13 +1241,14 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
-  padding: 12px;
+  padding: 16px;
 }
 
 .abuse-form-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  column-gap: 14px;
+  row-gap: 12px;
 }
 
 .abuse-form-grid .is-wide {
@@ -1257,6 +1258,10 @@
 .abuse-intake-grid > .form-group:first-child,
 .abuse-intake-grid > .form-group:last-child {
   grid-column: 1 / -1;
+}
+
+.abuse-intake-grid {
+  align-items: start;
 }
 
 .abuse-inline-field {

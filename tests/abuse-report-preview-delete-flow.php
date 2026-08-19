@@ -36,6 +36,14 @@ abuse_flow_assert(
     'The full editor must preserve compact-layout and optional-field behavior.'
 );
 abuse_flow_assert(
+    preg_match('/\.abuse-modal\s*\{[^}]*width:\s*min\(920px,/s', $style) === 1
+        && preg_match('/\.abuse-form-grid\s*\{[^}]*column-gap:\s*14px;[^}]*row-gap:\s*12px;/s', $style) === 1
+        && str_contains($style, '.abuse-intake-grid')
+        && !str_contains($page, 'form-group abuse-inline-field"><label class="form-label">Type</label>')
+        && !str_contains($page, 'form-group abuse-inline-field"><label class="form-label">Priority</label>'),
+    'The intake modal must use a constrained width and consistently top-aligned fields.'
+);
+abuse_flow_assert(
     str_contains($script, "renderListSelect(report, 'status'")
         && str_contains($script, "renderListSelect(report, 'assigned_user_id'")
         && str_contains($script, "renderListSelect(report, 'reporter'")
