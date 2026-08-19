@@ -35,6 +35,11 @@
   --blue-bd:   rgba(37,99,235,.18);
   --blue-glow: rgba(37,99,235,.10);
 
+  --tracs-calendar-accent: var(--blue);
+  --tracs-calendar-accent-soft: var(--blue-lt);
+  --tracs-calendar-accent-border: var(--blue-bd);
+  --tracs-calendar-accent-hover: color-mix(in srgb, var(--blue-lt) 70%, var(--s4));
+
   --red:    #dc2626;
   --red-lt: rgba(220,38,38,.07);
   --red-bd: rgba(220,38,38,.18);
@@ -4547,7 +4552,7 @@ input[type="checkbox"]:not([data-native-checkbox]):disabled,
   top: 10px !important;
   padding: 8px !important;
 }
-.flatpickr-prev-month:hover svg, .flatpickr-next-month:hover svg { fill: var(--blue) !important; }
+.flatpickr-prev-month:hover svg, .flatpickr-next-month:hover svg { fill: var(--tracs-calendar-accent) !important; }
 
 /* Day Grid */
 .flatpickr-innerContainer {
@@ -4637,7 +4642,7 @@ input[type="checkbox"]:not([data-native-checkbox]):disabled,
 
 /* Today and Selected */
 .flatpickr-day.today {
-  color: var(--blue) !important;
+  color: var(--tracs-calendar-accent) !important;
   font-weight: 800 !important;
 }
 .flatpickr-day.today::after {
@@ -4648,12 +4653,12 @@ input[type="checkbox"]:not([data-native-checkbox]):disabled,
   transform: translateX(-50%);
   width: 4px;
   height: 4px;
-  background: var(--blue);
+  background: var(--tracs-calendar-accent);
   border-radius: 50%;
 }
 
 .flatpickr-day.selected {
-  background: var(--blue) !important;
+  background: var(--tracs-calendar-accent) !important;
   color: #fff !important;
   border-radius: 4px !important;
   opacity: 1 !important;
@@ -13333,8 +13338,8 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
   font-weight: 500 !important;
 }
 .flatpickr-day:hover { background: var(--s3) !important; }
-.flatpickr-day.today { border-color: var(--blue) !important; color: var(--blue) !important; font-weight: 700 !important; }
-.flatpickr-day.selected { background: var(--blue) !important; color: #fff !important; border-color: var(--blue) !important; }
+.flatpickr-day.today { border-color: var(--tracs-calendar-accent) !important; color: var(--tracs-calendar-accent) !important; font-weight: 700 !important; }
+.flatpickr-day.selected { background: var(--tracs-calendar-accent) !important; color: #fff !important; border-color: var(--tracs-calendar-accent) !important; }
 
 .flatpickr-months { background: var(--s2) !important; border-radius: var(--r) var(--r) 0 0 !important; margin: -8px -8px 8px -8px !important; padding: 10px 0 !important; border-bottom: 1px solid var(--bd1) !important; }
 .flatpickr-month { color: var(--tx1) !important; }

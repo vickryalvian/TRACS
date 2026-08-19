@@ -66,6 +66,22 @@ $activities = [];
 foreach($AC->getRecentActivity(20)?:[] as $a){try{$activities[]=$AC->formatActivity($a);}catch(Exception $e){}}
 $ticker_items = $TC->formatAlertsForTicker();
 $abuse_summary = $AR ? $AR->dashboardSummary() : null;
+$abuse_open = 0;
+$abuse_critical = 0;
+$abuse_waiting_external = 0;
+$abuse_action_required = 0;
+$abuse_resolved_today = 0;
+$abuse_oldest = null;
+$abuse_href = 'abuse-reports.php';
+if($abuse_summary){
+  $abuse_open = (int)($abuse_summary['open'] ?? 0);
+  $abuse_critical = (int)($abuse_summary['critical'] ?? 0);
+  $abuse_waiting_external = (int)($abuse_summary['waiting_external'] ?? 0);
+  $abuse_action_required = (int)($abuse_summary['action_required'] ?? $abuse_summary['over_sla'] ?? 0);
+  $abuse_resolved_today = (int)($abuse_summary['resolved_today'] ?? 0);
+  $abuse_oldest = is_array($abuse_summary['oldest_open'] ?? null) ? $abuse_summary['oldest_open'] : null;
+  $abuse_href = $abuse_oldest ? 'abuse-reports.php?id='.(int)$abuse_oldest['id'] : 'abuse-reports.php';
+}
 $mom_dashboard = [];
 $weekly_suggestions = [];
 if($MC->isInstalled()){
@@ -137,7 +153,7 @@ $overdue_rem    = count(array_filter($reminders,fn($r)=>($r['status']??'')==='Ov
 $today_rem      = count(array_filter($reminders,fn($r)=>($r['status']??'')==='Today'));
 $critical_count = $critical_cases + $overdue_rem;
 if($abuse_summary){
-  $critical_count += (int)($abuse_summary['critical'] ?? 0) + (int)($abuse_summary['action_required'] ?? $abuse_summary['over_sla'] ?? 0);
+  $critical_count += $abuse_critical + $abuse_action_required;
 }
 
 $total_tasks = count($tasks);
@@ -446,8 +462,6 @@ $notification_groups = [
   ],
 ];
 if($abuse_summary){
-  $abuse_open = (int)($abuse_summary['open'] ?? 0);
-  $abuse_action_required = (int)($abuse_summary['action_required'] ?? $abuse_summary['over_sla'] ?? 0);
   $notification_groups[] = [
     'status' => 'abuse',
     'label' => 'Abuse',
@@ -883,6 +897,25 @@ function dashboard_monitor_reminder_list_html(array $items, string $empty_text =
   return trim((string)ob_get_clean());
 }
 
+function dashboard_monitor_metric_row_html(string $label, int $count, string $meta, string $href, string $status_key = 'new', string $priority = 'low'): string {
+  $status_key = in_array($status_key, ['overdue','due-soon','new','in-progress','done','upcoming'], true) ? $status_key : 'new';
+  $priority = in_array($priority, ['low','medium','high','critical'], true) ? $priority : 'low';
+  ob_start();
+  ?>
+  <a class="tm-reminder-list-item is-<?=esc($status_key)?> type-case-due" href="<?=esc($href)?>">
+    <span class="tm-reminder-list-main">
+      <span class="tm-reminder-list-line"><span class="tm-type-badge">Abuse</span><span class="tm-reminder-list-title"><?=esc($label)?></span></span>
+      <span class="tm-reminder-list-meta"><?=esc($meta)?></span>
+    </span>
+    <span class="tm-reminder-list-side">
+      <span class="tm-reminder-status-pill is-<?=esc($status_key)?>"><?=esc(number_format(max(0, $count)))?></span>
+      <span class="tm-priority-dot is-<?=esc($priority)?>" title="<?=esc(ucfirst($priority))?> priority"></span>
+    </span>
+  </a>
+  <?php
+  return trim((string)ob_get_clean());
+}
+
 function dashboard_assignment_status_meta(array $assignment): array {
   $raw = strtolower((string)($assignment['assignment_status'] ?? $assignment['stored_status'] ?? 'assigned'));
   $dueTs = !empty($assignment['due_at']) && strtotime((string)$assignment['due_at']) !== false ? strtotime((string)$assignment['due_at']) : null;
@@ -1083,6 +1116,49 @@ dashboard_monitor_sort_items($task_monitor_reminder_list_items);
 dashboard_monitor_sort_items($task_monitor_upcoming_items);
 $task_monitor_upcoming_items = array_slice($task_monitor_upcoming_items, 0, 8);
 $task_monitor_active_reminder_count = count(array_filter($task_monitor_reminder_list_items, fn($i)=>empty($i['is_completed'])));
+$abuse_tab_alert_count = $abuse_action_required ?: $abuse_critical;
+$task_monitor_abuse_metrics = [];
+if($abuse_summary){
+  $task_monitor_abuse_metrics = [
+    [
+      'label' => 'Action Required',
+      'count' => $abuse_action_required,
+      'meta' => $abuse_action_required > 0 ? 'Requires operator attention' : 'No action required',
+      'status' => $abuse_action_required > 0 ? 'overdue' : 'done',
+      'priority' => $abuse_action_required > 0 ? 'critical' : 'low',
+    ],
+    [
+      'label' => 'Open',
+      'count' => $abuse_open,
+      'meta' => 'Unresolved abuse reports',
+      'status' => $abuse_open > 0 ? 'new' : 'done',
+      'priority' => $abuse_open > 0 ? 'medium' : 'low',
+    ],
+    [
+      'label' => 'Waiting External',
+      'count' => $abuse_waiting_external,
+      'meta' => 'Waiting on required external response',
+      'status' => $abuse_waiting_external > 0 ? 'due-soon' : 'done',
+      'priority' => $abuse_waiting_external > 0 ? 'high' : 'low',
+    ],
+    [
+      'label' => 'Critical',
+      'count' => $abuse_critical,
+      'meta' => 'Critical open reports',
+      'status' => $abuse_critical > 0 ? 'overdue' : 'done',
+      'priority' => $abuse_critical > 0 ? 'critical' : 'low',
+    ],
+  ];
+  if($abuse_resolved_today > 0){
+    $task_monitor_abuse_metrics[] = [
+      'label' => 'Resolved Today',
+      'count' => $abuse_resolved_today,
+      'meta' => 'Closed during today\'s operations',
+      'status' => 'done',
+      'priority' => 'low',
+    ];
+  }
+}
 
 $page_title='Dashboard'; $active_page='dashboard';
 include 'includes/header.php';
@@ -1394,43 +1470,6 @@ include 'includes/header.php';
         <?php endif; ?>
       </div><!-- /cases panel -->
 
-      <?php if($abuse_summary):
-        $abuse_open = (int)($abuse_summary['open'] ?? 0);
-        $abuse_critical = (int)($abuse_summary['critical'] ?? 0);
-        $abuse_action_required = (int)($abuse_summary['action_required'] ?? $abuse_summary['over_sla'] ?? 0);
-        $abuse_resolved_today = (int)($abuse_summary['resolved_today'] ?? 0);
-        $abuse_oldest = is_array($abuse_summary['oldest_open'] ?? null) ? $abuse_summary['oldest_open'] : null;
-        $abuse_href = $abuse_oldest ? 'abuse-reports.php?id='.(int)$abuse_oldest['id'] : 'abuse-reports.php';
-      ?>
-      <a class="panel dashboard-abuse-panel <?=$abuse_action_required > 0 || $abuse_critical > 0 ? 'is-alert' : ''?>" href="<?=esc($abuse_href)?>">
-        <div class="panel-head">
-          <span class="panel-title">Abuse Reports</span>
-          <div class="panel-right">
-            <span class="panel-meta"><?=$abuse_open?> open</span>
-            <span class="panel-counter <?=dashboard_counter_class($abuse_action_required ?: $abuse_critical)?>"><?=min($abuse_action_required ?: $abuse_critical,99)?></span>
-          </div>
-        </div>
-        <div class="dashboard-abuse-grid" aria-label="Abuse report summary">
-          <span><b><?=$abuse_open?></b><em>Open</em></span>
-          <span><b><?=$abuse_critical?></b><em>Critical</em></span>
-          <span><b><?=$abuse_action_required?></b><em>Action Required</em></span>
-          <span><b><?=$abuse_resolved_today?></b><em>Resolved Today</em></span>
-        </div>
-        <div class="dashboard-abuse-focus">
-          <i data-lucide="<?=$abuse_action_required > 0 ? 'timer-off' : 'shield-alert'?>" class="icon-sm"></i>
-          <span>
-            <?php if($abuse_oldest): ?>
-            <strong><?=esc($abuse_oldest['report_number'] ?? ('#'.(int)$abuse_oldest['id']))?></strong>
-            <?=esc(dashboard_context_excerpt($abuse_oldest['title'] ?? 'Untitled abuse report', 70))?>
-            <?php else: ?>
-            <strong>Queue clear</strong>
-            No open abuse report needs attention.
-            <?php endif; ?>
-          </span>
-        </div>
-      </a>
-      <?php endif; ?>
-
     </div><!-- /col-left -->
 
     <div class="dashboard-workspace">
@@ -1670,6 +1709,7 @@ include 'includes/header.php';
               <span title="Checklist progress"><i data-lucide="list-checks" class="icon-xs"></i><b data-task-monitor-progress><?=$done_tasks?>/<?=$total_tasks?></b></span>
               <span title="Active reminders"><i data-lucide="bell" class="icon-xs"></i><b data-task-monitor-active-reminders><?=$task_monitor_active_reminder_count?></b></span>
               <span title="Meetings today"><i data-lucide="calendar-clock" class="icon-xs"></i><b><?=$task_monitor_today_meetings?></b></span>
+              <?php if($abuse_summary): ?><span title="Abuse reports"><i data-lucide="shield-alert" class="icon-xs"></i><b><?=$abuse_action_required?>/<?=$abuse_open?></b></span><?php endif; ?>
             </div>
           </div>
           <div class="panel-right task-monitoring-actions">
@@ -1680,6 +1720,9 @@ include 'includes/header.php';
         <div class="task-monitoring-tabs" role="tablist" aria-label="Task Monitoring">
           <button type="button" class="task-monitoring-tab active" role="tab" aria-selected="true" aria-controls="tm-pane-checklist" data-task-monitor-tab="checklist" data-all-href="monitoring.php"><i data-lucide="list-checks" class="icon-xs"></i>Checklist and Reminder</button>
           <button type="button" class="task-monitoring-tab" role="tab" aria-selected="false" aria-controls="tm-pane-assignments" data-task-monitor-tab="assignments" data-all-href="monitoring.php"><i data-lucide="user-check" class="icon-xs"></i>Assignments<?php if($task_monitor_active_assignment_count > 0): ?><span class="tm-tab-count"><?=esc($task_monitor_active_assignment_count)?></span><?php endif; ?></button>
+          <?php if($abuse_summary): ?>
+          <button type="button" class="task-monitoring-tab" role="tab" aria-selected="false" aria-controls="tm-pane-abuse" data-task-monitor-tab="abuse" data-all-href="abuse-reports.php"><i data-lucide="shield-alert" class="icon-xs"></i>Abuse Reports<?php if($abuse_tab_alert_count > 0): ?><span class="tm-tab-count"><?=esc((string)min($abuse_tab_alert_count, 99))?></span><?php endif; ?></button>
+          <?php endif; ?>
         </div>
 
         <div class="task-monitoring-viewport">
@@ -1793,6 +1836,63 @@ include 'includes/header.php';
               </div>
             </div>
           </section>
+
+          <?php if($abuse_summary): ?>
+          <section class="task-monitoring-pane" id="tm-pane-abuse" role="tabpanel" data-task-monitor-pane="abuse" hidden>
+            <div class="task-monitoring-grid">
+              <div class="tm-column tm-primary">
+                <div class="tm-column-head">
+                  <div><span>Abuse Reports</span><strong><?=$abuse_action_required?> action required · <?=$abuse_open?> open</strong></div>
+                  <div class="tm-column-actions">
+                    <span class="panel-counter <?=dashboard_counter_class($abuse_action_required)?>" title="<?=$abuse_action_required?> abuse reports require action"><?=$abuse_action_required?></span>
+                    <a href="abuse-reports.php" class="btn btn-ghost btn-sm">View All</a>
+                  </div>
+                </div>
+                <div class="tm-scroll tm-reminder-list" aria-label="Abuse report summary">
+                  <?php foreach($task_monitor_abuse_metrics as $metric): ?>
+                  <?=dashboard_monitor_metric_row_html($metric['label'], (int)$metric['count'], $metric['meta'], 'abuse-reports.php', $metric['status'], $metric['priority'])?>
+                  <?php endforeach; ?>
+                </div>
+              </div>
+
+              <div class="tm-column">
+                <div class="tm-column-head">
+                  <div><span>Operational Focus</span><strong><?=$abuse_action_required > 0 ? 'Needs review' : 'No action required'?></strong></div>
+                </div>
+                <?php if($abuse_action_required <= 0): ?>
+                <div class="tm-reminder-empty">
+                  <i data-lucide="shield-check" class="icon-sm"></i>
+                  <span>No action required</span>
+                  <small><?=$abuse_open > 0 ? esc($abuse_open.' open report'.($abuse_open===1?'':'s').' remain in monitoring.') : 'The abuse queue is clear.'?></small>
+                </div>
+                <?php elseif($abuse_oldest): ?>
+                <div class="tm-feed tm-scroll">
+                  <a class="tm-feed-item is-critical type-case-due" href="<?=esc($abuse_href)?>">
+                    <span class="tm-feed-icon"><i data-lucide="timer-off" class="icon-sm"></i></span>
+                    <span class="tm-feed-main">
+                      <span class="tm-feed-line">
+                        <span class="tm-type-badge">Action</span>
+                        <span class="tm-feed-title"><?=esc($abuse_oldest['report_number'] ?? ('#'.(int)$abuse_oldest['id']))?></span>
+                      </span>
+                      <span class="tm-feed-meta">
+                        <span><?=esc(dashboard_context_excerpt($abuse_oldest['title'] ?? 'Untitled abuse report', 72))?></span>
+                        <?php if(!empty($abuse_oldest['waiting_until'])): ?><span><?=esc(dashboard_context_when($abuse_oldest['waiting_until']))?></span><?php endif; ?>
+                      </span>
+                    </span>
+                    <span class="tm-priority-dot is-critical" title="Critical priority"></span>
+                  </a>
+                </div>
+                <?php else: ?>
+                <div class="tm-reminder-empty">
+                  <i data-lucide="shield-alert" class="icon-sm"></i>
+                  <span>Review abuse queue</span>
+                  <small>Action-required reports are available in Abuse Reports.</small>
+                </div>
+                <?php endif; ?>
+              </div>
+            </div>
+          </section>
+          <?php endif; ?>
 
         </div>
       </section>

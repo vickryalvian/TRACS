@@ -3621,12 +3621,12 @@ body.sa-modal-open {
 }
 
 .shift-flatpickr-calendar .flatpickr-day:focus-visible {
-  outline: 2px solid var(--blue);
+  outline: 2px solid var(--tracs-calendar-accent);
   outline-offset: -2px;
 }
 
 .shift-flatpickr-calendar .flatpickr-day.today:not(.selected) {
-  background: var(--blue-lt) !important;
+  background: var(--tracs-calendar-accent-soft) !important;
 }
 
 .shift-flatpickr-calendar .flatpickr-day.flatpickr-disabled {

@@ -239,7 +239,8 @@ class AbuseReportModel {
             SET waiting_started_at = COALESCE(waiting_started_at, created_at),
                 waiting_hours = CASE WHEN waiting_hours IN (24,48) THEN waiting_hours ELSE 24 END,
                 waiting_until = COALESCE(waiting_until, DATE_ADD(COALESCE(waiting_started_at, created_at), INTERVAL CASE WHEN waiting_hours IN (24,48) THEN waiting_hours ELSE 24 END HOUR))
-            WHERE waiting_until IS NULL
+            WHERE status = 'waiting_external'
+              AND waiting_until IS NULL
         ");
     }
 
@@ -386,9 +387,13 @@ class AbuseReportModel {
             : null;
         $nameservers = $this->cleanNameservers($input['nameserver_snapshot'] ?? null);
         $nameserverAt = $nameservers ? (self::normalizeDateTime($input['nameserver_snapshot_at'] ?? null) ?? date('Y-m-d H:i:s')) : null;
-        $waitingStarted = self::normalizeDateTime($input['waiting_started_at'] ?? null) ?? date('Y-m-d H:i:s');
         $waitingHours = $this->waitingHours($input['waiting_hours'] ?? 24);
-        $waitingUntil = self::normalizeDateTime($input['waiting_until'] ?? null) ?? $this->waitingDeadline($waitingStarted, $waitingHours);
+        $waitingStarted = $status === 'waiting_external'
+            ? (self::normalizeDateTime($input['waiting_started_at'] ?? null) ?? date('Y-m-d H:i:s'))
+            : null;
+        $waitingUntil = $status === 'waiting_external'
+            ? (self::normalizeDateTime($input['waiting_until'] ?? null) ?? $this->waitingDeadline($waitingStarted, $waitingHours))
+            : null;
         $resolvedAt = $status === 'resolved' ? date('Y-m-d H:i:s') : null;
         $closedAt = $status === 'closed' ? date('Y-m-d H:i:s') : null;
 
@@ -509,10 +514,13 @@ class AbuseReportModel {
         $nameserverAt = $nameservers
             ? (self::normalizeDateTime($input['nameserver_snapshot_at'] ?? ($old['nameserver_snapshot_at'] ?? null)) ?? date('Y-m-d H:i:s'))
             : null;
-        $waitingStarted = self::normalizeDateTime($input['waiting_started_at'] ?? ($old['waiting_started_at'] ?? ($old['created_at'] ?? null))) ?? date('Y-m-d H:i:s');
         $waitingHours = $this->waitingHours($input['waiting_hours'] ?? ($old['waiting_hours'] ?? 24));
-        $waitingUntil = self::normalizeDateTime($input['waiting_until'] ?? null)
-            ?? $this->waitingDeadline($waitingStarted, $waitingHours);
+        $waitingStarted = $status === 'waiting_external'
+            ? (self::normalizeDateTime($input['waiting_started_at'] ?? ($old['waiting_started_at'] ?? ($old['created_at'] ?? null))) ?? date('Y-m-d H:i:s'))
+            : null;
+        $waitingUntil = $status === 'waiting_external'
+            ? (self::normalizeDateTime($input['waiting_until'] ?? null) ?? $this->waitingDeadline($waitingStarted, $waitingHours))
+            : null;
         $resolvedAt = $old['resolved_at'];
         $closedAt = $old['closed_at'];
         if ($status === 'resolved' && empty($resolvedAt)) {
@@ -891,6 +899,7 @@ class AbuseReportModel {
         $summary = [
             'open' => 0,
             'critical' => 0,
+            'waiting_external' => 0,
             'over_sla' => 0,
             'action_required' => 0,
             'resolved_today' => 0,
@@ -900,6 +909,7 @@ class AbuseReportModel {
             SELECT
               SUM(status NOT IN ('resolved','closed')) AS open_count,
               SUM(status NOT IN ('resolved','closed') AND priority='critical') AS critical_count,
+              SUM(status='waiting_external') AS waiting_external_count,
               SUM(status NOT IN ('resolved','closed') AND (status='action_taken' OR (waiting_until IS NOT NULL AND waiting_until < NOW()))) AS action_required_count,
               SUM(status='resolved' AND DATE(resolved_at)=CURDATE()) AS resolved_today_count
             FROM tracs_abuse_reports
@@ -907,6 +917,7 @@ class AbuseReportModel {
         if ($result && ($row = $result->fetch_assoc())) {
             $summary['open'] = (int)($row['open_count'] ?? 0);
             $summary['critical'] = (int)($row['critical_count'] ?? 0);
+            $summary['waiting_external'] = (int)($row['waiting_external_count'] ?? 0);
             $summary['action_required'] = (int)($row['action_required_count'] ?? 0);
             $summary['over_sla'] = $summary['action_required'];
             $summary['resolved_today'] = (int)($row['resolved_today_count'] ?? 0);
