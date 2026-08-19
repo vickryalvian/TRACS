@@ -35,10 +35,10 @@ $critical_count = $critical;
 $allowed_filters = ['all', 'active', 'in_progress', 'critical', 'stuck', 'on_hold', 'overdue'];
 $allowed_sorts = ['operational', 'priority', 'overdue', 'next_check', 'created', 'updated', 'case_number'];
 $requested_filter = (string)($_GET['f'] ?? 'all');
-$requested_sort = (string)($_GET['sort'] ?? 'operational');
+$requested_sort = (string)($_GET['sort'] ?? 'updated');
 $f = in_array($requested_filter, $allowed_filters, true) ? $requested_filter : 'all';
 $q_raw = trim((string)($_GET['q'] ?? ''));
-$case_sort = in_array($requested_sort, $allowed_sorts, true) ? $requested_sort : 'operational';
+$case_sort = in_array($requested_sort, $allowed_sorts, true) ? $requested_sort : 'updated';
 
 $board_columns = [
   'attention' => ['title' => 'Need Attention', 'icon' => 'circle-alert', 'status' => 'active'],
@@ -173,12 +173,12 @@ include 'includes/header.php';
         <button type="button" role="menuitemradio" data-board-order="priority"><i data-lucide="flame" class="icon-xs"></i>Priority (Critical → Low)</button>
         <button type="button" role="menuitemradio" data-board-order="next_check"><i data-lucide="calendar-clock" class="icon-xs"></i>Next Check Date</button>
         <button type="button" role="menuitemradio" data-board-order="created"><i data-lucide="calendar-plus" class="icon-xs"></i>Created Date</button>
-        <button type="button" role="menuitemradio" data-board-order="updated"><i data-lucide="history" class="icon-xs"></i>Updated Date</button>
+        <button type="button" role="menuitemradio" data-board-order="updated" class="is-active"><i data-lucide="history" class="icon-xs"></i>Updated Date</button>
         <button type="button" role="menuitemradio" data-board-order="case_number"><i data-lucide="hash" class="icon-xs"></i>Case ID</button>
         <button type="button" role="menuitemradio" data-board-order="category"><i data-lucide="tag" class="icon-xs"></i>Category / Service</button>
         <button type="button" role="menuitemradio" data-board-order="assigned"><i data-lucide="user-round" class="icon-xs"></i>Assigned User</button>
         <div class="case-reorder-divider"></div>
-        <button type="button" role="menuitemradio" data-board-order="manual" class="is-active"><i data-lucide="hand" class="icon-xs"></i>Manual Order (your arrangement)</button>
+        <button type="button" role="menuitemradio" data-board-order="manual"><i data-lucide="hand" class="icon-xs"></i>Manual Order (your arrangement)</button>
       </div>
     </details>
     <details class="report-export-menu">

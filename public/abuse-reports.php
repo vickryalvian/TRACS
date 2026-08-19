@@ -143,10 +143,7 @@ include 'includes/header.php';
       <?php foreach($board_columns as $stage => $column): ?>
         <section class="abuse-column <?=$stage === 'action_required' ? 'is-action-required' : ''?>" data-abuse-column="<?=esc($stage)?>" data-abuse-status="<?=esc($column['status'])?>">
           <header class="abuse-column-head">
-            <div>
-              <strong><?=esc($column['label'])?></strong>
-              <small data-column-summary>0 reports</small>
-            </div>
+            <strong><?=esc($column['label'])?></strong>
             <span class="panel-counter" data-column-count>0</span>
           </header>
           <div class="abuse-column-list" data-abuse-dropzone="<?=esc($stage)?>"></div>

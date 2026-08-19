@@ -73,6 +73,8 @@ as urgent.
   normal page scrolling and a bounded column list.
 - Priority and status chips follow the compact Cases badge geometry, including
   severity dots and shared radius/typography tokens.
+- Column headers use one count badge only. Cards and list rows default to newest
+  activity first, falling back from last activity to updated and created time.
 - Board cards may show explicit text actions such as **Investigate** or
   **Resolve**. These labels must remain visible because they change workflow
   state.

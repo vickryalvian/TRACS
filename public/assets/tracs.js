@@ -2546,8 +2546,8 @@ const caseBoardState = {
   filteredCases: [],
   filter: 'all',
   query: '',
-  sort: 'operational',
-  boardOrder: 'manual',   // Workflow-board per-column ordering (see CASE_BOARD_ORDER_MODES)
+  sort: 'updated',
+  boardOrder: 'updated',   // Workflow-board per-column ordering (see CASE_BOARD_ORDER_MODES)
   draggedId: 0,
   initialized: false
 };
@@ -3016,8 +3016,8 @@ function caseCompareOperational(a,b){
     || caseCompareUpdated(a,b)
     || Number(b?.id||0)-Number(a?.id||0);
 }
-function sortCases(caseList,sortMode='operational'){
-  const mode=CASE_SORT_MODES.has(sortMode)?sortMode:'operational';
+function sortCases(caseList,sortMode='updated'){
+  const mode=CASE_SORT_MODES.has(sortMode)?sortMode:'updated';
   return [...caseList].sort((a,b)=>{
     if(mode==='priority')return caseComparePriority(a,b)||caseCompareOperational(a,b);
     if(mode==='overdue'){
@@ -3048,8 +3048,8 @@ function caseAssignedValue(item){
 }
 // Order a single board column. 'manual' honours the saved drag arrangement
 // (board_order); every other mode is a non-destructive view sort.
-function sortBoardColumn(items,mode='manual'){
-  const active=CASE_BOARD_ORDER_MODES.has(mode)?mode:'manual';
+function sortBoardColumn(items,mode='updated'){
+  const active=CASE_BOARD_ORDER_MODES.has(mode)?mode:'updated';
   const list=[...items];
   list.sort((a,b)=>{
     switch(active){
@@ -3517,7 +3517,7 @@ function initCaseBoard(){
   }
   caseBoardState.filter=CASE_FILTER_LABELS[workspace.dataset.caseFilter]?workspace.dataset.caseFilter:'all';
   caseBoardState.query=workspace.dataset.caseQuery||'';
-  caseBoardState.sort=CASE_SORT_MODES.has(workspace.dataset.caseSort)?workspace.dataset.caseSort:'operational';
+  caseBoardState.sort=CASE_SORT_MODES.has(workspace.dataset.caseSort)?workspace.dataset.caseSort:'updated';
   caseBoardState.initialized=true;
 
   const search=document.getElementById('caseSearchInput');

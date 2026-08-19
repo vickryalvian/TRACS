@@ -318,9 +318,8 @@ class AbuseReportModel {
                 ) latest ON latest.max_id = e.id
             ) le ON le.report_id = r.id
             ORDER BY FIELD(r.status, 'incoming','investigating','waiting_external','action_taken','resolved','closed'),
-                     r.board_order ASC,
-                     FIELD(r.priority, 'critical','high','medium','low'),
-                     r.created_at DESC
+                     COALESCE(le.created_at, r.updated_at, r.created_at) DESC,
+                     r.id DESC
         ";
         $result = $this->conn->query($sql);
         if (!$result) {

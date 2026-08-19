@@ -81,7 +81,8 @@
     canDelete: root.dataset.canDelete === '1' || window.TRACS_ABUSE_CAPS?.canDelete === true,
     previewId: 0,
     view: 'board',
-    sort: { field: 'priority', dir: 'asc' },
+    boardOrder: 'activity',
+    sort: { field: 'age', dir: 'desc' },
     createMode: 'single',
     saveInFlight: false,
     previewTimer: 0,
@@ -143,7 +144,7 @@
     const days = Math.floor(hours / 24);
     return `${days}d ${hours % 24}h`;
   };
-  const stageAge = report => relativeAge(report.last_activity_at || report.created_at || report.updated_at);
+  const stageAge = report => relativeAge(report.last_activity_at || report.updated_at || report.created_at);
   const isUrgent = report => !isDone(report) && (
     truthy(report.action_required)
     || truthy(report.over_sla)
@@ -267,10 +268,15 @@
   function sortReports(a, b) {
     const orderA = Number(a.board_order || 0);
     const orderB = Number(b.board_order || 0);
+    if (state.boardOrder === 'manual' && orderA !== orderB) return orderA - orderB;
+    const activityA = String(a.last_activity_at || a.updated_at || a.created_at || '');
+    const activityB = String(b.last_activity_at || b.updated_at || b.created_at || '');
+    const activity = activityB.localeCompare(activityA);
+    if (activity !== 0) return activity;
     if (orderA !== orderB) return orderA - orderB;
     const priority = (priorityRank[a.priority] ?? 9) - (priorityRank[b.priority] ?? 9);
     if (priority !== 0) return priority;
-    return String(b.created_at || '').localeCompare(String(a.created_at || ''));
+    return Number(b.id || 0) - Number(a.id || 0);
   }
 
   function renumberStage(stage) {
@@ -351,8 +357,8 @@
   function listSortValue(report, field) {
     if (field === 'priority') return priorityRank[report.priority] ?? 9;
     if (field === 'age') {
-      const date = new Date(String(report.last_activity_at || report.created_at || '').replace(' ', 'T'));
-      return Number.isNaN(date.getTime()) ? Number.MAX_SAFE_INTEGER : date.getTime();
+      const date = new Date(String(report.last_activity_at || report.updated_at || report.created_at || '').replace(' ', 'T'));
+      return Number.isNaN(date.getTime()) ? 0 : date.getTime();
     }
     if (field === 'status') return report.workflow_label || report.status_label || report.status || '';
     if (field === 'assignee') return report.assigned_staff || '';
@@ -477,6 +483,7 @@
       report.last_activity_at = report.updated_at || new Date().toISOString();
       report.last_activity_type = source || 'updated';
       updateReportInState(report);
+      state.boardOrder = 'activity';
       renderBoard();
       notify('Abuse report updated.', 'success');
       return report;
@@ -536,7 +543,6 @@
       if (!column || !list) return;
       const reports = visible.filter(report => report.workflow_stage === stage).sort(sortReports);
       $('[data-column-count]', column).textContent = reports.length;
-      $('[data-column-summary]', column).textContent = reports.length === 1 ? '1 report' : `${reports.length} reports`;
       list.innerHTML = reports.length
         ? reports.map(renderCard).join('')
         : '<div class="abuse-empty-column">No reports</div>';
@@ -818,6 +824,7 @@
       for (const row of rows) {
         const data = await jsonPost(apiUrls.create, { ...row, title: bulkTitle(row) });
         updateReportInState(data?.report || data);
+        state.boardOrder = 'activity';
         created += 1;
       }
       renderBoard();
@@ -1051,6 +1058,7 @@
   function refreshDetailSideData(report) {
     const updated = updateReportInState(report);
     if (!updated) return;
+    state.boardOrder = 'activity';
     state.detail = { ...(state.detail || {}), ...updated };
     renderTimeline(state.detail.timeline || []);
     renderNotes(state.detail.notes || []);
@@ -1113,6 +1121,7 @@
         : await jsonPost(apiUrls.create, payload);
       const report = data?.report || data;
       updateReportInState(report);
+      state.boardOrder = 'activity';
       fillDetail(report);
       notify(successMessage || (payload.id ? 'Abuse report updated.' : 'Abuse report created.'), 'success');
       if (!payload.id) closeDetail();
@@ -1168,7 +1177,9 @@
     const previous = state.reports.find(report => report.id === id);
     if (!previous) return;
     const oldStatus = previous.status;
+    const oldBoardOrder = state.boardOrder;
     const oldReports = state.reports.map(report => ({ ...report }));
+    state.boardOrder = source === 'drag_drop' ? 'manual' : 'activity';
     moveInState(id, status, beforeId);
     renderBoard();
     try {
@@ -1180,6 +1191,7 @@
       if (state.selectedId === id) openReport(id);
     } catch (error) {
       state.reports = oldReports;
+      state.boardOrder = oldBoardOrder;
       renderBoard();
       notify(error.message || 'Abuse report could not be moved.', 'error');
     }
