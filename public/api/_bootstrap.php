@@ -124,6 +124,7 @@ $script = basename((string)(parse_url($_SERVER['SCRIPT_NAME'] ?? '', PHP_URL_PAT
 $apiMethodMap = [
     'api_mom.php' => ['POST'],
     'abuse-report-create.php' => ['POST'],
+    'abuse-report-delete.php' => ['POST'],
     'abuse-report-evidence.php' => ['GET'],
     'abuse-report-evidence-upload.php' => ['POST'],
     'abuse-report-get.php' => ['GET', 'POST'],
@@ -215,6 +216,7 @@ if (isset($apiMethodMap[$script]) && !in_array($requestMethod, $apiMethodMap[$sc
 $apiPermissionMap = [
     'api_mom.php' => ['moms.manage'],
     'abuse-report-create.php' => ['abuse_reports.manage'],
+    'abuse-report-delete.php' => ['abuse_reports.view'],
     'abuse-report-evidence.php' => ['abuse_reports.view'],
     'abuse-report-evidence-upload.php' => ['abuse_reports.manage'],
     'abuse-report-get.php' => ['abuse_reports.view'],

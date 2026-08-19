@@ -57,4 +57,8 @@ class AbuseReportController {
     public function addNote(int $reportId, string $body, string $actorName): int {
         return $this->model->addNote($reportId, $body, $this->userId, $actorName);
     }
+
+    public function delete(int $reportId): array {
+        return $this->model->deleteReport($reportId);
+    }
 }

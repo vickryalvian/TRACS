@@ -89,6 +89,10 @@ function tracs_user_can_delete_cases(mysqli $conn, ?int $userId = null): bool {
     return tracs_is_supervisor_or_above($conn, $userId);
 }
 
+function tracs_user_can_delete_abuse_reports(mysqli $conn, ?int $userId = null): bool {
+    return tracs_is_supervisor_or_above($conn, $userId);
+}
+
 /**
  * MoM deletion is restricted to supervisor-tier roles and above, hard-coded
  * by role slug for the same reason as tracs_user_can_delete_cases(): a

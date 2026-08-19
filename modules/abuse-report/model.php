@@ -370,6 +370,50 @@ class AbuseReportModel {
         return $report;
     }
 
+    public function deleteReport(int $id): array {
+        $report = $this->rawReport($id, true);
+        if (!$report) {
+            throw new RuntimeException('Not found');
+        }
+
+        $evidence = [];
+        $stmt = $this->conn->prepare("SELECT stored_filename FROM tracs_abuse_report_evidence WHERE report_id = ?");
+        if (!$stmt) {
+            throw new RuntimeException('Database error');
+        }
+        $stmt->bind_param('i', $id);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            throw new RuntimeException('Database error');
+        }
+        $evidence = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+
+        foreach (['tracs_abuse_report_events', 'tracs_abuse_report_notes', 'tracs_abuse_report_evidence', 'tracs_abuse_reports'] as $table) {
+            $stmt = $this->conn->prepare("DELETE FROM {$table} WHERE " . ($table === 'tracs_abuse_reports' ? 'id' : 'report_id') . " = ?");
+            if (!$stmt) {
+                throw new RuntimeException('Database error');
+            }
+            $stmt->bind_param('i', $id);
+            if (!$stmt->execute()) {
+                $stmt->close();
+                throw new RuntimeException('Database error');
+            }
+            $deleted = $stmt->affected_rows;
+            $stmt->close();
+            if ($table === 'tracs_abuse_reports' && $deleted !== 1) {
+                throw new RuntimeException('Not found');
+            }
+        }
+
+        return [
+            'id' => $id,
+            'title' => (string)($report['title'] ?? 'Untitled'),
+            'report_number' => (string)($report['report_number'] ?? self::reportNumber($id)),
+            'evidence' => $evidence,
+        ];
+    }
+
     public function createReport(array $input, int $uid, string $actorName): int {
         $title = self::clean($input['title'] ?? '', 220);
         if ($title === '') {

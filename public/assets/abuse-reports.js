@@ -49,6 +49,7 @@
   const priorityRank = { critical: 0, high: 1, medium: 2, low: 3 };
   const apiUrls = {
     create: '/api/abuse-report-create.php',
+    delete: '/api/abuse-report-delete.php',
     update: '/api/abuse-report-update.php',
     get: '/api/abuse-report-get.php',
     status: '/api/abuse-report-status.php',
@@ -77,10 +78,13 @@
     detail: null,
     draggedId: 0,
     canManage: root.dataset.canManage === '1' || window.TRACS_ABUSE_CAPS?.canManage === true,
+    canDelete: root.dataset.canDelete === '1' || window.TRACS_ABUSE_CAPS?.canDelete === true,
+    previewId: 0,
     view: 'board',
     sort: { field: 'priority', dir: 'asc' },
     createMode: 'single',
     saveInFlight: false,
+    previewTimer: 0,
   };
 
   const notify = (message, type = 'info') => {
@@ -459,6 +463,49 @@
     }
   }
 
+  function setPreviewVisible(visible) {
+    const modal = $('#abusePreviewModal');
+    if (!modal) return;
+    if (visible) {
+      if (typeof window.tracsOpenModalElement === 'function') window.tracsOpenModalElement(modal);
+      else modal.classList.remove('hidden');
+    } else if (typeof window.tracsCloseModalElement === 'function') {
+      window.tracsCloseModalElement(modal, { bypassUnsaved: true });
+    } else {
+      modal.classList.add('hidden');
+      modal.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  function closePreview() {
+    state.previewId = 0;
+    setPreviewVisible(false);
+  }
+
+  function openPreview(id) {
+    const report = state.reports.find(item => item.id === toId(id));
+    if (!report) return;
+    state.previewId = report.id;
+    $('#abusePreviewRef') && ($('#abusePreviewRef').textContent = report.report_number || `#${report.id}`);
+    $('#abusePreviewTitle') && ($('#abusePreviewTitle').textContent = report.title || 'Untitled abuse report');
+    $('#abusePreviewType') && ($('#abusePreviewType').textContent = typeLabels[report.report_type] || eventLabel(report.report_type));
+    $('#abusePreviewPriority') && ($('#abusePreviewPriority').textContent = priorityLabels[report.priority] || eventLabel(report.priority));
+    $('#abusePreviewStatus') && ($('#abusePreviewStatus').textContent = report.workflow_label || report.status_label || statusLabels[report.status] || '-');
+    $('#abusePreviewDomain') && ($('#abusePreviewDomain').textContent = report.affected_domain || report.affected_ip || 'Not set');
+    $('#abusePreviewActivity') && ($('#abusePreviewActivity').textContent = formatDate(report.last_activity_at || report.updated_at));
+    $('#abusePreviewSla') && ($('#abusePreviewSla').textContent = formatDate(report.sla_due_at));
+    setPreviewVisible(true);
+    icons();
+  }
+
+  function schedulePreview(id) {
+    window.clearTimeout(state.previewTimer);
+    state.previewTimer = window.setTimeout(() => {
+      state.previewTimer = 0;
+      openPreview(id);
+    }, 180);
+  }
+
   function closeDetail() {
     const modal = $('#abuseDetailModal');
     if (!modal) return;
@@ -500,6 +547,49 @@
   function setValue(selector, value) {
     const node = $(selector);
     if (node) node.value = value ?? '';
+  }
+
+  const optionalFields = {
+    affected_ip: ['Affected IP', '#abuseIp'],
+    reporter_contact: ['Reporter Contact', '#abuseReporterContact'],
+    customer_name: ['Customer', '#abuseCustomer'],
+    customer_reference: ['Customer Ref', '#abuseCustomerRef'],
+    ticket_reference: ['Ticket Reference', '#abuseTicketRef'],
+    ticket_url: ['Ticket Link', '#abuseTicketUrl'],
+    ticket_sent_at: ['Ticket Sent', '#abuseTicketSentAt'],
+    tags: ['Tags', '#abuseTags'],
+    nameserver_snapshot: ['Nameserver Snapshot', '#abuseNameservers'],
+    nameserver_snapshot_at: ['Snapshot Taken', '#abuseNameserverAt'],
+  };
+
+  function syncOptionalFields(report) {
+    const addFields = $('#abuseAddFields');
+    const hidden = [];
+    Object.entries(optionalFields).forEach(([key, [label, selector]]) => {
+      const field = $(`[data-abuse-optional="${key}"]`, root);
+      if (!field) return;
+      const hasValue = String($(selector)?.value || report?.[key] || '').trim() !== '';
+      field.hidden = !hasValue;
+      if (!hasValue) hidden.push([key, label]);
+    });
+    if (!addFields) return;
+    addFields.innerHTML = hidden.map(([key, label]) => `<button type="button" class="abuse-add-field" data-abuse-add-field="${esc(key)}"><i data-lucide="plus" class="icon-sm"></i>${esc(label)}</button>`).join('');
+    addFields.hidden = hidden.length === 0;
+    icons();
+  }
+
+  function showOptionalField(key) {
+    const config = optionalFields[key];
+    const field = $(`[data-abuse-optional="${key}"]`, root);
+    if (!config || !field) return;
+    field.hidden = false;
+    if (field.closest('#abuseAdvancedFields')) {
+      const advanced = $('#abuseAdvancedFields');
+      if (advanced) advanced.open = true;
+    }
+    $(`[data-abuse-add-field="${key}"]`, root)?.remove();
+    if (!$('#abuseAddFields [data-abuse-add-field]')) $('#abuseAddFields')?.setAttribute('hidden', '');
+    $(config[1])?.focus();
   }
 
   function setOverviewPaneActive() {
@@ -676,6 +766,16 @@
     $('#abuseDetailRef') && ($('#abuseDetailRef').textContent = report.report_number || (report.id ? `#${report.id}` : 'New'));
     $('#abuseDetailTitle') && ($('#abuseDetailTitle').textContent = report.title || 'New abuse report');
     $('#abuseDetailSub') && ($('#abuseDetailSub').textContent = `${report.workflow_label || statusLabels[report.status] || 'Incoming'} · ${reportTarget(report)}`);
+    const statusBadge = $('#abuseDetailStatusBadge');
+    if (statusBadge) {
+      statusBadge.textContent = report.workflow_label || statusLabels[report.status] || 'Incoming';
+      statusBadge.className = `abuse-status-chip is-${esc(report.workflow_stage || stageForStatus(report.status))}`;
+    }
+    const priorityBadge = $('#abuseDetailPriorityBadge');
+    if (priorityBadge) {
+      priorityBadge.textContent = report.priority || 'medium';
+      priorityBadge.className = `abuse-pill is-${esc(report.priority || 'medium')}`;
+    }
     setValue('#abuseReportId', report.id || '');
     setValue('#abuseTitle', report.title || '');
     setValue('#abuseType', report.report_type || 'phishing');
@@ -705,8 +805,9 @@
     setValue('#abuseRelatedServer', report.related_server_id || '');
     setValue('#abuseRelatedCase', report.related_case_id || '');
     setValue('#abuseRelatedShift', report.related_shift_report_id || '');
+    syncOptionalFields(report);
     const advanced = $('#abuseAdvancedFields');
-    if (advanced) advanced.open = !creating;
+    if (advanced) advanced.open = sessionStorage.getItem('tracsAbuseAdvancedOpen') === '1';
     if (creating) resetBulkRows({
       report_type: report.report_type || 'phishing',
       priority: report.priority || 'medium',
@@ -755,6 +856,37 @@
       fillDetail(report);
     } catch (error) {
       notify(error.message || 'Abuse report could not be loaded.', 'error');
+    }
+  }
+
+  async function deleteReport() {
+    const id = toId($('#abuseReportId')?.value);
+    if (!id || !state.canDelete) return;
+    const ref = state.detail?.report_number || `#${id}`;
+    const dirty = window.TRACSUnsavedChanges?.isDirty($('#abuseDetailModal'));
+    const confirmed = await window.tracsConfirm?.({
+      type: 'warning',
+      title: 'Delete abuse report',
+      message: `${dirty ? 'Unsaved edits will also be lost. ' : ''}Delete ${ref} permanently, including its notes and evidence?`,
+      confirmText: 'Delete report',
+      destructive: true,
+    });
+    if (!confirmed) return;
+    const button = $('#abuseDeleteRecord');
+    button?.setAttribute('disabled', '');
+    try {
+      await jsonPost(apiUrls.delete, { id });
+      state.reports = state.reports.filter(report => report.id !== id);
+      state.detail = null;
+      state.selectedId = 0;
+      markDetailSaved($('#abuseDetailModal'));
+      setDetailVisible(false);
+      renderBoard();
+      notify(`${ref} deleted.`, 'success');
+    } catch (error) {
+      notify(error.message || 'Abuse report could not be deleted.', 'error');
+    } finally {
+      button?.removeAttribute('disabled');
     }
   }
 
@@ -1032,6 +1164,21 @@
       setCreateMode(createMode.dataset.abuseCreateMode);
       return;
     }
+    const addField = event.target.closest('[data-abuse-add-field]');
+    if (addField) {
+      showOptionalField(addField.dataset.abuseAddField);
+      return;
+    }
+    if (event.target.closest('#abuseOpenRecord')) {
+      const id = state.previewId;
+      closePreview();
+      openReport(id);
+      return;
+    }
+    if (event.target.closest('#abuseClosePreview, #abusePreviewDismiss')) {
+      closePreview();
+      return;
+    }
     if (event.target.closest('#abuseBulkAddRow')) {
       const last = $('#abuseBulkRows tr:last-child');
       const carry = last ? {
@@ -1050,12 +1197,12 @@
     }
     const row = event.target.closest('[data-abuse-row]');
     if (row) {
-      openReport(toId(row.dataset.abuseId));
+      schedulePreview(toId(row.dataset.abuseId));
       return;
     }
     const card = event.target.closest('.abuse-card');
     if (card) {
-      openReport(toId(card.dataset.abuseId));
+      schedulePreview(toId(card.dataset.abuseId));
       return;
     }
     const tab = event.target.closest('[data-abuse-tab]');
@@ -1112,7 +1259,21 @@
     }
     if (event.target.closest('#abuseClosePanel')) {
       closeDetail();
+      return;
     }
+    if (event.target.closest('#abuseDeleteRecord')) {
+      deleteReport();
+    }
+  });
+
+  root.addEventListener('dblclick', event => {
+    const target = event.target.closest('[data-abuse-row], .abuse-card');
+    if (!target || event.target.closest('button, a, input, select, textarea')) return;
+    event.preventDefault();
+    window.clearTimeout(state.previewTimer);
+    state.previewTimer = 0;
+    closePreview();
+    openReport(toId(target.dataset.abuseId));
   });
 
   root.addEventListener('dragstart', event => {
@@ -1164,6 +1325,9 @@
   $('#abuseWaitingHours')?.addEventListener('change', setWaitingDefaults);
   $('#abuseWaitingStartedAt')?.addEventListener('input', setWaitingDefaults);
   $('#abuseStatus')?.addEventListener('change', toggleWaitingFields);
+  $('#abuseAdvancedFields')?.addEventListener('toggle', event => {
+    sessionStorage.setItem('tracsAbuseAdvancedOpen', event.currentTarget.open ? '1' : '0');
+  });
   [
     '#abuseSearchInput', '#abuseStatusFilter', '#abusePriorityFilter', '#abuseReporterFilter',
     '#abuseAssignedFilter', '#abuseDateStart', '#abuseDateEnd', '#abuseHasAttachmentFilter',
