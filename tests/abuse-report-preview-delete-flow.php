@@ -45,10 +45,11 @@ abuse_flow_assert(
         && str_contains($script, 'data-tracs-dropdown="off"')
         && str_contains($script, "event.target.closest('.abuse-list-select, .abuse-list-editor-form')")
         && substr_count($script, 'cancelScheduledPreview();') >= 2
-        && str_contains($script, 'renderAdvanceButton(report, true)')
+        && !str_contains($script, 'renderAdvanceButton(report, true)')
+        && str_contains($script, 'title="Edit report details"')
         && str_contains($script, "replace(/^TRACS-AR-/, '#')")
         && str_contains($style, '.abuse-list-select:focus-within')
-        && str_contains($style, '.abuse-advance-btn.is-icon-only')
+        && !str_contains($style, '.abuse-advance-btn.is-icon-only')
         && str_contains($style, '.abuse-list-priority.is-critical')
         && str_contains($style, '.abuse-list-table th:nth-child(7)')
         && str_contains($style, '.abuse-list-select.is-status')

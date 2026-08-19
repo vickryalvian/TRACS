@@ -292,16 +292,15 @@
       </span>`;
   }
 
-  function renderAdvanceButton(report, iconOnly = false) {
+  function renderAdvanceButton(report) {
     if (!state.canManage) return '';
     const next = nextStatusFor(report);
     if (!next) return '';
     const label = advanceLabel(next);
-    const icon = next === 'investigating' ? 'search' : next === 'resolved' ? 'check' : 'arrow-right';
     return `
-      <button type="button" class="abuse-advance-btn ${iconOnly ? 'is-icon-only' : ''}" data-abuse-advance="${esc(next)}" data-abuse-id="${report.id}" title="${esc(label)}" aria-label="${esc(label)}">
-        ${iconOnly ? '' : `<span>${esc(label)}</span>`}
-        <i data-lucide="${icon}" class="icon-sm"></i>
+      <button type="button" class="abuse-advance-btn" data-abuse-advance="${esc(next)}" data-abuse-id="${report.id}" title="Move to ${esc(statusLabels[next] || label)}">
+        <span>${esc(label)}</span>
+        <i data-lucide="arrow-right" class="icon-sm"></i>
       </button>`;
   }
 
@@ -454,7 +453,7 @@
             ? renderListSelect(report, 'reporter', 'Reporter', report.reporter || 'Unknown reporter', reporterOptions(String(report.reporter || '').trim()), report.reporter ? '' : 'is-muted')
             : `<span class="${report.reporter ? '' : 'abuse-list-muted'}">${esc(report.reporter || 'Unknown reporter')}</span>`}</td>
           <td>${Number(report.evidence_count || 0)}</td>
-          <td><div class="abuse-list-actions">${renderAdvanceButton(report, true)}${state.canManage ? `<button type="button" class="abuse-list-edit-toggle" data-abuse-list-edit="${report.id}" aria-expanded="false" title="Edit row details" aria-label="Edit row details"><i data-lucide="pencil" class="icon-sm"></i></button>` : ''}</div></td>
+          <td><div class="abuse-list-actions">${state.canManage ? `<button type="button" class="abuse-list-edit-toggle" data-abuse-list-edit="${report.id}" aria-expanded="false" title="Edit report details" aria-label="Edit report details"><i data-lucide="pencil" class="icon-sm"></i></button>` : ''}</div></td>
         </tr>${state.canManage ? renderListEditor(report) : ''}`;
     }).join('') : '<tr><td colspan="8"><div class="abuse-empty-column">No reports match the current filters</div></td></tr>';
     $$('[data-abuse-sort]', root).forEach(button => {

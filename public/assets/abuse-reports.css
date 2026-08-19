@@ -624,22 +624,6 @@
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
-.abuse-advance-btn.is-icon-only {
-  width: 30px;
-  min-height: 30px;
-  padding: 0;
-  border-color: transparent;
-  color: var(--tx3);
-  background: transparent;
-}
-
-.abuse-advance-btn.is-icon-only:hover,
-.abuse-advance-btn.is-icon-only:focus-visible {
-  color: var(--tx1);
-  border-color: var(--bd2);
-  background: var(--s3);
-}
-
 .abuse-empty-column {
   display: grid;
   place-items: center;
