@@ -43,6 +43,8 @@ abuse_flow_assert(
         && str_contains($script, "name=\"description\"")
         && str_contains($script, 'await jsonPost(apiUrls.update, { id, ...patch })')
         && str_contains($script, 'data-tracs-dropdown="off"')
+        && str_contains($script, "event.target.closest('.abuse-list-select, .abuse-list-editor-form')")
+        && substr_count($script, 'cancelScheduledPreview();') >= 2
         && str_contains($script, 'renderAdvanceButton(report, true)')
         && str_contains($script, "replace(/^TRACS-AR-/, '#')")
         && str_contains($style, '.abuse-list-select:focus-within')

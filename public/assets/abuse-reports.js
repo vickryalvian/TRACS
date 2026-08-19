@@ -604,6 +604,11 @@
     }, 180);
   }
 
+  function cancelScheduledPreview() {
+    window.clearTimeout(state.previewTimer);
+    state.previewTimer = 0;
+  }
+
   function closeDetail() {
     const modal = $('#abuseDetailModal');
     if (!modal) return;
@@ -1273,7 +1278,10 @@
       toggleListEditor(toId(listEditCancel.dataset.abuseListEditCancel), false);
       return;
     }
-    if (event.target.closest('.abuse-list-control, .abuse-list-editor-form')) return;
+    if (event.target.closest('.abuse-list-select, .abuse-list-editor-form')) {
+      cancelScheduledPreview();
+      return;
+    }
     if (event.target.closest('#abuseOpenRecord')) {
       const id = state.previewId;
       closePreview();
@@ -1424,6 +1432,7 @@
   root.addEventListener('change', event => {
     const control = event.target.closest('[data-abuse-list-field]');
     if (!control) return;
+    cancelScheduledPreview();
     updateListFields(toId(control.dataset.abuseId), { [control.dataset.abuseListField]: control.value }, `list_${control.dataset.abuseListField}`);
   });
   root.addEventListener('submit', event => {
