@@ -36,13 +36,18 @@ abuse_flow_assert(
     'The full editor must preserve compact-layout and optional-field behavior.'
 );
 abuse_flow_assert(
-    str_contains($script, 'data-abuse-list-field="status"')
-        && str_contains($script, 'data-abuse-list-field="assigned_user_id"')
-        && str_contains($script, 'data-abuse-list-field="reporter"')
+    str_contains($script, "renderListSelect(report, 'status'")
+        && str_contains($script, "renderListSelect(report, 'assigned_user_id'")
+        && str_contains($script, "renderListSelect(report, 'reporter'")
         && str_contains($script, 'data-abuse-list-editor-form')
         && str_contains($script, "name=\"description\"")
         && str_contains($script, 'await jsonPost(apiUrls.update, { id, ...patch })')
-        && str_contains($style, '.abuse-list-control:hover')
+        && str_contains($script, 'data-tracs-dropdown="off"')
+        && str_contains($script, 'renderAdvanceButton(report, true)')
+        && str_contains($script, "replace(/^TRACS-AR-/, '#')")
+        && str_contains($style, '.abuse-list-select:focus-within')
+        && str_contains($style, '.abuse-advance-btn.is-icon-only')
+        && str_contains($style, '.abuse-list-priority.is-critical')
         && str_contains($style, '.abuse-list-editor-form')
         && str_contains($page, 'class="abuse-detail-meta"'),
     'List editing must use compact controls, preserve notes editing, and share the normal update API.'

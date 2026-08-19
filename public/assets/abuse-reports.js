@@ -292,15 +292,16 @@
       </span>`;
   }
 
-  function renderAdvanceButton(report) {
+  function renderAdvanceButton(report, iconOnly = false) {
     if (!state.canManage) return '';
     const next = nextStatusFor(report);
     if (!next) return '';
     const label = advanceLabel(next);
+    const icon = next === 'investigating' ? 'search' : next === 'resolved' ? 'check' : 'arrow-right';
     return `
-      <button type="button" class="abuse-advance-btn" data-abuse-advance="${esc(next)}" data-abuse-id="${report.id}" title="Move to ${esc(statusLabels[next] || label)}">
-        <span>${esc(label)}</span>
-        <i data-lucide="arrow-right" class="icon-sm"></i>
+      <button type="button" class="abuse-advance-btn ${iconOnly ? 'is-icon-only' : ''}" data-abuse-advance="${esc(next)}" data-abuse-id="${report.id}" title="${esc(label)}" aria-label="${esc(label)}">
+        ${iconOnly ? '' : `<span>${esc(label)}</span>`}
+        <i data-lucide="${icon}" class="icon-sm"></i>
       </button>`;
   }
 
@@ -374,6 +375,18 @@
     .join('');
   const statusSelectOptions = selected => selectOptions(Object.fromEntries(statuses.map(status => [status, statusLabels[status] || eventLabel(status)])), selected);
 
+  function renderListSelect(report, field, label, value, options, modifier = '') {
+    return `
+      <span class="abuse-list-select ${modifier}" title="Click to change ${esc(label.toLowerCase())}">
+        <span class="abuse-list-select-value">${esc(value)}</span>
+        <select data-tracs-dropdown="off" data-abuse-list-field="${esc(field)}" data-abuse-id="${report.id}" aria-label="${esc(label)} for ${esc(report.report_number)}">${options}</select>
+      </span>`;
+  }
+
+  function shortReportNumber(report) {
+    return String(report.report_number || `#${report.id}`).replace(/^TRACS-AR-/, '#');
+  }
+
   function assigneeOptions(selected) {
     return Array.from($('#abuseAssignedUser')?.options || []).map(option =>
       `<option value="${esc(option.value)}" ${String(option.value) === String(selected ?? '') ? 'selected' : ''}>${esc(option.textContent || 'Unassigned')}</option>`
@@ -415,25 +428,33 @@
       const stageText = stageAge(report) || report.open_age || '-';
       return `
         <tr class="abuse-list-row ${urgent ? 'is-overdue' : ''}" data-abuse-row data-abuse-id="${report.id}">
-          <td>${state.canManage ? `<select class="abuse-list-control is-priority" data-abuse-list-field="priority" data-abuse-id="${report.id}" aria-label="Priority for ${esc(report.report_number)}">${selectOptions(priorityLabels, report.priority)}</select>` : `<span class="abuse-pill is-${esc(report.priority)}">${esc(report.priority)}</span>`}</td>
+          <td>${state.canManage
+            ? renderListSelect(report, 'priority', 'Priority', priorityLabels[report.priority] || report.priority, selectOptions(priorityLabels, report.priority), `is-priority is-${esc(report.priority)}`)
+            : `<span class="abuse-list-priority is-${esc(report.priority)}">${esc(priorityLabels[report.priority] || report.priority)}</span>`}</td>
           <td>
             <div class="abuse-list-report">
-              <strong>${esc(report.report_number || `#${report.id}`)} · ${esc(report.title || 'Untitled abuse report')}</strong>
-              <span>${esc(reportTarget(report))}</span>
+              <strong>${esc(report.title || 'Untitled abuse report')}</strong>
+              <div class="abuse-list-report-meta"><span>${esc(shortReportNumber(report))}</span><span>${esc(reportTarget(report))}</span></div>
               ${report.description ? `<small>${esc(report.description)}</small>` : ''}
             </div>
           </td>
           <td>
             <div class="abuse-list-status">
-              ${state.canManage ? `<select class="abuse-list-control" data-abuse-list-field="status" data-abuse-id="${report.id}" aria-label="Status for ${esc(report.report_number)}">${statusSelectOptions(report.status)}</select>` : `<span class="abuse-status-chip is-${esc(report.workflow_stage)}">${esc(report.workflow_label || statusLabels[report.workflow_stage] || report.status_label)}</span>`}
+              ${state.canManage
+                ? renderListSelect(report, 'status', 'Status', report.workflow_label || statusLabels[report.workflow_stage] || report.status_label, statusSelectOptions(report.status), `is-status is-${esc(report.workflow_stage)}`)
+                : `<span class="abuse-list-status-text is-${esc(report.workflow_stage)}">${esc(report.workflow_label || statusLabels[report.workflow_stage] || report.status_label)}</span>`}
               ${renderUrgencyBadge(report)}
             </div>
           </td>
           <td><span class="abuse-list-age"><strong>${esc(stageText)}</strong><small>stage</small></span></td>
-          <td>${state.canManage ? `<select class="abuse-list-control" data-abuse-list-field="assigned_user_id" data-abuse-id="${report.id}" aria-label="Assignee for ${esc(report.report_number)}">${assigneeOptions(report.assigned_user_id)}</select>` : renderAssignee(report)}</td>
-          <td>${state.canManage ? `<select class="abuse-list-control" data-abuse-list-field="reporter" data-abuse-id="${report.id}" aria-label="Reporter for ${esc(report.report_number)}">${reporterOptions(String(report.reporter || '').trim())}</select>` : esc(report.reporter || 'Unknown reporter')}</td>
+          <td>${state.canManage
+            ? renderListSelect(report, 'assigned_user_id', 'Assignee', report.assigned_staff || 'Unassigned', assigneeOptions(report.assigned_user_id), report.assigned_staff ? '' : 'is-muted')
+            : report.assigned_staff ? renderAssignee(report) : '<span class="abuse-list-muted">Unassigned</span>'}</td>
+          <td>${state.canManage
+            ? renderListSelect(report, 'reporter', 'Reporter', report.reporter || 'Unknown reporter', reporterOptions(String(report.reporter || '').trim()), report.reporter ? '' : 'is-muted')
+            : `<span class="${report.reporter ? '' : 'abuse-list-muted'}">${esc(report.reporter || 'Unknown reporter')}</span>`}</td>
           <td>${Number(report.evidence_count || 0)}</td>
-          <td><div class="abuse-list-actions">${renderAdvanceButton(report)}${state.canManage ? `<button type="button" class="abuse-list-edit-toggle" data-abuse-list-edit="${report.id}" aria-expanded="false" title="Edit row details" aria-label="Edit row details"><i data-lucide="pencil" class="icon-sm"></i></button>` : ''}</div></td>
+          <td><div class="abuse-list-actions">${renderAdvanceButton(report, true)}${state.canManage ? `<button type="button" class="abuse-list-edit-toggle" data-abuse-list-edit="${report.id}" aria-expanded="false" title="Edit row details" aria-label="Edit row details"><i data-lucide="pencil" class="icon-sm"></i></button>` : ''}</div></td>
         </tr>${state.canManage ? renderListEditor(report) : ''}`;
     }).join('') : '<tr><td colspan="8"><div class="abuse-empty-column">No reports match the current filters</div></td></tr>';
     $$('[data-abuse-sort]', root).forEach(button => {
