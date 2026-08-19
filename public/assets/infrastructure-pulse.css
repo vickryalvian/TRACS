@@ -1514,8 +1514,6 @@
   gap: var(--dashboard-inner-gap);
   min-height: 68px;
   padding: 0;
-  border-top: 1px solid color-mix(in srgb, var(--bd1) 70%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, var(--bd1) 70%, transparent);
 }
 
 .infra-dashboard-widget__metrics div {

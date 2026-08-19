@@ -5962,7 +5962,6 @@ function openScreenshotHistoryModal(id) {
       <div class="screenshot-result-actions">
         <button type="button" class="btn btn-ghost screenshot-action" data-action="download" data-region="single"><i data-lucide="download" class="icon-sm"></i> Download</button>
         <button type="button" class="btn btn-ghost screenshot-action" data-action="view" data-region="single"><i data-lucide="maximize-2" class="icon-sm"></i> Open Full Size</button>
-        <button type="button" class="btn btn-ghost screenshot-action" data-action="copy-url" data-region="single"><i data-lucide="copy" class="icon-sm"></i> Copy Image URL</button>
         <button type="button" class="btn btn-ghost screenshot-action" data-action="recapture-modal"><i data-lucide="rotate-cw" class="icon-sm"></i> Capture Again</button>
       </div>
     </div>
@@ -6165,7 +6164,6 @@ async function captureSingleRegion(raw, region) {
           <div class="screenshot-result-actions">
             <button type="button" class="btn btn-ghost screenshot-action" data-action="download" data-region="single"><i data-lucide="download" class="icon-sm"></i> Download</button>
             <button type="button" class="btn btn-ghost screenshot-action" data-action="view" data-region="single"><i data-lucide="maximize-2" class="icon-sm"></i> Open Full Size</button>
-            <button type="button" class="btn btn-ghost screenshot-action" data-action="copy-url" data-region="single"><i data-lucide="copy" class="icon-sm"></i> Copy Image URL</button>
             <button type="button" class="btn btn-ghost screenshot-action" data-action="recapture-modal"><i data-lucide="rotate-cw" class="icon-sm"></i> Capture Again</button>
           </div>
         </div>
@@ -6264,15 +6262,6 @@ async function screenshotResultAction(action, key) {
     } catch (err) {
       console.error('Screenshot copy failed:', err);
       setScreenshotStatus('Copy not supported in this browser — use Download instead.', true);
-    }
-  } else if (action === 'copy-url') {
-    const url = entry.imageUrl || entry.dataUrl;
-    try {
-      await navigator.clipboard.writeText(url);
-      showToast('Image URL copied to clipboard.', 'success', { context: 'modal' });
-    } catch (err) {
-      console.error('Copy image URL failed:', err);
-      showToast('Could not copy the image URL.', 'error', { context: 'modal' });
     }
   }
 }
