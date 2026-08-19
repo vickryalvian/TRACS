@@ -25,10 +25,13 @@ submit_flow_assert(
     str_contains($abuse, 'function closeDetail()')
         && str_contains($abuse, 'requestModalClose(modal, close)')
         && str_contains($abuse, 'if (state.saveInFlight) return null;')
-        && str_contains($abuse, "if (!payload.id && options.refill !== false) closeDetail();")
+        && str_contains($abuse, 'if (!payload.id) closeDetail();')
+        && !str_contains($abuse, 'options.refill')
         && str_contains($abuse, 'refreshDetailSideData(data?.report)')
         && str_contains($abuse, "markDetailSaved($('#abuseNoteForm'))")
         && str_contains($abuse, "markDetailSaved($('#abuseEvidenceForm'))")
+        && !str_contains($abuse, 'saveAndAddAnother')
+        && !str_contains($abusePage, 'Save and Add Another')
         && str_contains($abusePage, 'data-unsaved-no-auto-save')
         && str_contains($guard, "modal.matches('[data-unsaved-no-auto-save]') ? null"),
     'The Abuse Report modal must guard closes, serialize saves, and preserve unrelated dirty fields.'

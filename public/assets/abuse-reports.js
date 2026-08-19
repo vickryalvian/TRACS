@@ -863,7 +863,7 @@
     };
   }
 
-  async function saveReport(successMessage = '', options = {}) {
+  async function saveReport(successMessage = '') {
     if (state.saveInFlight) return null;
     const payload = collectReport();
     if (!payload.title.trim()) {
@@ -883,9 +883,9 @@
         : await jsonPost(apiUrls.create, payload);
       const report = data?.report || data;
       updateReportInState(report);
-      if (options.refill !== false) fillDetail(report);
+      fillDetail(report);
       notify(successMessage || (payload.id ? 'Abuse report updated.' : 'Abuse report created.'), 'success');
-      if (!payload.id && options.refill !== false) closeDetail();
+      if (!payload.id) closeDetail();
       return report;
     } catch (error) {
       notify(error.message || 'Abuse report could not be saved.', 'error');
@@ -896,18 +896,6 @@
       modal?.removeAttribute('aria-busy');
       content?.removeAttribute('inert');
     }
-  }
-
-  async function saveAndAddAnother() {
-    if (toId($('#abuseReportId')?.value)) {
-      await saveReport();
-      return;
-    }
-    const carry = bulkCarry();
-    const report = await saveReport('Abuse report created.', { refill: false });
-    if (!report) return;
-    fillDetail({ ...blankReport(), ...carry });
-    $('#abuseTitle')?.focus();
   }
 
   function orderedIdsFor(stage, status) {
@@ -1042,10 +1030,6 @@
     const createMode = event.target.closest('[data-abuse-create-mode]');
     if (createMode) {
       setCreateMode(createMode.dataset.abuseCreateMode);
-      return;
-    }
-    if (event.target.closest('#abuseSaveAddAnotherBtn')) {
-      saveAndAddAnother();
       return;
     }
     if (event.target.closest('#abuseBulkAddRow')) {

@@ -238,7 +238,6 @@ include 'includes/header.php';
           <?php if($can_manage): ?>
           <div class="abuse-detail-actions">
             <button type="button" class="btn btn-ghost" id="abuseResetBtn">Reset</button>
-            <button type="button" class="btn btn-ghost abuse-create-only" id="abuseSaveAddAnotherBtn"><i data-lucide="copy-plus" class="icon-sm"></i>Save and Add Another</button>
             <button type="submit" class="btn btn-primary" id="abuseSaveBtn"><i data-lucide="check" class="icon-sm"></i>Save Report</button>
           </div>
           <?php endif; ?>
