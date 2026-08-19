@@ -80,6 +80,7 @@
     view: 'board',
     sort: { field: 'priority', dir: 'asc' },
     createMode: 'single',
+    saveInFlight: false,
   };
 
   const notify = (message, type = 'info') => {
@@ -447,6 +448,7 @@
     const modal = $('#abuseDetailModal');
     if (!modal) return;
     if (visible) {
+      if (!modal.classList.contains('hidden') && !modal.hidden && modal.getAttribute('aria-hidden') !== 'true') return;
       if (typeof window.tracsOpenModalElement === 'function') window.tracsOpenModalElement(modal);
       else modal.classList.remove('hidden');
     } else if (typeof window.tracsCloseModalElement === 'function') {
@@ -457,10 +459,38 @@
     }
   }
 
-  function markDetailSaved() {
+  function closeDetail() {
     const modal = $('#abuseDetailModal');
-    if (typeof window.tracsMarkSaved === 'function') window.tracsMarkSaved(modal);
-    else window.TRACSUnsavedChanges?.markSaved(modal);
+    if (!modal) return;
+    const close = () => {
+      state.selectedId = 0;
+      setDetailVisible(false);
+      renderBoard();
+    };
+    if (window.TRACSUnsavedChanges?.isDirty(modal)) {
+      window.TRACSUnsavedChanges.requestModalClose(modal, close);
+      return;
+    }
+    close();
+  }
+
+  function reportSaveRoots() {
+    return [$('#abuseOverviewPane'), $('[data-abuse-pane="relationships"]', root)].filter(Boolean);
+  }
+
+  function markDetailSaved(...roots) {
+    const modal = $('#abuseDetailModal');
+    const savedRoots = roots.filter(Boolean);
+    if (!modal) return;
+    if (window.TRACSUnsavedChanges) {
+      (savedRoots.length ? savedRoots : [modal]).forEach(savedRoot => window.TRACSUnsavedChanges.markSaved(savedRoot));
+      modal.dispatchEvent(new CustomEvent('tracs:save-success', {
+        bubbles: true,
+        detail: { root: savedRoots[0] || modal },
+      }));
+    } else if (typeof window.tracsMarkSaved === 'function') {
+      window.tracsMarkSaved(savedRoots[0] || modal);
+    }
   }
 
   function markDetailSaveFailed(error) {
@@ -605,7 +635,7 @@
       renderBoard();
       const carry = rows[rows.length - 1] || bulkCarry();
       resetBulkRows({ report_type: carry.report_type, priority: carry.priority });
-      markDetailSaved();
+      markDetailSaved($('#abuseBulkPane'));
       notify(`${created} abuse ${created === 1 ? 'report' : 'reports'} created.`, 'success');
     } catch (error) {
       renderBoard();
@@ -689,7 +719,7 @@
     updateCreateChrome();
     window.TRACSDropdowns?.syncAll?.();
     renderBoard();
-    markDetailSaved();
+    markDetailSaved(...reportSaveRoots());
   }
 
   function blankReport() {
@@ -714,11 +744,13 @@
   }
 
   async function openReport(id) {
-    if (!id) return;
-    state.selectedId = id;
+    const requestedId = toId(id);
+    if (!requestedId) return;
+    state.selectedId = requestedId;
     renderBoard();
     try {
-      const report = await jsonGet(`${apiUrls.get}?id=${encodeURIComponent(id)}`);
+      const report = await jsonGet(`${apiUrls.get}?id=${encodeURIComponent(requestedId)}`);
+      if (state.selectedId !== requestedId) return;
       updateReportInState(report);
       fillDetail(report);
     } catch (error) {
@@ -786,6 +818,17 @@
     `).join('') : '<div class="abuse-empty-column">No activity yet</div>';
   }
 
+  function refreshDetailSideData(report) {
+    const updated = updateReportInState(report);
+    if (!updated) return;
+    state.detail = { ...(state.detail || {}), ...updated };
+    renderTimeline(state.detail.timeline || []);
+    renderNotes(state.detail.notes || []);
+    renderEvidence(state.detail.evidence || []);
+    renderActivity(state.detail.timeline || []);
+    renderBoard();
+  }
+
   function collectReport() {
     const id = toId($('#abuseReportId')?.value);
     return {
@@ -821,6 +864,7 @@
   }
 
   async function saveReport(successMessage = '', options = {}) {
+    if (state.saveInFlight) return null;
     const payload = collectReport();
     if (!payload.title.trim()) {
       notify('Title is required.', 'warning');
@@ -828,6 +872,11 @@
       markDetailSaveFailed(new Error('Title is required'));
       return null;
     }
+    const modal = $('#abuseDetailModal');
+    const content = $('#abuseDetailContent');
+    state.saveInFlight = true;
+    modal?.setAttribute('aria-busy', 'true');
+    content?.setAttribute('inert', '');
     try {
       const data = payload.id
         ? await jsonPost(apiUrls.update, payload)
@@ -841,6 +890,10 @@
       notify(error.message || 'Abuse report could not be saved.', 'error');
       markDetailSaveFailed(error);
       return null;
+    } finally {
+      state.saveInFlight = false;
+      modal?.removeAttribute('aria-busy');
+      content?.removeAttribute('inert');
     }
   }
 
@@ -922,8 +975,8 @@
     try {
       const data = await jsonPost(apiUrls.note, { id, note: body });
       $('#abuseNoteBody').value = '';
-      updateReportInState(data?.report);
-      fillDetail(data?.report);
+      refreshDetailSideData(data?.report);
+      markDetailSaved($('#abuseNoteForm'));
       notify('Note added.', 'success');
     } catch (error) {
       notify(error.message || 'Note could not be saved.', 'error');
@@ -946,8 +999,8 @@
       if (!response.ok || payload.success === false) throw new Error(payload.message || 'Evidence could not be uploaded.');
       input.value = '';
       const report = payload.data?.report;
-      updateReportInState(report);
-      fillDetail(report);
+      refreshDetailSideData(report);
+      markDetailSaved($('#abuseEvidenceForm'));
       notify('Evidence uploaded.', 'success');
     } catch (error) {
       notify(error.message || 'Evidence could not be uploaded.', 'error');
@@ -1037,6 +1090,10 @@
     }
     const move = event.target.closest('[data-abuse-move]');
     if (move) {
+      if (window.TRACSUnsavedChanges?.isDirty($('#abuseDetailModal'))) {
+        notify('Save or reset your edits before changing the report status.', 'warning');
+        return;
+      }
       moveReport(toId($('#abuseReportId')?.value), move.dataset.abuseMove, 0, 'quick_action');
       return;
     }
@@ -1069,9 +1126,7 @@
       return;
     }
     if (event.target.closest('#abuseClosePanel')) {
-      state.selectedId = 0;
-      setDetailVisible(false);
-      renderBoard();
+      closeDetail();
     }
   });
 

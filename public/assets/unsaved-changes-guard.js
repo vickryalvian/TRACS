@@ -398,7 +398,7 @@
   function autoRegisterModals() {
     document.querySelectorAll('.modal-overlay, .dpc-modal, .infra-modal, .cf-modal').forEach(modal => {
       if (!modal.querySelector(editableSelector) || modal.matches('[data-unsaved-ignore]')) return;
-      const saveButton = modal.querySelector(
+      const saveButton = modal.matches('[data-unsaved-no-auto-save]') ? null : modal.querySelector(
         '[data-unsaved-save], button[type="submit"], input[type="submit"], [id$="SaveBtn"], .modal-foot .btn-primary, .dpc-modal-footer .btn-primary'
       );
       register({
@@ -470,9 +470,10 @@
   document.addEventListener('focusin', event => snapshot(event.target), true);
   document.addEventListener('input', event => syncControl(event.target), true);
   document.addEventListener('change', event => syncControl(event.target), true);
-  document.addEventListener('submit', event => {
+  function handleSubmit(event) {
     const form = event.target;
     if (!(form instanceof HTMLFormElement)) return;
+    if (event.defaultPrevented) return;
     if (bypassForms.has(form)) {
       bypassForms.delete(form);
       queueMicrotask(() => {
@@ -499,7 +500,7 @@
     queueMicrotask(() => {
       if (!event.defaultPrevented) allowNextUnload = true;
     });
-  }, true);
+  }
   document.addEventListener('tracs:save-success', event => markSaved(event.detail?.root || event.target), true);
 
   document.addEventListener('click', event => {
@@ -542,6 +543,7 @@
     autoRegisterForms();
     autoRegisterModals();
     autoRegisterEditablePage();
+    document.addEventListener('submit', handleSubmit);
   });
 
   global.TRACSUnsavedChanges = {

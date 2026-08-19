@@ -174,7 +174,7 @@ include 'includes/header.php';
     </div>
   </section>
 
-  <div class="modal-overlay hidden abuse-detail-modal" id="abuseDetailModal" aria-hidden="true">
+  <div class="modal-overlay hidden abuse-detail-modal" id="abuseDetailModal" data-unsaved-no-auto-save aria-hidden="true">
     <div class="modal modal-ticket abuse-modal" id="abuseDetailPanel" aria-live="polite">
       <div class="abuse-detail-content" id="abuseDetailContent">
         <header class="modal-head abuse-detail-head">
