@@ -59,6 +59,8 @@ abuse_flow_assert(
         && str_contains($style, '--abuse-pill-accent')
         && str_contains($style, '--abuse-status-accent')
         && str_contains($style, '.abuse-status-chip.is-investigating { --abuse-status-accent: var(--cyan); }')
+        && preg_match('/\.abuse-indicator\s*\{[^}]*border-radius:\s*999px;/s', $style) === 1
+        && preg_match('/\.abuse-tag\s*\{[^}]*border-radius:\s*999px;/s', $style) === 1
         && str_contains($page, 'class="abuse-detail-meta"'),
     'List editing must use compact controls, preserve notes editing, and share the normal update API.'
 );
