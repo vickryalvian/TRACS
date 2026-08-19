@@ -25,6 +25,7 @@ submit_flow_assert(
     str_contains($abuse, 'function closeDetail()')
         && str_contains($abuse, 'requestModalClose(modal, close)')
         && str_contains($abuse, 'if (state.saveInFlight) return null;')
+        && str_contains($abuse, "if (!payload.id && options.refill !== false) closeDetail();")
         && str_contains($abuse, 'refreshDetailSideData(data?.report)')
         && str_contains($abuse, "markDetailSaved($('#abuseNoteForm'))")
         && str_contains($abuse, "markDetailSaved($('#abuseEvidenceForm'))")

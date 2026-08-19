@@ -885,6 +885,7 @@
       updateReportInState(report);
       if (options.refill !== false) fillDetail(report);
       notify(successMessage || (payload.id ? 'Abuse report updated.' : 'Abuse report created.'), 'success');
+      if (!payload.id && options.refill !== false) closeDetail();
       return report;
     } catch (error) {
       notify(error.message || 'Abuse report could not be saved.', 'error');
