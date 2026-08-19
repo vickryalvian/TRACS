@@ -592,18 +592,18 @@
 }
 
 .abuse-status-chip {
+  --abuse-status-accent: var(--tx3);
   gap: 3px;
-  min-height: 18px;
-  padding: 1px 5px;
-  border: 1px solid var(--bd1);
-  border-radius: var(--r);
-  color: var(--tx2);
-  background: var(--s2);
+  min-height: 16px;
+  padding: 1px 6px;
+  border: 1px solid color-mix(in srgb, var(--abuse-status-accent) 16%, var(--bd1));
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--abuse-status-accent) 78%, var(--tx2));
+  background: color-mix(in srgb, var(--abuse-status-accent) 7%, var(--s2));
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: 7.5px;
   font-weight: 700;
-  letter-spacing: .05em;
-  text-transform: uppercase;
+  letter-spacing: 0;
   white-space: nowrap;
 }
 
@@ -613,24 +613,16 @@
   height: 4px;
   flex: 0 0 4px;
   border-radius: 50%;
-  background: var(--tx4);
+  background: var(--abuse-status-accent);
 }
 
-.abuse-status-chip.is-incoming::before { background: var(--blue); }
-.abuse-status-chip.is-investigating::before { background: var(--cyan); }
-.abuse-status-chip.is-waiting_external::before,
-.abuse-status-chip.is-waiting-external::before { background: var(--purple); }
-.abuse-status-chip.is-resolved::before { background: var(--green); }
-
+.abuse-status-chip.is-incoming { --abuse-status-accent: var(--blue); }
+.abuse-status-chip.is-investigating { --abuse-status-accent: var(--cyan); }
+.abuse-status-chip.is-waiting_external,
+.abuse-status-chip.is-waiting-external { --abuse-status-accent: var(--purple); }
+.abuse-status-chip.is-resolved { --abuse-status-accent: var(--green); }
 .abuse-status-chip.is-action_required,
-.abuse-status-chip.is-action-required {
-  color: var(--danger);
-  border-color: color-mix(in srgb, var(--danger) 40%, var(--bd1));
-  background: color-mix(in srgb, var(--danger) 8%, transparent);
-}
-
-.abuse-status-chip.is-action_required::before,
-.abuse-status-chip.is-action-required::before { background: var(--danger); }
+.abuse-status-chip.is-action-required { --abuse-status-accent: var(--danger); }
 
 .abuse-clock-badge {
   flex: 0 0 auto;

@@ -57,6 +57,8 @@ abuse_flow_assert(
         && str_contains($style, '.main.abuse-main')
         && str_contains($style, '.abuse-column-list::-webkit-scrollbar')
         && str_contains($style, '--abuse-pill-accent')
+        && str_contains($style, '--abuse-status-accent')
+        && str_contains($style, '.abuse-status-chip.is-investigating { --abuse-status-accent: var(--cyan); }')
         && str_contains($page, 'class="abuse-detail-meta"'),
     'List editing must use compact controls, preserve notes editing, and share the normal update API.'
 );
