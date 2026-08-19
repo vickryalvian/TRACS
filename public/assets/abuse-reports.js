@@ -457,6 +457,16 @@
     }
   }
 
+  function markDetailSaved() {
+    const modal = $('#abuseDetailModal');
+    if (typeof window.tracsMarkSaved === 'function') window.tracsMarkSaved(modal);
+    else window.TRACSUnsavedChanges?.markSaved(modal);
+  }
+
+  function markDetailSaveFailed(error) {
+    $('#abuseDetailModal')?.dispatchEvent(new CustomEvent('tracs:save-error', { bubbles: true, detail: { error } }));
+  }
+
   function setValue(selector, value) {
     const node = $(selector);
     if (node) node.value = value ?? '';
@@ -595,10 +605,12 @@
       renderBoard();
       const carry = rows[rows.length - 1] || bulkCarry();
       resetBulkRows({ report_type: carry.report_type, priority: carry.priority });
+      markDetailSaved();
       notify(`${created} abuse ${created === 1 ? 'report' : 'reports'} created.`, 'success');
     } catch (error) {
       renderBoard();
       notify(created ? `${created} created. ${error.message || 'The remaining reports could not be saved.'}` : (error.message || 'Bulk reports could not be saved.'), 'error');
+      markDetailSaveFailed(error);
     } finally {
       if (button) button.disabled = false;
     }
@@ -677,6 +689,7 @@
     updateCreateChrome();
     window.TRACSDropdowns?.syncAll?.();
     renderBoard();
+    markDetailSaved();
   }
 
   function blankReport() {
@@ -812,6 +825,7 @@
     if (!payload.title.trim()) {
       notify('Title is required.', 'warning');
       $('#abuseTitle')?.focus();
+      markDetailSaveFailed(new Error('Title is required'));
       return null;
     }
     try {
@@ -825,6 +839,7 @@
       return report;
     } catch (error) {
       notify(error.message || 'Abuse report could not be saved.', 'error');
+      markDetailSaveFailed(error);
       return null;
     }
   }

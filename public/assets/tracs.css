@@ -13573,8 +13573,8 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
   display: grid;
   padding: 20px;
   place-items: center;
-  background: rgb(5 12 25 / .58);
-  backdrop-filter: blur(3px);
+  background: rgb(5 12 25 / .74);
+  backdrop-filter: blur(10px) saturate(130%);
 }
 
 .tracs-unsaved-dialog-overlay.hidden {
@@ -13587,7 +13587,7 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
   grid-template-columns: 42px minmax(0, 1fr);
   gap: 12px;
   padding: 18px;
-  border: 1px solid var(--amber-bd);
+  border: 1px solid var(--bd2);
   border-radius: var(--r2);
   background: var(--s1);
   box-shadow: 0 24px 70px rgb(0 0 0 / .28);
@@ -13597,11 +13597,11 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
   display: grid;
   width: 42px;
   height: 42px;
-  border: 1px solid var(--amber-bd);
-  border-radius: 50%;
+  border: 1px solid var(--bd2);
+  border-radius: var(--r2);
   place-items: center;
-  color: var(--amber);
-  background: var(--amber-lt);
+  color: var(--blue);
+  background: var(--s2);
 }
 
 .tracs-unsaved-dialog h2 {
