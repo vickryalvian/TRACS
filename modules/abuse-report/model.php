@@ -769,8 +769,8 @@ class AbuseReportModel {
     public function getEvents(int $reportId, int $limit = 80): array {
         $limit = max(1, min(200, $limit));
         $stmt = $this->conn->prepare("
-            SELECT e.id, event_type, field_name, old_value, new_value, note, created_at,
-                   COALESCE(NULLIF(actor_name,''), NULLIF(u.name,''), u.email, 'System') AS actor_name
+            SELECT e.id, e.event_type, e.field_name, e.old_value, e.new_value, e.note, e.created_at,
+                   COALESCE(NULLIF(e.actor_name,''), NULLIF(u.name,''), u.email, 'System') AS actor_name
             FROM tracs_abuse_report_events e
             LEFT JOIN tracs_users u ON u.id = e.user_id
             WHERE e.report_id = ?
