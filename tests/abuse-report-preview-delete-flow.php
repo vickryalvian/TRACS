@@ -50,6 +50,8 @@ abuse_flow_assert(
         && str_contains($style, '.abuse-list-select:focus-within')
         && str_contains($style, '.abuse-advance-btn.is-icon-only')
         && str_contains($style, '.abuse-list-priority.is-critical')
+        && str_contains($style, '.abuse-list-table th:nth-child(7)')
+        && str_contains($style, '.abuse-list-select.is-status')
         && str_contains($style, '.abuse-list-editor-form')
         && str_contains($page, 'class="abuse-detail-meta"'),
     'List editing must use compact controls, preserve notes editing, and share the normal update API.'
