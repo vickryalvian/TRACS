@@ -352,14 +352,15 @@
   transition: transform var(--dur), border-color var(--dur), box-shadow var(--dur);
 }
 
-.abuse-card:hover,
-.abuse-card.is-selected {
-  border-color: color-mix(in srgb, var(--accent) 40%, var(--bd1));
-  box-shadow: var(--shadow-md);
+.abuse-card:hover {
+  border-color: var(--bd2);
+  background: var(--s2);
+  box-shadow: var(--shadow-sm);
 }
 
 .abuse-card.is-selected {
-  transform: translateY(-1px);
+  border-color: var(--bd3);
+  box-shadow: 0 0 0 1px var(--bd2);
 }
 
 .abuse-card.is-overdue {
@@ -650,7 +651,7 @@
 
 .abuse-list-table {
   width: 100%;
-  min-width: 920px;
+  min-width: 1180px;
   border-collapse: collapse;
   font-size: 12px;
 }
@@ -700,7 +701,7 @@
 }
 
 .abuse-list-row:hover {
-  background: color-mix(in srgb, var(--accent) 5%, transparent);
+  background: var(--s2);
 }
 
 .abuse-list-row.is-overdue {
@@ -724,6 +725,114 @@
   color: var(--tx3);
   font-family: var(--mono);
   font-size: 10.5px;
+}
+
+.abuse-list-report small {
+  max-width: 420px;
+  color: var(--tx3);
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.abuse-list-control {
+  width: 100%;
+  min-width: 112px;
+  min-height: 30px;
+  padding: 4px 26px 4px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--r1);
+  color: var(--tx2);
+  background-color: transparent;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.abuse-list-control:hover,
+.abuse-list-control:focus {
+  outline: none;
+  border-color: var(--bd2);
+  background-color: var(--s3);
+}
+
+.abuse-list-control:focus-visible {
+  box-shadow: 0 0 0 2px var(--blue-lt);
+}
+
+.abuse-list-control.is-priority {
+  color: var(--amber);
+}
+
+.abuse-list-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.abuse-list-edit-toggle {
+  width: 30px;
+  height: 30px;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid transparent;
+  border-radius: var(--r1);
+  color: var(--tx3);
+  background: transparent;
+  cursor: pointer;
+}
+
+.abuse-list-edit-toggle:hover,
+.abuse-list-edit-toggle[aria-expanded="true"] {
+  color: var(--tx1);
+  border-color: var(--bd2);
+  background: var(--s3);
+}
+
+.abuse-list-edit-row td {
+  padding: 0;
+  background: var(--s2);
+}
+
+.abuse-list-editor-form {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px;
+  border-bottom: 1px solid var(--bd2);
+}
+
+.abuse-list-editor-form label {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.abuse-list-editor-form label > span {
+  color: var(--tx3);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.abuse-list-editor-form .is-wide {
+  grid-column: 1 / -1;
+}
+
+.abuse-list-editor-form textarea {
+  min-height: 64px;
+  resize: vertical;
+}
+
+.abuse-list-editor-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .abuse-list-status {
@@ -860,6 +969,7 @@
 
 .abuse-detail-head {
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
   padding: 10px 12px;
@@ -868,29 +978,39 @@
 
 .abuse-detail-identity {
   min-width: 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 5px 8px;
+  display: grid;
+  gap: 5px;
 }
 
 .abuse-detail-identity .modal-title {
-  min-width: min(320px, 55vw);
+  min-width: 0;
   color: var(--tx1);
-  font-size: 15px;
+  font-size: 17px;
+  line-height: 1.25;
   overflow-wrap: anywhere;
 }
 
-.abuse-detail-identity .modal-sub {
-  width: 100%;
+.abuse-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.abuse-detail-meta .modal-sub {
   margin: 0;
 }
 
-.abuse-detail-badges,
 .abuse-detail-head-actions {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.abuse-detail-meta .abuse-detail-ref::after {
+  content: "·";
+  margin-left: 6px;
+  color: var(--tx4);
 }
 
 .abuse-delete-record:hover {
@@ -1285,6 +1405,10 @@
   .abuse-form-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .abuse-list-editor-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 720px) {
@@ -1318,6 +1442,10 @@
   }
 
   .abuse-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .abuse-list-editor-form {
     grid-template-columns: minmax(0, 1fr);
   }
 

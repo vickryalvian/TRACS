@@ -36,6 +36,18 @@ abuse_flow_assert(
     'The full editor must preserve compact-layout and optional-field behavior.'
 );
 abuse_flow_assert(
+    str_contains($script, 'data-abuse-list-field="status"')
+        && str_contains($script, 'data-abuse-list-field="assigned_user_id"')
+        && str_contains($script, 'data-abuse-list-field="reporter"')
+        && str_contains($script, 'data-abuse-list-editor-form')
+        && str_contains($script, "name=\"description\"")
+        && str_contains($script, 'await jsonPost(apiUrls.update, { id, ...patch })')
+        && str_contains($style, '.abuse-list-control:hover')
+        && str_contains($style, '.abuse-list-editor-form')
+        && str_contains($page, 'class="abuse-detail-meta"'),
+    'List editing must use compact controls, preserve notes editing, and share the normal update API.'
+);
+abuse_flow_assert(
     str_contains($page, 'id="abuseDeleteRecord"')
         && str_contains($bootstrap, "'abuse-report-delete.php' => ['POST']")
         && str_contains($endpoint, 'tracs_user_can_delete_abuse_reports')

@@ -204,10 +204,13 @@ include 'includes/header.php';
       <div class="abuse-detail-content" id="abuseDetailContent">
         <header class="modal-head abuse-detail-head">
           <div class="abuse-detail-identity">
-            <span class="abuse-detail-ref" id="abuseDetailRef">TRACS-AR</span>
             <div class="modal-title" id="abuseDetailTitle">Abuse report</div>
-            <div class="abuse-detail-badges"><span class="abuse-status-chip" id="abuseDetailStatusBadge">Incoming</span><span class="abuse-pill" id="abuseDetailPriorityBadge">medium</span></div>
-            <div class="modal-sub" id="abuseDetailSub">Operational workflow detail</div>
+            <div class="abuse-detail-meta">
+              <span class="abuse-detail-ref" id="abuseDetailRef">TRACS-AR</span>
+              <span class="modal-sub" id="abuseDetailSub">Operational workflow detail</span>
+              <span class="abuse-status-chip" id="abuseDetailStatusBadge">Incoming</span>
+              <span class="abuse-pill" id="abuseDetailPriorityBadge">medium</span>
+            </div>
           </div>
           <div class="abuse-detail-head-actions">
             <?php if($can_delete): ?><button class="modal-close abuse-delete-record" type="button" id="abuseDeleteRecord" aria-label="Delete report" title="Delete report"><i data-lucide="trash-2"></i></button><?php endif; ?>

@@ -85,6 +85,7 @@
     createMode: 'single',
     saveInFlight: false,
     previewTimer: 0,
+    inlineSaving: new Set(),
   };
 
   const notify = (message, type = 'info') => {
@@ -368,6 +369,43 @@
     return (state.sort.dir === 'asc' ? diff : -diff) || sortReports(a, b);
   }
 
+  const selectOptions = (options, selected) => Object.entries(options)
+    .map(([value, label]) => `<option value="${esc(value)}" ${String(value) === String(selected ?? '') ? 'selected' : ''}>${esc(label)}</option>`)
+    .join('');
+  const statusSelectOptions = selected => selectOptions(Object.fromEntries(statuses.map(status => [status, statusLabels[status] || eventLabel(status)])), selected);
+
+  function assigneeOptions(selected) {
+    return Array.from($('#abuseAssignedUser')?.options || []).map(option =>
+      `<option value="${esc(option.value)}" ${String(option.value) === String(selected ?? '') ? 'selected' : ''}>${esc(option.textContent || 'Unassigned')}</option>`
+    ).join('');
+  }
+
+  function reporterOptions(selected) {
+    const values = new Set(state.reports.map(report => String(report.reporter || '').trim()).filter(Boolean));
+    if (selected) values.add(String(selected));
+    return `<option value="" ${selected ? '' : 'selected'}>Unknown reporter</option>`
+      + Array.from(values).sort().map(value => `<option value="${esc(value)}" ${value === selected ? 'selected' : ''}>${esc(value)}</option>`).join('');
+  }
+
+  function renderListEditor(report) {
+    return `
+      <tr class="abuse-list-edit-row" data-abuse-list-edit-row="${report.id}" hidden>
+        <td colspan="8">
+          <form class="abuse-list-editor-form" data-abuse-list-editor-form data-abuse-id="${report.id}">
+            <label><span>Title</span><input class="form-input" name="title" maxlength="220" value="${esc(report.title || '')}" required></label>
+            <label><span>Type</span><select class="form-select" name="report_type">${selectOptions(typeLabels, report.report_type)}</select></label>
+            <label><span>Affected domain</span><input class="form-input" name="affected_domain" maxlength="255" value="${esc(report.affected_domain || '')}"></label>
+            <label><span>Reporter</span><input class="form-input" name="reporter" maxlength="160" value="${esc(report.reporter || '')}" placeholder="Reporter name or source"></label>
+            <label class="is-wide"><span>Notes</span><textarea class="form-textarea" name="description" maxlength="8000">${esc(report.description || '')}</textarea></label>
+            <div class="abuse-list-editor-actions">
+              <button class="btn btn-ghost" type="button" data-abuse-list-edit-cancel="${report.id}">Cancel</button>
+              <button class="btn btn-primary" type="submit"><i data-lucide="check" class="icon-sm"></i>Save</button>
+            </div>
+          </form>
+        </td>
+      </tr>`;
+  }
+
   function renderList(visible) {
     const body = $('#abuseListBody');
     if (!body) return;
@@ -377,31 +415,70 @@
       const stageText = stageAge(report) || report.open_age || '-';
       return `
         <tr class="abuse-list-row ${urgent ? 'is-overdue' : ''}" data-abuse-row data-abuse-id="${report.id}">
-          <td><span class="abuse-pill is-${esc(report.priority)}">${esc(report.priority)}</span></td>
+          <td>${state.canManage ? `<select class="abuse-list-control is-priority" data-abuse-list-field="priority" data-abuse-id="${report.id}" aria-label="Priority for ${esc(report.report_number)}">${selectOptions(priorityLabels, report.priority)}</select>` : `<span class="abuse-pill is-${esc(report.priority)}">${esc(report.priority)}</span>`}</td>
           <td>
             <div class="abuse-list-report">
               <strong>${esc(report.report_number || `#${report.id}`)} · ${esc(report.title || 'Untitled abuse report')}</strong>
               <span>${esc(reportTarget(report))}</span>
+              ${report.description ? `<small>${esc(report.description)}</small>` : ''}
             </div>
           </td>
           <td>
             <div class="abuse-list-status">
-              <span class="abuse-status-chip is-${esc(report.workflow_stage)}">${esc(report.workflow_label || statusLabels[report.workflow_stage] || report.status_label)}</span>
+              ${state.canManage ? `<select class="abuse-list-control" data-abuse-list-field="status" data-abuse-id="${report.id}" aria-label="Status for ${esc(report.report_number)}">${statusSelectOptions(report.status)}</select>` : `<span class="abuse-status-chip is-${esc(report.workflow_stage)}">${esc(report.workflow_label || statusLabels[report.workflow_stage] || report.status_label)}</span>`}
               ${renderUrgencyBadge(report)}
             </div>
           </td>
           <td><span class="abuse-list-age"><strong>${esc(stageText)}</strong><small>stage</small></span></td>
-          <td>${renderAssignee(report)}</td>
-          <td>${esc(report.reporter || 'Unknown reporter')}</td>
+          <td>${state.canManage ? `<select class="abuse-list-control" data-abuse-list-field="assigned_user_id" data-abuse-id="${report.id}" aria-label="Assignee for ${esc(report.report_number)}">${assigneeOptions(report.assigned_user_id)}</select>` : renderAssignee(report)}</td>
+          <td>${state.canManage ? `<select class="abuse-list-control" data-abuse-list-field="reporter" data-abuse-id="${report.id}" aria-label="Reporter for ${esc(report.report_number)}">${reporterOptions(String(report.reporter || '').trim())}</select>` : esc(report.reporter || 'Unknown reporter')}</td>
           <td>${Number(report.evidence_count || 0)}</td>
-          <td>${renderAdvanceButton(report)}</td>
-        </tr>`;
+          <td><div class="abuse-list-actions">${renderAdvanceButton(report)}${state.canManage ? `<button type="button" class="abuse-list-edit-toggle" data-abuse-list-edit="${report.id}" aria-expanded="false" title="Edit row details" aria-label="Edit row details"><i data-lucide="pencil" class="icon-sm"></i></button>` : ''}</div></td>
+        </tr>${state.canManage ? renderListEditor(report) : ''}`;
     }).join('') : '<tr><td colspan="8"><div class="abuse-empty-column">No reports match the current filters</div></td></tr>';
     $$('[data-abuse-sort]', root).forEach(button => {
       const active = button.dataset.abuseSort === state.sort.field;
       button.classList.toggle('is-active', active);
       button.dataset.sortDir = active ? state.sort.dir : '';
     });
+  }
+
+  async function updateListFields(id, patch, source) {
+    if (!id || state.inlineSaving.has(id)) return null;
+    state.inlineSaving.add(id);
+    const row = $(`[data-abuse-row][data-abuse-id="${id}"]`, root);
+    const editorRow = $(`[data-abuse-list-edit-row="${id}"]`, root);
+    row?.setAttribute('aria-busy', 'true');
+    $$('select, input, textarea, button', row).forEach(control => { control.disabled = true; });
+    if (editorRow) $$('select, input, textarea, button', editorRow).forEach(control => { control.disabled = true; });
+    try {
+      const data = await jsonPost(apiUrls.update, { id, ...patch });
+      const report = data?.report || data;
+      report.last_activity_at = report.updated_at || new Date().toISOString();
+      report.last_activity_type = source || 'updated';
+      updateReportInState(report);
+      renderBoard();
+      notify('Abuse report updated.', 'success');
+      return report;
+    } catch (error) {
+      renderBoard();
+      notify(error.message || 'Abuse report could not be updated.', 'error');
+      return null;
+    } finally {
+      state.inlineSaving.delete(id);
+    }
+  }
+
+  function toggleListEditor(id, visible = null) {
+    const editor = $(`[data-abuse-list-edit-row="${id}"]`, root);
+    const button = $(`[data-abuse-list-edit="${id}"]`, root);
+    if (!editor || !button) return;
+    const show = visible ?? editor.hidden;
+    $$('[data-abuse-list-edit-row]', root).forEach(row => { row.hidden = true; });
+    $$('[data-abuse-list-edit]', root).forEach(toggle => toggle.setAttribute('aria-expanded', 'false'));
+    editor.hidden = !show;
+    button.setAttribute('aria-expanded', show ? 'true' : 'false');
+    if (show) $('input[name="title"]', editor)?.focus();
   }
 
   function renderMoreFilterCount(filters) {
@@ -626,10 +703,6 @@
     toggleWaitingFields();
   }
 
-  const optionHtml = (options, selected) => Object.entries(options)
-    .map(([value, label]) => `<option value="${esc(value)}" ${value === selected ? 'selected' : ''}>${esc(label)}</option>`)
-    .join('');
-
   function bulkCarry() {
     return {
       report_type: $('#abuseType')?.value || 'phishing',
@@ -643,8 +716,8 @@
     const row = document.createElement('tr');
     row.innerHTML = `
       <td><input class="form-input" data-abuse-bulk-domain maxlength="255" value="${esc(values.affected_domain || '')}" placeholder="example.com"></td>
-      <td><select class="form-select" data-tracs-dropdown="off" data-abuse-bulk-type>${optionHtml(typeLabels, values.report_type || 'phishing')}</select></td>
-      <td><select class="form-select" data-tracs-dropdown="off" data-abuse-bulk-priority>${optionHtml(priorityLabels, values.priority || 'medium')}</select></td>
+      <td><select class="form-select" data-tracs-dropdown="off" data-abuse-bulk-type>${selectOptions(typeLabels, values.report_type || 'phishing')}</select></td>
+      <td><select class="form-select" data-tracs-dropdown="off" data-abuse-bulk-priority>${selectOptions(priorityLabels, values.priority || 'medium')}</select></td>
       <td><input class="form-input" data-abuse-bulk-note maxlength="500" value="${esc(values.description || '')}" placeholder="Optional note"></td>
       <td><button type="button" class="abuse-bulk-remove" data-abuse-bulk-remove aria-label="Remove row"><i data-lucide="trash-2" class="icon-sm"></i></button></td>
     `;
@@ -765,7 +838,7 @@
     if (creating || wasBulkCreating) setOverviewPaneActive();
     $('#abuseDetailRef') && ($('#abuseDetailRef').textContent = report.report_number || (report.id ? `#${report.id}` : 'New'));
     $('#abuseDetailTitle') && ($('#abuseDetailTitle').textContent = report.title || 'New abuse report');
-    $('#abuseDetailSub') && ($('#abuseDetailSub').textContent = `${report.workflow_label || statusLabels[report.status] || 'Incoming'} · ${reportTarget(report)}`);
+    $('#abuseDetailSub') && ($('#abuseDetailSub').textContent = reportTarget(report));
     const statusBadge = $('#abuseDetailStatusBadge');
     if (statusBadge) {
       statusBadge.textContent = report.workflow_label || statusLabels[report.status] || 'Incoming';
@@ -1169,6 +1242,17 @@
       showOptionalField(addField.dataset.abuseAddField);
       return;
     }
+    const listEdit = event.target.closest('[data-abuse-list-edit]');
+    if (listEdit) {
+      toggleListEditor(toId(listEdit.dataset.abuseListEdit));
+      return;
+    }
+    const listEditCancel = event.target.closest('[data-abuse-list-edit-cancel]');
+    if (listEditCancel) {
+      toggleListEditor(toId(listEditCancel.dataset.abuseListEditCancel), false);
+      return;
+    }
+    if (event.target.closest('.abuse-list-control, .abuse-list-editor-form')) return;
     if (event.target.closest('#abuseOpenRecord')) {
       const id = state.previewId;
       closePreview();
@@ -1315,6 +1399,18 @@
   $('#abuseOverviewPane')?.addEventListener('submit', event => {
     event.preventDefault();
     saveReport();
+  });
+  root.addEventListener('change', event => {
+    const control = event.target.closest('[data-abuse-list-field]');
+    if (!control) return;
+    updateListFields(toId(control.dataset.abuseId), { [control.dataset.abuseListField]: control.value }, `list_${control.dataset.abuseListField}`);
+  });
+  root.addEventListener('submit', event => {
+    const form = event.target.closest('[data-abuse-list-editor-form]');
+    if (!form) return;
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(form).entries());
+    updateListFields(toId(form.dataset.abuseId), values, 'list_details');
   });
   $('#abuseBulkPane')?.addEventListener('submit', saveBulkReports);
   $('#abuseBulkPane')?.addEventListener('paste', handleBulkPaste);
