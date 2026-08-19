@@ -45,6 +45,16 @@
   width: 200px;
   max-width: 200px;
   min-width: 168px;
+  height: var(--toolbar-h);
+}
+
+.abuse-search .search-input {
+  height: var(--toolbar-h);
+  min-height: var(--toolbar-h);
+  padding-block: 0;
+  border-radius: var(--r);
+  font-size: var(--toolbar-fz);
+  line-height: 1;
 }
 
 .abuse-filter-control {

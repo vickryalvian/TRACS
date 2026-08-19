@@ -44,6 +44,10 @@ abuse_flow_assert(
     'The intake modal must use a constrained width and consistently top-aligned fields.'
 );
 abuse_flow_assert(
+    preg_match('/\.abuse-search\s+\.search-input\s*\{[^}]*height:\s*var\(--toolbar-h\);[^}]*min-height:\s*var\(--toolbar-h\);/s', $style) === 1,
+    'The Abuse Reports search input must match the shared toolbar control height.'
+);
+abuse_flow_assert(
     str_contains($script, "renderListSelect(report, 'status'")
         && str_contains($script, "renderListSelect(report, 'assigned_user_id'")
         && str_contains($script, "renderListSelect(report, 'reporter'")
