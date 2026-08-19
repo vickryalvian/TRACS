@@ -1,6 +1,6 @@
 # TRACS API Security Inventory
 
-Review date: 2026-06-15. All `public/api/` routes require a fully authenticated, active account through a reviewed bootstrap. Pending-2FA sessions receive `401`. Mutating methods require CSRF. Internal helper files return `404` on direct execution and are denied by the web-server template.
+Baseline review date: 2026-06-15; Abuse Reports entries updated 2026-08-19. All `public/api/` routes require a fully authenticated, active account through a reviewed bootstrap. Pending-2FA sessions receive `401`. Mutating methods require CSRF. Internal helper files return `404` on direct execution and are denied by the web-server template.
 
 | Endpoint | Purpose | Method | Required access | CSRF | Risk / action |
 | --- | --- | --- | --- | --- | --- |
@@ -19,6 +19,15 @@ Review date: 2026-06-15. All `public/api/` routes require a fully authenticated,
 | `api/case-resolve.php` | Resolve case | POST | `cases.manage` plus owner scope | Yes | High; prepared statement |
 | `api/case-get.php` | Case detail | POST | `cases.view` plus object access | Yes | Medium; generic not-found |
 | `api/case-attachment.php` | Serve protected case image | GET | `cases.view` plus owner scope | No | High; no direct folder access |
+| `api/abuse-report-get.php` | Abuse report detail, timeline, notes, and evidence | GET / POST | `abuse_reports.view` | GET: No; POST: Yes | Medium; positive integer ID and generic not-found |
+| `api/abuse-report-create.php` | Create abuse report and optional evidence | POST | `abuse_reports.manage` | Yes | High; transaction, validation, audit, upload rollback |
+| `api/abuse-report-update.php` | Partial or full abuse report update | POST | `abuse_reports.manage` | Yes | High; transaction, validation, field-change audit |
+| `api/abuse-report-status.php` | Update abuse workflow status | POST | `abuse_reports.manage` | Yes | High; normalized status, transaction, audit and notifications |
+| `api/abuse-report-reorder.php` | Persist abuse board order | POST | `abuse_reports.manage` | Yes | High; stage/status normalization and controlled IDs |
+| `api/abuse-report-note.php` | Add abuse report note | POST | `abuse_reports.manage` | Yes | High; validated report and note content |
+| `api/abuse-report-evidence-upload.php` | Upload abuse evidence | POST | `abuse_reports.manage` | Yes | High; 10 MB limit, MIME/content checks, randomized storage, rollback cleanup |
+| `api/abuse-report-evidence.php` | Serve protected abuse evidence | GET | `abuse_reports.view` | No | High; permission-checked response, no direct folder access |
+| `api/abuse-report-delete.php` | Permanently delete abuse report and evidence | POST | Supervisor tier or above after `abuse_reports.view` bootstrap | Yes | Critical; explicit hard role gate, transaction, child/file cleanup |
 | `api/reminder-create.php` | Create reminder | POST | `reminders.manage` | Yes | High; owner-scoped |
 | `api/reminder-update.php` | Update reminder | POST | `reminders.manage` plus owner scope | Yes | High; prepared statement |
 | `api/reminder-delete.php` | Delete reminder | POST | `reminders.manage` plus owner scope | Yes | High; prepared statement |

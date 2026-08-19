@@ -68,6 +68,18 @@ data in test evidence.
 - [ ] Dashboard loads authorized statistics and widgets without broken sections.
 - [ ] Cases list/search/filter opens the shared ticket modal and supports
       authorized create, update, status, resolve, delete, and attachment flows.
+- [ ] Abuse Reports is visible only with `abuse_reports.view`; manage controls
+      require `abuse_reports.manage`; delete remains Supervisor-or-above only.
+- [ ] Abuse board search, filters, drag/reorder, preview, Open record, and explicit
+      text workflow actions persist correctly.
+- [ ] Abuse list dropdowns open only when clicked, save without opening preview,
+      and use Status as the only workflow control; Actions contains only Edit.
+- [ ] Abuse full editor create/update/reset/close, collapsed Advanced preference,
+      optional fields, notes, relationships, timeline, and permanent delete work.
+- [ ] Abuse failed saves preserve edits and dirty state; successful saves clear
+      dirty state only after the server response.
+- [ ] Abuse evidence accepts supported files up to 10 MB, rejects invalid files,
+      downloads through the protected endpoint, and is removed with its report.
 - [ ] Checklist create/update/toggle/delete and completed-item visibility work.
 - [ ] Reminder create/update/toggle/delete, due state, and dashboard visibility work.
 - [ ] Task Assignment/Monitoring preserves assignment, review, checklist,

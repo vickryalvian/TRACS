@@ -64,7 +64,9 @@ Current migrations:
   release) plus `dashboard.view` repair for operational roles. Idempotent;
   supersedes the status-only migration above by also ensuring the enum.
 - `2026_08_04_abuse_reports.sql` — abuse report workflow tables, evidence,
-  timeline/audit storage, and permissions.
+  timeline/audit storage, and permissions. See
+  [`docs/ABUSE_REPORTS.md`](../docs/ABUSE_REPORTS.md) for the application and
+  API contract.
 
 ## File Structure
 

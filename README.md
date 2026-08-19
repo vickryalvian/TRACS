@@ -8,6 +8,7 @@ TRACS is a compact operational control panel for support, legal, CS, and monitor
 | --- | --- |
 | Dashboard | Restored five-item stat strip, Cases, Task Monitoring, Shift Handover, Currency Converter, Infrastructure Pulse summary, ticker, and Attention Center. |
 | Cases | CRUD, `in_progress` status, filters/search/export, shared ticket detail, progress timeline, Resolve action, and image attachments. |
+| Abuse Reports | Board/list triage, compact preview, full tabbed record, inline table updates, bulk intake, SLA/action-required states, notes, evidence, relationships, and audit timeline. |
 | Reminders | Full reminder page plus Reminder List inside the dashboard `Checklist and Reminder` tab. |
 | Task Monitoring | Dashboard tabs are `Checklist and Reminder`, `Assignments`, and `Activity`; full assignment/review workflow is at `monitoring.php`. |
 | Shift Reports | Active/On Hold/Resolved handover context, dashboard shift reminder, activity snapshots, exports, and image attachments. |
@@ -88,6 +89,7 @@ Change this immediately after first login.
 | [docs/API_SECURITY_INVENTORY.md](docs/API_SECURITY_INVENTORY.md) | Endpoint methods, authentication, permissions, CSRF, and hardening actions. |
 | [docs/nginx-tracs.conf.example](docs/nginx-tracs.conf.example) | Production Nginx deny rules and PHP-FPM baseline. |
 | [config/README.md](config/README.md) | Installer, schemas, and migration guidance. |
+| [docs/ABUSE_REPORTS.md](docs/ABUSE_REPORTS.md) | Abuse Reports workflow, UI contracts, permissions, APIs, evidence, data model, and regression checks. |
 | [docs/DOMAIN_PRICE_CROSSCHECK.md](docs/DOMAIN_PRICE_CROSSCHECK.md) | Domain Price user/operations guide. |
 | [docs/INFRASTRUCTURE_PULSE.md](docs/INFRASTRUCTURE_PULSE.md) | Current prototype scope and usage. |
 | [docs/SECURITY_AUDIT_2FA.md](docs/SECURITY_AUDIT_2FA.md) | Focused mandatory-2FA audit. |
