@@ -394,8 +394,8 @@
 }
 
 .abuse-card.is-selected {
-  border-color: var(--bd3);
-  box-shadow: 0 0 0 1px var(--bd2);
+  border-color: var(--bd2);
+  box-shadow: var(--shadow-sm);
 }
 
 .abuse-card.is-overdue {
