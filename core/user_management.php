@@ -281,6 +281,7 @@ function tracs_default_role_permissions(string $roleSlug): array {
             'dashboard.view',
             'cases.view',
             'abuse_reports.view',
+            'abuse_reports.manage',
             'reminders.view',
             'checklist.view',
             'finance.view',
@@ -293,6 +294,8 @@ function tracs_default_role_permissions(string $roleSlug): array {
         ]))),
         'intern' => array_values(array_unique(array_merge($profile, [
             'dashboard.view',
+            'abuse_reports.view',
+            'abuse_reports.manage',
             'checklist.view',
             'tasks.view_own',
             'tasks.update_own',
@@ -613,6 +616,9 @@ function tracs_user_can(mysqli $conn, string $permission, ?int $userId = null): 
     $user = tracs_get_user_by_id($conn, $uid);
     if (!$user || !tracs_user_can_login($user)) {
         return false;
+    }
+    if (in_array($permission, ['abuse_reports.view', 'abuse_reports.manage'], true)) {
+        return true;
     }
     if (($user['role_slug'] ?? '') === 'super_admin') {
         return true;

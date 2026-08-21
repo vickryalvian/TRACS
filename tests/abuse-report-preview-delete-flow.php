@@ -16,8 +16,10 @@ $bootstrap = file_get_contents(__DIR__ . '/../public/api/_bootstrap.php');
 $endpoint = file_get_contents(__DIR__ . '/../public/api/abuse-report-delete.php');
 $model = file_get_contents(__DIR__ . '/../modules/abuse-report/model.php');
 $access = file_get_contents(__DIR__ . '/../core/access_control.php');
+$userManagement = file_get_contents(__DIR__ . '/../core/user_management.php');
+$permissionMigration = file_get_contents(__DIR__ . '/../config/migrations/2026_08_21_abuse_reports_all_roles.sql');
 
-abuse_flow_assert(!in_array(false, [$page, $script, $style, $bootstrap, $endpoint, $model, $access], true), 'Unable to read abuse report sources.');
+abuse_flow_assert(!in_array(false, [$page, $script, $style, $bootstrap, $endpoint, $model, $access, $userManagement, $permissionMigration], true), 'Unable to read abuse report sources.');
 abuse_flow_assert(
     str_contains($page, 'id="abusePreviewModal"')
         && str_contains($page, 'id="abuseOpenRecord"')
@@ -84,6 +86,16 @@ abuse_flow_assert(
         && str_contains($model, "'tracs_abuse_report_events', 'tracs_abuse_report_notes', 'tracs_abuse_report_evidence', 'tracs_abuse_reports'")
         && str_contains($endpoint, 'abuse_report_evidence_delete_file($file)'),
     'Delete must be role-gated and remove report children plus stored evidence.'
+);
+abuse_flow_assert(
+    preg_match("/'viewer'\\s*=>.*?'abuse_reports\\.view'.*?'abuse_reports\\.manage'/s", $userManagement) === 1
+        && preg_match("/'intern'\\s*=>.*?'abuse_reports\\.view'.*?'abuse_reports\\.manage'/s", $userManagement) === 1
+        && str_contains($userManagement, "in_array(\$permission, ['abuse_reports.view', 'abuse_reports.manage'], true)")
+        && str_contains($permissionMigration, "'abuse_reports.view'")
+        && str_contains($permissionMigration, "'abuse_reports.manage'")
+        && str_contains($permissionMigration, 'JOIN `tracs_permissions` p')
+        && !str_contains($permissionMigration, 'WHERE r.slug'),
+    'Abuse Reports view/update permissions must be granted to every role while delete stays role-gated.'
 );
 
 echo "TRACS abuse report preview/delete flow checks passed.\n";
