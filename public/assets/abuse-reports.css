@@ -399,7 +399,7 @@
 }
 
 .abuse-card.is-overdue {
-  border-color: color-mix(in srgb, var(--danger) 55%, var(--bd1));
+  border-color: var(--bd1);
 }
 
 .abuse-card[draggable="true"] {
@@ -455,10 +455,10 @@
   width: fit-content;
   min-height: 20px;
   padding: 2px 6px;
-  border: 1px solid color-mix(in srgb, var(--danger) 38%, var(--bd1));
+  border: 1px solid color-mix(in srgb, var(--red) 38%, var(--bd1));
   border-radius: var(--r1);
-  color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  color: var(--red);
+  background: color-mix(in srgb, var(--red) 8%, transparent);
   font-size: 10px;
   font-weight: 600;
 }
@@ -521,7 +521,7 @@
 }
 
 .abuse-card-sla .is-over {
-  color: var(--danger);
+  color: var(--red);
 }
 
 .abuse-card-indicators {
@@ -582,7 +582,7 @@
   background: var(--abuse-pill-accent);
 }
 
-.abuse-pill.is-critical { --abuse-pill-accent: var(--danger); }
+.abuse-pill.is-critical { --abuse-pill-accent: var(--red); }
 .abuse-pill.is-high { --abuse-pill-accent: var(--warning); }
 .abuse-pill.is-medium { --abuse-pill-accent: var(--purple); }
 .abuse-pill.is-low { --abuse-pill-accent: var(--tx3); }
@@ -627,17 +627,17 @@
 .abuse-status-chip.is-waiting-external { --abuse-status-accent: var(--purple); }
 .abuse-status-chip.is-resolved { --abuse-status-accent: var(--green); }
 .abuse-status-chip.is-action_required,
-.abuse-status-chip.is-action-required { --abuse-status-accent: var(--danger); }
+.abuse-status-chip.is-action-required { --abuse-status-accent: var(--red); }
 
 .abuse-clock-badge {
   flex: 0 0 auto;
   gap: 4px;
   min-height: 22px;
   padding: 2px 7px;
-  border: 1px solid color-mix(in srgb, var(--danger) 42%, var(--bd1));
+  border: 1px solid color-mix(in srgb, var(--red) 42%, var(--bd1));
   border-radius: 999px;
-  color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  color: var(--red);
+  background: color-mix(in srgb, var(--red) 8%, transparent);
   font-size: 10px;
   font-weight: 800;
   white-space: nowrap;
@@ -789,7 +789,7 @@
 }
 
 .abuse-list-row.is-overdue {
-  box-shadow: inset 3px 0 0 var(--danger);
+  box-shadow: inset 3px 0 0 var(--red);
 }
 
 .abuse-list-report {
@@ -907,7 +907,7 @@
 
 .abuse-list-select.is-priority.is-critical,
 .abuse-list-priority.is-critical {
-  color: var(--danger);
+  color: var(--red);
   font-weight: 800;
 }
 
@@ -915,7 +915,7 @@
 .abuse-list-select.is-status.is-action-required,
 .abuse-list-status-text.is-action-required,
 .abuse-list-status-text.is-action_required {
-  color: var(--danger);
+  color: var(--red);
   font-weight: 700;
 }
 
@@ -1168,9 +1168,9 @@
 }
 
 .abuse-delete-record:hover {
-  color: var(--danger);
-  border-color: color-mix(in srgb, var(--danger) 40%, var(--bd2));
-  background: color-mix(in srgb, var(--danger) 8%, var(--s2));
+  color: var(--red);
+  border-color: color-mix(in srgb, var(--red) 40%, var(--bd2));
+  background: color-mix(in srgb, var(--red) 8%, var(--s2));
 }
 
 .abuse-detail-head h2 {
@@ -1420,9 +1420,9 @@
 }
 
 .abuse-bulk-remove:hover {
-  color: var(--danger);
-  border-color: color-mix(in srgb, var(--danger) 35%, var(--bd2));
-  background: color-mix(in srgb, var(--danger) 7%, var(--s2));
+  color: var(--red);
+  border-color: color-mix(in srgb, var(--red) 35%, var(--bd2));
+  background: color-mix(in srgb, var(--red) 7%, var(--s2));
 }
 
 .abuse-bulk-actions {
