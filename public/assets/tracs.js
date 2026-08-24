@@ -1435,7 +1435,7 @@ function tracsClosestPopup(target) {
 
 function tracsIsDateRangePopupClick(target) {
   return target instanceof Element
-    && Boolean(target.closest('.tracs-date-range-popup:not([hidden])'));
+    && Boolean(target.closest('.tracs-date-range-popup'));
 }
 
 function tracsSetCustomPopupOpen(host, open) {
