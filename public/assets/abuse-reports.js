@@ -265,6 +265,25 @@
     return haystack.includes(filters.q);
   }
 
+  function syncExportFilters() {
+    const filters = currentFilters();
+    const values = {
+      '#abuseExportQ': filters.q,
+      '#abuseExportStatus': filters.status,
+      '#abuseExportPriority': filters.priority,
+      '#abuseExportReporter': filters.reporter,
+      '#abuseExportAssigned': filters.assigned,
+      '#abuseExportEvidence': filters.evidence ? '1' : '',
+      '#abuseExportActionRequired': filters.actionRequired ? '1' : '',
+      '#abuseExportForm [data-tracs-range-start]': filters.start,
+      '#abuseExportForm [data-tracs-range-end]': filters.end,
+    };
+    Object.entries(values).forEach(([selector, value]) => {
+      const input = $(selector);
+      if (input) input.value = value;
+    });
+  }
+
   function sortReports(a, b) {
     const orderA = Number(a.board_order || 0);
     const orderB = Number(b.board_order || 0);
@@ -1459,6 +1478,8 @@
   $('#abuseNoteForm')?.addEventListener('submit', addNote);
   $('#abuseEvidenceForm')?.addEventListener('submit', uploadEvidence);
   $('#abuseSearchForm')?.addEventListener('submit', event => event.preventDefault());
+  $('#abuseExportForm')?.addEventListener('submit', syncExportFilters);
+  $('#abuseExportForm')?.closest('details')?.addEventListener('toggle', syncExportFilters);
   $('#abuseWaitingHours')?.addEventListener('change', setWaitingDefaults);
   $('#abuseWaitingStartedAt')?.addEventListener('input', setWaitingDefaults);
   $('#abuseStatus')?.addEventListener('change', toggleWaitingFields);
@@ -1473,6 +1494,7 @@
   ['#abuseStatusFilter', '#abusePriorityFilter', '#abuseReporterFilter', '#abuseAssignedFilter']
     .forEach(selector => $(selector)?.addEventListener('change', renderBoard));
 
+  syncExportFilters();
   renderBoard();
   if (state.selectedId) openReport(state.selectedId);
   window.openAbuseReport = openReport;

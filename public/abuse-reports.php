@@ -78,6 +78,26 @@ include 'includes/header.php';
       </div>
     </div>
     <div class="abuse-page-actions">
+      <details class="report-export-menu">
+        <summary class="btn btn-ghost btn-icon report-export-trigger" title="More actions" aria-label="More actions" data-tooltip="More actions"><i data-lucide="more-vertical" class="icon-sm"></i></summary>
+        <form method="get" action="/api/export-abuse-reports.php" class="report-export-popover" id="abuseExportForm">
+          <input type="hidden" name="q" id="abuseExportQ" value="">
+          <input type="hidden" name="status" id="abuseExportStatus" value="">
+          <input type="hidden" name="priority" id="abuseExportPriority" value="">
+          <input type="hidden" name="reporter" id="abuseExportReporter" value="">
+          <input type="hidden" name="assigned" id="abuseExportAssigned" value="">
+          <input type="hidden" name="evidence" id="abuseExportEvidence" value="">
+          <input type="hidden" name="action_required" id="abuseExportActionRequired" value="">
+          <div class="report-export-title"><i data-lucide="download" class="icon-xs"></i>Export CSV</div>
+          <?=tracs_date_range_picker([
+              'id' => 'abuseExportRange',
+              'start_name' => 'from',
+              'end_name' => 'to',
+              'label' => 'Export date range',
+          ])?>
+          <button type="submit" class="btn btn-primary"><i data-lucide="download" class="icon-sm"></i>Download CSV</button>
+        </form>
+      </details>
       <?php if($can_manage): ?>
       <button class="btn btn-primary abuse-new-btn" type="button" id="abuseNewBtn"><i data-lucide="plus-circle" class="icon-sm"></i>Add Abuse Report</button>
       <?php endif; ?>
