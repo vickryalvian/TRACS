@@ -1433,6 +1433,11 @@ function tracsClosestPopup(target) {
     : null;
 }
 
+function tracsIsDateRangePopupClick(target) {
+  return target instanceof Element
+    && Boolean(target.closest('.tracs-date-range-popup:not([hidden])'));
+}
+
 function tracsSetCustomPopupOpen(host, open) {
   if (!host) return;
   host.classList.toggle('is-open', open);
@@ -1484,6 +1489,8 @@ window.tracsCloseIconPopups = tracsCloseIconPopups;
 window.tracsSetCustomPopupOpen = tracsSetCustomPopupOpen;
 
 document.addEventListener('click', e => {
+  if (tracsIsDateRangePopupClick(e.target)) return;
+
   const popup = tracsClosestPopup(e.target);
   const summary = e.target instanceof Element ? e.target.closest('summary') : null;
   const clickedPopupSummary = summary?.closest(TRACS_POPUP_DETAILS_SELECTOR);
