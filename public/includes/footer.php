@@ -132,8 +132,8 @@ $_tracs_case_can_delete = isset($conn) && $conn instanceof mysqli && function_ex
         <div class="case-ticket-menu-popover" id="caseTicketMorePopover" role="menu">
           <?php if($_tracs_case_can_manage): ?>
           <button class="btn btn-ghost btn-sm" type="button" id="caseTicketEditBtn" onclick="closeCaseTicketMore();editCaseFromTicket()" role="menuitem"><i data-lucide="pencil" class="icon-sm"></i>Edit</button>
-          <button class="btn btn-ghost btn-sm" type="button" id="caseTicketNoteBtn" onclick="closeCaseTicketMore();editCaseFromTicket()" role="menuitem"><i data-lucide="notebook-pen" class="icon-sm"></i>Add note</button>
-          <button class="btn btn-ghost btn-sm" type="button" id="caseTicketReminderBtn" onclick="closeCaseTicketMore();editCaseFromTicket()" role="menuitem"><i data-lucide="alarm-clock" class="icon-sm"></i>Set next check</button>
+          <button class="btn btn-ghost btn-sm" type="button" id="caseTicketNoteBtn" onclick="closeCaseTicketMore();editCaseFromTicket('caseNotes')" role="menuitem"><i data-lucide="notebook-pen" class="icon-sm"></i>Add note</button>
+          <button class="btn btn-ghost btn-sm" type="button" id="caseTicketReminderBtn" onclick="closeCaseTicketMore();editCaseFromTicket('caseNextCheck')" role="menuitem"><i data-lucide="alarm-clock" class="icon-sm"></i>Set next check</button>
           <?php endif; ?>
           <?php if($_tracs_case_can_delete): ?>
           <button class="btn btn-danger btn-sm" type="button" id="caseTicketDeleteBtn" onclick="closeCaseTicketMore();deleteCaseFromTicket()" role="menuitem"><i data-lucide="trash-2" class="icon-sm"></i>Delete</button>

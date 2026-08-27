@@ -1072,12 +1072,20 @@ function openModal(id){
 }
 function closeModal(id){tracsCloseModalElement(document.getElementById(id+'Modal'));}
 function closeAllModals(){document.querySelectorAll('.modal-overlay:not(.hidden)').forEach(tracsCloseModalElement);}
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeAllModals();});
+function closeTopModal(){
+  const modals=Array.from(document.querySelectorAll('.modal-overlay:not(.hidden)')).filter(modal=>!modal.hidden);
+  const top=modals.at(-1);
+  if(!top)return;
+  if(top.id==='caseImageModal'){closeCaseImagePreview();return;}
+  if(top.id==='screenshotResultModal'){closeScreenshotResultModal();return;}
+  tracsCloseModalElement(top);
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape' && !tracsDialogActive)closeTopModal();});
 document.addEventListener('click',e=>{
   if(!e.target.classList.contains('modal-overlay'))return;
   if(e.target.id==='caseImageModal'){closeCaseImagePreview();return;}
   if(e.target.id==='screenshotResultModal'){closeScreenshotResultModal();return;}
-  closeAllModals();
+  tracsCloseModalElement(e.target);
 });
 
 /* ── TRACS custom dropdowns ───────────────────────────── */
@@ -2521,6 +2529,7 @@ let caseSelectedAttachments = [];
 let caseRemovedAttachmentIds = new Set();
 let currentCaseTicketId = 0;
 let currentCaseTicketData = null;
+let caseTicketRequestSeq = 0;
 const caseStatusPendingIds = new Set();
 
 const CASE_STATUS_META = {
@@ -2763,6 +2772,33 @@ function closeCaseTicketMore(){
   if(menu)menu.classList.remove('is-open');
   if(btn)btn.setAttribute('aria-expanded','false');
 }
+function caseTicketStatusButtons(){
+  return [
+    document.getElementById('caseTicketInProgressBtn'),
+    document.getElementById('caseTicketStuckBtn'),
+    document.getElementById('caseTicketHoldBtn'),
+    document.getElementById('caseTicketResolveBtn')
+  ].filter(Boolean);
+}
+function setCaseTicketStatusPending(pending,activeButton=null){
+  caseTicketStatusButtons().forEach(button=>{
+    if(pending){
+      if(button===activeButton)setButtonLoading(button,tracsLoadingTextForButton(button));
+      else if(!button.disabled){
+        button.dataset.caseTicketTempDisabled='1';
+        button.disabled=true;
+        button.setAttribute('aria-disabled','true');
+      }
+      return;
+    }
+    resetButtonLoading(button);
+    if(button.dataset.caseTicketTempDisabled === '1'){
+      button.disabled=false;
+      button.removeAttribute('aria-disabled');
+      delete button.dataset.caseTicketTempDisabled;
+    }
+  });
+}
 function toggleCaseTicketMore(event){
   event?.preventDefault?.();
   event?.stopPropagation?.();
@@ -2850,6 +2886,7 @@ async function openCaseTicket(id){
   currentCaseTicketId=Number(id)||0;
   currentCaseTicketData=null;
   if(!currentCaseTicketId)return;
+  const requestSeq=++caseTicketRequestSeq;
   const titleEl=document.getElementById('caseTicketTitle');
   const refEl=document.getElementById('caseTicketRef');
   const badgesEl=document.getElementById('caseTicketBadges');
@@ -2861,9 +2898,29 @@ async function openCaseTicket(id){
     timelineEl.classList.remove('is-resolved');
     timelineEl.innerHTML='';
   }
+  const setLoadingText=(id,value='Loading...')=>{const el=document.getElementById(id);if(el)el.textContent=value;};
+  setLoadingText('caseTicketPic');
+  setLoadingText('caseTicketCreated');
+  setLoadingText('caseTicketUpdated');
+  setLoadingText('caseTicketNext');
+  setLoadingText('caseTicketNotes');
+  const historyLoading=document.getElementById('caseTicketHistory');
+  if(historyLoading)historyLoading.innerHTML='<span class="case-ticket-empty">Loading activity...</span>';
+  const refsLoading=document.getElementById('caseTicketReferences');
+  if(refsLoading)refsLoading.innerHTML='<span class="case-ticket-empty">Loading references...</span>';
+  const attachmentsLoading=document.getElementById('caseTicketAttachments');
+  if(attachmentsLoading)attachmentsLoading.innerHTML='';
+  const emptyLoading=document.getElementById('caseTicketAttachmentEmpty');
+  if(emptyLoading){
+    emptyLoading.hidden=false;
+    emptyLoading.textContent='Loading attachments...';
+  }
+  setCaseTicketStatusPending(caseStatusPendingIds.has(currentCaseTicketId));
   openModal('caseTicket');
 
   const d=await api(API.CASE.GET,{id:currentCaseTicketId});
+  const modal=document.getElementById('caseTicketModal');
+  if(requestSeq!==caseTicketRequestSeq || currentCaseTicketId!==Number(id) || modal?.classList.contains('hidden'))return;
   if(!d.success){
     toast(d.message||'Could not load case','error');
     closeModal('caseTicket');
@@ -2909,6 +2966,7 @@ async function openCaseTicket(id){
     tracsRefreshIcons(attachments);
   }
   if(empty)empty.hidden=list.length>0;
+  if(empty && !list.length)empty.textContent='No attachments available.';
 
   const caps=window.TRACS_CASE_CAPS||{};
   const canManage=Boolean(data.can_manage ?? caps.canManage);
@@ -2918,6 +2976,8 @@ async function openCaseTicket(id){
   const stuckBtn=document.getElementById('caseTicketStuckBtn');
   const holdBtn=document.getElementById('caseTicketHoldBtn');
   const editBtn=document.getElementById('caseTicketEditBtn');
+  const noteBtn=document.getElementById('caseTicketNoteBtn');
+  const reminderBtn=document.getElementById('caseTicketReminderBtn');
   const deleteBtn=document.getElementById('caseTicketDeleteBtn');
   const moreMenu=document.getElementById('caseTicketMoreMenu');
   // Status transitions are open to every cases.view holder (drag & drop board
@@ -2928,10 +2988,12 @@ async function openCaseTicket(id){
   if(stuckBtn)stuckBtn.hidden=status==='stuck' || status==='completed';
   if(holdBtn)holdBtn.hidden=status==='on_hold' || status==='completed';
   if(editBtn)editBtn.hidden=!canManage;
+  if(noteBtn)noteBtn.hidden=!canManage;
+  if(reminderBtn)reminderBtn.hidden=!canManage;
   if(deleteBtn)deleteBtn.hidden=!canDelete;
   if(moreMenu){
     closeCaseTicketMore();
-    moreMenu.hidden=!((editBtn && !editBtn.hidden) || (deleteBtn && !deleteBtn.hidden));
+    moreMenu.hidden=!([editBtn,noteBtn,reminderBtn,deleteBtn].some(button=>button && !button.hidden));
   }
   const actionButtons=document.querySelector('#caseTicketModal .case-ticket-action-buttons');
   const actionBar=document.querySelector('#caseTicketModal .case-ticket-actions');
@@ -3420,6 +3482,9 @@ async function updateCaseStatusImmediately(id,status,source='quick_action'){
   const targetStatus=String(status||'').toLowerCase();
   const caseItem=caseBoardState.rawCases.find(item=>Number(item.id)===caseId);
   if(!caseId || !caseItem || !CASE_STATUS_META[targetStatus] || caseStatusPendingIds.has(caseId))return;
+  const sourceButton=tracsSourceElement();
+  const ticketModal=document.getElementById('caseTicketModal');
+  const ticketOpen=currentCaseTicketId===caseId && ticketModal && !ticketModal.classList.contains('hidden');
   const previous={status:caseItem.status,overdue:caseItem.overdue,updated_at:caseItem.updated_at};
   if(String(previous.status||'').toLowerCase()===targetStatus){
     closeCaseCardMenus();
@@ -3427,6 +3492,7 @@ async function updateCaseStatusImmediately(id,status,source='quick_action'){
   }
 
   caseStatusPendingIds.add(caseId);
+  if(ticketOpen)setCaseTicketStatusPending(true,sourceButton?.closest?.('.case-ticket-status-btn, #caseTicketResolveBtn') || null);
   closeCaseCardMenus();
   caseItem.status=targetStatus;
   if(targetStatus==='completed')caseItem.overdue=false;
@@ -3438,15 +3504,14 @@ async function updateCaseStatusImmediately(id,status,source='quick_action'){
     Object.assign(caseItem,d.data||{},{id:caseId,status:targetStatus});
     caseItem.overdue=caseIsOverdue(caseItem);
     showToast(d.message||'Case status updated.','success',{context:'page'});
-    if(currentCaseTicketId===caseId && !document.getElementById('caseTicketModal')?.classList.contains('hidden'))openCaseTicket(caseId);
   }catch(error){
     Object.assign(caseItem,previous);
-    const ticketModal=document.getElementById('caseTicketModal');
-    const ticketOpen=currentCaseTicketId===caseId && ticketModal && !ticketModal.classList.contains('hidden');
     handleRequestError(error,ticketOpen?'modal':'page','The case status could not be updated. Please try again.');
   }finally{
     caseStatusPendingIds.delete(caseId);
+    if(ticketOpen)setCaseTicketStatusPending(false);
     renderCaseWorkspace();
+    if(ticketOpen && !ticketModal.classList.contains('hidden'))openCaseTicket(caseId);
   }
 }
 function requestCaseTicketStatus(status){
@@ -3888,11 +3953,12 @@ async function resolveCaseFromTicket(){
   if(!id)return;
   updateCaseStatusImmediately(id,'completed','drawer_action');
 }
-function editCaseFromTicket(){
+function editCaseFromTicket(focusId=''){
   const id=currentCaseTicketId;
   if(!id)return;
   closeModal('caseTicket');
   openEditCase(id);
+  if(focusId)window.setTimeout(()=>document.getElementById(focusId)?.focus({preventScroll:false}),120);
 }
 function deleteCaseFromTicket(){
   const id=currentCaseTicketId;
