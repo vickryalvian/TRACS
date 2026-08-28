@@ -403,9 +403,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $filter_status = $_GET['s']  ?? 'all';
 $q             = trim($_GET['q'] ?? '');
 $month         = $_GET['m']  ?? '';
+$date_from     = trim((string)($_GET['from'] ?? $_GET['start_date'] ?? ''));
+$date_to       = trim((string)($_GET['to'] ?? $_GET['end_date'] ?? ''));
 $page          = max(1, intval($_GET['p'] ?? 1));
 $per_page      = 25;
 $offset        = ($page - 1) * $per_page;
+
+$date_from = preg_match('/^\d{4}-\d{2}-\d{2}$/', $date_from) ? $date_from : '';
+$date_to   = preg_match('/^\d{4}-\d{2}-\d{2}$/', $date_to)   ? $date_to   : '';
+if (!$date_from && !$date_to && $month && preg_match('/^\d{4}-\d{2}$/', $month)) {
+    $date_from = $month . '-01';
+    $date_to = date('Y-m-t', strtotime($date_from));
+}
+if ($date_from && $date_to && $date_from > $date_to) {
+    [$date_from, $date_to] = [$date_to, $date_from];
+}
 
 /* ── Build WHERE clause ─────────────────────────────────────── */
 $allowed_statuses = ['pending','pending transfer','locked','error epp code','move domain','done',
@@ -421,10 +433,15 @@ if (in_array($filter_status, $allowed_statuses, true)) {
     $bind_vals[]  = $filter_status;
 }
 
-if ($month && preg_match('/^\d{4}-\d{2}$/', $month)) {
-    $conditions[] = "DATE_FORMAT(dt.process_start_date, '%Y-%m') = ?";
+if ($date_from) {
+    $conditions[] = "dt.process_start_date >= ?";
     $bind_types  .= 's';
-    $bind_vals[]  = $month;
+    $bind_vals[]  = $date_from;
+}
+if ($date_to) {
+    $conditions[] = "dt.process_start_date <= ?";
+    $bind_types  .= 's';
+    $bind_vals[]  = $date_to;
 }
 
 if ($q !== '') {
@@ -495,18 +512,6 @@ $stat_done      = (int) ($stats['done_count']     ?? 0);
 $stat_error     = (int) ($stats['error_count']    ?? 0);
 $stat_cancelled = (int) ($stats['cancelled_count']?? 0);
 
-/* ── Month dropdown ─────────────────────────────────────────── */
-$months_res = $conn->query("
-  SELECT DISTINCT DATE_FORMAT(process_start_date,'%Y-%m') AS ym,
-                  DATE_FORMAT(process_start_date,'%M %Y') AS label
-  FROM domain_transfers
-  WHERE process_start_date IS NOT NULL
-  ORDER BY ym DESC
-  LIMIT 24
-");
-$month_options = [];
-if ($months_res) while ($mr = $months_res->fetch_assoc()) $month_options[] = $mr;
-
 /* ── Status helpers ─────────────────────────────────────────── */
 function dt_status_class(string $s): string {
     return match($s) {
@@ -539,6 +544,21 @@ function dt_status_label(string $s): string {
         'renew period'        => 'Renew Period',
         default               => htmlspecialchars($s, ENT_QUOTES, 'UTF-8'),
     };
+}
+function dt_query(array $overrides = []): string {
+    global $filter_status, $q, $date_from, $date_to;
+    $params = [
+        's' => $filter_status,
+        'q' => $q,
+        'from' => $date_from,
+        'to' => $date_to,
+    ];
+    foreach ($overrides as $key => $value) {
+        if ($value === null) unset($params[$key]);
+        else $params[$key] = $value;
+    }
+    $params = array_filter($params, fn($value) => $value !== '' && $value !== 'all');
+    return $params ? '?' . http_build_query($params) : '?';
 }
 
 /* ── Page bootstrap ─────────────────────────────────────────── */
@@ -591,16 +611,16 @@ include 'includes/header.php';
 
   <!-- Status filter tabs -->
   <div class="filter-bar">
-    <a href="?s=all&q=<?= urlencode($q) ?>&m=<?= urlencode($month) ?>"
+    <a href="<?= esc(dt_query(['s' => 'all', 'p' => null])) ?>"
        class="filter-tab <?= $filter_status === 'all' ? 'active' : '' ?>">All</a>
     <?php
     $tab_statuses = [
+        'done'                => 'Done',
         'pending'              => 'Pending',
         'pending transfer'    => 'Pending Transfer',
         'locked'              => 'Locked',
         'error epp code'      => 'Error EPP',
         'move domain'         => 'Move',
-        'done'                => 'Done',
         'cancelled'           => 'Cancelled',
         'retransferred'       => 'Retransferred',
         'transferred away'    => 'Transferred Away',
@@ -608,41 +628,35 @@ include 'includes/header.php';
         'renew period'        => 'Renew',
     ];
     foreach ($tab_statuses as $k => $l): ?>
-    <a href="?s=<?= urlencode($k) ?>&q=<?= urlencode($q) ?>&m=<?= urlencode($month) ?>"
+    <a href="<?= esc(dt_query(['s' => $k, 'p' => null])) ?>"
        class="filter-tab <?= $filter_status === $k ? 'active' : '' ?>"><?= esc($l) ?></a>
     <?php endforeach; ?>
   </div>
 
 </div>
 
-<!-- ── Second filter row: month + search + reset ─────────────── -->
+<!-- ── Second filter row: search + date range + reset ────────── -->
 <div class="filter-search-row filter-search-row-mt">
-
-  <!-- Month picker -->
-  <?php if ($month_options): ?>
-  <div class="month-select-wrap">
-    <label>Month</label>
-    <select class="form-select compact-select"
-            onchange="tracsFilterNavigate('?s=<?= esc($filter_status) ?>&q=<?= urlencode($q) ?>&m='+this.value)">
-      <option value="">All months</option>
-      <?php foreach ($month_options as $mo): ?>
-      <option value="<?= esc($mo['ym']) ?>" <?= $month === $mo['ym'] ? 'selected' : '' ?>>
-        <?= esc($mo['label']) ?>
-      </option>
-      <?php endforeach; ?>
-    </select>
-  </div>
-  <?php endif; ?>
 
   <!-- Search -->
   <form method="get" class="search-form-wrap">
     <input type="hidden" name="s" value="<?= esc($filter_status) ?>">
-    <input type="hidden" name="m" value="<?= esc($month) ?>">
     <i data-lucide="search" class="search-ic icon-sm"></i>
     <input type="text" name="q" class="search-input"
-           placeholder="Search domain, transfer status, reseller, or notes"
+           placeholder="Search domain, transfer status, registrar, or notes"
            value="<?= esc($q) ?>">
-    <?php if ($q || $month || $filter_status !== 'all'): ?>
+    <?=tracs_date_range_picker([
+      'id' => 'domainTransferDateRange',
+      'start_name' => 'from',
+      'end_name' => 'to',
+      'start' => $date_from,
+      'end' => $date_to,
+      'label' => 'Date range',
+      'placeholder' => 'Date Range',
+      'class' => 'domain-transfer-date-range',
+      'auto_submit' => true,
+    ])?>
+    <?php if ($q || $date_from || $date_to || $filter_status !== 'all'): ?>
     <a href="?" class="btn btn-ghost btn-reset btn-sm">Reset</a>
     <?php endif; ?>
   </form>
@@ -657,13 +671,12 @@ include 'includes/header.php';
       <span class="panel-meta">
         <?= $total_rows ?> record<?= $total_rows !== 1 ? 's' : '' ?>
         <?= $q ? ' · "' . esc($q) . '"' : '' ?>
-        <?= $month ? ' · ' . esc($month) : '' ?>
+        <?= ($date_from && $date_to) ? ' · ' . esc(tracs_date_display($date_from) . ' - ' . tracs_date_display($date_to)) : '' ?>
       </span>
       <details class="report-export-menu">
         <summary class="btn btn-ghost btn-icon report-export-trigger" title="More actions" aria-label="More actions" data-tooltip="More actions"><i data-lucide="more-vertical" class="icon-sm"></i></summary>
         <form method="get" action="/api/export-domains.php" class="report-export-popover">
           <input type="hidden" name="s" value="<?= esc($filter_status) ?>">
-          <input type="hidden" name="m" value="<?= esc($month) ?>">
           <input type="hidden" name="q" value="<?= esc($q) ?>">
           <div class="report-export-title">
             <i data-lucide="download" class="icon-xs"></i>
@@ -673,6 +686,8 @@ include 'includes/header.php';
               'id' => 'domainsExportRange',
               'start_name' => 'from',
               'end_name' => 'to',
+              'start' => $date_from,
+              'end' => $date_to,
               'label' => 'Export date range',
           ])?>
           <button type="submit" class="btn btn-primary"><i data-lucide="download" class="icon-sm"></i>Download CSV</button>
@@ -699,12 +714,12 @@ include 'includes/header.php';
       <div class="dt-inline-group">
         <label class="dt-inline-lbl">Status <span class="req-star">*</span></label>
         <select class="form-select dt-inline-input" id="nStatus">
+          <option value="done">Done</option>
           <option value="pending">Pending</option>
-          <option value="pending transfer">Pending Transfer</option>
+          <option value="pending transfer" selected>Pending Transfer</option>
           <option value="locked">Locked</option>
           <option value="error epp code">Error EPP Code</option>
           <option value="move domain">Move Domain</option>
-          <option value="done">Done</option>
           <option value="cancelled">Cancelled</option>
           <option value="retransferred">Retransferred</option>
           <option value="transferred away">Transferred Away</option>
@@ -724,7 +739,7 @@ include 'includes/header.php';
       </div>
 
       <div class="dt-inline-group">
-        <label class="dt-inline-lbl">Move Domain</label>
+        <label class="dt-inline-lbl">Registrar</label>
         <select class="form-select dt-inline-input" id="nWebnic">
           <option value="">—</option>
           <?php foreach ($registrar_options as $registrar_option): ?>
@@ -749,7 +764,7 @@ include 'includes/header.php';
     <div class="dt-empty-ic"><i data-lucide="globe" class="icon-xl"></i></div>
     <div class="dt-empty-t">No transfer records found</div>
     <div class="dt-empty-s">
-      <?= ($q || $month || $filter_status !== 'all')
+      <?= ($q || $date_from || $date_to || $filter_status !== 'all')
           ? 'Try adjusting filters or search terms'
           : 'Add a domain transfer above to get started' ?>
     </div>
@@ -813,12 +828,12 @@ include 'includes/header.php';
           <span class="dt-status <?= $scls ?>" id="dt-status-badge-<?= $did ?>"><?= $slabel ?></span>
           <select class="dt-status-select" onchange="quickStatusUpdate(<?= $did ?>, this)"
                   aria-label="Change status for <?= esc($dr['domain_name']) ?>">
+            <option value="done"                <?= $status==='done'                ?'selected':'' ?>>Done</option>
             <option value="pending"             <?= $status==='pending'             ?'selected':'' ?>>Pending</option>
             <option value="pending transfer"    <?= $status==='pending transfer'    ?'selected':'' ?>>Pending Transfer</option>
             <option value="locked"              <?= $status==='locked'              ?'selected':'' ?>>Locked</option>
             <option value="error epp code"      <?= $status==='error epp code'      ?'selected':'' ?>>Error EPP Code</option>
             <option value="move domain"         <?= $status==='move domain'         ?'selected':'' ?>>Move Domain</option>
-            <option value="done"                <?= $status==='done'                ?'selected':'' ?>>Done</option>
             <option value="cancelled"           <?= $status==='cancelled'           ?'selected':'' ?>>Cancelled</option>
             <option value="retransferred"       <?= $status==='retransferred'       ?'selected':'' ?>>Retransferred</option>
             <option value="transferred away"    <?= $status==='transferred away'    ?'selected':'' ?>>Transferred Away</option>
@@ -842,6 +857,7 @@ include 'includes/header.php';
                class="dt-date-input <?= $dr['process_end_date'] ? 'has-value' : '' ?>"
                id="dt-end-<?= $did ?>"
                value="<?= esc($dr['process_end_date'] ?? '') ?>"
+               data-prev="<?= esc($dr['process_end_date'] ?? '') ?>"
                onchange="quickEndDateUpdate(<?= $did ?>, this)"
                title="Click to set end date">
       </td>
@@ -851,7 +867,7 @@ include 'includes/header.php';
         <select class="dt-move-select <?= $move_val ? 'has-value' : '' ?>"
                 id="dt-move-<?= $did ?>"
                 onchange="quickMoveUpdate(<?= $did ?>, this)"
-                aria-label="Move domain for <?= esc($dr['domain_name']) ?>">
+                aria-label="Registrar for <?= esc($dr['domain_name']) ?>">
           <option value=""<?= !$move_val ?' selected':'' ?>>—</option>
           <?php foreach ($registrar_options as $registrar_option): ?>
             <option value="<?= esc($registrar_option) ?>"<?= $move_val===$registrar_option ?' selected':'' ?>><?= esc($registrar_option) ?></option>
@@ -891,7 +907,7 @@ include 'includes/header.php';
     </span>
     <div class="dt-pages">
 
-      <a href="?s=<?= esc($filter_status) ?>&q=<?= urlencode($q) ?>&m=<?= urlencode($month) ?>&p=<?= max(1, $page - 1) ?>"
+      <a href="<?= esc(dt_query(['p' => max(1, $page - 1)])) ?>"
          class="dt-page-btn <?= $page <= 1 ? 'disabled' : '' ?>">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width:10px;height:10px;stroke-width:3"><polyline points="15 18 9 12 15 6"/></svg>
       </a>
@@ -901,11 +917,11 @@ include 'includes/header.php';
       $end_pg   = min($total_pages, $start_pg + 6);
       for ($pg = $start_pg; $pg <= $end_pg; $pg++):
       ?>
-      <a href="?s=<?= esc($filter_status) ?>&q=<?= urlencode($q) ?>&m=<?= urlencode($month) ?>&p=<?= $pg ?>"
+      <a href="<?= esc(dt_query(['p' => $pg])) ?>"
          class="dt-page-btn <?= $pg === $page ? 'active' : '' ?>"><?= $pg ?></a>
       <?php endfor; ?>
 
-      <a href="?s=<?= esc($filter_status) ?>&q=<?= urlencode($q) ?>&m=<?= urlencode($month) ?>&p=<?= min($total_pages, $page + 1) ?>"
+      <a href="<?= esc(dt_query(['p' => min($total_pages, $page + 1)])) ?>"
          class="dt-page-btn <?= $page >= $total_pages ? 'disabled' : '' ?>">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width:10px;height:10px;stroke-width:3"><polyline points="9 18 15 12 9 6"/></svg>
       </a>
@@ -944,12 +960,12 @@ include 'includes/header.php';
     <div class="form-group">
       <label class="form-label">Transfer Status <span class="req-star">*</span></label>
       <select class="form-select" id="dtStatus">
+        <option value="done">Done</option>
         <option value="pending">Pending</option>
         <option value="pending transfer">Pending Transfer</option>
         <option value="locked">Locked</option>
         <option value="error epp code">Error EPP Code</option>
         <option value="move domain">Move Domain</option>
-        <option value="done">Done</option>
         <option value="cancelled">Cancelled</option>
         <option value="retransferred">Retransferred</option>
         <option value="transferred away">Transferred Away</option>
@@ -970,7 +986,7 @@ include 'includes/header.php';
     </div>
 
     <div class="form-group">
-      <label class="form-label">Move Domain</label>
+      <label class="form-label">Registrar</label>
       <select class="form-select" id="dtWebnic">
         <option value="">—</option>
         <?php foreach ($registrar_options as $registrar_option): ?>

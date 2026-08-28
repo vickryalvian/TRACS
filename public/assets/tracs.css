@@ -9365,6 +9365,24 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
   min-height: var(--toolbar-h);
 }
 
+.filter-search-row .search-form-wrap {
+  gap: var(--toolbar-gap);
+}
+
+.filter-search-row .search-form-wrap .search-input {
+  flex: 1 1 220px;
+}
+
+.filter-search-row .search-form-wrap .domain-transfer-date-range {
+  flex: 0 0 150px;
+  width: 150px;
+  min-width: 126px;
+}
+
+.filter-search-row .search-form-wrap .domain-transfer-date-range .tracs-date-range-trigger {
+  width: 100%;
+}
+
 .report-export-menu {
   position: relative;
   flex-shrink: 0;

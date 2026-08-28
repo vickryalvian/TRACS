@@ -6935,12 +6935,12 @@ const DT_STATUS_CLASS = {
   'renew period'        : 'dt-status-renew',
 };
 const DT_STATUS_LABEL = {
+  'done'                : 'Done',
   'pending'              : 'Pending',
   'pending transfer'    : 'Pending Transfer',
   'locked'              : 'Locked',
   'error epp code'      : 'Error EPP Code',
   'move domain'         : 'Move Domain',
-  'done'                : 'Done',
   'cancelled'           : 'Cancelled',
   'retransferred'       : 'Retransferred',
   'transferred away'    : 'Transferred Away',
@@ -6994,7 +6994,7 @@ function dtEnsureTable(){
   wrap.className='dt-table-wrap';
   wrap.innerHTML=`
     <table class="dt-table">
-      <thead><tr><th style="width:38px">No</th><th>Domain</th><th>Status</th><th>Start Date</th><th>End Date</th><th>Move Domain</th><th>Notes</th></tr></thead>
+      <thead><tr><th style="width:38px">No</th><th>Domain</th><th>Status</th><th>Start Date</th><th>End Date</th><th>Registrar</th><th>Notes</th></tr></thead>
       <tbody></tbody>
     </table>`;
   empty.replaceWith(wrap);
@@ -7013,7 +7013,7 @@ function dtRowHtml(record){
       <td><div class="dt-status-wrap" title="Click to change status"><span class="dt-status ${DT_STATUS_CLASS[status] || ''}" id="dt-status-badge-${id}">${escHtml(DT_STATUS_LABEL[status] || status)}</span><select class="dt-status-select" onchange="quickStatusUpdate(${id}, this)" aria-label="Change status for ${escHtml(record?.domain_name || 'domain')}">${dtStatusOptions(status)}</select></div></td>
       <td>${record?.process_start_date ? `<span class="dt-date">${escHtml(dtFormatDate(record.process_start_date))}</span>` : '<span class="dt-date-none">—</span>'}</td>
       <td><input type="date" class="dt-date-input ${record?.process_end_date ? 'has-value' : ''}" id="dt-end-${id}" value="${escHtml(record?.process_end_date || '')}" data-prev="${escHtml(record?.process_end_date || '')}" onchange="quickEndDateUpdate(${id}, this)" title="Click to set end date"></td>
-      <td><select class="dt-move-select ${move ? 'has-value' : ''}" id="dt-move-${id}" onchange="quickMoveUpdate(${id}, this)" aria-label="Move domain for ${escHtml(record?.domain_name || 'domain')}">${dtMoveOptions(move)}</select></td>
+      <td><select class="dt-move-select ${move ? 'has-value' : ''}" id="dt-move-${id}" onchange="quickMoveUpdate(${id}, this)" aria-label="Registrar for ${escHtml(record?.domain_name || 'domain')}">${dtMoveOptions(move)}</select></td>
       <td>${notes ? `<span class="dt-notes" title="${escHtml(notes)}">${escHtml(notes)}</span>` : '<span class="dt-notes-none">—</span>'}
         <details class="row-action-menu">
           <summary class="btn btn-ghost btn-icon" title="Actions" aria-label="Row actions"><i data-lucide="more-vertical" class="icon-sm"></i></summary>
@@ -7110,11 +7110,11 @@ async function quickMoveUpdate(id, selectEl) {
   if (d.success) {
     const record=tracsPayloadRecord(d);
     if(record)dtApplyRecord(record);
-    toast(newVal ? 'Move domain: ' + newVal : 'Move domain cleared', 'success');
+    toast(newVal ? 'Registrar: ' + newVal : 'Registrar cleared', 'success');
     [...selectEl.options].forEach(o => { o.defaultSelected = (o.value === newVal); });
     tracsMarkSaved(selectEl);
   } else {
-    toast(d.message || "Couldn't update the move-domain field. Please try again.", 'error');
+    toast(d.message || "Couldn't update the registrar. Please try again.", 'error');
     selectEl.value = prevVal;
     selectEl.classList.toggle('has-value', !!prevVal);
     window.TRACSDropdowns?.syncSelect(selectEl);

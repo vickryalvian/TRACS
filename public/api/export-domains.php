@@ -3,7 +3,7 @@ require_once __DIR__ . '/_export_helpers.php';
 
 [$from, $to] = export_date_range();
 
-$allowedStatuses = ['pending transfer','locked','error epp code','move domain','done','cancelled','retransferred','transferred away','pending verification','renew period'];
+$allowedStatuses = ['pending','pending transfer','locked','error epp code','move domain','done','cancelled','retransferred','transferred away','pending verification','renew period'];
 $status = (string)($_GET['s'] ?? 'all');
 $month = trim((string)($_GET['m'] ?? ''));
 $q = trim((string)($_GET['q'] ?? ''));
@@ -38,7 +38,7 @@ $sql .= ' ORDER BY created_at DESC';
 $result = export_query($conn, $sql, $types, $params);
 export_send_csv(
     export_filename('domains', $from, $to),
-    ['Domain', 'Status', 'Process Start Date', 'Process End Date', 'Reseller', 'Notes', 'Created At', 'Updated At'],
+    ['Domain', 'Status', 'Process Start Date', 'Process End Date', 'Registrar', 'Notes', 'Created At', 'Updated At'],
     $result,
     fn(array $row) => [
         $row['domain_name'] ?? '',
