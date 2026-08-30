@@ -1,0 +1,1501 @@
+(() => {
+  'use strict';
+
+  const root = document.getElementById('abuseWorkspace');
+  if (!root || root.dataset.abuseInitialized === '1') return;
+  root.dataset.abuseInitialized = '1';
+
+  const stages = ['incoming', 'investigating', 'waiting_external', 'action_required', 'resolved'];
+  const statuses = ['incoming', 'investigating', 'waiting_external', 'action_taken', 'resolved', 'closed'];
+  const stageStatus = {
+    incoming: 'incoming',
+    investigating: 'investigating',
+    waiting_external: 'waiting_external',
+    action_required: 'action_taken',
+    resolved: 'resolved',
+  };
+  const statusStage = {
+    incoming: 'incoming',
+    investigating: 'investigating',
+    waiting_external: 'waiting_external',
+    action_taken: 'action_required',
+    resolved: 'resolved',
+    closed: 'resolved',
+  };
+  const statusLabels = {
+    incoming: 'Incoming',
+    investigating: 'Investigating',
+    waiting_external: 'Waiting External',
+    action_required: 'Action Required',
+    action_taken: 'Action Required',
+    resolved: 'Resolved',
+    closed: 'Closed',
+  };
+  const typeLabels = {
+    phishing: 'Phishing',
+    malware: 'Malware',
+    spam: 'Spam',
+    copyright: 'Copyright',
+    illegal_content: 'Illegal Content',
+    abuse_complaint: 'Abuse Complaint',
+    other: 'Other',
+  };
+  const priorityLabels = {
+    critical: 'Critical',
+    high: 'High',
+    medium: 'Medium',
+    low: 'Low',
+  };
+  const priorityRank = { critical: 0, high: 1, medium: 2, low: 3 };
+  const apiUrls = {
+    create: '/api/abuse-report-create.php',
+    delete: '/api/abuse-report-delete.php',
+    update: '/api/abuse-report-update.php',
+    get: '/api/abuse-report-get.php',
+    status: '/api/abuse-report-status.php',
+    reorder: '/api/abuse-report-reorder.php',
+    note: '/api/abuse-report-note.php',
+    evidence: '/api/abuse-report-evidence-upload.php',
+  };
+
+  const $ = (selector, scope = document) => scope.querySelector(selector);
+  const $$ = (selector, scope = document) => Array.from(scope.querySelectorAll(selector));
+  const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
+  })[char]);
+  const toId = value => Number.parseInt(value, 10) || 0;
+  const parsePayload = () => {
+    try {
+      const node = $('#abuseDataset');
+      return node ? JSON.parse(node.textContent || '[]') : [];
+    } catch (_) {
+      return [];
+    }
+  };
+  const state = {
+    reports: Array.isArray(parsePayload()) ? parsePayload() : [],
+    selectedId: toId(root.dataset.selectedId),
+    detail: null,
+    draggedId: 0,
+    canManage: root.dataset.canManage === '1' || window.TRACS_ABUSE_CAPS?.canManage === true,
+    canDelete: root.dataset.canDelete === '1' || window.TRACS_ABUSE_CAPS?.canDelete === true,
+    previewId: 0,
+    view: 'board',
+    boardOrder: 'activity',
+    sort: { field: 'age', dir: 'desc' },
+    createMode: 'single',
+    saveInFlight: false,
+    previewTimer: 0,
+    inlineSaving: new Set(),
+  };
+
+  const notify = (message, type = 'info') => {
+    if (typeof window.showToast === 'function') {
+      window.showToast(message, type, { context: 'page' });
+    }
+  };
+  const icons = () => {
+    if (typeof window.tracsRefreshIcons === 'function') window.tracsRefreshIcons(root);
+    else window.lucide?.createIcons?.();
+  };
+  const formatBytes = value => {
+    const bytes = Number(value) || 0;
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1048576) return `${Math.round(bytes / 1024)} KB`;
+    return `${(bytes / 1048576).toFixed(1)} MB`;
+  };
+  const formatDate = value => {
+    if (!value) return '-';
+    const date = new Date(String(value).replace(' ', 'T'));
+    return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString(undefined, {
+      day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+    });
+  };
+  const dateKey = value => String(value || '').slice(0, 10);
+  const datetimeLocal = value => value ? String(value).replace(' ', 'T').slice(0, 16) : '';
+  const nowLocalInput = () => {
+    const date = new Date();
+    date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+    return date.toISOString().slice(0, 16);
+  };
+  const addHoursLocal = (value, hours) => {
+    const base = value ? new Date(value) : new Date();
+    if (Number.isNaN(base.getTime())) return '';
+    base.setHours(base.getHours() + (Number.parseInt(hours, 10) || 24));
+    base.setMinutes(base.getMinutes() - base.getTimezoneOffset());
+    return base.toISOString().slice(0, 16);
+  };
+  const eventLabel = value => String(value || 'updated').replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+  const reportTarget = report => [report.affected_domain, report.affected_ip].filter(Boolean).join(' / ') || 'No target set';
+  const truthy = value => value === true || value === 1 || value === '1';
+  const isDone = report => ['resolved', 'closed'].includes(report.status);
+  const initials = value => {
+    const parts = String(value || '').trim().split(/\s+/).filter(Boolean);
+    return (parts.length ? parts.slice(0, 2).map(part => part.charAt(0)).join('') : '?').toUpperCase();
+  };
+  const relativeAge = value => {
+    if (!value) return '';
+    const date = new Date(String(value).replace(' ', 'T'));
+    if (Number.isNaN(date.getTime())) return '';
+    const minutes = Math.max(0, Math.floor((Date.now() - date.getTime()) / 60000));
+    if (minutes < 60) return `${minutes}m`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 48) return `${hours}h ${minutes % 60}m`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ${hours % 24}h`;
+  };
+  const stageAge = report => relativeAge(report.last_activity_at || report.updated_at || report.created_at);
+  const isUrgent = report => !isDone(report) && (
+    truthy(report.action_required)
+    || truthy(report.over_sla)
+    || /overdue/i.test(String(report.waiting_label || ''))
+    || /over by/i.test(String(report.sla_label || ''))
+  );
+  const urgencyText = report => {
+    const waiting = String(report.waiting_label || '');
+    if (/overdue/i.test(waiting)) return waiting;
+    const sla = String(report.sla_label || '');
+    if (/over by/i.test(sla)) return sla.replace(/^SLA\s+/i, '');
+    return truthy(report.action_required) ? 'Action required' : '';
+  };
+  const nextStatusFor = report => {
+    if (isDone(report)) return '';
+    if (report.workflow_stage === 'action_required') return 'resolved';
+    if (report.status === 'incoming') return 'investigating';
+    if (report.status === 'waiting_external') return 'action_taken';
+    if (['investigating', 'action_taken'].includes(report.status)) return 'resolved';
+    return '';
+  };
+  const advanceLabel = status => ({
+    investigating: 'Investigate',
+    action_taken: 'Require action',
+    resolved: 'Resolve',
+  })[status] || 'Advance';
+  const stageForStatus = status => statusStage[status] || (stages.includes(status) ? status : 'incoming');
+  const statusForStage = stage => stageStatus[stage] || (statuses.includes(stage) ? stage : 'incoming');
+  const stageAndStatus = value => {
+    const raw = String(value || 'incoming');
+    const status = statuses.includes(raw) ? raw : statusForStage(raw);
+    return { status, stage: stages.includes(raw) ? raw : stageForStatus(status) };
+  };
+  const normalizeReport = report => {
+    if (!report || !report.id) return null;
+    report.id = toId(report.id);
+    report.status = statuses.includes(report.status) ? report.status : 'incoming';
+    report.status_label = report.status_label || statusLabels[report.status] || report.status;
+    report.workflow_stage = stages.includes(report.workflow_stage) ? report.workflow_stage : stageForStatus(report.status);
+    report.action_required = truthy(report.action_required) || report.workflow_stage === 'action_required';
+    if (report.action_required && !['resolved', 'closed'].includes(report.status)) report.workflow_stage = 'action_required';
+    report.workflow_label = report.workflow_label || statusLabels[report.workflow_stage] || report.status_label;
+    report.priority = ['critical', 'high', 'medium', 'low'].includes(report.priority) ? report.priority : 'medium';
+    report.evidence_count = Number(report.evidence_count || 0);
+    report.tag_list = Array.isArray(report.tag_list)
+      ? report.tag_list
+      : String(report.tags || '').split(',').map(tag => tag.trim()).filter(Boolean);
+    report.ticket_sent = truthy(report.ticket_sent) || report.ticket_status === 'sent';
+    report.nameserver_saved = truthy(report.nameserver_saved) || String(report.nameserver_snapshot || '').trim() !== '';
+    report.waiting_label = report.waiting_label || (report.waiting_until ? `Until ${formatDate(report.waiting_until)}` : 'No waiting window');
+    report.over_sla = truthy(report.over_sla);
+    return report;
+  };
+  state.reports = state.reports.map(normalizeReport).filter(Boolean);
+
+  async function jsonPost(url, data) {
+    if (typeof window.api === 'function') {
+      const payload = await window.api(url, data);
+      if (payload?.success === false || payload?.ok === false) throw new Error(payload.message || 'Request failed');
+      return payload.data;
+    }
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data || {}),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload.success === false) throw new Error(payload.message || 'Request failed');
+    return payload.data;
+  }
+
+  async function jsonGet(url) {
+    const response = await fetch(url, { headers: { Accept: 'application/json' } });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload.success === false) throw new Error(payload.message || 'Request failed');
+    return payload.data;
+  }
+
+  function updateReportInState(report) {
+    const normalized = normalizeReport(report);
+    if (!normalized) return null;
+    const idx = state.reports.findIndex(item => item.id === normalized.id);
+    if (idx >= 0) state.reports[idx] = { ...state.reports[idx], ...normalized };
+    else state.reports.unshift(normalized);
+    return normalized;
+  }
+
+  function currentFilters() {
+    return {
+      q: ($('#abuseSearchInput')?.value || '').trim().toLowerCase(),
+      status: $('#abuseStatusFilter')?.value || '',
+      priority: $('#abusePriorityFilter')?.value || '',
+      reporter: $('#abuseReporterFilter')?.value || '',
+      assigned: $('#abuseAssignedFilter')?.value || '',
+      start: $('#abuseDateStart')?.value || '',
+      end: $('#abuseDateEnd')?.value || '',
+      evidence: $('#abuseHasAttachmentFilter')?.checked || false,
+      actionRequired: $('#abuseActionRequiredFilter')?.checked || false,
+    };
+  }
+
+  function matchesFilters(report, filters) {
+    if (filters.status && report.workflow_stage !== filters.status) return false;
+    if (filters.priority && report.priority !== filters.priority) return false;
+    if (filters.reporter && String(report.reporter || '') !== filters.reporter) return false;
+    if (filters.assigned && String(report.assigned_user_id || '') !== filters.assigned) return false;
+    if (filters.evidence && Number(report.evidence_count || 0) <= 0) return false;
+    if (filters.actionRequired && (isDone(report) || !report.action_required)) return false;
+    const created = dateKey(report.created_at);
+    if (filters.start && created && created < filters.start) return false;
+    if (filters.end && created && created > filters.end) return false;
+    if (!filters.q) return true;
+    const haystack = [
+      report.report_number, report.title, report.affected_domain, report.affected_ip,
+      report.reporter, report.reporter_contact, report.customer_name,
+      report.customer_reference, report.assigned_staff, report.tags, report.description,
+    ].join(' ').toLowerCase();
+    return haystack.includes(filters.q);
+  }
+
+  function syncExportFilters() {
+    const filters = currentFilters();
+    const values = {
+      '#abuseExportQ': filters.q,
+      '#abuseExportStatus': filters.status,
+      '#abuseExportPriority': filters.priority,
+      '#abuseExportReporter': filters.reporter,
+      '#abuseExportAssigned': filters.assigned,
+      '#abuseExportEvidence': filters.evidence ? '1' : '',
+      '#abuseExportActionRequired': filters.actionRequired ? '1' : '',
+      '#abuseExportForm [data-tracs-range-start]': filters.start,
+      '#abuseExportForm [data-tracs-range-end]': filters.end,
+    };
+    Object.entries(values).forEach(([selector, value]) => {
+      const input = $(selector);
+      if (input) input.value = value;
+    });
+  }
+
+  function sortReports(a, b) {
+    const orderA = Number(a.board_order || 0);
+    const orderB = Number(b.board_order || 0);
+    if (state.boardOrder === 'manual' && orderA !== orderB) return orderA - orderB;
+    const activityA = String(a.last_activity_at || a.updated_at || a.created_at || '');
+    const activityB = String(b.last_activity_at || b.updated_at || b.created_at || '');
+    const activity = activityB.localeCompare(activityA);
+    if (activity !== 0) return activity;
+    if (orderA !== orderB) return orderA - orderB;
+    const priority = (priorityRank[a.priority] ?? 9) - (priorityRank[b.priority] ?? 9);
+    if (priority !== 0) return priority;
+    return Number(b.id || 0) - Number(a.id || 0);
+  }
+
+  function renumberStage(stage) {
+    let position = 0;
+    state.reports.forEach(report => {
+      if (report.workflow_stage === stage) {
+        report.board_order = position;
+        position += 1;
+      }
+    });
+  }
+
+  function renderAssignee(report) {
+    const name = String(report.assigned_staff || '').trim();
+    return `
+      <span class="abuse-assignee ${name ? '' : 'is-unassigned'}">
+        <span class="abuse-assignee-avatar">${esc(initials(name))}</span>
+        <span>${esc(name || 'Unassigned')}</span>
+      </span>`;
+  }
+
+  function renderAdvanceButton(report) {
+    if (!state.canManage) return '';
+    const next = nextStatusFor(report);
+    if (!next) return '';
+    const label = advanceLabel(next);
+    return `
+      <button type="button" class="abuse-advance-btn" data-abuse-advance="${esc(next)}" data-abuse-id="${report.id}" title="Move to ${esc(statusLabels[next] || label)}">
+        <span>${esc(label)}</span>
+        <i data-lucide="arrow-right" class="icon-sm"></i>
+      </button>`;
+  }
+
+  function renderUrgencyBadge(report) {
+    if (!isUrgent(report)) return '';
+    return `<span class="abuse-clock-badge"><i data-lucide="clock-3" class="icon-sm"></i>${esc(urgencyText(report))}</span>`;
+  }
+
+  function renderCard(report) {
+    const tags = (report.tag_list || []).slice(0, 3).map(tag => `<span class="abuse-tag">${esc(tag)}</span>`).join('');
+    const indicators = [
+      report.ticket_sent ? 'Ticket sent' : 'Ticket not sent',
+      report.nameserver_saved ? 'NS saved' : 'NS missing',
+    ].map(label => `<span class="abuse-indicator">${esc(label)}</span>`).join('');
+    const urgent = isUrgent(report);
+    const stageText = stageAge(report) || report.open_age || '-';
+    return `
+      <article class="abuse-card is-${esc(report.priority)} ${urgent ? 'is-overdue' : ''} ${report.action_required ? 'is-action-required' : ''} ${isDone(report) ? 'is-resolved' : ''} ${state.selectedId === report.id ? 'is-selected' : ''}" data-abuse-id="${report.id}" draggable="${state.canManage ? 'true' : 'false'}">
+        <div class="abuse-card-body">
+          <div class="abuse-card-top">
+            <span class="abuse-card-number">${esc(report.report_number || `#${report.id}`)}</span>
+            <span class="abuse-pill is-${esc(report.priority)}">${esc(report.priority)}</span>
+          </div>
+          <h3>${esc(report.title || 'Untitled abuse report')}</h3>
+          <div class="abuse-card-target-row">
+            <span class="abuse-card-target">${esc(reportTarget(report))}</span>
+            ${renderUrgencyBadge(report)}
+          </div>
+          <div class="abuse-card-stage">
+            <span class="abuse-status-chip is-${esc(report.workflow_stage)}">${esc(report.workflow_label || statusLabels[report.workflow_stage] || report.status_label)}</span>
+            <span><i data-lucide="timer" class="icon-sm"></i>Stage ${esc(stageText)}</span>
+            <span>${esc(report.open_age || '-')} open</span>
+          </div>
+          <div class="abuse-card-people">
+            <span class="abuse-reporter">${esc(report.reporter || 'Unknown reporter')}</span>
+            ${renderAssignee(report)}
+          </div>
+          <div class="abuse-card-indicators">${indicators}</div>
+          ${tags ? `<div class="abuse-card-tags">${tags}</div>` : ''}
+          <div class="abuse-card-footer">
+            <span class="abuse-card-footer-meta">${Number(report.evidence_count || 0)} evidence · ${esc(eventLabel(report.last_activity_type || 'received'))}</span>
+            ${renderAdvanceButton(report)}
+          </div>
+        </div>
+      </article>`;
+  }
+
+  function listSortValue(report, field) {
+    if (field === 'priority') return priorityRank[report.priority] ?? 9;
+    if (field === 'age') {
+      const date = new Date(String(report.last_activity_at || report.updated_at || report.created_at || '').replace(' ', 'T'));
+      return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+    }
+    if (field === 'status') return report.workflow_label || report.status_label || report.status || '';
+    if (field === 'assignee') return report.assigned_staff || '';
+    if (field === 'reporter') return report.reporter || '';
+    return [report.report_number, report.title, report.affected_domain, report.affected_ip].filter(Boolean).join(' ');
+  }
+
+  function sortListReports(a, b) {
+    const valueA = listSortValue(a, state.sort.field);
+    const valueB = listSortValue(b, state.sort.field);
+    const diff = typeof valueA === 'number' && typeof valueB === 'number'
+      ? valueA - valueB
+      : String(valueA).localeCompare(String(valueB));
+    return (state.sort.dir === 'asc' ? diff : -diff) || sortReports(a, b);
+  }
+
+  const selectOptions = (options, selected) => Object.entries(options)
+    .map(([value, label]) => `<option value="${esc(value)}" ${String(value) === String(selected ?? '') ? 'selected' : ''}>${esc(label)}</option>`)
+    .join('');
+  const statusSelectOptions = selected => selectOptions(Object.fromEntries(statuses.map(status => [status, statusLabels[status] || eventLabel(status)])), selected);
+
+  function renderListSelect(report, field, label, value, options, modifier = '') {
+    return `
+      <span class="abuse-list-select ${modifier}" title="Click to change ${esc(label.toLowerCase())}">
+        <span class="abuse-list-select-value">${esc(value)}</span>
+        <select data-tracs-dropdown="off" data-abuse-list-field="${esc(field)}" data-abuse-id="${report.id}" aria-label="${esc(label)} for ${esc(report.report_number)}">${options}</select>
+      </span>`;
+  }
+
+  function shortReportNumber(report) {
+    return String(report.report_number || `#${report.id}`).replace(/^TRACS-AR-/, '#');
+  }
+
+  function assigneeOptions(selected) {
+    return Array.from($('#abuseAssignedUser')?.options || []).map(option =>
+      `<option value="${esc(option.value)}" ${String(option.value) === String(selected ?? '') ? 'selected' : ''}>${esc(option.textContent || 'Unassigned')}</option>`
+    ).join('');
+  }
+
+  function reporterOptions(selected) {
+    const values = new Set(state.reports.map(report => String(report.reporter || '').trim()).filter(Boolean));
+    if (selected) values.add(String(selected));
+    return `<option value="" ${selected ? '' : 'selected'}>Unknown reporter</option>`
+      + Array.from(values).sort().map(value => `<option value="${esc(value)}" ${value === selected ? 'selected' : ''}>${esc(value)}</option>`).join('');
+  }
+
+  function renderListEditor(report) {
+    return `
+      <tr class="abuse-list-edit-row" data-abuse-list-edit-row="${report.id}" hidden>
+        <td colspan="8">
+          <form class="abuse-list-editor-form" data-abuse-list-editor-form data-abuse-id="${report.id}">
+            <label><span>Title</span><input class="form-input" name="title" maxlength="220" value="${esc(report.title || '')}" required></label>
+            <label><span>Type</span><select class="form-select" name="report_type">${selectOptions(typeLabels, report.report_type)}</select></label>
+            <label><span>Affected domain</span><input class="form-input" name="affected_domain" maxlength="255" value="${esc(report.affected_domain || '')}"></label>
+            <label><span>Reporter</span><input class="form-input" name="reporter" maxlength="160" value="${esc(report.reporter || '')}" placeholder="Reporter name or source"></label>
+            <label class="is-wide"><span>Notes</span><textarea class="form-textarea" name="description" maxlength="8000">${esc(report.description || '')}</textarea></label>
+            <div class="abuse-list-editor-actions">
+              <button class="btn btn-ghost" type="button" data-abuse-list-edit-cancel="${report.id}">Cancel</button>
+              <button class="btn btn-primary" type="submit"><i data-lucide="check" class="icon-sm"></i>Save</button>
+            </div>
+          </form>
+        </td>
+      </tr>`;
+  }
+
+  function renderList(visible) {
+    const body = $('#abuseListBody');
+    if (!body) return;
+    const rows = visible.slice().sort(sortListReports);
+    body.innerHTML = rows.length ? rows.map(report => {
+      const urgent = isUrgent(report);
+      const stageText = stageAge(report) || report.open_age || '-';
+      return `
+        <tr class="abuse-list-row ${urgent ? 'is-overdue' : ''}" data-abuse-row data-abuse-id="${report.id}">
+          <td>${state.canManage
+            ? renderListSelect(report, 'priority', 'Priority', priorityLabels[report.priority] || report.priority, selectOptions(priorityLabels, report.priority), `is-priority is-${esc(report.priority)}`)
+            : `<span class="abuse-list-priority is-${esc(report.priority)}">${esc(priorityLabels[report.priority] || report.priority)}</span>`}</td>
+          <td>
+            <div class="abuse-list-report">
+              <strong>${esc(report.title || 'Untitled abuse report')}</strong>
+              <div class="abuse-list-report-meta"><span>${esc(shortReportNumber(report))}</span><span>${esc(reportTarget(report))}</span></div>
+              ${report.description ? `<small>${esc(report.description)}</small>` : ''}
+            </div>
+          </td>
+          <td>
+            <div class="abuse-list-status">
+              ${state.canManage
+                ? renderListSelect(report, 'status', 'Status', report.workflow_label || statusLabels[report.workflow_stage] || report.status_label, statusSelectOptions(report.status), `is-status is-${esc(report.workflow_stage)}`)
+                : `<span class="abuse-list-status-text is-${esc(report.workflow_stage)}">${esc(report.workflow_label || statusLabels[report.workflow_stage] || report.status_label)}</span>`}
+              ${renderUrgencyBadge(report)}
+            </div>
+          </td>
+          <td><span class="abuse-list-age"><strong>${esc(stageText)}</strong><small>stage</small></span></td>
+          <td>${state.canManage
+            ? renderListSelect(report, 'assigned_user_id', 'Assignee', report.assigned_staff || 'Unassigned', assigneeOptions(report.assigned_user_id), report.assigned_staff ? '' : 'is-muted')
+            : report.assigned_staff ? renderAssignee(report) : '<span class="abuse-list-muted">Unassigned</span>'}</td>
+          <td>${state.canManage
+            ? renderListSelect(report, 'reporter', 'Reporter', report.reporter || 'Unknown reporter', reporterOptions(String(report.reporter || '').trim()), report.reporter ? '' : 'is-muted')
+            : `<span class="${report.reporter ? '' : 'abuse-list-muted'}">${esc(report.reporter || 'Unknown reporter')}</span>`}</td>
+          <td>${Number(report.evidence_count || 0)}</td>
+          <td><div class="abuse-list-actions">${state.canManage ? `<button type="button" class="abuse-list-edit-toggle" data-abuse-list-edit="${report.id}" aria-expanded="false" title="Edit report details" aria-label="Edit report details"><i data-lucide="pencil" class="icon-sm"></i></button>` : ''}</div></td>
+        </tr>${state.canManage ? renderListEditor(report) : ''}`;
+    }).join('') : '<tr><td colspan="8"><div class="abuse-empty-column">No reports match the current filters</div></td></tr>';
+    $$('[data-abuse-sort]', root).forEach(button => {
+      const active = button.dataset.abuseSort === state.sort.field;
+      button.classList.toggle('is-active', active);
+      button.dataset.sortDir = active ? state.sort.dir : '';
+    });
+  }
+
+  async function updateListFields(id, patch, source) {
+    if (!id || state.inlineSaving.has(id)) return null;
+    state.inlineSaving.add(id);
+    const row = $(`[data-abuse-row][data-abuse-id="${id}"]`, root);
+    const editorRow = $(`[data-abuse-list-edit-row="${id}"]`, root);
+    row?.setAttribute('aria-busy', 'true');
+    $$('select, input, textarea, button', row).forEach(control => { control.disabled = true; });
+    if (editorRow) $$('select, input, textarea, button', editorRow).forEach(control => { control.disabled = true; });
+    try {
+      const data = await jsonPost(apiUrls.update, { id, ...patch });
+      const report = data?.report || data;
+      report.last_activity_at = report.updated_at || new Date().toISOString();
+      report.last_activity_type = source || 'updated';
+      updateReportInState(report);
+      state.boardOrder = 'activity';
+      renderBoard();
+      notify('Abuse report updated.', 'success');
+      return report;
+    } catch (error) {
+      renderBoard();
+      notify(error.message || 'Abuse report could not be updated.', 'error');
+      return null;
+    } finally {
+      state.inlineSaving.delete(id);
+    }
+  }
+
+  function toggleListEditor(id, visible = null) {
+    const editor = $(`[data-abuse-list-edit-row="${id}"]`, root);
+    const button = $(`[data-abuse-list-edit="${id}"]`, root);
+    if (!editor || !button) return;
+    const show = visible ?? editor.hidden;
+    $$('[data-abuse-list-edit-row]', root).forEach(row => { row.hidden = true; });
+    $$('[data-abuse-list-edit]', root).forEach(toggle => toggle.setAttribute('aria-expanded', 'false'));
+    editor.hidden = !show;
+    button.setAttribute('aria-expanded', show ? 'true' : 'false');
+    if (show) $('input[name="title"]', editor)?.focus();
+  }
+
+  function renderMoreFilterCount(filters) {
+    const active = [filters.reporter, filters.assigned].filter(Boolean).length;
+    const count = $('#abuseMoreFilterCount');
+    const summary = $('#abuseMoreFiltersSummary');
+    if (count) {
+      count.textContent = active;
+      count.hidden = active === 0;
+    }
+    summary?.classList.toggle('is-active', active > 0);
+  }
+
+  function renderBoard() {
+    const filters = currentFilters();
+    const visible = state.reports.filter(report => matchesFilters(report, filters));
+    const open = visible.filter(report => !['resolved', 'closed'].includes(report.status)).length;
+    const critical = visible.filter(report => report.priority === 'critical' && !['resolved', 'closed'].includes(report.status)).length;
+    const actionRequired = visible.filter(report => !isDone(report) && report.action_required).length;
+    const resolvedToday = $('#abusePageSummary')?.dataset.resolvedToday || '0';
+
+    $('#abusePageSummary') && ($('#abusePageSummary').textContent = `${visible.length} shown · ${open} open · ${critical} critical · ${actionRequired} action required · ${resolvedToday} resolved today`);
+    renderMoreFilterCount(filters);
+    $('#abuseBoardWrap') && ($('#abuseBoardWrap').hidden = state.view !== 'board');
+    $('#abuseListWrap') && ($('#abuseListWrap').hidden = state.view !== 'list');
+    $$('[data-abuse-view]', root).forEach(button => {
+      const active = button.dataset.abuseView === state.view;
+      button.classList.toggle('is-active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+
+    stages.forEach(stage => {
+      const column = $(`[data-abuse-column="${stage}"]`, root);
+      const list = $(`[data-abuse-dropzone="${stage}"]`, root);
+      if (!column || !list) return;
+      const reports = visible.filter(report => report.workflow_stage === stage).sort(sortReports);
+      $('[data-column-count]', column).textContent = reports.length;
+      list.innerHTML = reports.length
+        ? reports.map(renderCard).join('')
+        : '<div class="abuse-empty-column">No reports</div>';
+    });
+    renderList(visible);
+    icons();
+  }
+
+  function setDetailVisible(visible) {
+    const modal = $('#abuseDetailModal');
+    if (!modal) return;
+    if (visible) {
+      if (!modal.classList.contains('hidden') && !modal.hidden && modal.getAttribute('aria-hidden') !== 'true') return;
+      if (typeof window.tracsOpenModalElement === 'function') window.tracsOpenModalElement(modal);
+      else modal.classList.remove('hidden');
+    } else if (typeof window.tracsCloseModalElement === 'function') {
+      window.tracsCloseModalElement(modal, { bypassUnsaved: true });
+    } else {
+      modal.classList.add('hidden');
+      modal.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  function setPreviewVisible(visible) {
+    const modal = $('#abusePreviewModal');
+    if (!modal) return;
+    if (visible) {
+      if (typeof window.tracsOpenModalElement === 'function') window.tracsOpenModalElement(modal);
+      else modal.classList.remove('hidden');
+    } else if (typeof window.tracsCloseModalElement === 'function') {
+      window.tracsCloseModalElement(modal, { bypassUnsaved: true });
+    } else {
+      modal.classList.add('hidden');
+      modal.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  function closePreview() {
+    state.previewId = 0;
+    setPreviewVisible(false);
+  }
+
+  function openPreview(id) {
+    const report = state.reports.find(item => item.id === toId(id));
+    if (!report) return;
+    state.previewId = report.id;
+    $('#abusePreviewRef') && ($('#abusePreviewRef').textContent = report.report_number || `#${report.id}`);
+    $('#abusePreviewTitle') && ($('#abusePreviewTitle').textContent = report.title || 'Untitled abuse report');
+    $('#abusePreviewType') && ($('#abusePreviewType').textContent = typeLabels[report.report_type] || eventLabel(report.report_type));
+    $('#abusePreviewPriority') && ($('#abusePreviewPriority').textContent = priorityLabels[report.priority] || eventLabel(report.priority));
+    $('#abusePreviewStatus') && ($('#abusePreviewStatus').textContent = report.workflow_label || report.status_label || statusLabels[report.status] || '-');
+    $('#abusePreviewDomain') && ($('#abusePreviewDomain').textContent = report.affected_domain || report.affected_ip || 'Not set');
+    $('#abusePreviewActivity') && ($('#abusePreviewActivity').textContent = formatDate(report.last_activity_at || report.updated_at));
+    $('#abusePreviewSla') && ($('#abusePreviewSla').textContent = formatDate(report.sla_due_at));
+    setPreviewVisible(true);
+    icons();
+  }
+
+  function schedulePreview(id) {
+    window.clearTimeout(state.previewTimer);
+    state.previewTimer = window.setTimeout(() => {
+      state.previewTimer = 0;
+      openPreview(id);
+    }, 180);
+  }
+
+  function cancelScheduledPreview() {
+    window.clearTimeout(state.previewTimer);
+    state.previewTimer = 0;
+  }
+
+  function closeDetail() {
+    const modal = $('#abuseDetailModal');
+    if (!modal) return;
+    const close = () => {
+      state.selectedId = 0;
+      setDetailVisible(false);
+      renderBoard();
+    };
+    if (window.TRACSUnsavedChanges?.isDirty(modal)) {
+      window.TRACSUnsavedChanges.requestModalClose(modal, close);
+      return;
+    }
+    close();
+  }
+
+  function reportSaveRoots() {
+    return [$('#abuseOverviewPane'), $('[data-abuse-pane="relationships"]', root)].filter(Boolean);
+  }
+
+  function markDetailSaved(...roots) {
+    const modal = $('#abuseDetailModal');
+    const savedRoots = roots.filter(Boolean);
+    if (!modal) return;
+    if (window.TRACSUnsavedChanges) {
+      (savedRoots.length ? savedRoots : [modal]).forEach(savedRoot => window.TRACSUnsavedChanges.markSaved(savedRoot));
+      modal.dispatchEvent(new CustomEvent('tracs:save-success', {
+        bubbles: true,
+        detail: { root: savedRoots[0] || modal },
+      }));
+    } else if (typeof window.tracsMarkSaved === 'function') {
+      window.tracsMarkSaved(savedRoots[0] || modal);
+    }
+  }
+
+  function markDetailSaveFailed(error) {
+    $('#abuseDetailModal')?.dispatchEvent(new CustomEvent('tracs:save-error', { bubbles: true, detail: { error } }));
+  }
+
+  function setValue(selector, value) {
+    const node = $(selector);
+    if (node) node.value = value ?? '';
+  }
+
+  const optionalFields = {
+    affected_ip: ['Affected IP', '#abuseIp'],
+    reporter_contact: ['Reporter Contact', '#abuseReporterContact'],
+    customer_name: ['Customer', '#abuseCustomer'],
+    customer_reference: ['Customer Ref', '#abuseCustomerRef'],
+    ticket_reference: ['Ticket Reference', '#abuseTicketRef'],
+    ticket_url: ['Ticket Link', '#abuseTicketUrl'],
+    ticket_sent_at: ['Ticket Sent', '#abuseTicketSentAt'],
+    tags: ['Tags', '#abuseTags'],
+    nameserver_snapshot: ['Nameserver Snapshot', '#abuseNameservers'],
+    nameserver_snapshot_at: ['Snapshot Taken', '#abuseNameserverAt'],
+  };
+
+  function syncOptionalFields(report) {
+    const addFields = $('#abuseAddFields');
+    const hidden = [];
+    Object.entries(optionalFields).forEach(([key, [label, selector]]) => {
+      const field = $(`[data-abuse-optional="${key}"]`, root);
+      if (!field) return;
+      const hasValue = String($(selector)?.value || report?.[key] || '').trim() !== '';
+      field.hidden = !hasValue;
+      if (!hasValue) hidden.push([key, label]);
+    });
+    if (!addFields) return;
+    addFields.innerHTML = hidden.map(([key, label]) => `<button type="button" class="abuse-add-field" data-abuse-add-field="${esc(key)}"><i data-lucide="plus" class="icon-sm"></i>${esc(label)}</button>`).join('');
+    addFields.hidden = hidden.length === 0;
+    icons();
+  }
+
+  function showOptionalField(key) {
+    const config = optionalFields[key];
+    const field = $(`[data-abuse-optional="${key}"]`, root);
+    if (!config || !field) return;
+    field.hidden = false;
+    if (field.closest('#abuseAdvancedFields')) {
+      const advanced = $('#abuseAdvancedFields');
+      if (advanced) advanced.open = true;
+    }
+    $(`[data-abuse-add-field="${key}"]`, root)?.remove();
+    if (!$('#abuseAddFields [data-abuse-add-field]')) $('#abuseAddFields')?.setAttribute('hidden', '');
+    $(config[1])?.focus();
+  }
+
+  function setOverviewPaneActive() {
+    $$('[data-abuse-tab]', root).forEach(node => node.classList.toggle('is-active', node.dataset.abuseTab === 'overview'));
+    $$('[data-abuse-pane]', root).forEach(pane => {
+      const active = pane.dataset.abusePane === 'overview';
+      pane.classList.toggle('is-active', active);
+      pane.hidden = !active;
+    });
+    $('#abuseBulkPane')?.classList.remove('is-active');
+    if ($('#abuseBulkPane')) $('#abuseBulkPane').hidden = true;
+  }
+
+  function toggleWaitingFields() {
+    const isWaiting = $('#abuseStatus')?.value === 'waiting_external';
+    $$('.abuse-waiting-field', root).forEach(field => {
+      field.hidden = !isWaiting;
+    });
+    if (isWaiting && !$('#abuseWaitingUntil')?.value) setWaitingDefaults();
+  }
+
+  function updateCreateChrome() {
+    const creating = !toId($('#abuseReportId')?.value);
+    $('#abuseDetailContent')?.classList.toggle('is-creating', creating);
+    $('#abuseDetailContent')?.classList.toggle('is-bulk-creating', creating && state.createMode === 'bulk');
+    const mode = $('#abuseCreateMode');
+    if (mode) mode.hidden = !creating || !state.canManage;
+    $$('.abuse-create-only', root).forEach(node => {
+      node.hidden = !creating || !state.canManage;
+    });
+    $$('.abuse-existing-only', root).forEach(node => {
+      node.hidden = creating;
+    });
+    toggleWaitingFields();
+  }
+
+  function bulkCarry() {
+    return {
+      report_type: $('#abuseType')?.value || 'phishing',
+      priority: $('#abusePriority')?.value || 'medium',
+    };
+  }
+
+  function addBulkRow(values = {}, afterRow = null) {
+    const body = $('#abuseBulkRows');
+    if (!body) return null;
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td><input class="form-input" data-abuse-bulk-domain maxlength="255" value="${esc(values.affected_domain || '')}" placeholder="example.com"></td>
+      <td><select class="form-select" data-tracs-dropdown="off" data-abuse-bulk-type>${selectOptions(typeLabels, values.report_type || 'phishing')}</select></td>
+      <td><select class="form-select" data-tracs-dropdown="off" data-abuse-bulk-priority>${selectOptions(priorityLabels, values.priority || 'medium')}</select></td>
+      <td><input class="form-input" data-abuse-bulk-note maxlength="500" value="${esc(values.description || '')}" placeholder="Optional note"></td>
+      <td><button type="button" class="abuse-bulk-remove" data-abuse-bulk-remove aria-label="Remove row"><i data-lucide="trash-2" class="icon-sm"></i></button></td>
+    `;
+    if (afterRow?.parentNode === body) afterRow.after(row);
+    else body.appendChild(row);
+    icons();
+    return row;
+  }
+
+  function resetBulkRows(values = {}) {
+    const body = $('#abuseBulkRows');
+    if (!body) return;
+    body.innerHTML = '';
+    addBulkRow(values);
+  }
+
+  function ensureBulkRows() {
+    if (!$('#abuseBulkRows')?.children.length) resetBulkRows(bulkCarry());
+  }
+
+  function setCreateMode(mode) {
+    const creating = !toId($('#abuseReportId')?.value);
+    state.createMode = creating && mode === 'bulk' ? 'bulk' : 'single';
+    const bulk = $('#abuseBulkPane');
+    const single = $('#abuseOverviewPane');
+    if (single) {
+      single.hidden = creating && state.createMode === 'bulk';
+      single.classList.toggle('is-active', !(creating && state.createMode === 'bulk'));
+    }
+    if (bulk) {
+      bulk.hidden = !(creating && state.createMode === 'bulk');
+      bulk.classList.toggle('is-active', creating && state.createMode === 'bulk');
+    }
+    $$('[data-abuse-create-mode]', root).forEach(button => {
+      const active = button.dataset.abuseCreateMode === state.createMode;
+      button.classList.toggle('is-active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    if (state.createMode === 'bulk') ensureBulkRows();
+    updateCreateChrome();
+    icons();
+  }
+
+  function bulkRows() {
+    return $$('#abuseBulkRows tr', root).map(row => ({
+      title: '',
+      report_type: $('[data-abuse-bulk-type]', row)?.value || 'phishing',
+      status: 'incoming',
+      priority: $('[data-abuse-bulk-priority]', row)?.value || 'medium',
+      affected_domain: ($('[data-abuse-bulk-domain]', row)?.value || '').trim(),
+      affected_ip: '',
+      description: ($('[data-abuse-bulk-note]', row)?.value || '').trim(),
+    })).filter(row => row.affected_domain);
+  }
+
+  function bulkTitle(row) {
+    const type = typeLabels[row.report_type] || 'Abuse';
+    return `${type} report for ${row.affected_domain}`;
+  }
+
+  async function saveBulkReports(event) {
+    event.preventDefault();
+    const rows = bulkRows();
+    if (!rows.length) {
+      notify('Add at least one domain.', 'warning');
+      $('[data-abuse-bulk-domain]')?.focus();
+      return;
+    }
+    const button = $('#abuseBulkSaveBtn');
+    if (button) button.disabled = true;
+    let created = 0;
+    try {
+      for (const row of rows) {
+        const data = await jsonPost(apiUrls.create, { ...row, title: bulkTitle(row) });
+        updateReportInState(data?.report || data);
+        state.boardOrder = 'activity';
+        created += 1;
+      }
+      renderBoard();
+      const carry = rows[rows.length - 1] || bulkCarry();
+      resetBulkRows({ report_type: carry.report_type, priority: carry.priority });
+      markDetailSaved($('#abuseBulkPane'));
+      notify(`${created} abuse ${created === 1 ? 'report' : 'reports'} created.`, 'success');
+    } catch (error) {
+      renderBoard();
+      notify(created ? `${created} created. ${error.message || 'The remaining reports could not be saved.'}` : (error.message || 'Bulk reports could not be saved.'), 'error');
+      markDetailSaveFailed(error);
+    } finally {
+      if (button) button.disabled = false;
+    }
+  }
+
+  function handleBulkPaste(event) {
+    const input = event.target.closest('[data-abuse-bulk-domain]');
+    if (!input) return;
+    const domains = (event.clipboardData?.getData('text/plain') || '')
+      .split(/\r?\n/)
+      .map(line => line.split(/\t|,/)[0].trim())
+      .filter(Boolean);
+    if (domains.length <= 1) return;
+    event.preventDefault();
+    let row = input.closest('tr');
+    const carry = {
+      report_type: $('[data-abuse-bulk-type]', row)?.value || 'phishing',
+      priority: $('[data-abuse-bulk-priority]', row)?.value || 'medium',
+    };
+    domains.forEach((domain, index) => {
+      if (index > 0) row = addBulkRow(carry, row);
+      $('[data-abuse-bulk-domain]', row).value = domain;
+    });
+  }
+
+  function fillDetail(report) {
+    const creating = !toId(report?.id);
+    const wasBulkCreating = state.createMode === 'bulk';
+    state.detail = normalizeReport(report) || report;
+    state.selectedId = toId(report?.id);
+    setDetailVisible(true);
+    if (creating || wasBulkCreating) setOverviewPaneActive();
+    $('#abuseDetailRef') && ($('#abuseDetailRef').textContent = report.report_number || (report.id ? `#${report.id}` : 'New'));
+    $('#abuseDetailTitle') && ($('#abuseDetailTitle').textContent = report.title || 'New abuse report');
+    $('#abuseDetailSub') && ($('#abuseDetailSub').textContent = reportTarget(report));
+    const statusBadge = $('#abuseDetailStatusBadge');
+    if (statusBadge) {
+      statusBadge.textContent = report.workflow_label || statusLabels[report.status] || 'Incoming';
+      statusBadge.className = `abuse-status-chip is-${esc(report.workflow_stage || stageForStatus(report.status))}`;
+    }
+    const priorityBadge = $('#abuseDetailPriorityBadge');
+    if (priorityBadge) {
+      priorityBadge.textContent = report.priority || 'medium';
+      priorityBadge.className = `abuse-pill is-${esc(report.priority || 'medium')}`;
+    }
+    setValue('#abuseReportId', report.id || '');
+    setValue('#abuseTitle', report.title || '');
+    setValue('#abuseType', report.report_type || 'phishing');
+    setValue('#abuseStatus', report.status || 'incoming');
+    setValue('#abusePriority', report.priority || 'medium');
+    setValue('#abuseDomain', report.affected_domain || '');
+    setValue('#abuseIp', report.affected_ip || '');
+    setValue('#abuseReporter', report.reporter || '');
+    setValue('#abuseReporterContact', report.reporter_contact || '');
+    setValue('#abuseAssignedUser', report.assigned_user_id || '');
+    setValue('#abuseSlaDue', datetimeLocal(report.sla_due_at));
+    setValue('#abuseCustomer', report.customer_name || '');
+    setValue('#abuseCustomerRef', report.customer_reference || '');
+    setValue('#abuseTicketStatus', report.ticket_status || 'not_sent');
+    setValue('#abuseTicketRef', report.ticket_reference || '');
+    setValue('#abuseTicketUrl', report.ticket_url || '');
+    setValue('#abuseTicketSentAt', datetimeLocal(report.ticket_sent_at));
+    setValue('#abuseWaitingHours', report.waiting_hours || '24');
+    setValue('#abuseWaitingStartedAt', datetimeLocal(report.waiting_started_at));
+    setValue('#abuseWaitingUntil', datetimeLocal(report.waiting_until));
+    $('#abuseWaitingStatus') && ($('#abuseWaitingStatus').textContent = report.waiting_label || 'No waiting window');
+    setValue('#abuseTags', report.tags || (report.tag_list || []).join(', '));
+    setValue('#abuseNameservers', report.nameserver_snapshot || '');
+    setValue('#abuseNameserverAt', datetimeLocal(report.nameserver_snapshot_at));
+    setValue('#abuseDescription', report.description || '');
+    setValue('#abuseRelatedDomain', report.related_domain_id || '');
+    setValue('#abuseRelatedServer', report.related_server_id || '');
+    setValue('#abuseRelatedCase', report.related_case_id || '');
+    setValue('#abuseRelatedShift', report.related_shift_report_id || '');
+    syncOptionalFields(report);
+    const advanced = $('#abuseAdvancedFields');
+    if (advanced) advanced.open = sessionStorage.getItem('tracsAbuseAdvancedOpen') === '1';
+    if (creating) resetBulkRows({
+      report_type: report.report_type || 'phishing',
+      priority: report.priority || 'medium',
+    });
+    renderTimeline(report.timeline || []);
+    renderNotes(report.notes || []);
+    renderEvidence(report.evidence || []);
+    renderActivity(report.timeline || []);
+    setCreateMode('single');
+    updateCreateChrome();
+    window.TRACSDropdowns?.syncAll?.();
+    renderBoard();
+    markDetailSaved(...reportSaveRoots());
+  }
+
+  function blankReport() {
+    return {
+      id: 0,
+      report_number: 'New',
+      title: '',
+      report_type: 'phishing',
+      status: 'incoming',
+      workflow_stage: 'incoming',
+      workflow_label: 'Incoming',
+      priority: 'medium',
+      ticket_status: 'not_sent',
+      waiting_hours: 24,
+      waiting_started_at: '',
+      waiting_until: '',
+      tag_list: [],
+      timeline: [],
+      notes: [],
+      evidence: [],
+    };
+  }
+
+  async function openReport(id) {
+    const requestedId = toId(id);
+    if (!requestedId) return;
+    state.selectedId = requestedId;
+    renderBoard();
+    try {
+      const report = await jsonGet(`${apiUrls.get}?id=${encodeURIComponent(requestedId)}`);
+      if (state.selectedId !== requestedId) return;
+      updateReportInState(report);
+      fillDetail(report);
+    } catch (error) {
+      notify(error.message || 'Abuse report could not be loaded.', 'error');
+    }
+  }
+
+  async function deleteReport() {
+    const id = toId($('#abuseReportId')?.value);
+    if (!id || !state.canDelete) return;
+    const ref = state.detail?.report_number || `#${id}`;
+    const dirty = window.TRACSUnsavedChanges?.isDirty($('#abuseDetailModal'));
+    const confirmed = await window.tracsConfirm?.({
+      type: 'warning',
+      title: 'Delete abuse report',
+      message: `${dirty ? 'Unsaved edits will also be lost. ' : ''}Delete ${ref} permanently, including its notes and evidence?`,
+      confirmText: 'Delete report',
+      destructive: true,
+    });
+    if (!confirmed) return;
+    const button = $('#abuseDeleteRecord');
+    button?.setAttribute('disabled', '');
+    try {
+      await jsonPost(apiUrls.delete, { id });
+      state.reports = state.reports.filter(report => report.id !== id);
+      state.detail = null;
+      state.selectedId = 0;
+      markDetailSaved($('#abuseDetailModal'));
+      setDetailVisible(false);
+      renderBoard();
+      notify(`${ref} deleted.`, 'success');
+    } catch (error) {
+      notify(error.message || 'Abuse report could not be deleted.', 'error');
+    } finally {
+      button?.removeAttribute('disabled');
+    }
+  }
+
+  function renderTimeline(events) {
+    const host = $('#abuseTimeline');
+    if (!host) return;
+    host.innerHTML = events.length ? events.map(event => `
+      <article class="abuse-event">
+        <div class="abuse-event-head">
+          <strong>${esc(eventLabel(event.event_type))}</strong>
+          <span>${esc(formatDate(event.created_at))}</span>
+        </div>
+        <p>${esc([event.actor_name, event.field_name, event.note || event.new_value].filter(Boolean).join(' · '))}</p>
+      </article>
+    `).join('') : '<div class="abuse-empty-column">No timeline entries</div>';
+  }
+
+  function renderNotes(notes) {
+    const host = $('#abuseNotes');
+    if (!host) return;
+    host.innerHTML = notes.length ? notes.map(note => `
+      <article class="abuse-note">
+        <div class="abuse-note-head">
+          <strong>${esc(note.author_name || 'Internal note')}</strong>
+          <span>${esc(formatDate(note.created_at))}</span>
+        </div>
+        <p>${esc(note.body || '')}</p>
+      </article>
+    `).join('') : '<div class="abuse-empty-column">No notes</div>';
+  }
+
+  function renderEvidence(items) {
+    const host = $('#abuseEvidenceGrid');
+    if (!host) return;
+    host.innerHTML = items.length ? items.map(item => `
+      <article class="abuse-evidence-item">
+        <a class="abuse-evidence-preview" href="${esc(item.download_url || '#')}" target="_blank" rel="noopener">
+          ${item.preview_url ? `<img src="${esc(item.preview_url)}" alt="">` : `<i data-lucide="file-text"></i>`}
+        </a>
+        <div class="abuse-evidence-meta">
+          <strong>${esc(item.original_filename || 'Evidence')}</strong>
+          <span>${esc(item.evidence_type || 'other')} · ${esc(formatBytes(item.file_size))}</span>
+          <span>${esc(formatDate(item.created_at))}</span>
+        </div>
+      </article>
+    `).join('') : '<div class="abuse-empty-column">No evidence uploaded</div>';
+    icons();
+  }
+
+  function renderActivity(events) {
+    const host = $('#abuseActivityLog');
+    if (!host) return;
+    host.innerHTML = events.length ? events.slice(0, 12).map(event => `
+      <article class="abuse-event">
+        <div class="abuse-event-head">
+          <strong>${esc(eventLabel(event.event_type))}</strong>
+          <span>${esc(event.actor_name || 'System')}</span>
+        </div>
+        <p>${esc(formatDate(event.created_at))}</p>
+      </article>
+    `).join('') : '<div class="abuse-empty-column">No activity yet</div>';
+  }
+
+  function refreshDetailSideData(report) {
+    const updated = updateReportInState(report);
+    if (!updated) return;
+    state.boardOrder = 'activity';
+    state.detail = { ...(state.detail || {}), ...updated };
+    renderTimeline(state.detail.timeline || []);
+    renderNotes(state.detail.notes || []);
+    renderEvidence(state.detail.evidence || []);
+    renderActivity(state.detail.timeline || []);
+    renderBoard();
+  }
+
+  function collectReport() {
+    const id = toId($('#abuseReportId')?.value);
+    return {
+      id,
+      title: $('#abuseTitle')?.value || '',
+      report_type: $('#abuseType')?.value || 'phishing',
+      status: $('#abuseStatus')?.value || 'incoming',
+      priority: $('#abusePriority')?.value || 'medium',
+      affected_domain: $('#abuseDomain')?.value || '',
+      affected_ip: $('#abuseIp')?.value || '',
+      reporter: $('#abuseReporter')?.value || '',
+      reporter_contact: $('#abuseReporterContact')?.value || '',
+      assigned_user_id: $('#abuseAssignedUser')?.value || '',
+      sla_due_at: id ? ($('#abuseSlaDue')?.value || '') : '',
+      customer_name: $('#abuseCustomer')?.value || '',
+      customer_reference: $('#abuseCustomerRef')?.value || '',
+      ticket_status: $('#abuseTicketStatus')?.value || 'not_sent',
+      ticket_reference: $('#abuseTicketRef')?.value || '',
+      ticket_url: $('#abuseTicketUrl')?.value || '',
+      ticket_sent_at: $('#abuseTicketSentAt')?.value || '',
+      waiting_hours: $('#abuseWaitingHours')?.value || '24',
+      waiting_started_at: $('#abuseWaitingStartedAt')?.value || '',
+      waiting_until: $('#abuseWaitingUntil')?.value || '',
+      tags: $('#abuseTags')?.value || '',
+      nameserver_snapshot: $('#abuseNameservers')?.value || '',
+      nameserver_snapshot_at: $('#abuseNameserverAt')?.value || '',
+      description: $('#abuseDescription')?.value || '',
+      related_domain_id: $('#abuseRelatedDomain')?.value || '',
+      related_server_id: $('#abuseRelatedServer')?.value || '',
+      related_case_id: $('#abuseRelatedCase')?.value || '',
+      related_shift_report_id: $('#abuseRelatedShift')?.value || '',
+    };
+  }
+
+  async function saveReport(successMessage = '') {
+    if (state.saveInFlight) return null;
+    const payload = collectReport();
+    if (!payload.title.trim()) {
+      notify('Title is required.', 'warning');
+      $('#abuseTitle')?.focus();
+      markDetailSaveFailed(new Error('Title is required'));
+      return null;
+    }
+    const modal = $('#abuseDetailModal');
+    const content = $('#abuseDetailContent');
+    state.saveInFlight = true;
+    modal?.setAttribute('aria-busy', 'true');
+    content?.setAttribute('inert', '');
+    try {
+      const data = payload.id
+        ? await jsonPost(apiUrls.update, payload)
+        : await jsonPost(apiUrls.create, payload);
+      const report = data?.report || data;
+      updateReportInState(report);
+      state.boardOrder = 'activity';
+      fillDetail(report);
+      notify(successMessage || (payload.id ? 'Abuse report updated.' : 'Abuse report created.'), 'success');
+      if (!payload.id) closeDetail();
+      return report;
+    } catch (error) {
+      notify(error.message || 'Abuse report could not be saved.', 'error');
+      markDetailSaveFailed(error);
+      return null;
+    } finally {
+      state.saveInFlight = false;
+      modal?.removeAttribute('aria-busy');
+      content?.removeAttribute('inert');
+    }
+  }
+
+  function orderedIdsFor(stage, status) {
+    return state.reports
+      .filter(report => report.workflow_stage === stage && (!status || report.status === status))
+      .sort(sortReports)
+      .map(report => report.id);
+  }
+
+  function moveInState(id, target, beforeId = 0) {
+    const { stage, status } = stageAndStatus(target);
+    const index = state.reports.findIndex(report => report.id === id);
+    if (index < 0) return null;
+    const [report] = state.reports.splice(index, 1);
+    const oldStage = report.workflow_stage;
+    const oldStatus = report.status;
+    report.status = status;
+    report.workflow_stage = stage;
+    report.status_label = statusLabels[status] || status;
+    report.workflow_label = statusLabels[stage] || report.status_label;
+    report.action_required = stage === 'action_required';
+    if (oldStage !== stage || oldStatus !== status) {
+      report.last_activity_at = new Date().toISOString();
+      report.last_activity_type = 'status_changed';
+    }
+    if (beforeId === id) beforeId = 0;
+    let insertAt = beforeId ? state.reports.findIndex(item => item.id === beforeId) : -1;
+    if (insertAt < 0) {
+      insertAt = state.reports.reduce((last, item, idx) => item.workflow_stage === stage ? idx + 1 : last, state.reports.length);
+    }
+    state.reports.splice(insertAt, 0, report);
+    renumberStage(oldStage);
+    renumberStage(stage);
+    return report;
+  }
+
+  async function moveReport(id, target, beforeId = 0, source = 'drag_drop') {
+    const { stage, status } = stageAndStatus(target);
+    if (!state.canManage || !stages.includes(stage)) return;
+    const previous = state.reports.find(report => report.id === id);
+    if (!previous) return;
+    const oldStatus = previous.status;
+    const oldBoardOrder = state.boardOrder;
+    const oldReports = state.reports.map(report => ({ ...report }));
+    state.boardOrder = source === 'drag_drop' ? 'manual' : 'activity';
+    moveInState(id, status, beforeId);
+    renderBoard();
+    try {
+      if (oldStatus !== status) {
+        const report = await jsonPost(apiUrls.status, { id, status, source });
+        updateReportInState(report);
+      }
+      await jsonPost(apiUrls.reorder, { status, ordered_ids: orderedIdsFor(stage, status) });
+      if (state.selectedId === id) openReport(id);
+    } catch (error) {
+      state.reports = oldReports;
+      state.boardOrder = oldBoardOrder;
+      renderBoard();
+      notify(error.message || 'Abuse report could not be moved.', 'error');
+    }
+  }
+
+  async function addNote(event) {
+    event.preventDefault();
+    const id = toId($('#abuseReportId')?.value);
+    const body = ($('#abuseNoteBody')?.value || '').trim();
+    if (!id) return notify('Save the report before adding notes.', 'warning');
+    if (!body) return notify('Note is required.', 'warning');
+    try {
+      const data = await jsonPost(apiUrls.note, { id, note: body });
+      $('#abuseNoteBody').value = '';
+      refreshDetailSideData(data?.report);
+      markDetailSaved($('#abuseNoteForm'));
+      notify('Note added.', 'success');
+    } catch (error) {
+      notify(error.message || 'Note could not be saved.', 'error');
+    }
+  }
+
+  async function uploadEvidence(event) {
+    event.preventDefault();
+    const id = toId($('#abuseReportId')?.value);
+    const input = $('#abuseEvidenceInput');
+    if (!id) return notify('Save the report before uploading evidence.', 'warning');
+    if (!input?.files?.length) return notify('Choose evidence before uploading.', 'warning');
+    const body = new FormData();
+    body.append('id', String(id));
+    body.append('evidence_type', $('#abuseEvidenceType')?.value || '');
+    Array.from(input.files).forEach(file => body.append('evidence[]', file));
+    try {
+      const response = await fetch(apiUrls.evidence, { method: 'POST', body });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload.success === false) throw new Error(payload.message || 'Evidence could not be uploaded.');
+      input.value = '';
+      const report = payload.data?.report;
+      refreshDetailSideData(report);
+      markDetailSaved($('#abuseEvidenceForm'));
+      notify('Evidence uploaded.', 'success');
+    } catch (error) {
+      notify(error.message || 'Evidence could not be uploaded.', 'error');
+    }
+  }
+
+  function setWaitingDefaults() {
+    const started = $('#abuseWaitingStartedAt')?.value || nowLocalInput();
+    const hours = $('#abuseWaitingHours')?.value || '24';
+    if (!$('#abuseWaitingStartedAt')?.value) setValue('#abuseWaitingStartedAt', started);
+    setValue('#abuseWaitingUntil', addHoursLocal(started, hours));
+    $('#abuseWaitingStatus') && ($('#abuseWaitingStatus').textContent = `Until ${formatDate($('#abuseWaitingUntil')?.value)}`);
+  }
+
+  root.addEventListener('click', event => {
+    const advance = event.target.closest('[data-abuse-advance]');
+    if (advance) {
+      event.preventDefault();
+      moveReport(toId(advance.dataset.abuseId), advance.dataset.abuseAdvance, 0, 'advance_button');
+      return;
+    }
+    const view = event.target.closest('[data-abuse-view]');
+    if (view) {
+      state.view = view.dataset.abuseView === 'list' ? 'list' : 'board';
+      renderBoard();
+      return;
+    }
+    const sort = event.target.closest('[data-abuse-sort]');
+    if (sort) {
+      const field = sort.dataset.abuseSort || 'priority';
+      state.sort = {
+        field,
+        dir: state.sort.field === field && state.sort.dir === 'asc' ? 'desc' : 'asc',
+      };
+      renderBoard();
+      return;
+    }
+    const createMode = event.target.closest('[data-abuse-create-mode]');
+    if (createMode) {
+      setCreateMode(createMode.dataset.abuseCreateMode);
+      return;
+    }
+    const addField = event.target.closest('[data-abuse-add-field]');
+    if (addField) {
+      showOptionalField(addField.dataset.abuseAddField);
+      return;
+    }
+    const listEdit = event.target.closest('[data-abuse-list-edit]');
+    if (listEdit) {
+      toggleListEditor(toId(listEdit.dataset.abuseListEdit));
+      return;
+    }
+    const listEditCancel = event.target.closest('[data-abuse-list-edit-cancel]');
+    if (listEditCancel) {
+      toggleListEditor(toId(listEditCancel.dataset.abuseListEditCancel), false);
+      return;
+    }
+    if (event.target.closest('.abuse-list-select, .abuse-list-editor-form')) {
+      cancelScheduledPreview();
+      return;
+    }
+    if (event.target.closest('#abuseOpenRecord')) {
+      const id = state.previewId;
+      closePreview();
+      openReport(id);
+      return;
+    }
+    if (event.target.closest('#abuseClosePreview, #abusePreviewDismiss')) {
+      closePreview();
+      return;
+    }
+    if (event.target.closest('#abuseBulkAddRow')) {
+      const last = $('#abuseBulkRows tr:last-child');
+      const carry = last ? {
+        report_type: $('[data-abuse-bulk-type]', last)?.value || 'phishing',
+        priority: $('[data-abuse-bulk-priority]', last)?.value || 'medium',
+      } : bulkCarry();
+      addBulkRow(carry)?.querySelector('[data-abuse-bulk-domain]')?.focus();
+      return;
+    }
+    const bulkRemove = event.target.closest('[data-abuse-bulk-remove]');
+    if (bulkRemove) {
+      const row = bulkRemove.closest('tr');
+      if ($('#abuseBulkRows')?.children.length > 1) row?.remove();
+      else row?.querySelectorAll('input').forEach(input => { input.value = ''; });
+      return;
+    }
+    const row = event.target.closest('[data-abuse-row]');
+    if (row) {
+      schedulePreview(toId(row.dataset.abuseId));
+      return;
+    }
+    const card = event.target.closest('.abuse-card');
+    if (card) {
+      schedulePreview(toId(card.dataset.abuseId));
+      return;
+    }
+    const tab = event.target.closest('[data-abuse-tab]');
+    if (tab) {
+      const name = tab.dataset.abuseTab;
+      $$('[data-abuse-tab]', root).forEach(node => node.classList.toggle('is-active', node === tab));
+      $$('[data-abuse-pane]', root).forEach(pane => {
+        const active = pane.dataset.abusePane === name;
+        pane.classList.toggle('is-active', active);
+        pane.hidden = !active;
+      });
+      state.createMode = 'single';
+      $('#abuseBulkPane')?.classList.remove('is-active');
+      if ($('#abuseBulkPane')) $('#abuseBulkPane').hidden = true;
+      updateCreateChrome();
+      return;
+    }
+    const move = event.target.closest('[data-abuse-move]');
+    if (move) {
+      if (window.TRACSUnsavedChanges?.isDirty($('#abuseDetailModal'))) {
+        notify('Save or reset your edits before changing the report status.', 'warning');
+        return;
+      }
+      moveReport(toId($('#abuseReportId')?.value), move.dataset.abuseMove, 0, 'quick_action');
+      return;
+    }
+    if (event.target.closest('[data-abuse-ticket-sent]')) {
+      if (!toId($('#abuseReportId')?.value)) return notify('Save the report before marking a ticket sent.', 'warning');
+      setValue('#abuseTicketStatus', 'sent');
+      if (!$('#abuseTicketSentAt')?.value) setValue('#abuseTicketSentAt', nowLocalInput());
+      saveReport('Ticket marked sent.');
+      return;
+    }
+    if (event.target.closest('[data-abuse-snapshot-now]')) {
+      if (!toId($('#abuseReportId')?.value)) return notify('Save the report before stamping a snapshot.', 'warning');
+      if (!($('#abuseNameservers')?.value || '').trim()) return notify('Enter nameserver snapshot before stamping.', 'warning');
+      setValue('#abuseNameserverAt', nowLocalInput());
+      saveReport('Nameserver snapshot stamped.');
+      return;
+    }
+    if (event.target.closest('[data-abuse-placeholder]')) {
+      notify('Action captured for future automation integration.', 'info');
+      return;
+    }
+    if (event.target.closest('#abuseNewBtn')) {
+      fillDetail(blankReport());
+      $('#abuseTitle')?.focus();
+      return;
+    }
+    if (event.target.closest('#abuseResetBtn')) {
+      const id = toId($('#abuseReportId')?.value);
+      id ? openReport(id) : fillDetail(blankReport());
+      return;
+    }
+    if (event.target.closest('#abuseClosePanel')) {
+      closeDetail();
+      return;
+    }
+    if (event.target.closest('#abuseDeleteRecord')) {
+      deleteReport();
+    }
+  });
+
+  root.addEventListener('dblclick', event => {
+    const target = event.target.closest('[data-abuse-row], .abuse-card');
+    if (!target || event.target.closest('button, a, input, select, textarea')) return;
+    event.preventDefault();
+    window.clearTimeout(state.previewTimer);
+    state.previewTimer = 0;
+    closePreview();
+    openReport(toId(target.dataset.abuseId));
+  });
+
+  root.addEventListener('dragstart', event => {
+    const card = event.target.closest('.abuse-card');
+    if (!card || !state.canManage) return;
+    state.draggedId = toId(card.dataset.abuseId);
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', String(state.draggedId));
+    card.classList.add('is-dragging');
+  });
+  root.addEventListener('dragend', event => {
+    event.target.closest('.abuse-card')?.classList.remove('is-dragging');
+    state.draggedId = 0;
+    $$('.abuse-column', root).forEach(column => column.classList.remove('is-drag-over'));
+  });
+  root.addEventListener('dragover', event => {
+    if (!state.draggedId || !state.canManage) return;
+    const column = event.target.closest('[data-abuse-column]');
+    if (!column) return;
+    event.preventDefault();
+    column.classList.add('is-drag-over');
+  });
+  root.addEventListener('dragleave', event => {
+    const column = event.target.closest('[data-abuse-column]');
+    if (column && !column.contains(event.relatedTarget)) column.classList.remove('is-drag-over');
+  });
+  root.addEventListener('drop', event => {
+    if (!state.draggedId || !state.canManage) return;
+    const column = event.target.closest('[data-abuse-column]');
+    if (!column) return;
+    event.preventDefault();
+    const status = column.dataset.abuseColumn;
+    const target = event.target.closest('.abuse-card');
+    const beforeId = target ? toId(target.dataset.abuseId) : 0;
+    column.classList.remove('is-drag-over');
+    moveReport(state.draggedId, status, beforeId);
+  });
+
+  $('#abuseOverviewPane')?.addEventListener('submit', event => {
+    event.preventDefault();
+    saveReport();
+  });
+  root.addEventListener('change', event => {
+    const control = event.target.closest('[data-abuse-list-field]');
+    if (!control) return;
+    cancelScheduledPreview();
+    updateListFields(toId(control.dataset.abuseId), { [control.dataset.abuseListField]: control.value }, `list_${control.dataset.abuseListField}`);
+  });
+  root.addEventListener('submit', event => {
+    const form = event.target.closest('[data-abuse-list-editor-form]');
+    if (!form) return;
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(form).entries());
+    updateListFields(toId(form.dataset.abuseId), values, 'list_details');
+  });
+  $('#abuseBulkPane')?.addEventListener('submit', saveBulkReports);
+  $('#abuseBulkPane')?.addEventListener('paste', handleBulkPaste);
+  $('#abuseSaveRelationships')?.addEventListener('click', () => saveReport());
+  $('#abuseNoteForm')?.addEventListener('submit', addNote);
+  $('#abuseEvidenceForm')?.addEventListener('submit', uploadEvidence);
+  $('#abuseSearchForm')?.addEventListener('submit', event => event.preventDefault());
+  $('#abuseExportForm')?.addEventListener('submit', syncExportFilters);
+  $('#abuseExportForm')?.closest('details')?.addEventListener('toggle', syncExportFilters);
+  $('#abuseWaitingHours')?.addEventListener('change', setWaitingDefaults);
+  $('#abuseWaitingStartedAt')?.addEventListener('input', setWaitingDefaults);
+  $('#abuseStatus')?.addEventListener('change', toggleWaitingFields);
+  $('#abuseAdvancedFields')?.addEventListener('toggle', event => {
+    sessionStorage.setItem('tracsAbuseAdvancedOpen', event.currentTarget.open ? '1' : '0');
+  });
+  [
+    '#abuseSearchInput', '#abuseStatusFilter', '#abusePriorityFilter', '#abuseReporterFilter',
+    '#abuseAssignedFilter', '#abuseDateStart', '#abuseDateEnd', '#abuseHasAttachmentFilter',
+    '#abuseActionRequiredFilter',
+  ].forEach(selector => $(selector)?.addEventListener('input', renderBoard));
+  ['#abuseStatusFilter', '#abusePriorityFilter', '#abuseReporterFilter', '#abuseAssignedFilter']
+    .forEach(selector => $(selector)?.addEventListener('change', renderBoard));
+
+  syncExportFilters();
+  renderBoard();
+  if (state.selectedId) openReport(state.selectedId);
+  window.openAbuseReport = openReport;
+})();

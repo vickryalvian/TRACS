@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "tracs-docker",
+      "runtimeExecutable": "docker",
+      "runtimeArgs": ["compose", "up"],
+      "port": 8080,
+      "autoPort": false
+    },
+    {
+      "name": "tracs-static",
+      "runtimeExecutable": "php",
+      "runtimeArgs": ["-S", "127.0.0.1:8099", "-t", "public"],
+      "port": 8099,
+      "autoPort": false
+    }
+  ]
+}

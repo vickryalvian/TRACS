@@ -5,6 +5,7 @@
 header('Content-Type: application/json');
 require '_bootstrap.php';
 require_once __DIR__ . '/../../modules/cancellation-feedback/controller.php';
+require_once __DIR__ . '/_realtime_payloads.php';
 tracs_ensure_creator_columns($conn, 'tracs_cancellation_feedback', null);
 
 $controller = new CancellationFeedbackController($conn, $uid);
@@ -39,7 +40,14 @@ if ($data['email_address'] !== '' && !filter_var($data['email_address'], FILTER_
 $id = $controller->createFeedback($data);
 
 if ($id) {
-    echo json_encode(['success' => true, 'id' => $id]);
+    echo json_encode([
+        'success' => true,
+        'id' => $id,
+        'data' => [
+            'id' => $id,
+            'record' => tracs_realtime_feedback($conn, (int)$id),
+        ],
+    ]);
 } else {
     echo json_encode(['success' => false, 'error' => 'Database error.']);
 }

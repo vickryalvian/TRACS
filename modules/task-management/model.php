@@ -126,17 +126,99 @@ class TaskManagementModel {
         return $count;
     }
 
+    /**
+     * Lazy recurrence engine: there's no system cron in this app, so — same
+     * pattern as refreshOverdueStatuses() — this runs on page load. Any
+     * recurring task whose due_at has passed gets its due_at rolled forward
+     * by recurrence_interval_days (looping past any cycles missed while the
+     * app wasn't loaded), and every non-cancelled assignment on it is reset
+     * to a fresh 'assigned' cycle. The prior cycle's outcome is preserved in
+     * tracs_task_logs rather than being silently overwritten.
+     */
+    public function refreshRecurringTasks(?int $actorId = null): int {
+        $actorId = $actorId ?: 0;
+        $res = $this->conn->query("
+            SELECT id, due_at, recurrence_interval_days
+            FROM tracs_tasks
+            WHERE recurrence_type = 'daily' AND due_at IS NOT NULL AND due_at <= NOW()
+            LIMIT 100
+        ");
+        $tasks = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
+        $rolled = 0;
+        foreach ($tasks as $task) {
+            $taskId = (int)$task['id'];
+            $intervalDays = max(1, (int)$task['recurrence_interval_days']);
+            $due = strtotime((string)$task['due_at']);
+            if ($due === false) {
+                continue;
+            }
+            do {
+                $due += $intervalDays * 86400;
+            } while ($due <= time());
+            $newDueAt = date('Y-m-d H:i:s', $due);
+
+            $this->conn->begin_transaction();
+            try {
+                $assignRes = $this->conn->query("
+                    SELECT id, status, linked_checklist_task_id, linked_reminder_id
+                    FROM tracs_task_assignments WHERE task_id = " . $taskId . "
+                ");
+                $assignments = $assignRes ? $assignRes->fetch_all(MYSQLI_ASSOC) : [];
+                foreach ($assignments as $a) {
+                    if ($a['status'] === 'cancelled') {
+                        continue;
+                    }
+                    $assignmentId = (int)$a['id'];
+                    $priorStatus = (string)$a['status'];
+                    $upd = $this->conn->prepare("
+                        UPDATE tracs_task_assignments
+                        SET status = 'assigned', progress_note = NULL, completion_note = NULL, review_note = NULL,
+                            assigned_at = NOW(), started_at = NULL, completed_at = NULL, reviewed_at = NULL,
+                            completion_seconds = NULL, overdue_seconds = 0, start_delay_seconds = NULL,
+                            updated_by = ?, updated_at = NOW()
+                        WHERE id = ?
+                    ");
+                    $upd->bind_param('ii', $actorId, $assignmentId);
+                    $upd->execute();
+                    $upd->close();
+
+                    $cid = (int)($a['linked_checklist_task_id'] ?? 0);
+                    if ($cid > 0) {
+                        $this->conn->query("UPDATE tracs_side_tasks SET is_completed = 0, updated_at = NOW() WHERE id = " . $cid);
+                    }
+                    $rid = (int)($a['linked_reminder_id'] ?? 0);
+                    if ($rid > 0) {
+                        $rstmt = $this->conn->prepare("UPDATE tracs_reminders SET due_date = ?, is_completed = 0, updated_at = NOW() WHERE id = ?");
+                        $rstmt->bind_param('si', $newDueAt, $rid);
+                        $rstmt->execute();
+                        $rstmt->close();
+                    }
+                    $this->log($taskId, $assignmentId, $actorId, 'recurrence_reset', 'New cycle started (previous cycle closed as ' . $priorStatus . '). Next due ' . $newDueAt . '.');
+                }
+                $tstmt = $this->conn->prepare("UPDATE tracs_tasks SET due_at = ?, updated_at = NOW() WHERE id = ?");
+                $tstmt->bind_param('si', $newDueAt, $taskId);
+                $tstmt->execute();
+                $tstmt->close();
+                $this->conn->commit();
+                $rolled++;
+            } catch (Throwable $e) {
+                $this->conn->rollback();
+            }
+        }
+        return $rolled;
+    }
+
     public function createTask(array $data, array $assigneeIds, int $actorId, string $actorName): int {
         tracs_notifications_ensure_schema($this->conn);
         $this->conn->begin_transaction();
         try {
             $stmt = $this->conn->prepare("
                 INSERT INTO tracs_tasks
-                  (title, description, category, priority, assignment_scope, due_at, recurrence_type, reference_url, requires_review, created_by, assigned_by, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+                  (title, description, category, priority, assignment_scope, due_at, recurrence_type, recurrence_interval_days, reference_url, requires_review, created_by, assigned_by, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
             ");
             $stmt->bind_param(
-                'ssssssssiii',
+                'sssssssisiii',
                 $data['title'],
                 $data['description'],
                 $data['category'],
@@ -144,6 +226,7 @@ class TaskManagementModel {
                 $data['assignment_scope'],
                 $data['due_at'],
                 $data['recurrence_type'],
+                $data['recurrence_interval_days'],
                 $data['reference_url'],
                 $data['requires_review'],
                 $actorId,
@@ -239,6 +322,203 @@ class TaskManagementModel {
         return $assignmentId;
     }
 
+    /** created_by of a task, for owner-or-monitor permission checks. */
+    public function taskOwnerId(int $taskId): int {
+        $stmt = $this->conn->prepare("SELECT created_by FROM tracs_tasks WHERE id = ? LIMIT 1");
+        if (!$stmt) return 0;
+        $stmt->bind_param('i', $taskId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        return (int)($row['created_by'] ?? 0);
+    }
+
+    /** Full task record for edit prefill. */
+    public function taskById(int $taskId): ?array {
+        $stmt = $this->conn->prepare("SELECT * FROM tracs_tasks WHERE id = ? LIMIT 1");
+        if (!$stmt) return null;
+        $stmt->bind_param('i', $taskId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        return $row ?: null;
+    }
+
+    /** Assignees currently on a task (for reassign prefill). */
+    public function taskAssigneeIds(int $taskId): array {
+        $ids = [];
+        $res = $this->conn->query("SELECT user_id FROM tracs_task_assignments WHERE task_id = " . (int)$taskId);
+        if ($res) { while ($row = $res->fetch_assoc()) $ids[] = (int)$row['user_id']; }
+        return $ids;
+    }
+
+    /**
+     * Edit a task's core fields and cascade the changes to every linked
+     * checklist item and reminder so the shared objects stay consistent.
+     */
+    public function updateTask(int $taskId, array $data, int $actorId): bool {
+        $this->conn->begin_transaction();
+        try {
+            $stmt = $this->conn->prepare("
+                UPDATE tracs_tasks
+                SET title=?, description=?, category=?, priority=?, due_at=?, recurrence_type=?, recurrence_interval_days=?, reference_url=?, requires_review=?, updated_at=NOW()
+                WHERE id=?
+            ");
+            $stmt->bind_param('ssssssisii', $data['title'], $data['description'], $data['category'], $data['priority'], $data['due_at'], $data['recurrence_type'], $data['recurrence_interval_days'], $data['reference_url'], $data['requires_review'], $taskId);
+            if (!$stmt->execute()) { $stmt->close(); throw new RuntimeException('Task update failed.'); }
+            $stmt->close();
+
+            $desc = trim(($data['description'] ?? '') . (!empty($data['reference_url']) ? "\nReference: " . $data['reference_url'] : ''));
+            $remPriority = match ($data['priority']) { 'urgent' => 'critical', 'high' => 'high', 'low' => 'low', default => 'medium' };
+            $res = $this->conn->query("SELECT linked_checklist_task_id, linked_reminder_id FROM tracs_task_assignments WHERE task_id = " . (int)$taskId);
+            while ($res && ($row = $res->fetch_assoc())) {
+                $cid = (int)($row['linked_checklist_task_id'] ?? 0);
+                $rid = (int)($row['linked_reminder_id'] ?? 0);
+                if ($cid) {
+                    $s = $this->conn->prepare("UPDATE tracs_side_tasks SET title=?, description=?, updated_at=NOW() WHERE id=?");
+                    if ($s) { $s->bind_param('ssi', $data['title'], $desc, $cid); $s->execute(); $s->close(); }
+                }
+                if ($rid) {
+                    if (!empty($data['due_at'])) {
+                        $s = $this->conn->prepare("UPDATE tracs_reminders SET title=?, description=?, due_date=?, priority=?, updated_at=NOW() WHERE id=?");
+                        if ($s) { $s->bind_param('ssssi', $data['title'], $desc, $data['due_at'], $remPriority, $rid); $s->execute(); $s->close(); }
+                    } else {
+                        $s = $this->conn->prepare("UPDATE tracs_reminders SET title=?, description=?, priority=?, updated_at=NOW() WHERE id=?");
+                        if ($s) { $s->bind_param('sssi', $data['title'], $desc, $remPriority, $rid); $s->execute(); $s->close(); }
+                    }
+                }
+            }
+            $this->log($taskId, null, $actorId, 'updated', 'Task details updated.');
+            $this->conn->commit();
+            return true;
+        } catch (Throwable $e) {
+            $this->conn->rollback();
+            throw $e;
+        }
+    }
+
+    /** Add assignees to an existing task (reassign); skips users already assigned. Returns count added. */
+    public function addAssignees(int $taskId, array $userIds, int $actorId, string $actorName): int {
+        $task = $this->taskById($taskId);
+        if (!$task) throw new RuntimeException('Task not found.');
+        $existing = array_flip($this->taskAssigneeIds($taskId));
+        $added = 0;
+        $this->conn->begin_transaction();
+        try {
+            foreach ($userIds as $uid) {
+                $uid = (int)$uid;
+                if ($uid <= 0 || isset($existing[$uid])) continue;
+                $assignmentId = $this->createAssignment($taskId, $uid, $actorId, $actorName, $task);
+                $this->log($taskId, $assignmentId, $actorId, 'assigned', 'Additional assignee added.');
+                $added++;
+            }
+            $this->conn->commit();
+        } catch (Throwable $e) {
+            $this->conn->rollback();
+            throw $e;
+        }
+        return $added;
+    }
+
+    /**
+     * Remove a single user's assignment from a task, cascading to that
+     * assignment's own linked checklist item (+ its logs), its linked reminder,
+     * and that assignment's task logs — while leaving the task itself and every
+     * other assignee untouched. This is the inverse of addAssignees().
+     *
+     * Refuses to remove the final assignee: a task nobody is assigned to should
+     * be removed with deleteTask() instead, so the caller is forced to make that
+     * choice explicitly rather than silently orphaning the task.
+     *
+     * @return array{user_id:int, assignee_name:string}
+     */
+    public function removeAssignee(int $taskId, int $assignmentId): array {
+        $stmt = $this->conn->prepare("
+            SELECT ta.id, ta.user_id, ta.linked_checklist_task_id, ta.linked_reminder_id,
+                   COALESCE(NULLIF(u.name,''), u.email, 'User') AS assignee_name
+            FROM tracs_task_assignments ta
+            LEFT JOIN tracs_users u ON u.id = ta.user_id
+            WHERE ta.id = ? AND ta.task_id = ? LIMIT 1
+        ");
+        if (!$stmt) throw new RuntimeException('Database error.');
+        $stmt->bind_param('ii', $assignmentId, $taskId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$row) throw new RuntimeException('That assignment was not found for this task.');
+
+        $count = 0;
+        $res = $this->conn->query("SELECT COUNT(*) AS c FROM tracs_task_assignments WHERE task_id = " . (int)$taskId);
+        if ($res && ($r = $res->fetch_assoc())) $count = (int)$r['c'];
+        if ($count <= 1) {
+            throw new RuntimeException('This is the only assignee. Delete the whole task instead of unassigning the last person.');
+        }
+
+        $cid = (int)($row['linked_checklist_task_id'] ?? 0);
+        $rid = (int)($row['linked_reminder_id'] ?? 0);
+        $this->conn->begin_transaction();
+        try {
+            if ($cid > 0) {
+                $this->conn->query("DELETE FROM tracs_side_task_logs WHERE task_id = " . $cid);
+                $this->conn->query("DELETE FROM tracs_side_tasks WHERE id = " . $cid);
+            }
+            if ($rid > 0) {
+                $this->conn->query("DELETE FROM tracs_reminders WHERE id = " . $rid);
+            }
+            // Only this assignment's own logs; task-level logs (assignment_id
+            // NULL) stay attached to the surviving task.
+            $this->conn->query("DELETE FROM tracs_task_logs WHERE assignment_id = " . (int)$assignmentId);
+            $stmt = $this->conn->prepare("DELETE FROM tracs_task_assignments WHERE id = ? AND task_id = ?");
+            $stmt->bind_param('ii', $assignmentId, $taskId);
+            $ok = $stmt->execute() && $stmt->affected_rows > 0;
+            $stmt->close();
+            if (!$ok) throw new RuntimeException('Assignment could not be removed.');
+            $this->conn->commit();
+        } catch (Throwable $e) {
+            $this->conn->rollback();
+            throw $e;
+        }
+        return ['user_id' => (int)$row['user_id'], 'assignee_name' => (string)$row['assignee_name']];
+    }
+
+    /**
+     * Delete a task and everything it spawned: linked checklist items (+ their
+     * logs), linked reminders, task logs, and all assignments. Children first so
+     * foreign keys stay satisfied regardless of cascade config.
+     */
+    public function deleteTask(int $taskId): bool {
+        $this->conn->begin_transaction();
+        try {
+            $cids = []; $rids = [];
+            $res = $this->conn->query("SELECT linked_checklist_task_id, linked_reminder_id FROM tracs_task_assignments WHERE task_id = " . (int)$taskId);
+            while ($res && ($row = $res->fetch_assoc())) {
+                if (!empty($row['linked_checklist_task_id'])) $cids[] = (int)$row['linked_checklist_task_id'];
+                if (!empty($row['linked_reminder_id'])) $rids[] = (int)$row['linked_reminder_id'];
+            }
+            if ($cids) {
+                $in = implode(',', array_map('intval', $cids));
+                $this->conn->query("DELETE FROM tracs_side_task_logs WHERE task_id IN ($in)");
+                $this->conn->query("DELETE FROM tracs_side_tasks WHERE id IN ($in)");
+            }
+            if ($rids) {
+                $in = implode(',', array_map('intval', $rids));
+                $this->conn->query("DELETE FROM tracs_reminders WHERE id IN ($in)");
+            }
+            $this->conn->query("DELETE FROM tracs_task_logs WHERE task_id = " . (int)$taskId);
+            $this->conn->query("DELETE FROM tracs_task_assignments WHERE task_id = " . (int)$taskId);
+            $stmt = $this->conn->prepare("DELETE FROM tracs_tasks WHERE id = ?");
+            $stmt->bind_param('i', $taskId);
+            $ok = $stmt->execute() && $stmt->affected_rows > 0;
+            $stmt->close();
+            if (!$ok) throw new RuntimeException('Task not found.');
+            $this->conn->commit();
+            return true;
+        } catch (Throwable $e) {
+            $this->conn->rollback();
+            throw $e;
+        }
+    }
+
     public function listTasks(array $filters, int $actorId, bool $canMonitor): array {
         $where = [$canMonitor ? '1=1' : 'ta.user_id = ?'];
         $types = $canMonitor ? '' : 'i';
@@ -283,7 +563,7 @@ class TaskManagementModel {
             $params[] = (string)$filters['due_date'];
         }
         $stmt = $this->conn->prepare("
-            SELECT t.*, ta.id AS assignment_id, ta.user_id, ta.status AS stored_status,
+            SELECT t.*, ta.id AS assignment_id, ta.task_id, ta.user_id, ta.status AS stored_status,
                    CASE
                      WHEN ta.status IN ('completed_on_time','completed_late','reviewed','cancelled','reassigned') THEN ta.status
                      WHEN t.due_at IS NOT NULL AND t.due_at < NOW() THEN 'overdue'
@@ -306,7 +586,9 @@ class TaskManagementModel {
             LEFT JOIN tracs_users cb ON cb.id = t.created_by
             LEFT JOIN tracs_users ab ON ab.id = ta.assigned_by
             WHERE " . implode(' AND ', $where) . "
-            ORDER BY COALESCE(t.due_at, t.created_at) ASC, FIELD(t.priority,'urgent','high','normal','low'), t.created_at DESC
+            ORDER BY COALESCE(ta.updated_at, ta.assigned_at, t.updated_at, t.created_at) DESC,
+                     COALESCE(t.due_at, t.created_at) DESC,
+                     FIELD(t.priority,'urgent','high','normal','low')
             LIMIT 300
         ");
         if (!$stmt) {
@@ -335,6 +617,8 @@ class TaskManagementModel {
               SUM(ta.status NOT IN ('completed_on_time','completed_late','reviewed','cancelled') AND t.due_at IS NOT NULL AND t.due_at < NOW()) AS overdue_tasks,
               SUM(ta.status='completed_late') AS completed_late,
               SUM(ta.status='need_review') AS need_review,
+              SUM(ta.status IN ('completed_on_time','completed_late','reviewed')) AS completed_count,
+              SUM(ta.completion_seconds > 0) AS timing_sample_size,
               SUM(r.slug='intern' AND ta.status NOT IN ('completed_on_time','completed_late','reviewed','cancelled')) AS intern_tasks,
               AVG(NULLIF(ta.completion_seconds,0)) AS avg_completion_seconds,
               MIN(NULLIF(ta.completion_seconds,0)) AS fastest_completion_seconds,
@@ -516,6 +800,112 @@ class TaskManagementModel {
             $stmt->close();
         }
         $this->log((int)$assignment['task_id'], (int)$assignment['id'], $actorId, $done ? 'completed' : 'reopened', 'Synced from checklist.');
+    }
+
+    /**
+     * The inverse of createAssignment(): a checklist item created directly
+     * (not via a Task Assignment) gets promoted into a full self-assigned
+     * Task Assignment, so it shows up on the Task Management & Monitoring
+     * page too. Uses the same defaults createTask() falls back to for
+     * fields the checklist widget doesn't collect (category, priority, due
+     * date, recurrence).
+     */
+    public function createFromChecklist(int $checklistId, string $title, string $description, int $actorId): array {
+        $this->conn->begin_transaction();
+        try {
+            $stmt = $this->conn->prepare("
+                INSERT INTO tracs_tasks
+                  (title, description, category, priority, assignment_scope, due_at, recurrence_type, recurrence_interval_days, reference_url, requires_review, created_by, assigned_by, created_at, updated_at)
+                VALUES (?, ?, 'custom', 'normal', 'users', NULL, 'none', 1, NULL, 0, ?, ?, NOW(), NOW())
+            ");
+            if (!$stmt) throw new RuntimeException('Database error.');
+            $stmt->bind_param('ssii', $title, $description, $actorId, $actorId);
+            if (!$stmt->execute()) throw new RuntimeException('Task could not be created.');
+            $taskId = (int)$stmt->insert_id;
+            $stmt->close();
+
+            $stmt = $this->conn->prepare("
+                INSERT INTO tracs_task_assignments
+                  (task_id, user_id, status, assigned_by, assigned_at, linked_checklist_task_id, created_at, updated_at)
+                VALUES (?, ?, 'assigned', ?, NOW(), ?, NOW(), NOW())
+            ");
+            if (!$stmt) throw new RuntimeException('Database error.');
+            $stmt->bind_param('iiii', $taskId, $actorId, $actorId, $checklistId);
+            if (!$stmt->execute()) throw new RuntimeException('Task assignment could not be created.');
+            $assignmentId = (int)$stmt->insert_id;
+            $stmt->close();
+
+            if (tracs_column_exists($this->conn, 'tracs_side_tasks', 'linked_assignment_id')) {
+                $stmt = $this->conn->prepare("UPDATE tracs_side_tasks SET linked_assignment_id = ? WHERE id = ?");
+                if ($stmt) {
+                    $stmt->bind_param('ii', $assignmentId, $checklistId);
+                    $stmt->execute();
+                    $stmt->close();
+                }
+            }
+
+            $this->log($taskId, $assignmentId, $actorId, 'assigned', 'Created from checklist.');
+            $this->conn->commit();
+            return ['task_id' => $taskId, 'assignment_id' => $assignmentId];
+        } catch (Throwable $e) {
+            $this->conn->rollback();
+            throw $e;
+        }
+    }
+
+    /** Propagate a checklist item's title/description edit up to its linked task, if any. */
+    public function syncTaskFromChecklist(int $checklistTaskId, string $title, string $description): void {
+        $stmt = $this->conn->prepare("SELECT task_id FROM tracs_task_assignments WHERE linked_checklist_task_id = ? LIMIT 1");
+        if (!$stmt) return;
+        $stmt->bind_param('i', $checklistTaskId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$row) return;
+        $taskId = (int)$row['task_id'];
+        $stmt = $this->conn->prepare("UPDATE tracs_tasks SET title=?, description=?, updated_at=NOW() WHERE id=?");
+        if ($stmt) {
+            $stmt->bind_param('ssi', $title, $description, $taskId);
+            $stmt->execute();
+            $stmt->close();
+        }
+    }
+
+    /**
+     * Deleting a checklist item removes its linked assignment too, and the
+     * whole task if that was its only assignee (mirrors deleteTask()'s own
+     * cleanup, just entered from the checklist side).
+     */
+    public function deleteTaskFromChecklist(int $checklistTaskId): void {
+        $stmt = $this->conn->prepare("SELECT id, task_id FROM tracs_task_assignments WHERE linked_checklist_task_id = ? LIMIT 1");
+        if (!$stmt) return;
+        $stmt->bind_param('i', $checklistTaskId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$row) return;
+        $assignmentId = (int)$row['id'];
+        $taskId = (int)$row['task_id'];
+
+        $count = 0;
+        $res = $this->conn->query("SELECT COUNT(*) AS c FROM tracs_task_assignments WHERE task_id = " . $taskId);
+        if ($res && ($r = $res->fetch_assoc())) $count = (int)$r['c'];
+
+        $this->conn->begin_transaction();
+        try {
+            $this->conn->query("DELETE FROM tracs_task_logs WHERE assignment_id = " . $assignmentId);
+            $stmt = $this->conn->prepare("DELETE FROM tracs_task_assignments WHERE id = ?");
+            $stmt->bind_param('i', $assignmentId);
+            $stmt->execute();
+            $stmt->close();
+            if ($count <= 1) {
+                $this->conn->query("DELETE FROM tracs_task_logs WHERE task_id = " . $taskId);
+                $this->conn->query("DELETE FROM tracs_tasks WHERE id = " . $taskId);
+            }
+            $this->conn->commit();
+        } catch (Throwable $e) {
+            $this->conn->rollback();
+        }
     }
 
     public function log(int $taskId, ?int $assignmentId, int $actorId, string $action, string $note): void {

@@ -411,7 +411,54 @@ include 'includes/header.php';
           </div>
         </div>
         <div class="shift-report-items">
-          <?php foreach($group['reports'] as $r):
+          <?php
+            // Within a date+shift group, split the flat rows into one block per
+            // agent handover so each agent's report reads as a single unit.
+            $agentBlocks = [];
+            foreach($group['reports'] as $r) {
+              $hk = !empty($r['handover_id']) ? 'h'.$r['handover_id'] : 'u'.($r['created_by'] ?? '0');
+              if(!isset($agentBlocks[$hk])) {
+                $blockHandoverId = (int)($r['handover_id'] ?? 0);
+                $agentBlocks[$hk] = [
+                  'agent' => tracs_creator_label($r),
+                  'summary' => trim((string)($r['handover_summary'] ?? '')),
+                  'submitted' => (string)($r['handover_submitted_at'] ?? ''),
+                  'handover_id' => $blockHandoverId,
+                  'attachments' => $blockHandoverId ? shift_attachment_list_for_handover($conn, $blockHandoverId) : [],
+                  'reports' => [],
+                ];
+              }
+              $agentBlocks[$hk]['reports'][] = $r;
+            }
+          ?>
+          <?php foreach($agentBlocks as $block): ?>
+          <div class="shift-report-agent-block">
+            <div class="shift-report-agent-head">
+              <span class="shift-report-agent-name">
+                <i data-lucide="user" class="icon-xs"></i><?=esc($block['agent'])?><?php if($block['submitted'] !== ''): ?> <span class="shift-report-agent-time">· <?=esc(safe_dt($block['submitted'], 'H:i'))?></span><?php endif; ?>
+              </span>
+              <span class="shift-report-agent-count"><?=count($block['reports'])?> item<?=count($block['reports'])===1?'':'s'?></span>
+            </div>
+            <?php if($block['summary'] !== ''): ?>
+            <div class="shift-report-agent-summary">
+              <span class="search-text"><?=esc($block['summary'])?></span>
+              <?php if($block['handover_id']): ?><button class="shift-summary-edit" type="button" onclick="editHandoverSummary(<?=$block['handover_id']?>,this)" title="Edit shift summary"><i data-lucide="pencil" class="icon-xs"></i></button><?php endif; ?>
+            </div>
+            <?php elseif($block['handover_id']): ?>
+            <div class="shift-report-agent-summary is-empty">
+              <button class="shift-summary-edit" type="button" onclick="editHandoverSummary(<?=$block['handover_id']?>,this)"><i data-lucide="plus" class="icon-xs"></i>Add shift summary</button>
+            </div>
+            <?php endif; ?>
+            <?php if(!empty($block['attachments'])): ?>
+            <div class="shift-photo-grid shift-handover-photo-grid">
+              <?php foreach($block['attachments'] as $attachment): ?>
+              <a href="<?=esc($attachment['image_url'])?>" target="_blank" rel="noopener noreferrer" class="shift-photo-thumb" title="<?=esc($attachment['original_filename'])?>">
+                <img src="<?=esc($attachment['thumbnail_url'])?>" alt="<?=esc($attachment['original_filename'])?>" loading="lazy">
+              </a>
+              <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+          <?php foreach($block['reports'] as $r):
             $id=intval($r['id']??0);
             $title=esc($r['title']??'');
             $shift=esc($r['shift_name']??'');
@@ -459,6 +506,8 @@ include 'includes/header.php';
               </details>
             </div>
           </article>
+          <?php endforeach; ?>
+          </div>
           <?php endforeach; ?>
         </div>
       </section>

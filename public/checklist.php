@@ -28,10 +28,11 @@ if($q) $tasks=array_filter($tasks,fn($t)=>str_contains(strtolower($t['title']??'
 $tasks=array_values($tasks);
 $critical_count=0;
 
+$checklist_signature=$KC->getSignature();
 $page_title='Checklist'; $active_page='checklist';
 include 'includes/header.php';
 ?>
-<main class="main checklist-page"><div class="main-inner">
+<main class="main checklist-page"><div class="main-inner" data-checklist-live data-checklist-signature="<?=esc($checklist_signature)?>">
 
 <div class="topbar">
   <div><div class="page-title">Checklist</div><div class="page-sub"><?=$total?> tasks · <?=$pending?> pending · <?=$pct?>% complete</div></div>
@@ -99,9 +100,9 @@ include 'includes/header.php';
         $tdate_fmt=$tdate?date('d M Y',strtotime($tdate)):'';
       ?>
       <tr class="checkable-row <?=$tdone?'is-completed':''?>" data-tid="<?=$tid?>" data-completed="<?=$tdone?'1':'0'?>" data-title="<?=esc($t['title']??'')?>" data-desc="<?=esc($t['description']??'')?>">
-        <td style="text-align:center"><input type="checkbox" class="rem-check task-chk" <?=$tdone?'checked':''?> onchange="toggleTask(<?=$tid?>,this)"></td>
+        <td style="text-align:center"><input type="checkbox" class="rem-check task-chk" data-unsaved-ignore <?=$tdone?'checked':''?> onchange="toggleTask(<?=$tid?>,this)"></td>
         <td style="max-width:300px">
-          <div style="font-weight:500;color:var(--tx1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" class="task-title <?=$tdone?'done':''?>"><?=$ttit?></div>
+          <button type="button" class="task-title <?=$tdone?'done':''?>" style="font-weight:500;color:var(--tx1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:none;border:0;padding:0;text-align:left;cursor:pointer;width:100%" onclick="openEditTask(<?=$tid?>)" title="View details"><?=$ttit?></button>
           <?php if($tdesc):?><div class="task-sub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="<?=$tdesc?>"><?=$tdesc?></div><?php endif;?>
           <?=tracs_creator_meta($t)?>
         </td>
@@ -111,7 +112,9 @@ include 'includes/header.php';
             <summary class="btn btn-ghost btn-icon" title="Actions" aria-label="Row actions"><i data-lucide="more-vertical" class="icon-sm"></i></summary>
             <div class="row-action-popover">
               <button class="btn btn-ghost btn-sm" type="button" onclick="openEditTask(<?=$tid?>)">Edit</button>
+              <?php if((int)($t['created_by']??0)===(int)$uid):?>
               <button class="btn btn-danger btn-sm" type="button" onclick="deleteTask(<?=$tid?>,this)">Delete</button>
+              <?php endif;?>
             </div>
           </details>
         </td>

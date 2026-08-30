@@ -8,6 +8,7 @@ TRACS is a compact operational control panel for support, legal, CS, and monitor
 | --- | --- |
 | Dashboard | Restored five-item stat strip, Cases, Task Monitoring, Shift Handover, Currency Converter, Infrastructure Pulse summary, ticker, and Attention Center. |
 | Cases | CRUD, `in_progress` status, filters/search/export, shared ticket detail, progress timeline, Resolve action, and image attachments. |
+| Abuse Reports | Board/list triage, compact preview, full tabbed record, inline table updates, bulk intake, SLA/action-required states, notes, evidence, relationships, and audit timeline. |
 | Reminders | Full reminder page plus Reminder List inside the dashboard `Checklist and Reminder` tab. |
 | Task Monitoring | Dashboard tabs are `Checklist and Reminder`, `Assignments`, and `Activity`; full assignment/review workflow is at `monitoring.php`. |
 | Shift Reports | Active/On Hold/Resolved handover context, dashboard shift reminder, activity snapshots, exports, and image attachments. |
@@ -88,10 +89,22 @@ Change this immediately after first login.
 | [docs/API_SECURITY_INVENTORY.md](docs/API_SECURITY_INVENTORY.md) | Endpoint methods, authentication, permissions, CSRF, and hardening actions. |
 | [docs/nginx-tracs.conf.example](docs/nginx-tracs.conf.example) | Production Nginx deny rules and PHP-FPM baseline. |
 | [config/README.md](config/README.md) | Installer, schemas, and migration guidance. |
+| [docs/ABUSE_REPORTS.md](docs/ABUSE_REPORTS.md) | Abuse Reports workflow, UI contracts, permissions, APIs, evidence, data model, and regression checks. |
 | [docs/DOMAIN_PRICE_CROSSCHECK.md](docs/DOMAIN_PRICE_CROSSCHECK.md) | Domain Price user/operations guide. |
 | [docs/INFRASTRUCTURE_PULSE.md](docs/INFRASTRUCTURE_PULSE.md) | Current prototype scope and usage. |
 | [docs/SECURITY_AUDIT_2FA.md](docs/SECURITY_AUDIT_2FA.md) | Focused mandatory-2FA audit. |
 | [docs/TRACS_SIGNATURE.md](docs/TRACS_SIGNATURE.md) | Preserved build authorship/deployment marker. |
+| [TESTING.md](TESTING.md) | Pre-refactor testing baseline, priorities, tools, and future CI direction. |
+| [ROLLBACK.md](ROLLBACK.md) | Local, branch, commit, deployment, and database rollback procedures. |
+| [REFACTOR_ROADMAP.md](REFACTOR_ROADMAP.md) | Full-system React, Tailwind, PHP API, and MySQL migration direction. |
+| [docs/manual-smoke-checklist.md](docs/manual-smoke-checklist.md) | Manual smoke coverage for critical TRACS pages and workflows. |
+| [docs/permission-api-contract-checklist.md](docs/permission-api-contract-checklist.md) | Role, object-scope, CSRF, API, export, upload, and monitoring contracts. |
+| [docs/calendar-reference-regression-checklist.md](docs/calendar-reference-regression-checklist.md) | Zero-mistake Calendar reference regression checklist. |
+| [docs/react-tailwind-architecture.md](docs/react-tailwind-architecture.md) | React islands, Tailwind isolation, Vite loading, components, tokens, and API client direction. |
+| [docs/frontend-migration-plan.md](docs/frontend-migration-plan.md) | Module order, behavior-slice migration stages, feature flags, parity, and rollback. |
+| [docs/php-api-architecture-plan.md](docs/php-api-architecture-plan.md) | Gradual PHP controller, middleware, service, repository, response, and security direction. |
+| [docs/tailwind-design-system-plan.md](docs/tailwind-design-system-plan.md) | Tailwind safety, component contracts, responsive behavior, dark mode, and governance. |
+| [docs/design-token-map.md](docs/design-token-map.md) | Semantic mapping for TRACS colors, spacing, typography, radius, elevation, and density. |
 
 Files under `MOM README/` are historical package documentation. Files under backup trees are not current documentation.
 
@@ -160,6 +173,9 @@ docker compose up -d --build
 
 # Run notification scheduling once
 php bin/tracs-notification-worker.php
+
+# Run one Infrastructure Pulse monitoring pass (checks due real ICMP targets)
+php bin/tracs-infrastructure-monitor.php
 
 # Preview and apply the default CS schedule from the current month through year-end
 php bin/seed-default-shift-schedule.php
@@ -240,6 +256,7 @@ No deployed path uses `777`. See [VPS_SECURITY_CONFIGURATION.md](VPS_SECURITY_CO
 - Configure 2FA as needed with `TRACS_2FA_ISSUER`, `TRACS_2FA_TIMEOUT_MINUTES`, `TRACS_2FA_MAX_FAILED_ATTEMPTS`, `TRACS_2FA_LOCK_MINUTES`, `TRACS_2FA_VALID_WINDOW_STEPS`, and `TRACS_2FA_SECRET_KEY`. Production deployments should set `TRACS_2FA_SECRET_KEY` to a long random value and keep it stable across deploys.
 - Optional CAPTCHA: set `TRACS_CAPTCHA_PROVIDER=turnstile`, `TRACS_TURNSTILE_SITE_KEY`, and `TRACS_TURNSTILE_SECRET_KEY`. If unset, TRACS uses an internal challenge only after suspicious login behavior.
 - Run `bin/tracs-notification-worker.php` every minute from cron and rotate its log.
+- Run `bin/tracs-infrastructure-monitor.php` every minute from cron and rotate its log if any real Infrastructure Pulse targets are registered — without it, real servers only get checked when someone manually adds/edits one, not on their configured interval.
 - Verify login, 2FA, case ticket/resolve, reminder/checklist, task assignment sync, shift statuses, MoM, notifications, permissions, and exports.
 - Confirm `public/uploads/case_attachments`, `public/uploads/shift_report_attachments`, and `public/uploads/mom` are writable when image evidence is used. Protected case, shift, and MoM images must be served through their API endpoints.
 - Confirm protected case, shift, and MoM uploads return `403/404` when requested directly; avatars are the only intended direct-public upload.

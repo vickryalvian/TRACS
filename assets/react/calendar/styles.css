@@ -3,8 +3,8 @@
 @source "./**/*.{js,jsx}";
 
 @theme {
-  --font-sans: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  --font-sans: var(--font);
+  --font-mono: var(--mono);
 
   --color-tracs-page: var(--bg);
   --color-tracs-card: var(--s1);
@@ -16,10 +16,10 @@
   --color-tracs-secondary: var(--tx2);
   --color-tracs-muted: var(--tx3);
   --color-tracs-faint: var(--tx4);
-  --color-tracs-accent: var(--blue);
-  --color-tracs-accent-soft: var(--blue-lt);
-  --color-tracs-accent-border: var(--blue-bd);
-  --color-tracs-accent-hover: color-mix(in srgb, var(--blue-lt) 70%, var(--s4));
+  --color-tracs-accent: var(--tracs-calendar-accent);
+  --color-tracs-accent-soft: var(--tracs-calendar-accent-soft);
+  --color-tracs-accent-border: var(--tracs-calendar-accent-border);
+  --color-tracs-accent-hover: var(--tracs-calendar-accent-hover);
   --color-tracs-success: var(--green);
   --color-tracs-success-soft: var(--green-lt);
   --color-tracs-success-border: var(--green-bd);
@@ -44,9 +44,9 @@
 }
 
 .calendar-react-root {
-  --tracs-calendar-orange: #f97316;
-  --tracs-calendar-orange-soft: rgba(249, 115, 22, .09);
-  --tracs-calendar-orange-border: rgba(249, 115, 22, .4);
+  --tracs-calendar-orange: var(--orange);
+  --tracs-calendar-orange-soft: var(--orange-lt);
+  --tracs-calendar-orange-border: var(--orange-bd);
   color-scheme: dark;
   isolation: isolate;
 }

@@ -1366,6 +1366,10 @@ include 'includes/header.php';
       </summary>
       <div class="report-export-popover dpc-actions-popover" role="menu" aria-label="Domain price actions">
         <?php if (!$is_intern && tracs_user_can($conn, 'domain_price.manage')): ?>
+          <button type="button" class="btn btn-ghost dpc-more-action-btn" role="menuitem" onclick="openRegistrarManagementModal(); this.closest('details')?.removeAttribute('open');">
+            <i data-lucide="building-2" class="icon-sm"></i>
+            Manage Registrars
+          </button>
           <button type="button" class="btn btn-ghost dpc-more-action-btn" role="menuitem" onclick="openExtensionModal(); this.closest('details')?.removeAttribute('open');">
             <i data-lucide="sliders-horizontal" class="icon-sm"></i>
             Matrix Settings

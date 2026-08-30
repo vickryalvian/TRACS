@@ -1,4 +1,6 @@
 .tracs-date-range {
+  --tracs-date-range-accent: var(--tracs-calendar-accent, var(--blue));
+  --tracs-date-range-accent-soft: var(--tracs-calendar-accent-soft, var(--blue-lt));
   min-width: 0;
 }
 
@@ -17,7 +19,7 @@
   color: var(--tx1);
   font: inherit;
   font-size: 11px;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1;
   white-space: nowrap;
   cursor: pointer;
@@ -32,8 +34,8 @@
 .tracs-date-range-trigger:focus-visible,
 .tracs-date-range-trigger[aria-expanded="true"] {
   outline: none;
-  border-color: var(--amber);
-  box-shadow: 0 0 0 3px var(--amber-lt);
+  border-color: var(--tracs-date-range-accent);
+  box-shadow: 0 0 0 3px var(--tracs-date-range-accent-soft);
 }
 
 .tracs-date-range-trigger > svg {
@@ -56,10 +58,12 @@
 
 .tracs-date-range.is-empty .tracs-date-range-label {
   color: var(--tx3);
-  font-weight: 550;
+  font-weight: 500;
 }
 
 .tracs-date-range-popup {
+  --tracs-date-range-accent: var(--tracs-calendar-accent, var(--blue));
+  --tracs-date-range-accent-soft: var(--tracs-calendar-accent-soft, var(--blue-lt));
   position: fixed;
   z-index: 12500;
   width: min(304px, calc(100vw - var(--modal-padding) - var(--modal-padding)));
@@ -82,7 +86,7 @@
 }
 
 .tracs-date-range-popup.is-custom {
-  width: min(652px, calc(100vw - 20px));
+  width: min(676px, calc(100vw - 20px));
   overflow: auto;
 }
 
@@ -102,7 +106,7 @@
   flex: 1 1 auto;
   color: var(--tx1);
   font-size: 11px;
-  font-weight: 750;
+  font-weight: 700;
 }
 
 .tracs-date-range-popup-close {
@@ -129,7 +133,7 @@
 .tracs-date-range-popup-close:focus-visible,
 .tracs-date-range-preset:focus-visible,
 .tracs-date-range-action:focus-visible {
-  outline: 2px solid var(--amber);
+  outline: 2px solid var(--tracs-date-range-accent);
   outline-offset: 2px;
 }
 
@@ -168,8 +172,8 @@
 }
 
 .tracs-date-range-preset.is-active {
-  background: color-mix(in srgb, var(--amber) 10%, var(--s2));
-  color: var(--amber);
+  background: color-mix(in srgb, var(--tracs-date-range-accent) 10%, var(--s2));
+  color: var(--tracs-date-range-accent);
 }
 
 .tracs-date-range-preset svg {
@@ -219,7 +223,7 @@
 }
 
 .tracs-date-range-value.is-active::after {
-  background: color-mix(in srgb, var(--amber) 82%, var(--tx1));
+  background: color-mix(in srgb, var(--tracs-date-range-accent) 82%, var(--tx1));
 }
 
 .tracs-date-range-value span {
@@ -232,7 +236,7 @@
 .tracs-date-range-value strong {
   color: var(--tx1);
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.2;
   white-space: nowrap;
 }
@@ -287,7 +291,7 @@
   padding: 0 !important;
   color: var(--tx1) !important;
   font-size: 12px !important;
-  font-weight: 650 !important;
+  font-weight: 600 !important;
 }
 
 .tracs-date-range-calendar .flatpickr-current-month,
@@ -340,12 +344,12 @@
   border: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
-  color: var(--amber) !important;
+  color: var(--tracs-date-range-accent) !important;
 }
 
 .tracs-date-range-calendar .flatpickr-prev-month:focus-visible,
 .tracs-date-range-calendar .flatpickr-next-month:focus-visible {
-  outline: 2px solid var(--amber);
+  outline: 2px solid var(--tracs-date-range-accent);
   outline-offset: 1px;
 }
 
@@ -390,7 +394,7 @@
   width: 100% !important;
   max-width: none !important;
   display: grid !important;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   grid-auto-flow: row;
   padding: 0 9px;
   box-sizing: border-box;
@@ -402,7 +406,7 @@
   justify-content: center;
   color: var(--tx3) !important;
   font-size: 9.5px !important;
-  font-weight: 650 !important;
+  font-weight: 600 !important;
   line-height: 1 !important;
   text-transform: none !important;
 }
@@ -425,7 +429,7 @@
   width: 100% !important;
   max-width: none !important;
   display: grid !important;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   grid-auto-flow: row;
   grid-auto-rows: 31px;
   align-content: start;
@@ -455,42 +459,42 @@
   border-radius: var(--r) !important;
   color: var(--tx2) !important;
   font-size: 10.5px !important;
-  font-weight: 550 !important;
+  font-weight: 500 !important;
   line-height: 31px !important;
 }
 
 .tracs-date-range-calendar .flatpickr-day:hover,
 .tracs-date-range-calendar .flatpickr-day:focus {
   border-color: transparent !important;
-  background: color-mix(in srgb, var(--amber) 9%, var(--s2)) !important;
+  background: color-mix(in srgb, var(--tracs-date-range-accent) 9%, var(--s2)) !important;
   color: var(--tx1) !important;
 }
 
 .tracs-date-range-calendar .flatpickr-day.today:not(.selected) {
   border-color: transparent !important;
-  color: var(--amber) !important;
-  font-weight: 750 !important;
+  color: var(--tracs-date-range-accent) !important;
+  font-weight: 700 !important;
 }
 
 .tracs-date-range-calendar .flatpickr-day.today::after {
   bottom: 3px;
   width: 3px;
   height: 3px;
-  background: var(--amber);
+  background: var(--tracs-date-range-accent);
 }
 
 .tracs-date-range-calendar .flatpickr-day.selected,
 .tracs-date-range-calendar .flatpickr-day.startRange,
 .tracs-date-range-calendar .flatpickr-day.endRange {
-  border-color: var(--amber) !important;
-  background: var(--amber) !important;
+  border-color: var(--tracs-date-range-accent) !important;
+  background: var(--tracs-date-range-accent) !important;
   color: #fff !important;
 }
 
 .tracs-date-range-calendar .flatpickr-day.inRange {
   border-color: transparent !important;
   border-radius: 0 !important;
-  background: color-mix(in srgb, var(--amber) 8%, var(--s2)) !important;
+  background: color-mix(in srgb, var(--tracs-date-range-accent) 8%, var(--s2)) !important;
   box-shadow: none !important;
   color: var(--tx1) !important;
 }
@@ -546,13 +550,13 @@
 }
 
 .tracs-date-range-action.is-primary {
-  border-color: color-mix(in srgb, var(--amber) 65%, var(--bd2));
-  background: var(--amber);
+  border-color: color-mix(in srgb, var(--tracs-date-range-accent) 65%, var(--bd2));
+  background: var(--tracs-date-range-accent);
   color: #fff;
 }
 
 .tracs-date-range-action.is-primary:hover {
-  background: color-mix(in srgb, var(--amber) 88%, #111 12%);
+  background: color-mix(in srgb, var(--tracs-date-range-accent) 88%, #111 12%);
 }
 
 .tracs-date-range-action:disabled {

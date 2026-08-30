@@ -5,7 +5,11 @@ $id = tracs_is_positive_int($_GET['id'] ?? null) ? (int)$_GET['id'] : 0;
 if (!$id) fail_not_found();
 
 $attachment = shift_attachment_fetch_for_user($conn, $id, $uid);
-if (!$attachment || !tracs_can_view_report($conn, (int)$attachment['shift_report_id'])) fail_not_found();
+if (!$attachment) fail_not_found();
+$reportId = (int)($attachment['shift_report_id'] ?? 0);
+$handoverId = (int)($attachment['handover_id'] ?? 0);
+$allowed = $reportId > 0 ? tracs_can_view_report($conn, $reportId) : ($handoverId > 0 && tracs_can_view_handover($conn, $handoverId));
+if (!$allowed) fail_not_found();
 
 $variant = ($_GET['variant'] ?? '') === 'thumb' ? 'thumbnail_filename' : 'stored_filename';
 $fileName = basename((string)($attachment[$variant] ?? ''));

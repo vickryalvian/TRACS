@@ -9,6 +9,7 @@ tracs_require_page_permission($conn, 'dashboard.view');
 require_once __DIR__ . '/../modules/case/controller.php';
 require_once __DIR__ . '/../modules/reminder/controller.php';
 require_once __DIR__ . '/../modules/alert-ticker/controller.php';
+require_once __DIR__ . '/../core/infrastructure_servers.php';
 require_once __DIR__ . '/includes/page_helpers.php';
 
 $uid = (int)($_SESSION['user_id'] ?? 0);
@@ -31,6 +32,9 @@ $ticker_items = $TC->formatAlertsForTicker();
 $critical_cases = count(array_filter($cases, fn($c) => ($c['priority'] ?? '') === 'critical'));
 $overdue_reminders = count(array_filter($reminders, fn($r) => ($r['status'] ?? '') === 'Overdue'));
 $critical_count = $critical_cases + $overdue_reminders;
+
+$infra_real_servers = tracs_infra_server_list_active_for_json($conn);
+$infra_hidden_seed_codes = tracs_infra_hidden_seed_codes($conn);
 
 $page_title = 'Infrastructure Pulse';
 $active_page = 'infrastructure-pulse';
@@ -106,13 +110,17 @@ $infra_js_v = @filemtime(__DIR__ . '/assets/infrastructure-pulse.js') ?: time();
       <button type="button" class="btn btn-ghost btn-icon" data-infra-manage-close aria-label="Close"><i data-lucide="x" class="icon-sm"></i></button>
     </div>
     <div class="infra-modal__tabs" role="tablist" aria-label="Server registry sections">
-      <button type="button" class="is-active" data-infra-modal-tab="add" role="tab" aria-selected="true">Add Server</button>
-      <button type="button" data-infra-modal-tab="servers" role="tab" aria-selected="false">Current Servers</button>
-      <button type="button" data-infra-modal-tab="settings" role="tab" aria-selected="false">Monitoring Settings</button>
+      <button type="button" class="is-active" data-infra-modal-tab="add" role="tab" id="infraModalTabAdd" aria-selected="true" aria-controls="infraModalPaneAdd">Add Server</button>
+      <button type="button" data-infra-modal-tab="servers" role="tab" id="infraModalTabServers" aria-selected="false" aria-controls="infraModalPaneServers">Current Servers</button>
+      <button type="button" data-infra-modal-tab="settings" role="tab" id="infraModalTabSettings" aria-selected="false" aria-controls="infraModalPaneSettings">Monitoring Settings</button>
     </div>
     <div class="infra-modal__body">
-      <section class="infra-modal__pane is-active" data-infra-modal-pane="add">
+      <section class="infra-modal__pane is-active" data-infra-modal-pane="add" id="infraModalPaneAdd" role="tabpanel" aria-labelledby="infraModalTabAdd">
         <form class="infra-server-form" data-infra-server-form novalidate>
+          <div class="infra-edit-banner" data-infra-edit-banner hidden role="status">
+            <span>Editing <strong data-infra-edit-code></strong></span>
+            <button type="button" class="btn btn-ghost btn-sm" data-infra-edit-cancel>Cancel edit</button>
+          </div>
           <div class="infra-method-grid" role="radiogroup" aria-label="Monitoring method">
             <label class="infra-method-card is-active" data-infra-method-card="icmp">
               <input type="radio" name="method" value="icmp" checked>
@@ -199,11 +207,11 @@ $infra_js_v = @filemtime(__DIR__ . '/assets/infrastructure-pulse.js') ?: time();
         </form>
       </section>
 
-      <section class="infra-modal__pane" data-infra-modal-pane="servers">
-        <div class="infra-server-registry" data-infra-server-registry></div>
+      <section class="infra-modal__pane" data-infra-modal-pane="servers" id="infraModalPaneServers" role="tabpanel" aria-labelledby="infraModalTabServers">
+        <div class="infra-server-registry" data-infra-server-registry tabindex="-1"></div>
       </section>
 
-      <section class="infra-modal__pane" data-infra-modal-pane="settings">
+      <section class="infra-modal__pane" data-infra-modal-pane="settings" id="infraModalPaneSettings" role="tabpanel" aria-labelledby="infraModalTabSettings">
         <div class="infra-settings-grid">
           <article>
             <i data-lucide="server-cog" class="icon-sm"></i>
@@ -234,6 +242,8 @@ MonitoringService::checkHttp($url, $expectedStatus, $expectedKeyword)</code></pr
   </section>
 </div>
 
+<script>window.TRACS_INFRA_REAL_SERVERS = <?=json_encode($infra_real_servers, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)?>;
+window.TRACS_INFRA_HIDDEN_SEED_CODES = <?=json_encode($infra_hidden_seed_codes, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)?>;</script>
 <script src="assets/infrastructure-pulse-data.js?v=<?=$infra_data_v?>"></script>
 <script src="assets/infrastructure-pulse.js?v=<?=$infra_js_v?>"></script>
 <?php include __DIR__ . '/includes/footer.php'; ?>

@@ -154,6 +154,10 @@ function tracs_permission_catalog(): array {
             'cases.manage' => 'Create and update cases',
             'cases.delete' => 'Delete operational cases',
         ],
+        'Abuse Reports' => [
+            'abuse_reports.view' => 'View abuse reports',
+            'abuse_reports.manage' => 'Create, update, and move abuse reports',
+        ],
         'Reminders' => [
             'reminders.view' => 'View reminders',
             'reminders.manage' => 'Create and update reminders',
@@ -232,6 +236,7 @@ function tracs_default_role_permissions(string $roleSlug): array {
             'settings.manage',
         ])),
         'supervisor' => array_values(array_unique(array_merge($profile, [
+            'dashboard.view',
             'users.view',
             'users.update',
             'users.suspend',
@@ -242,6 +247,8 @@ function tracs_default_role_permissions(string $roleSlug): array {
             'divisions.manage_members',
             'cases.view',
             'cases.manage',
+            'abuse_reports.view',
+            'abuse_reports.manage',
             'reminders.view',
             'reminders.manage',
             'checklist.view',
@@ -273,6 +280,8 @@ function tracs_default_role_permissions(string $roleSlug): array {
             'users.view_activity',
             'dashboard.view',
             'cases.view',
+            'abuse_reports.view',
+            'abuse_reports.manage',
             'reminders.view',
             'checklist.view',
             'finance.view',
@@ -285,6 +294,8 @@ function tracs_default_role_permissions(string $roleSlug): array {
         ]))),
         'intern' => array_values(array_unique(array_merge($profile, [
             'dashboard.view',
+            'abuse_reports.view',
+            'abuse_reports.manage',
             'checklist.view',
             'tasks.view_own',
             'tasks.update_own',
@@ -294,6 +305,8 @@ function tracs_default_role_permissions(string $roleSlug): array {
             'dashboard.view',
             'cases.view',
             'cases.manage',
+            'abuse_reports.view',
+            'abuse_reports.manage',
             'reminders.view',
             'reminders.manage',
             'checklist.view',
@@ -604,6 +617,9 @@ function tracs_user_can(mysqli $conn, string $permission, ?int $userId = null): 
     if (!$user || !tracs_user_can_login($user)) {
         return false;
     }
+    if (in_array($permission, ['abuse_reports.view', 'abuse_reports.manage'], true)) {
+        return true;
+    }
     if (($user['role_slug'] ?? '') === 'super_admin') {
         return true;
     }
@@ -809,7 +825,7 @@ function tracs_user_role_badge_class(string $roleSlug): string {
 function tracs_user_status_badge_class(string $status): string {
     return match ($status) {
         'active' => 'b-active',
-        'suspended' => 'b-critical',
+        'suspended', 'removed' => 'b-critical',
         default => 'b-done',
     };
 }

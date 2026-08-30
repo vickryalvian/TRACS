@@ -62,6 +62,47 @@ function tracs_require_page_permission(mysqli $conn, string $permission): void {
     tracs_require_any_page_permission($conn, [$permission]);
 }
 
+/**
+ * True for supervisor-tier roles and above (supervisor, admin, super_admin),
+ * hard-coded by role slug rather than an editable permission flag, so a
+ * misconfigured role-permission grant cannot widen access for agents/interns.
+ */
+function tracs_is_supervisor_or_above(mysqli $conn, ?int $userId = null): bool {
+    $uid = $userId ?? (int)($_SESSION['user_id'] ?? 0);
+    if ($uid <= 0) {
+        return false;
+    }
+    $user = tracs_get_user_by_id($conn, $uid);
+    if (!$user || !tracs_user_can_login($user)) {
+        return false;
+    }
+    $role = (string)($user['role_slug'] ?? '');
+    return in_array($role, ['super_admin', 'admin', 'supervisor'], true);
+}
+
+/**
+ * Case deletion is restricted to supervisor-tier roles and above, hard-coded
+ * by role slug rather than the editable cases.delete permission flag, so a
+ * misconfigured role-permission grant cannot let an agent/intern delete cases.
+ */
+function tracs_user_can_delete_cases(mysqli $conn, ?int $userId = null): bool {
+    return tracs_is_supervisor_or_above($conn, $userId);
+}
+
+function tracs_user_can_delete_abuse_reports(mysqli $conn, ?int $userId = null): bool {
+    return tracs_is_supervisor_or_above($conn, $userId);
+}
+
+/**
+ * MoM deletion is restricted to supervisor-tier roles and above, hard-coded
+ * by role slug for the same reason as tracs_user_can_delete_cases(): a
+ * misconfigured moms.manage grant must not let an agent/intern delete a
+ * shared meeting record.
+ */
+function tracs_user_can_delete_moms(mysqli $conn, ?int $userId = null): bool {
+    return tracs_is_supervisor_or_above($conn, $userId);
+}
+
 function tracs_require_super_admin_page(mysqli $conn): array {
     $user = tracs_get_user_by_id($conn, (int)($_SESSION['user_id'] ?? 0));
     if ($user && tracs_user_can_login($user) && (string)($user['role_slug'] ?? '') === 'super_admin') {
@@ -123,10 +164,12 @@ function tracs_record_owner_ids(array $record, array $ownerColumns): array {
 function tracs_can_view_owned_record(mysqli $conn, string $table, int $id, array $ownerColumns, ?string $permission = null): bool {
     static $allowedTables = [
         'tracs_moms' => true,
+        'tracs_abuse_reports' => true,
         'tracs_cases' => true,
         'tracs_reminders' => true,
         'tracs_side_tasks' => true,
         'tracs_shift_reports' => true,
+        'tracs_shift_handovers' => true,
         'tracs_cancellation_feedback' => true,
         'tracs_domains' => true,
         'tracs_finance_transfers' => true,
@@ -185,8 +228,35 @@ function tracs_can_view_owned_record(mysqli $conn, string $table, int $id, array
     return false;
 }
 
+/**
+ * MoM is a shared, collaborative record: any authenticated user holding
+ * moms.view or moms.manage may view any MoM, not just ones they created.
+ * created_by remains an immutable audit field, not a view/edit gate.
+ */
 function tracs_can_view_mom(mysqli $conn, int $momId): bool {
-    return tracs_can_view_owned_record($conn, 'tracs_moms', $momId, ['created_by'], null);
+    if ($momId <= 0) {
+        return false;
+    }
+
+    $stmt = $conn->prepare('SELECT id FROM `tracs_moms` WHERE id = ? LIMIT 1');
+    if (!$stmt) {
+        return false;
+    }
+    $stmt->bind_param('i', $momId);
+    $stmt->execute();
+    $exists = (bool)$stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$exists) {
+        return false;
+    }
+
+    $actor = tracs_get_user_by_id($conn, (int)($_SESSION['user_id'] ?? 0));
+    if (!$actor || !tracs_user_can_login($actor)) {
+        return false;
+    }
+
+    return tracs_user_can($conn, 'moms.view', (int)$actor['id'])
+        || tracs_user_can($conn, 'moms.manage', (int)$actor['id']);
 }
 
 function tracs_can_view_case(mysqli $conn, int $caseId): bool {
@@ -195,6 +265,45 @@ function tracs_can_view_case(mysqli $conn, int $caseId): bool {
 
 function tracs_can_view_report(mysqli $conn, int $reportId): bool {
     return tracs_can_view_owned_record($conn, 'tracs_shift_reports', $reportId, ['created_by'], null);
+}
+
+function tracs_can_view_handover(mysqli $conn, int $handoverId): bool {
+    return tracs_can_view_owned_record($conn, 'tracs_shift_handovers', $handoverId, ['created_by'], null);
+}
+
+function tracs_can_view_checklist_item(mysqli $conn, int $taskId): bool {
+    return tracs_can_view_owned_record($conn, 'tracs_side_tasks', $taskId, ['created_by'], null);
+}
+
+/**
+ * A task's screenshots are viewable by anyone with task-monitor access, plus
+ * the task's creator/assigner and any of its current assignees — mirrors who
+ * can already see the task itself on the monitoring page.
+ */
+function tracs_can_view_task(mysqli $conn, int $taskId): bool {
+    if ($taskId <= 0) return false;
+    $actor = tracs_get_user_by_id($conn, (int)($_SESSION['user_id'] ?? 0));
+    if (!$actor || !tracs_user_can_login($actor)) return false;
+    $actorId = (int)$actor['id'];
+
+    if (tracs_user_can($conn, 'tasks.monitor', $actorId)) return true;
+
+    $stmt = $conn->prepare('SELECT created_by, assigned_by FROM tracs_tasks WHERE id = ? LIMIT 1');
+    if (!$stmt) return false;
+    $stmt->bind_param('i', $taskId);
+    $stmt->execute();
+    $task = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$task) return false;
+    if ((int)($task['created_by'] ?? 0) === $actorId || (int)($task['assigned_by'] ?? 0) === $actorId) return true;
+
+    $stmt = $conn->prepare('SELECT id FROM tracs_task_assignments WHERE task_id = ? AND user_id = ? LIMIT 1');
+    if (!$stmt) return false;
+    $stmt->bind_param('ii', $taskId, $actorId);
+    $stmt->execute();
+    $isAssignee = (bool)$stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    return $isAssignee;
 }
 
 function tracs_can_view_feedback(mysqli $conn, int $feedbackId): bool {

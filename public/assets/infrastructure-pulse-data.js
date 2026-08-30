@@ -326,6 +326,8 @@
       const packetLoss = Number(node.packetLoss ?? node.packet_loss_percent ?? 0);
       const uptime = Number(node.uptime ?? node.uptime_30d ?? 0);
       const incidentCount = Number(node.incidentCount ?? node.incident_count ?? 0);
+      const mode = node.mode || (node.method && node.method !== 'mock' ? 'real' : 'mock');
+      const status = node.status || 'healthy';
       return {
         ...node,
         id: node.id || code.toLowerCase(),
@@ -337,7 +339,7 @@
         country: node.country || 'Unknown',
         city: node.city || node.region || 'Unknown',
         region: node.region || node.city || 'Unknown',
-        mode: node.mode || (node.method && node.method !== 'mock' ? 'real' : 'mock'),
+        mode,
         method: node.method || 'mock',
         target_host: node.target_host || node.targetHost || '',
         target_ip: node.target_ip || node.targetIp || '',
@@ -350,14 +352,20 @@
         is_active: node.is_active ?? true,
         created_at: node.created_at || node.createdAt || nowIso(),
         updated_at: node.updated_at || node.updatedAt || nowIso(),
-        status: node.status || 'healthy',
+        status,
         latency,
         uptime,
+        // 30D uptime is only meaningful with real historical aggregation
+        // (infrastructure_monitoring_results, not yet implemented). Mock
+        // nodes fabricate it for the prototype; real nodes only get it once
+        // that aggregation exists, so the UI shows "--" instead of a
+        // fabricated figure in the meantime.
+        uptimeTracked: node.uptimeTracked ?? (mode !== 'real'),
         packetLoss,
         incidentCount,
         latitude: Number(node.latitude),
         longitude: Number(node.longitude),
-        lastChecked: node.lastChecked || node.last_checked || nowIso(),
+        lastChecked: node.lastChecked || node.last_checked || (status === 'pending' ? null : nowIso()),
         history: node.history || makeHistory(latency, index, packetLoss, uptime, incidentCount),
       };
     });
@@ -368,6 +376,11 @@
     return values.reduce((sum, value) => sum + Number(value || 0), 0) / values.length;
   }
 
+  function measuredOnly(nodes) {
+    const measured = nodes.filter((node) => node.status !== 'pending');
+    return measured.length ? measured : nodes;
+  }
+
   function regionSummary(nodes, country) {
     const regionNodes = nodes.filter((node) => node.country === country);
     const worst = regionNodes.reduce((acc, node) => (statusRank(node.status) > statusRank(acc.status) ? node : acc), { status: 'healthy' });
@@ -375,7 +388,7 @@
       country,
       status: worst.status,
       label: statusLabel(worst.status),
-      latency: Math.round(average(regionNodes.map((node) => node.latency))),
+      latency: Math.round(average(measuredOnly(regionNodes).map((node) => node.latency))),
       incidents: regionNodes.filter((node) => ['critical', 'warning', 'degraded', 'maintenance'].includes(node.status)).length,
     };
   }
@@ -390,8 +403,8 @@
       globalStatus,
       globalStatusLabel: globalStatus === 'critical' ? 'Degraded' : statusLabel(globalStatus),
       activeIncidents,
-      averageLatency: Math.round(average(nodes.map((node) => node.latency))),
-      uptime30d: Number(average(nodes.map((node) => node.uptime)).toFixed(3)),
+      averageLatency: Math.round(average(measuredOnly(nodes).map((node) => node.latency))),
+      uptime30d: Number(average(measuredOnly(nodes).map((node) => node.uptime)).toFixed(3)),
       indonesia: regionSummary(nodes, 'Indonesia'),
       singapore: regionSummary(nodes, 'Singapore'),
       worstAffected: activeIncidents > 0 ? {
@@ -418,8 +431,21 @@
     }));
   }
 
-  function createSnapshot() {
-    const nodes = withHistories(clone(DATACENTERS));
+  function dedupeByCode(nodes) {
+    // Later entries win, so real/persisted servers (appended after the
+    // built-in seed list) override a seed with the same code.
+    const byCode = new Map();
+    nodes.forEach((node) => {
+      const code = String(node.code || node.shortCode || '').toUpperCase();
+      byCode.set(code, node);
+    });
+    return Array.from(byCode.values());
+  }
+
+  function createSnapshot(extraNodes = [], hiddenSeedCodes = []) {
+    const hidden = new Set((hiddenSeedCodes || []).map((code) => String(code).toUpperCase()));
+    const seeds = DATACENTERS.filter((node) => !hidden.has(node.code.toUpperCase()));
+    const nodes = withHistories(dedupeByCode([...clone(seeds), ...clone(extraNodes)]));
     return {
       generatedAt: nowIso(),
       endpoints: { ...API_ENDPOINTS },
@@ -534,7 +560,7 @@
   }
 
   function createMockStore(options = {}) {
-    let snapshot = createSnapshot();
+    let snapshot = createSnapshot(options.extraNodes || [], options.hiddenSeedCodes || []);
     let timer = null;
     let tick = 0;
     const intervalMs = Number(options.intervalMs || 1000);

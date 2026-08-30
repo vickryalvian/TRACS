@@ -6,8 +6,9 @@ require_once __DIR__ . '/../../core/build_signature.php';
 $_tracs_footer_build = tracs_build_public_payload();
 $_tracs_can_view_build_info = isset($conn) && $conn instanceof mysqli && function_exists('tracs_user_can') && tracs_user_can($conn, 'settings.manage');
 $_tracs_case_can_manage = isset($conn) && $conn instanceof mysqli && function_exists('tracs_user_can') && tracs_user_can($conn, 'cases.manage');
+$_tracs_case_can_view = isset($conn) && $conn instanceof mysqli && function_exists('tracs_user_can') && tracs_user_can($conn, 'cases.view');
 $_tracs_case_role = (string)($_SESSION['user_role_slug'] ?? '');
-$_tracs_case_can_delete = in_array($_tracs_case_role, ['super_admin', 'admin'], true) || (isset($conn) && $conn instanceof mysqli && function_exists('tracs_user_can') && tracs_user_can($conn, 'cases.delete'));
+$_tracs_case_can_delete = isset($conn) && $conn instanceof mysqli && function_exists('tracs_user_can_delete_cases') && tracs_user_can_delete_cases($conn, (int)($_SESSION['user_id'] ?? 0));
 ?>
 <!-- CASE MODAL -->
 <div class="modal-overlay hidden" id="caseModal">
@@ -100,7 +101,7 @@ $_tracs_case_can_delete = in_array($_tracs_case_role, ['super_admin', 'admin'], 
       <input class="case-upload-input" type="file" id="caseAttachments" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" multiple>
       <label class="case-upload-drop" id="caseUploadDrop" for="caseAttachments">
         <i data-lucide="image-plus" class="icon-sm"></i>
-        <span>Click or drop images here</span>
+        <span>Click, drop, or paste images here</span>
         <small>JPG, JPEG, PNG, WEBP. Max 5MB each.</small>
       </label>
       <div class="case-upload-status" id="caseUploadStatus" aria-live="polite"></div>
@@ -131,8 +132,8 @@ $_tracs_case_can_delete = in_array($_tracs_case_role, ['super_admin', 'admin'], 
         <div class="case-ticket-menu-popover" id="caseTicketMorePopover" role="menu">
           <?php if($_tracs_case_can_manage): ?>
           <button class="btn btn-ghost btn-sm" type="button" id="caseTicketEditBtn" onclick="closeCaseTicketMore();editCaseFromTicket()" role="menuitem"><i data-lucide="pencil" class="icon-sm"></i>Edit</button>
-          <button class="btn btn-ghost btn-sm" type="button" id="caseTicketNoteBtn" onclick="closeCaseTicketMore();editCaseFromTicket()" role="menuitem"><i data-lucide="notebook-pen" class="icon-sm"></i>Add note</button>
-          <button class="btn btn-ghost btn-sm" type="button" id="caseTicketReminderBtn" onclick="closeCaseTicketMore();editCaseFromTicket()" role="menuitem"><i data-lucide="alarm-clock" class="icon-sm"></i>Set next check</button>
+          <button class="btn btn-ghost btn-sm" type="button" id="caseTicketNoteBtn" onclick="closeCaseTicketMore();editCaseFromTicket('caseNotes')" role="menuitem"><i data-lucide="notebook-pen" class="icon-sm"></i>Add note</button>
+          <button class="btn btn-ghost btn-sm" type="button" id="caseTicketReminderBtn" onclick="closeCaseTicketMore();editCaseFromTicket('caseNextCheck')" role="menuitem"><i data-lucide="alarm-clock" class="icon-sm"></i>Set next check</button>
           <?php endif; ?>
           <?php if($_tracs_case_can_delete): ?>
           <button class="btn btn-danger btn-sm" type="button" id="caseTicketDeleteBtn" onclick="closeCaseTicketMore();deleteCaseFromTicket()" role="menuitem"><i data-lucide="trash-2" class="icon-sm"></i>Delete</button>
@@ -174,7 +175,7 @@ $_tracs_case_can_delete = in_array($_tracs_case_role, ['super_admin', 'admin'], 
   <div class="modal-foot case-ticket-actions">
     <div class="case-ticket-action-note" id="caseTicketActionNote">View-only ticket preview</div>
     <div class="case-ticket-action-buttons">
-    <?php if($_tracs_case_can_manage): ?>
+    <?php if($_tracs_case_can_view): ?>
     <button class="btn btn-ghost case-ticket-status-btn" type="button" id="caseTicketInProgressBtn" onclick="requestCaseTicketStatus('in_progress')"><i data-lucide="loader-circle" class="icon-sm"></i>In Progress</button>
     <button class="btn btn-ghost case-ticket-status-btn" type="button" id="caseTicketStuckBtn" onclick="requestCaseTicketStatus('stuck')"><i data-lucide="pause-circle" class="icon-sm"></i>Stuck</button>
     <button class="btn btn-ghost case-ticket-status-btn" type="button" id="caseTicketHoldBtn" onclick="requestCaseTicketStatus('on_hold')"><i data-lucide="archive" class="icon-sm"></i>On Hold</button>
@@ -194,6 +195,18 @@ $_tracs_case_can_delete = in_array($_tracs_case_role, ['super_admin', 'admin'], 
       </div>
     </div>
     <img id="caseImagePreviewFull" src="" alt="Case attachment preview">
+  </div>
+</div>
+
+<div class="modal-overlay hidden case-image-modal" id="screenshotResultModal">
+  <div class="case-image-frame screenshot-result-frame" role="dialog" aria-modal="true" aria-label="Website screenshot result">
+    <div class="case-image-bar">
+      <div class="case-image-title" id="screenshotResultTitle">Screenshot</div>
+      <div class="case-image-actions">
+        <button class="modal-close" type="button" onclick="closeScreenshotResultModal()" aria-label="Close preview"><i data-lucide="x"></i></button>
+      </div>
+    </div>
+    <div class="screenshot-result-body" id="screenshotResultBody"></div>
   </div>
 </div>
 
@@ -254,6 +267,17 @@ $_tracs_case_can_delete = in_array($_tracs_case_role, ['super_admin', 'admin'], 
     <input type="hidden" id="taskId">
     <div class="form-group"><label class="form-label">Task Title *</label><input type="text" class="form-input" id="taskTitle" placeholder="Task title, e.g. Verify pending customer escalation" autocomplete="off"></div>
     <div class="form-group"><label class="form-label">Task Details</label><textarea class="form-textarea" id="taskDesc" placeholder="Add internal notes, checklist context, or next action" style="min-height:60px"></textarea></div>
+    <div class="form-group case-upload-group">
+      <label class="form-label">Screenshots / Photos</label>
+      <input class="case-upload-input" type="file" id="taskAttachments" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" multiple>
+      <label class="case-upload-drop" id="taskUploadDrop" for="taskAttachments">
+        <i data-lucide="image-plus" class="icon-sm"></i>
+        <span>Click, drop, or paste images here</span>
+        <small>JPG, JPEG, PNG, WEBP. Max 5MB each.</small>
+      </label>
+      <div class="case-upload-status" id="taskUploadStatus" aria-live="polite"></div>
+      <div class="case-attachment-grid" id="taskAttachmentPreview"></div>
+    </div>
   </div>
   <div class="modal-foot">
     <button class="btn btn-ghost" onclick="closeModal('task')">Cancel</button>
@@ -261,16 +285,43 @@ $_tracs_case_can_delete = in_array($_tracs_case_role, ['super_admin', 'admin'], 
   </div>
 </div></div>
 
+<!-- VIEW ALL CHECKLIST MODAL -->
+<div class="modal-overlay hidden" id="checklistAllModal">
+<div class="modal modal-lg checklist-all-modal">
+  <div class="modal-head">
+    <div><div class="modal-title">Operational Checklist</div><div class="modal-sub">All items and completion history</div></div>
+    <button class="modal-close" onclick="closeModal('checklistAll')"><i data-lucide="x"></i></button>
+  </div>
+  <div class="modal-body checklist-all-body">
+    <div class="checklist-all-toolbar">
+      <div class="task-monitoring-tabs" role="tablist" aria-label="Checklist view">
+        <button type="button" class="task-monitoring-tab active" role="tab" aria-selected="true" data-checklist-tab="active" onclick="switchChecklistAllTab('active')"><i data-lucide="list-checks" class="icon-xs"></i>Active Checklist</button>
+        <button type="button" class="task-monitoring-tab" role="tab" aria-selected="false" data-checklist-tab="history" onclick="switchChecklistAllTab('history')"><i data-lucide="history" class="icon-xs"></i>History Checklist</button>
+      </div>
+    </div>
+    <div class="checklist-all-pane is-active" data-checklist-pane="active">
+      <div class="checklist-all-list" id="checklistAllActiveList">
+        <div class="tm-history-empty">Loading…</div>
+      </div>
+    </div>
+    <div class="checklist-all-pane" data-checklist-pane="history" hidden>
+      <div class="tm-history checklist-all-list" id="checklistHistoryList">
+        <div class="tm-history-empty">Loading…</div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('checklistAll')">Close</button></div>
+</div></div>
+
 <!-- SHIFT REPORT MODAL -->
 <div class="modal-overlay hidden" id="shiftModal">
 <div class="modal">
   <div class="modal-head">
-    <div><div class="modal-title" id="shiftModalTitle">New Shift Report</div><div class="modal-sub">Handover active items</div></div>
+    <div><div class="modal-title" id="shiftModalTitle">New Shift Handover</div><div class="modal-sub" id="shiftModalSub">One report, all the cases you're handing over</div></div>
     <button class="modal-close" onclick="closeModal('shift')"><i data-lucide="x"></i></button>
   </div>
   <div class="modal-body">
     <input type="hidden" id="shiftId">
-    <div class="form-group"><label class="form-label">Shift Report Title *</label><input type="text" class="form-input" id="shiftTitle" placeholder="Shift report title, e.g. VPS node monitoring required" autocomplete="off"></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Work Date *</label>
         <input type="date" class="form-input" id="shiftDate" value="<?=date('Y-m-d')?>">
@@ -283,45 +334,31 @@ $_tracs_case_can_delete = in_array($_tracs_case_role, ['super_admin', 'admin'], 
         </select>
       </div>
     </div>
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">Priority</label>
-        <select class="form-select" id="shiftPriority">
-          <option value="low">Low</option>
-          <option value="medium" selected>Medium</option>
-          <option value="high">High</option>
-          <option value="critical">Critical</option>
-        </select>
-      </div>
-      <div class="form-group"><label class="form-label">Status</label>
-        <select class="form-select" id="shiftStatus" onchange="toggleShiftResolutionFields()">
-          <option value="active" selected>Active / Need Handover</option>
-          <option value="on_hold">On Hold</option>
-          <option value="resolved">Resolved</option>
-        </select>
-      </div>
+    <div class="form-group" id="shiftSummaryGroup">
+      <label class="form-label">Shift Summary *</label>
+      <textarea class="form-textarea" id="shiftSummary" placeholder="Overall notes for the next agent — how the shift went, what to watch, carryovers" style="min-height:64px"></textarea>
     </div>
-    <div class="form-group"><label class="form-label">Handover Details</label><textarea class="form-textarea" id="shiftDetails" placeholder="Describe handover context, steps taken, customer impact, and next actions" style="min-height:100px"></textarea></div>
-    <div class="shift-resolution-fields hidden" id="shiftResolutionFields">
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">Resolved Time</label><input type="datetime-local" class="form-input" id="shiftResolvedAt"></div>
-        <div class="form-group"><label class="form-label">Resolution Summary</label><input type="text" class="form-input" id="shiftResolutionNote" maxlength="255" placeholder="Short note for next shift visibility"></div>
-      </div>
-    </div>
-    <div class="form-group case-upload-group">
+    <div class="form-group case-upload-group" id="shiftSummaryUploadGroup">
       <label class="form-label">Screenshots / Photos</label>
-      <input class="case-upload-input" type="file" id="shiftAttachments" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" multiple>
-      <label class="case-upload-drop" id="shiftUploadDrop" for="shiftAttachments">
+      <input class="case-upload-input" type="file" id="shiftSummaryAttachments" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" multiple onchange="shiftSummaryAddFiles(this.files)">
+      <label class="case-upload-drop" id="shiftSummaryUploadDrop" for="shiftSummaryAttachments">
         <i data-lucide="image-plus" class="icon-sm"></i>
-        <span>Click or drop images here</span>
+        <span>Click, drop, or paste images here</span>
         <small>JPG, JPEG, PNG, WEBP. Max 5MB each.</small>
       </label>
-      <div class="case-upload-status" id="shiftUploadStatus" aria-live="polite"></div>
-      <div class="case-attachment-grid" id="shiftAttachmentPreview"></div>
+      <div class="case-upload-status" id="shiftSummaryUploadStatus" aria-live="polite"></div>
+      <div class="case-attachment-grid" id="shiftSummaryAttachmentPreview"></div>
     </div>
+    <div class="shift-items-head">
+      <span class="form-label" id="shiftItemsLabel">Handover Items</span>
+      <span class="shift-items-count" id="shiftItemsCount"></span>
+    </div>
+    <div id="shiftItemsContainer" class="shift-items-container"></div>
+    <button type="button" class="btn btn-ghost btn-sm shift-add-item-btn" id="shiftAddItemBtn" onclick="addShiftItem()"><i data-lucide="plus" class="icon-sm"></i>Add item</button>
   </div>
   <div class="modal-foot">
     <button class="btn btn-ghost" onclick="closeModal('shift')">Cancel</button>
-    <button class="btn btn-primary" id="shiftSaveBtn" data-loading-text="Saving..." onclick="saveShiftReport()"><i data-lucide="check" class="icon-sm"></i>Save Report</button>
+    <button class="btn btn-primary" id="shiftSaveBtn" data-loading-text="Saving..." onclick="saveShiftReport()"><i data-lucide="check" class="icon-sm"></i><span id="shiftSaveLabel">Save Handover</span></button>
   </div>
 </div></div>
 
@@ -342,15 +379,21 @@ $_tracs_case_can_delete = in_array($_tracs_case_role, ['super_admin', 'admin'], 
     </div>
     <div class="ticker-entry-list">
       <?php
-      $mgr=array_filter($ticker_items??[],fn($t)=>isset($t['id']));
+      // Only true custom announcements (SmartTickerEngine tags their merged-feed
+      // id as "custom-{tracs_ticker_messages.id}"); every other alert type
+      // (reminder-, checklist-, case-, ...) also carries a non-null id and must
+      // not leak in here, since this list's delete button only works for rows
+      // that actually exist in tracs_ticker_messages.
+      $mgr=array_filter($ticker_items??[],fn($t)=>str_starts_with((string)($t['id']??''),'custom-'));
       if(empty($mgr)):?>
       <div class="empty"><div class="empty-ic"><i data-lucide="megaphone"></i></div><div class="empty-t">No custom announcements</div></div>
-      <?php else: foreach($mgr as $i=>$it):
-        $iid=$it['id']??$i;
+      <?php else: foreach($mgr as $it):
+        // Strip the "custom-" tag back to the raw tracs_ticker_messages.id the
+        // delete API expects; the tagged id also can't be interpolated
+        // unquoted into onclick below (it isn't a valid JS numeric literal).
+        $iid=(int)substr((string)$it['id'],7);
         $cls=htmlspecialchars($it['class']??'normal');
         $txt=htmlspecialchars($it['text']??'');
-        // Only show custom messages (those with an id), not auto-generated
-        if(!isset($it['id']))continue;
       ?>
       <div class="tmgr-row" id="tmgr-<?=$iid?>">
         <span class="tmgr-type <?=$cls?>"><?=$cls?></span>
@@ -530,7 +573,7 @@ First Deployment Build
 <!-- TRACS System by Vickry -->
 <?php $_tracs_js_v = @filemtime(__DIR__.'/../assets/tracs.js') ?: time(); ?>
 <script>
-window.TRACS_CASE_CAPS = <?=json_encode(['canManage' => $_tracs_case_can_manage, 'canDelete' => $_tracs_case_can_delete], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)?>;
+window.TRACS_CASE_CAPS = <?=json_encode(['canView' => $_tracs_case_can_view, 'canManage' => $_tracs_case_can_manage, 'canDelete' => $_tracs_case_can_delete], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)?>;
 </script>
 <script src="assets/tracs.js?v=<?=$_tracs_js_v?>"></script>
 <?php if(!empty($calendar_script ?? '')): ?>
@@ -543,6 +586,10 @@ window.TRACS_CASE_CAPS = <?=json_encode(['canManage' => $_tracs_case_can_manage,
 <?php if(($active_page??'') === 'shifting-assignment'): ?>
 <?php $_shift_assignment_js_v = @filemtime(__DIR__.'/../assets/shifting-assignment.js') ?: time(); ?>
 <script src="assets/shifting-assignment.js?v=<?=$_shift_assignment_js_v?>"></script>
+<?php endif; ?>
+<?php if(($active_page??'') === 'abuse-reports'): ?>
+<?php $_abuse_js_v = @filemtime(__DIR__.'/../assets/abuse-reports.js') ?: time(); ?>
+<script src="assets/abuse-reports.js?v=<?=$_abuse_js_v?>"></script>
 <?php endif; ?>
 <?php if(in_array(($active_page??''), ['mom','dashboard'], true)): ?>
 <?php $_mom_js_v = @filemtime(__DIR__.'/../assets/mom-functions.js') ?: time(); ?>

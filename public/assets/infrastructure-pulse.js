@@ -4,10 +4,18 @@
   const Infra = window.TRACSInfrastructure;
   if (!Infra) return;
 
+  // Mirrors core/infrastructure_servers.php's TRACS_INFRA_SEED_CODES —
+  // removing one of these persists (hidden server-side); removing any other
+  // mock/"Demo Data" entry stays session-only, matching existing behavior.
+  const SEED_CODES = new Set(['DCI', 'IDB', 'CY1', 'BCD', 'BTI', 'DR3', 'SG3', 'EGH', 'NDS']);
+
   const state = {
     selectedCode: 'NDS',
     lastEventKey: '',
     store: null,
+    pendingChecks: new Set(),
+    realCheckTimer: null,
+    editingCode: null,
   };
 
   function esc(value) {
@@ -26,6 +34,20 @@
 
   function ms(value) {
     return `${Math.round(Number(value || 0))} ms`;
+  }
+
+  // Nodes awaiting a first real check have no measured data yet; showing
+  // 0ms/0%/100% would misrepresent them as measured and healthy.
+  function statText(node, formatted) {
+    return node?.status === 'pending' ? '--' : formatted;
+  }
+
+  // 30D uptime additionally requires historical aggregation that real
+  // targets don't have yet (a single check only proves current reachability).
+  function uptimeText(node, formatted) {
+    if (node?.status === 'pending') return '--';
+    if (node?.mode === 'real' && !node?.uptimeTracked) return '--';
+    return formatted;
   }
 
   function statusClass(status) {
@@ -227,6 +249,9 @@
       .filter((item) => item.status !== 'healthy')
       .sort((a, b) => Infra.statusRank(b.status) - Infra.statusRank(a.status));
     const healthy = snapshot.nodes.filter((item) => item.status === 'healthy');
+    const focusedSelect = container.contains(document.activeElement)
+      ? document.activeElement.closest('[data-infra-select]')?.getAttribute('data-infra-select')
+      : null;
     container.innerHTML = `
       <div class="infra-report-main ${statusClass(snapshot.summary.globalStatus)}">
         <div class="infra-report-head">
@@ -251,10 +276,10 @@
           </div>
           <p>${esc(node.region || node.city || '--')} / ${esc(node.provider || node.facility || '--')}</p>
           <div class="infra-report-node-grid">
-            <div><span>Latency</span><b>${esc(ms(node.latency))}</b></div>
-            <div><span>Loss</span><b>${esc(Number(node.packetLoss || 0).toFixed(2))}%</b></div>
-            <div><span>Uptime</span><b>${esc(pct(node.uptime))}</b></div>
-            <div><span>Checked</span><b>${esc(Infra.formatTime(node.lastChecked))}</b></div>
+            <div><span>Latency</span><b>${esc(statText(node, ms(node.latency)))}</b></div>
+            <div><span>Loss</span><b>${esc(statText(node, `${Number(node.packetLoss || 0).toFixed(2)}%`))}</b></div>
+            <div><span>Uptime</span><b>${esc(uptimeText(node, pct(node.uptime)))}</b></div>
+            <div><span>Checked</span><b>${esc(node.lastChecked ? Infra.formatTime(node.lastChecked) : 'Not checked')}</b></div>
           </div>
         ` : '<p>No selected server.</p>'}
       </aside>
@@ -265,7 +290,7 @@
             <button type="button" class="infra-report-row ${statusClass(item.status)}" data-infra-select="${esc(item.code)}">
               <span>${esc(item.code)}</span>
               <strong>${esc(item.name)}</strong>
-              <em>${esc(Infra.statusLabel(item.status))} / ${esc(ms(item.latency))}</em>
+              <em>${esc(Infra.statusLabel(item.status))} / ${esc(statText(item, ms(item.latency)))}</em>
             </button>
           `).join('') : '<p class="infra-empty-line">No degraded, critical, maintenance, or recovery servers.</p>'}
         </section>
@@ -275,12 +300,15 @@
             <button type="button" class="infra-report-row is-healthy" data-infra-select="${esc(item.code)}">
               <span>${esc(item.code)}</span>
               <strong>${esc(item.name)}</strong>
-              <em>${esc(ms(item.latency))} / ${esc(pct(item.uptime))}</em>
+              <em>${esc(ms(item.latency))} / ${esc(uptimeText(item, pct(item.uptime)))}</em>
             </button>
           `).join('') : '<p class="infra-empty-line">No healthy servers in this snapshot.</p>'}
         </section>
       </div>
     `;
+    if (focusedSelect) {
+      container.querySelector(`[data-infra-select="${CSS.escape(focusedSelect)}"]`)?.focus();
+    }
   }
 
   function ensureMetricRows(container, nodes) {
@@ -321,9 +349,9 @@
         chip.className = `infra-status-chip ${statusClass(node.status)}`;
         chip.textContent = Infra.statusLabel(node.status);
       }
-      row.querySelector('[data-field="latency"]').textContent = ms(node.latency);
-      row.querySelector('[data-field="loss"]').textContent = `${Number(node.packetLoss).toFixed(2)}% loss`;
-      row.querySelector('[data-field="uptime"]').textContent = pct(node.uptime);
+      row.querySelector('[data-field="latency"]').textContent = statText(node, ms(node.latency));
+      row.querySelector('[data-field="loss"]').textContent = statText(node, `${Number(node.packetLoss).toFixed(2)}% loss`);
+      row.querySelector('[data-field="uptime"]').textContent = uptimeText(node, pct(node.uptime));
       const line = row.querySelector('[data-field="spark-line"]');
       const area = row.querySelector('[data-field="spark-area"]');
       const linePath = Infra.sparklinePath(node.history?.latency || []);
@@ -507,7 +535,7 @@
           <article class="${statusClass(node.status)}">
             <strong>${esc(node.code)}</strong>
             <span>${esc(node.name)}</span>
-            <b>${esc(ms(node.latency))}</b>
+            <b>${esc(statText(node, ms(node.latency)))}</b>
           </article>
         `).join('') : '<p>All datacenters are inside the normal band.</p>'}
       </div>
@@ -625,6 +653,160 @@
     };
   }
 
+  // Converts a persisted infrastructure_servers row (loaded server-side into
+  // window.TRACS_INFRA_REAL_SERVERS) into the node shape the store expects.
+  function dbRowToNode(row) {
+    const code = String(row.code || '').toUpperCase();
+    const latency = row.last_latency_ms != null ? Math.round(Number(row.last_latency_ms)) : 0;
+    const packetLoss = row.last_packet_loss_percent != null ? Number(row.last_packet_loss_percent) : 0;
+    return {
+      id: `db-${code.toLowerCase()}`,
+      code,
+      shortCode: code,
+      name: row.name || code,
+      region: row.region || '',
+      country: row.country || '',
+      city: row.region || '',
+      provider: row.provider || '',
+      facility: row.provider || '',
+      mode: 'real',
+      method: row.method || 'icmp',
+      target_host: row.target_host || '',
+      target_ip: row.target_host || '',
+      target_port: row.target_port || '',
+      health_url: row.health_url || '',
+      expected_status: row.expected_status || '',
+      expected_keyword: row.expected_keyword || '',
+      packet_count: row.packet_count || 4,
+      interval_seconds: row.interval_seconds || 60,
+      timeout_seconds: row.timeout_seconds || 5,
+      is_active: true,
+      status: row.last_status || 'pending',
+      latency,
+      packetLoss,
+      uptime: 0,
+      uptimeTracked: false,
+      incidentCount: 0,
+      latitude: 0,
+      longitude: 0,
+      lastChecked: row.last_checked_at || null,
+      created_at: row.created_at || new Date().toISOString(),
+      updated_at: row.updated_at || new Date().toISOString(),
+    };
+  }
+
+  // Live ICMP check for real Network Ping targets. Runs server-side
+  // (public/api/infrastructure-ping.php) — the browser never probes hosts
+  // itself, only asks the TRACS backend to run a bounded ping and report back.
+  async function fetchIcmpCheck(node) {
+    const response = await fetch('/api/infrastructure-ping.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        host: node.target_host || node.target_ip,
+        count: node.packet_count || 4,
+        timeout: node.timeout_seconds || 5,
+        code: node.code,
+      }),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload || payload.success === false) return null;
+    return payload.data;
+  }
+
+  async function runIcmpCheck(node, store) {
+    if (!node || state.pendingChecks.has(node.code)) return;
+    state.pendingChecks.add(node.code);
+    try {
+      const result = await fetchIcmpCheck(node);
+      if (!result) return;
+      const snapshot = store.getSnapshot();
+      const current = snapshot.nodes.find((item) => item.code === node.code);
+      if (!current) return;
+      const latency = result.latency_ms != null ? Math.round(Number(result.latency_ms)) : current.latency;
+      const packetLoss = result.packet_loss_percent != null ? Number(result.packet_loss_percent) : current.packetLoss;
+      const updated = {
+        ...current,
+        status: result.status || 'critical',
+        latency,
+        packetLoss,
+        lastChecked: result.checked_at || new Date().toISOString(),
+        history: {
+          ...current.history,
+          latency: [...(current.history?.latency || []).slice(-35), latency],
+          packetLoss: [...(current.history?.packetLoss || []).slice(-35), packetLoss],
+        },
+      };
+      const nodes = snapshot.nodes.map((item) => (item.code === node.code ? updated : item));
+      store.ingest({ ...snapshot, nodes });
+    } catch (error) {
+      // Backend/network failure: leave the node at its last known state
+      // rather than showing an incorrect result.
+    } finally {
+      state.pendingChecks.delete(node.code);
+    }
+  }
+
+  // Recurring checks now run from bin/tracs-infrastructure-monitor.php (cron),
+  // independent of any browser tab — see core/infrastructure_monitor.php.
+  // The page's job is just to poll for the latest persisted state and
+  // historical samples, the same way a Grafana dashboard polls a datasource.
+  async function fetchRealServerList() {
+    const response = await fetch('/api/infrastructure-server-list.php');
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload || payload.success === false) return null;
+    return payload.data;
+  }
+
+  async function fetchServerHistory(code) {
+    const response = await fetch(`/api/infrastructure-server-history.php?code=${encodeURIComponent(code)}&limit=60`);
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload || payload.success === false) return null;
+    return payload.data;
+  }
+
+  function historyToSeries(rows, fallbackLatency) {
+    if (!rows || !rows.length) return null;
+    const latency = rows.map((row) => (row.latency_ms != null ? Math.round(row.latency_ms) : fallbackLatency));
+    const packetLoss = rows.map((row) => (row.packet_loss_percent != null ? Number(row.packet_loss_percent) : 0));
+    return {
+      latency,
+      packetLoss,
+      // 30D uptime aggregation isn't tracked yet (see uptimeTracked in
+      // infrastructure-pulse-data.js) — this stays flat and unused by the UI.
+      uptime: latency.map(() => 100),
+      incidents: [],
+      p50: latency.map((value) => Math.round(value * 0.78)),
+      p95: latency.map((value) => Math.round(value * 1.24)),
+      p99: latency.map((value) => Math.round(value * 1.55)),
+    };
+  }
+
+  async function refreshRealServers(store) {
+    const rows = await fetchRealServerList();
+    if (!rows) return;
+    const freshReal = rows.map(dbRowToNode);
+    await Promise.all(freshReal.map(async (node) => {
+      const history = await fetchServerHistory(node.code);
+      const series = historyToSeries(history, node.latency);
+      if (series) node.history = series;
+    }));
+    const freshCodes = new Set(freshReal.map((node) => node.code));
+    const snapshot = store.getSnapshot();
+    const nodes = [
+      ...freshReal,
+      ...snapshot.nodes.filter((node) => node.mode !== 'real' && !freshCodes.has(node.code)),
+    ];
+    store.ingest({ ...snapshot, nodes });
+  }
+
+  function startRealServerRefresh(store) {
+    if (state.realCheckTimer) return;
+    const tick = () => refreshRealServers(store);
+    tick();
+    state.realCheckTimer = window.setInterval(tick, 15000);
+  }
+
   function requiredFieldsFor(method) {
     const base = ['name', 'code', 'region', 'country', 'provider'];
     if (method === 'icmp') return [...base, 'target_host'];
@@ -670,7 +852,9 @@
       validation.classList.remove('is-error');
       validation.textContent = method === 'mock'
         ? 'Mock entries update the current session only and remain separate from real monitoring targets.'
-        : 'Real targets are registered as awaiting backend checks. TRACS will display results after VPS-side monitoring is wired.';
+        : method === 'icmp'
+          ? 'Network Ping targets get a live ICMP check from the TRACS backend as soon as they are added.'
+          : 'Real targets are registered as awaiting backend checks. TRACS will display results after VPS-side monitoring for this method is wired.';
     }
   }
 
@@ -708,18 +892,22 @@
             </div>
             <em>${esc(node.region || '--')} / ${esc(node.country || '--')} / ${esc(node.provider || '--')}</em>
             <small>${esc(methodLabel(node.method))}: ${esc(monitoringTarget(node))}</small>
-            ${node.mode === 'real' ? '<small class="infra-server-registry__backend">Awaiting VPS backend worker results. No real browser probing is active.</small>' : ''}
+            ${node.mode === 'real' && node.method === 'icmp' ? '<small class="infra-server-registry__backend">Live ICMP check runs from the TRACS backend while this tab stays open.</small>' : ''}
+            ${node.mode === 'real' && node.method !== 'icmp' ? '<small class="infra-server-registry__backend">Awaiting VPS backend worker results. Only Network Ping runs live checks today.</small>' : ''}
           </div>
           <div class="infra-server-registry__quick">
             ${statusChip(node.status)}
-            <span>${esc(ms(node.latency))}</span>
-            <span>${esc(Number(node.packetLoss || 0).toFixed(2))}% loss</span>
-            <span>${esc(pct(node.uptime))}</span>
+            <span>${esc(statText(node, ms(node.latency)))}</span>
+            <span>${esc(statText(node, `${Number(node.packetLoss || 0).toFixed(2)}% loss`))}</span>
+            <span>${esc(uptimeText(node, pct(node.uptime)))}</span>
             <time>${esc(node.lastChecked ? Infra.formatTime(node.lastChecked) : 'Not checked')}</time>
           </div>
           <div class="infra-server-registry__remove" data-infra-remove-wrap="${esc(node.code)}">
-            <button type="button" class="btn btn-ghost btn-sm" data-infra-remove-server="${esc(node.code)}">
-              <i data-lucide="trash-2" class="icon-sm"></i>Remove
+            <button type="button" class="btn btn-ghost btn-icon" data-infra-edit-server="${esc(node.code)}" title="Edit" aria-label="Edit ${esc(node.name)}">
+              <i data-lucide="pencil" class="icon-sm"></i>
+            </button>
+            <button type="button" class="btn btn-ghost btn-icon" data-infra-remove-server="${esc(node.code)}" title="Remove" aria-label="Remove ${esc(node.name)}">
+              <i data-lucide="trash-2" class="icon-sm"></i>
             </button>
           </div>
         </article>
@@ -731,6 +919,67 @@
         </div>
       `}
     `;
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  function setFieldValue(form, name, value) {
+    const field = form.elements[name];
+    if (field) field.value = value ?? '';
+  }
+
+  function enterEditMode(modal, node) {
+    const form = modal.querySelector('[data-infra-server-form]');
+    if (!form || !node) return;
+    state.editingCode = node.code;
+
+    const method = node.method || 'mock';
+    const methodRadio = form.querySelector(`input[name="method"][value="${CSS.escape(method)}"]`);
+    if (methodRadio) methodRadio.checked = true;
+
+    setFieldValue(form, 'name', node.name);
+    setFieldValue(form, 'code', node.code);
+    setFieldValue(form, 'region', node.region);
+    setFieldValue(form, 'country', node.country);
+    setFieldValue(form, 'provider', node.provider);
+    setFieldValue(form, 'target_host', node.target_host);
+    setFieldValue(form, 'target_port', node.target_port);
+    setFieldValue(form, 'health_url', node.health_url);
+    setFieldValue(form, 'expected_status', node.expected_status || 200);
+    setFieldValue(form, 'expected_keyword', node.expected_keyword);
+    setFieldValue(form, 'packet_count', node.packet_count || 4);
+    setFieldValue(form, 'timeout_seconds', node.timeout_seconds || 5);
+    setFieldValue(form, 'interval_seconds', node.interval_seconds || 60);
+    setFieldValue(form, 'status', ['healthy', 'recovery', 'degraded', 'critical', 'maintenance'].includes(node.status) ? node.status : 'healthy');
+    setFieldValue(form, 'latency', node.latency || 24);
+    setFieldValue(form, 'packetLoss', node.packetLoss || 0.02);
+    setFieldValue(form, 'uptime', node.uptime || 99.99);
+
+    const banner = modal.querySelector('[data-infra-edit-banner]');
+    if (banner) {
+      banner.hidden = false;
+      const codeEl = banner.querySelector('[data-infra-edit-code]');
+      if (codeEl) codeEl.textContent = node.code;
+    }
+    // Code is the upsert key server-side; keep it fixed during edit so a
+    // typo doesn't silently create a second entry alongside the original.
+    if (form.elements.code) form.elements.code.readOnly = true;
+    const submitButton = form.querySelector('button[type="submit"]');
+    if (submitButton) submitButton.innerHTML = '<i data-lucide="save" class="icon-sm"></i>Save Changes';
+    if (window.lucide) window.lucide.createIcons();
+
+    updateMethodUi(modal);
+    activateModalTab(modal, 'add');
+    form.querySelector('input[name="name"]')?.focus();
+  }
+
+  function exitEditMode(modal) {
+    state.editingCode = null;
+    const banner = modal.querySelector('[data-infra-edit-banner]');
+    if (banner) banner.hidden = true;
+    const form = modal.querySelector('[data-infra-server-form]');
+    if (form?.elements.code) form.elements.code.readOnly = false;
+    const submitButton = form?.querySelector('button[type="submit"]');
+    if (submitButton) submitButton.innerHTML = '<i data-lucide="plus" class="icon-sm"></i>Add Server';
     if (window.lucide) window.lucide.createIcons();
   }
 
@@ -750,6 +999,7 @@
 
     function closeModal() {
       tracsCloseModalElement(modal);
+      exitEditMode(modal);
     }
 
     document.querySelectorAll('[data-infra-manage-open]').forEach((button) => {
@@ -775,25 +1025,66 @@
       form.elements.packet_count.value = '4';
       form.elements.timeout_seconds.value = '5';
       form.elements.interval_seconds.value = '60';
+      exitEditMode(modal);
       updateMethodUi(modal);
     });
-    modal.addEventListener('click', (event) => {
+    modal.querySelector('[data-infra-edit-cancel]')?.addEventListener('click', () => {
+      form.reset();
+      form.elements.method.value = 'icmp';
+      form.elements.expected_status.value = '200';
+      form.elements.packet_count.value = '4';
+      form.elements.timeout_seconds.value = '5';
+      form.elements.interval_seconds.value = '60';
+      exitEditMode(modal);
+      updateMethodUi(modal);
+    });
+    modal.addEventListener('click', async (event) => {
+      const edit = event.target.closest('[data-infra-edit-server]');
       const remove = event.target.closest('[data-infra-remove-server]');
       const cancelRemove = event.target.closest('[data-infra-cancel-remove]');
       const confirmRemove = event.target.closest('[data-infra-confirm-remove]');
+      if (edit) {
+        const code = edit.getAttribute('data-infra-edit-server');
+        const node = store.getSnapshot().nodes.find((item) => item.code === code);
+        if (node) enterEditMode(modal, node);
+        return;
+      }
       if (cancelRemove) {
+        const code = cancelRemove.getAttribute('data-infra-cancel-remove');
         renderServerRegistry(modal, store);
+        if (code) modal.querySelector(`[data-infra-remove-server="${CSS.escape(code)}"]`)?.focus();
         return;
       }
       if (confirmRemove) {
         const code = confirmRemove.getAttribute('data-infra-confirm-remove');
         const snapshot = store.getSnapshot();
-        // TODO(soft delete): deactivate this target through the backend API once persisted monitoring history exists.
+        const target = snapshot.nodes.find((item) => item.code === code);
+        if (target?.mode === 'real' || SEED_CODES.has(code)) {
+          confirmRemove.disabled = true;
+          try {
+            const response = await fetch('/api/infrastructure-server-delete.php', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ code }),
+            });
+            const payload = await response.json().catch(() => null);
+            if (!response.ok || !payload || payload.success === false) {
+              confirmRemove.disabled = false;
+              showToast(payload?.message || 'The server could not be removed. Please try again.', 'error', { context: 'modal', position: 'modal-center', modal });
+              return;
+            }
+          } catch (error) {
+            confirmRemove.disabled = false;
+            showToast('The server could not be removed. Please check your connection and try again.', 'error', { context: 'modal', position: 'modal-center', modal });
+            return;
+          }
+        }
         const nodes = snapshot.nodes.filter((node) => node.code !== code);
         if (state.selectedCode === code) state.selectedCode = nodes[0]?.code || '';
         store.ingest({ ...snapshot, nodes });
         renderServerRegistry(modal, store);
-        showToast('Server removed from monitoring.','success',{context:'modal',position:'modal-center',modal,duration:1800});
+        modal.querySelector('[data-infra-server-registry]')?.focus();
+        showToast('Server removed from monitoring.','success',{context:'modal',position:'modal-center',modal});
         return;
       }
       if (!remove) return;
@@ -807,14 +1098,15 @@
           <strong>Remove this server from monitoring?</strong>
           <p>This will remove ${esc(node.name)} / ${esc(node.code)} from the server registry. Historical monitoring data should not be deleted unless explicitly requested.</p>
           <div>
-            <button type="button" class="btn btn-ghost btn-sm" data-infra-cancel-remove>Cancel</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-infra-cancel-remove="${esc(node.code)}">Cancel</button>
             <button type="button" class="btn btn-danger btn-sm" data-infra-confirm-remove="${esc(node.code)}">Remove Server</button>
           </div>
         </div>
       `;
+      wrap.querySelector('[data-infra-cancel-remove]')?.focus();
       if (window.lucide) window.lucide.createIcons();
     });
-    form?.addEventListener('submit', (event) => {
+    form?.addEventListener('submit', async (event) => {
       event.preventDefault();
       const result = validateServerForm(form);
       const validation = modal.querySelector('[data-infra-server-validation]');
@@ -837,18 +1129,73 @@
         handleModalError({modal,message:'The server details could not be prepared. Please review the form and try again.'});
         return;
       }
-      const snapshot = store.getSnapshot();
-      const nodes = [node, ...snapshot.nodes.filter((item) => item.code !== node.code)];
+      const isEditing = !!state.editingCode;
+      const originalNode = isEditing ? store.getSnapshot().nodes.find((item) => item.code === state.editingCode) : null;
       const button=event.submitter || form.querySelector('button[type="submit"]');
-      if(button && !setButtonLoading(button,'Saving...'))return;
+      if(button && !setButtonLoading(button, isEditing ? 'Saving changes...' : 'Saving...'))return;
+
+      if (isEditing && originalNode?.mode === 'real' && node.mode !== 'real') {
+        // Downgrading a persisted real target back to Demo Data — drop the
+        // DB row so it doesn't keep getting live-checked in the background.
+        try {
+          await fetch('/api/infrastructure-server-delete.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: originalNode.code }),
+          });
+        } catch (error) {
+          // Best-effort: proceed with the local mock update either way.
+        }
+      }
+
+      let finalNode = node;
+      if (node.mode === 'real') {
+        try {
+          const response = await fetch('/api/infrastructure-server-create.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              code: node.code,
+              name: node.name,
+              region: node.region,
+              country: node.country,
+              provider: node.provider,
+              method: node.method,
+              target_host: node.target_host,
+              target_port: node.target_port,
+              health_url: node.health_url,
+              expected_status: node.expected_status,
+              expected_keyword: node.expected_keyword,
+              packet_count: node.packet_count,
+              timeout_seconds: node.timeout_seconds,
+              interval_seconds: node.interval_seconds,
+            }),
+          });
+          const payload = await response.json().catch(() => null);
+          if (!response.ok || !payload || payload.success === false) {
+            resetButtonLoading(button);
+            handleModalError({ modal, message: payload?.message || 'The server could not be saved. Please try again.' });
+            return;
+          }
+          finalNode = dbRowToNode(payload.data);
+        } catch (error) {
+          resetButtonLoading(button);
+          handleModalError({ modal, message: 'The server could not be saved. Please check your connection and try again.' });
+          return;
+        }
+      }
+
+      const snapshot = store.getSnapshot();
+      const nodes = [finalNode, ...snapshot.nodes.filter((item) => item.code !== finalNode.code)];
       showModalSuccessAndClose({
         modal,
         button,
-        message:'Server added to monitoring.',
+        message: isEditing ? 'Server updated.' : 'Server added to monitoring.',
         close:()=>closeModal(),
         onAfterClose:()=>{
-          state.selectedCode = node.code;
+          state.selectedCode = finalNode.code;
           store.ingest({ ...snapshot, nodes });
+          if (finalNode.mode === 'real' && finalNode.method === 'icmp') runIcmpCheck(finalNode, store);
           form.reset();
           form.elements.method.value = 'icmp';
           form.elements.status.value = 'healthy';
@@ -878,7 +1225,13 @@
     initDashboardWidgetSliders();
     const startStore = () => {
       if (state.store) return state.store;
-      const store = Infra.createSharedStore({ intervalMs: 4000 });
+      const persistedReal = Array.isArray(window.TRACS_INFRA_REAL_SERVERS)
+        ? window.TRACS_INFRA_REAL_SERVERS.map(dbRowToNode)
+        : [];
+      const hiddenSeedCodes = Array.isArray(window.TRACS_INFRA_HIDDEN_SEED_CODES)
+        ? window.TRACS_INFRA_HIDDEN_SEED_CODES
+        : [];
+      const store = Infra.createSharedStore({ intervalMs: 4000, extraNodes: persistedReal, hiddenSeedCodes });
       state.store = store;
       bindPage(page, store);
       bindServerModal(store);
@@ -889,7 +1242,14 @@
         if (window.lucide) window.lucide.createIcons();
       });
       store.start();
-      window.addEventListener('pagehide', () => store.stop(), { once: true });
+      startRealServerRefresh(store);
+      window.addEventListener('pagehide', () => {
+        store.stop();
+        if (state.realCheckTimer) {
+          window.clearInterval(state.realCheckTimer);
+          state.realCheckTimer = null;
+        }
+      }, { once: true });
       return store;
     };
 

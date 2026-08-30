@@ -101,7 +101,7 @@ include 'includes/header.php';
         $scls=rem_status_class($rstat);$pb=prio_badge($rprio);
       ?>
       <tr class="checkable-row <?=$rdone?'is-completed':''?>" data-rid="<?=$rid?>" data-completed="<?=$rdone?'1':'0'?>" data-title="<?=esc($r['title']??'')?>" data-priority="<?=esc($rprio)?>" data-due="<?=$rdue_dt?>" data-desc="<?=esc($r['description']??'')?>">
-        <td style="text-align:center"><input type="checkbox" class="rem-check" <?=$rdone?'checked':''?> onchange="toggleReminder(<?=$rid?>,this)"></td>
+        <td style="text-align:center"><input type="checkbox" class="rem-check" data-unsaved-ignore <?=$rdone?'checked':''?> onchange="toggleReminder(<?=$rid?>,this)"></td>
         <td style="max-width:300px">
           <div style="font-weight:500;color:var(--tx1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" class="rem-title <?=$rdone?'done':''?>"><?=$rtit?></div>
           <?php if($rdesc):?><div class="rem-desc-inline" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="<?=$rdesc?>"><?=$rdesc?></div><?php endif;?>

@@ -228,18 +228,24 @@ include 'includes/header.php';
         <i data-lucide="plus" style="width:11px;height:11px"></i>
         Add Cancellation Feedback
       </div>
+      <!-- hidden id field so auto-save can patch the record after creation -->
+      <input type="hidden" id="inFeedbackId" value="">
       <div class="fb-inline-grid">
         <div class="dt-inline-group fb-field-reference">
           <label class="fb-inline-lbl">Reference</label>
-          <input type="text" class="form-input fb-inline-input" id="inRef" placeholder="Domain, invoice, or service reference, e.g. exampledomain.com" autocomplete="off">
+          <input type="text" class="form-input fb-inline-input" id="inRef"
+                 data-autosave-field="whmcs_reference" data-unsaved-ignore
+                 placeholder="Domain, invoice, or service reference, e.g. exampledomain.com" autocomplete="off">
         </div>
         <div class="dt-inline-group fb-field-email">
           <label class="fb-inline-lbl">Customer Email</label>
-          <input type="text" class="form-input fb-inline-input" id="inEmail" placeholder="Customer email, e.g. client@domain.com" autocomplete="off">
+          <input type="text" class="form-input fb-inline-input" id="inEmail"
+                 data-autosave-field="email_address" data-unsaved-ignore
+                 placeholder="Customer email, e.g. client@domain.com" autocomplete="off">
         </div>
         <div class="dt-inline-group fb-field-service">
           <label class="fb-inline-lbl">Service <span class="req-star">*</span></label>
-          <div class="cf-choice-box" id="inService" data-multi-choice>
+          <div class="cf-choice-box" id="inService" data-multi-choice data-autosave-field="cancelled_service" data-unsaved-ignore>
             <?php foreach($services as $s): ?>
             <label class="cf-choice-option">
               <input type="checkbox" value="<?=esc($s)?>">
@@ -251,7 +257,7 @@ include 'includes/header.php';
         </div>
         <div class="dt-inline-group fb-field-reason">
           <label class="fb-inline-lbl">Reason <span class="req-star">*</span></label>
-          <div class="cf-choice-box" id="inReason" data-multi-choice>
+          <div class="cf-choice-box" id="inReason" data-multi-choice data-autosave-field="cancellation_reason" data-unsaved-ignore>
             <?php foreach($reasons as $r): ?>
             <label class="cf-choice-option">
               <input type="checkbox" value="<?=esc($r)?>">
@@ -263,14 +269,17 @@ include 'includes/header.php';
         </div>
         <div class="dt-inline-group fb-field-resolution">
           <label class="fb-inline-lbl">Resolution</label>
-          <select class="form-select fb-inline-input" id="inResolution">
+          <select class="form-select fb-inline-input" id="inResolution"
+                  data-autosave-field="payment_resolution" data-unsaved-ignore>
             <option value="">— Select —</option>
             <?php foreach($resolutions as $res): ?><option value="<?=esc($res)?>"><?=esc($res)?></option><?php endforeach; ?>
           </select>
         </div>
         <div class="dt-inline-group fb-field-details">
           <label class="fb-inline-lbl">Additional Details / Context</label>
-          <textarea class="form-textarea fb-inline-input fb-details-input" id="inDetails" placeholder="Add cancellation context, retention effort, or follow-up action"></textarea>
+          <textarea class="form-textarea fb-inline-input fb-details-input" id="inDetails"
+                    data-autosave-field="additional_details" data-unsaved-ignore
+                    placeholder="Add cancellation context, retention effort, or follow-up action"></textarea>
         </div>
         <div class="fb-inline-action">
           <button class="btn btn-primary fb-save-btn" onclick="quickSaveFeedback()">
@@ -333,7 +342,7 @@ include 'includes/header.php';
               'created_by_name' => $f['created_by_name'] ?? '',
             ];
           ?>
-          <tr data-feedback-id="<?= $f['id'] ?>" class="<?= $is_critical ? 'row-critical' : '' ?>">
+          <tr data-feedback-id="<?= $f['id'] ?>" data-feedback-critical="<?= $is_critical ? '1' : '0' ?>" class="<?= $is_critical ? 'row-critical' : '' ?>">
             <td>
               <div class="user-cell">
                 <div class="avatar"><?= $initials ?></div>
@@ -445,6 +454,35 @@ include 'includes/header.php';
 
 <script>
 window.feedbackRecords = <?= json_encode($feedback_detail_records, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
+</script>
+
+<?php
+$_cf_autosave_js_v = @filemtime(__DIR__ . '/../assets/feedback-autosave.js') ?: time();
+?>
+<script src="assets/feedback-autosave.js?v=<?= $_cf_autosave_js_v ?>"></script>
+<script>
+// Initialise auto-save for the inline quick-entry form on this page.
+// The edit modal is wired inside openEditFeedback() in tracs.js.
+document.addEventListener('DOMContentLoaded', function () {
+  if (window.FeedbackAutoSave) {
+    FeedbackAutoSave.bindInlineForm();
+  }
+
+  // Teardown auto-save listeners when the edit modal closes (any method:
+  // Escape key, backdrop click, Cancel button, or after saveFeedback()).
+  const feedbackModal = document.getElementById('feedbackModal');
+  if (feedbackModal && window.FeedbackAutoSave) {
+    new MutationObserver(function (mutations) {
+      mutations.forEach(function (m) {
+        if (m.type === 'attributes' && m.attributeName === 'class') {
+          if (feedbackModal.classList.contains('hidden')) {
+            FeedbackAutoSave.unbindModal();
+          }
+        }
+      });
+    }).observe(feedbackModal, { attributes: true, attributeFilter: ['class'] });
+  }
+});
 </script>
 
 <?php include 'includes/footer.php'; ?>

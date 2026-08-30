@@ -21,7 +21,14 @@ class ChecklistController {
     public function getTasks() {
         return $this->model->getTasksByUser($this->user_id);
     }
-    
+
+    /**
+     * Change signature of the shared checklist (for the real-time poller).
+     */
+    public function getSignature() {
+        return $this->model->getSignature();
+    }
+
     /**
      * Get incomplete tasks only
      */

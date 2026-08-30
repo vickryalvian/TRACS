@@ -113,6 +113,7 @@ function tracs_notification_log(mysqli $conn, string $status, string $message, ?
 function tracs_notification_module_permission(string $module): ?array {
     return match ($module) {
         'cases' => ['cases.view', 'cases.manage'],
+        'abuse_reports' => ['abuse_reports.view', 'abuse_reports.manage'],
         'reminders' => ['reminders.view', 'reminders.manage'],
         'tasks' => ['tasks.view_own', 'tasks.monitor'],
         'mom', 'meeting' => ['moms.view', 'moms.manage'],
@@ -137,6 +138,7 @@ function tracs_notification_user_can_receive(mysqli $conn, int $userId, string $
 function tracs_notification_url(string $module, int $entityId = 0): ?string {
     return match ($module) {
         'cases' => 'cases.php',
+        'abuse_reports' => $entityId > 0 ? 'abuse-reports.php?id=' . $entityId : 'abuse-reports.php',
         'reminders' => 'reminders.php',
         'tasks' => 'tasks.php',
         'mom', 'meeting' => $entityId > 0 ? 'mom.php?mom_id=' . $entityId : 'mom.php',
@@ -377,6 +379,95 @@ function tracs_notify_case_created(mysqli $conn, int $caseId, int $targetUserId,
     ]);
 }
 
+function tracs_notification_module_targets(mysqli $conn, string $module, int $limit = 500): array {
+    if (!tracs_table_exists($conn, 'tracs_users')) return [];
+    $limit = max(1, min(1000, $limit));
+    $where = "1=1";
+    if (tracs_column_exists($conn, 'tracs_users', 'is_active')) {
+        $where .= " AND is_active=1";
+    }
+    if (tracs_column_exists($conn, 'tracs_users', 'status')) {
+        $where .= " AND COALESCE(status,'active')='active'";
+    }
+    $result = $conn->query("SELECT id FROM tracs_users WHERE {$where} ORDER BY id ASC LIMIT {$limit}");
+    if (!$result) return [];
+    $ids = [];
+    while ($row = $result->fetch_assoc()) {
+        $id = (int)($row['id'] ?? 0);
+        if ($id > 0 && tracs_notification_user_can_receive($conn, $id, $module)) {
+            $ids[] = $id;
+        }
+    }
+    return $ids;
+}
+
+function tracs_notify_abuse_report_created(mysqli $conn, int $reportId, string $reportTitle, int $actorUserId): int {
+    $created = 0;
+    foreach (tracs_notification_module_targets($conn, 'abuse_reports') as $targetUserId) {
+        $nid = tracs_create_notification($conn, [
+            'notification_type' => 'abuse_report_created',
+            'target_user_id' => $targetUserId,
+            'related_module' => 'abuse_reports',
+            'related_entity_id' => $reportId,
+            'trigger_type' => 'created',
+            'title' => 'New abuse report',
+            'message' => tracs_notification_clean_text($reportTitle, 140),
+            'actor_user_id' => $actorUserId,
+        ]);
+        if ($nid) $created++;
+    }
+    return $created;
+}
+
+function tracs_notify_abuse_report_critical(mysqli $conn, int $reportId, string $reportTitle, int $actorUserId): int {
+    $created = 0;
+    foreach (tracs_notification_module_targets($conn, 'abuse_reports') as $targetUserId) {
+        $nid = tracs_create_notification($conn, [
+            'notification_type' => 'abuse_report_critical',
+            'target_user_id' => $targetUserId,
+            'related_module' => 'abuse_reports',
+            'related_entity_id' => $reportId,
+            'trigger_type' => 'critical',
+            'title' => 'Critical abuse report',
+            'message' => tracs_notification_clean_text($reportTitle, 140),
+            'actor_user_id' => $actorUserId,
+        ]);
+        if ($nid) $created++;
+    }
+    return $created;
+}
+
+function tracs_notify_abuse_report_assigned(mysqli $conn, int $reportId, int $targetUserId, string $reportTitle, int $actorUserId): ?int {
+    return tracs_create_notification($conn, [
+        'notification_type' => 'abuse_report_assigned',
+        'target_user_id' => $targetUserId,
+        'related_module' => 'abuse_reports',
+        'related_entity_id' => $reportId,
+        'trigger_type' => 'assigned',
+        'title' => 'Abuse report assigned',
+        'message' => tracs_notification_clean_text($reportTitle, 140),
+        'actor_user_id' => $actorUserId,
+    ]);
+}
+
+function tracs_notify_abuse_report_resolved(mysqli $conn, int $reportId, string $reportTitle, int $actorUserId): int {
+    $created = 0;
+    foreach (tracs_notification_module_targets($conn, 'abuse_reports') as $targetUserId) {
+        $nid = tracs_create_notification($conn, [
+            'notification_type' => 'abuse_report_resolved',
+            'target_user_id' => $targetUserId,
+            'related_module' => 'abuse_reports',
+            'related_entity_id' => $reportId,
+            'trigger_type' => 'resolved',
+            'title' => 'Abuse report resolved',
+            'message' => tracs_notification_clean_text($reportTitle, 140),
+            'actor_user_id' => $actorUserId,
+        ]);
+        if ($nid) $created++;
+    }
+    return $created;
+}
+
 function tracs_notify_reminder_created(mysqli $conn, int $reminderId, int $targetUserId, string $reminderTitle, ?string $dueAt, int $actorUserId): ?int {
     $due = ($dueAt && strtotime($dueAt)) ? ' Due ' . date('d M H:i', strtotime($dueAt)) . '.' : '';
     return tracs_create_notification($conn, [
@@ -423,6 +514,7 @@ function tracs_notifications_run_scheduler(mysqli $conn): array {
         $created += tracs_notifications_schedule_reminders($conn);
         $created += tracs_notifications_schedule_meetings($conn);
         $created += tracs_notifications_schedule_shift_handover($conn);
+        $created += tracs_notifications_schedule_abuse_sla($conn);
         tracs_notification_log($conn, 'success', 'Notification scheduler completed.', null, null, ['created' => $created]);
     } catch (Throwable $e) {
         tracs_notification_log($conn, 'failed', 'Notification scheduler failed.', null, null, ['error' => $e->getMessage()]);
@@ -567,6 +659,49 @@ function tracs_notifications_schedule_shift_handover(mysqli $conn): int {
             'scheduled_at' => $scheduledAt,
         ]);
         if ($nid) $created++;
+    }
+    return $created;
+}
+
+function tracs_notifications_schedule_abuse_sla(mysqli $conn): int {
+    if (!tracs_table_exists($conn, 'tracs_abuse_reports')) return 0;
+    $result = $conn->query("
+        SELECT id, report_number, title, affected_domain, affected_ip, waiting_hours, waiting_until
+        FROM tracs_abuse_reports
+        WHERE status NOT IN ('resolved','closed')
+          AND waiting_until IS NOT NULL
+          AND waiting_until < NOW()
+        ORDER BY waiting_until ASC
+        LIMIT 100
+    ");
+    if (!$result) return 0;
+
+    $targets = tracs_notification_module_targets($conn, 'abuse_reports');
+    if (!$targets) return 0;
+
+    $created = 0;
+    while ($row = $result->fetch_assoc()) {
+        $reportId = (int)$row['id'];
+        $number = trim((string)($row['report_number'] ?? '')) ?: ('#' . $reportId);
+        $title = trim((string)($row['title'] ?? 'Abuse report'));
+        $target = trim((string)($row['affected_domain'] ?? '')) ?: trim((string)($row['affected_ip'] ?? ''));
+        $hours = (int)($row['waiting_hours'] ?? 24);
+        $hours = in_array($hours, [24, 48], true) ? $hours : 24;
+        $message = $number . ($target !== '' ? ' for ' . $target : '') . ' exceeded its ' . $hours . '-hour waiting period. Review and update status.';
+        foreach ($targets as $targetUserId) {
+            $nid = tracs_create_notification($conn, [
+                'notification_type' => 'abuse_report_action_required',
+                'target_user_id' => $targetUserId,
+                'related_module' => 'abuse_reports',
+                'related_entity_id' => $reportId,
+                'trigger_type' => 'action_required',
+                'dedupe_key' => tracs_notification_dedupe_key($targetUserId, 'abuse_report_action_required', 'abuse_reports', $reportId, 'action_required|' . (string)($row['waiting_until'] ?? '')),
+                'title' => 'Abuse report requires action',
+                'message' => tracs_notification_clean_text($message . ' ' . $title, 220),
+                'scheduled_at' => $row['waiting_until'] ?? null,
+            ]);
+            if ($nid) $created++;
+        }
     }
     return $created;
 }

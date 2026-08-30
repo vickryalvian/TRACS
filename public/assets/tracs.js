@@ -2,14 +2,6 @@
 'use strict';
 
 function tracsLogBuildSignature() {
-  if (window.__TRACS_SIGNATURE_LOGGED__) return;
-  const build = window.TRACS_BUILD_INFO || {};
-  const owner = build.owner || 'Vickry';
-  const version = build.version ? ` • ${build.version}` : '';
-  console.log(`%cTRACS System • Initial Build by ${owner}${version}`, 'color:#0891b2;font-weight:700;');
-  if (build.easterEgg) {
-    console.log('Internal build channel active.');
-  }
   window.__TRACS_SIGNATURE_LOGGED__ = true;
 }
 tracsLogBuildSignature();
@@ -45,6 +37,7 @@ const API = {
     DELETE : API_BASE + 'case-delete.php',
     RESOLVE: API_BASE + 'case-resolve.php',
     STATUS : API_BASE + 'case-status.php',
+    REORDER: API_BASE + 'case-reorder.php',
     GET    : API_BASE + 'case-get.php'
   },
 
@@ -60,7 +53,9 @@ const API = {
     CREATE : API_BASE + 'task-create.php',
     UPDATE : API_BASE + 'task-update.php',
     DELETE : API_BASE + 'task-delete.php',
-    TOGGLE : API_BASE + 'task-toggle.php'
+    TOGGLE : API_BASE + 'task-toggle.php',
+    HISTORY: API_BASE + 'checklist-history.php',
+    LIST   : API_BASE + 'checklist-list.php'
   },
 
   DOMAIN: {
@@ -77,7 +72,8 @@ const API = {
   TICKER: {
     CREATE : API_BASE + 'ticker-create.php',
     DELETE : API_BASE + 'ticker-delete.php',
-    LIST   : API_BASE + 'ticker-list.php'
+    LIST   : API_BASE + 'ticker-list.php',
+    FEED   : API_BASE + 'ticker-feed.php'
   },
 
   SHIFT: {
@@ -85,7 +81,9 @@ const API = {
     UPDATE : API_BASE + 'shift-update.php',
     RESOLVE: API_BASE + 'shift-resolve.php',
     DELETE : API_BASE + 'shift-delete.php',
-    LIST   : API_BASE + 'shift-list.php'
+    LIST   : API_BASE + 'shift-list.php',
+    HANDOVER_CREATE : API_BASE + 'shift-handover-create.php',
+    HANDOVER_UPDATE : API_BASE + 'shift-handover-update.php'
   },
 
   NOTIFICATION: {
@@ -114,6 +112,7 @@ let _lastToast=null;
 const tracsToastDocks=new Map();
 const tracsModalToastDocks=new WeakMap();
 const tracsInlineToastDocks=new WeakMap();
+let tracsLoginToastDockNode=null;
 const tracsToastDefaults={success:3500,info:4000,warning:7000,error:9000};
 const tracsModalOverlaySelector='.modal-overlay, .dpc-modal, .infra-modal, .cf-modal, .tracs-dialog-overlay';
 function tracsNoticeType(type){
@@ -128,9 +127,58 @@ function toastIconFor(type){
 function tracsRefreshIcons(root){
   if(window.lucide) lucide.createIcons(root ? { nodes: Array.from(root.querySelectorAll('[data-lucide]')) } : undefined);
 }
+/* Re-fetches the current URL's server-rendered HTML so a save can refresh a
+   widget in place with the exact same markup a full reload would produce,
+   without navigating away (loses no scroll/tab/filter state). */
+async function tracsFetchDocument(){
+  const res=await fetch(window.location.href,{headers:{'X-Requested-With':'XMLHttpRequest'}});
+  if(!res.ok)throw new Error('Refresh request failed');
+  return new DOMParser().parseFromString(await res.text(),'text/html');
+}
+async function tracsSwapFragment(selector,{preserveScroll=true}={}){
+  const target=document.querySelector(selector);
+  if(!target)return false;
+  const scrollHosts=preserveScroll?[...target.querySelectorAll('.scroll-y,.tm-scroll')]:[];
+  const scrollTops=scrollHosts.map(el=>el.scrollTop);
+  let doc;
+  try{ doc=await tracsFetchDocument(); }catch(error){ console.error('Unable to refresh section:',error); return false; }
+  const fresh=doc.querySelector(selector);
+  if(!fresh)return false;
+  target.replaceWith(fresh);
+  fresh.querySelectorAll('.scroll-y,.tm-scroll').forEach((el,i)=>{ if(scrollTops[i]!=null)el.scrollTop=scrollTops[i]; });
+  tracsRefreshIcons(fresh);
+  window.TRACSDropdowns?.syncAll();
+  return true;
+}
+/* For filter controls (status tabs, month pickers) that used to navigate via
+   location.href, causing a full reload just to change a query-string filter.
+   Fetches the filtered URL, swaps in the fresh section, and updates the
+   address bar via pushState so back/forward and bookmarking still work. */
+async function tracsFilterNavigate(url,{target='.main-inner',preserveScroll=true}={}){
+  const targetEl=document.querySelector(target);
+  if(!targetEl){window.location.href=url;return false;}
+  const scrollTop=preserveScroll?window.scrollY:null;
+  try{
+    const res=await fetch(url,{headers:{'X-Requested-With':'XMLHttpRequest'}});
+    if(!res.ok)throw new Error('Filter request failed');
+    const doc=new DOMParser().parseFromString(await res.text(),'text/html');
+    const fresh=doc.querySelector(target);
+    if(!fresh)throw new Error('Missing target section');
+    targetEl.replaceWith(fresh);
+    window.history.pushState({},'',url);
+    tracsRefreshIcons(fresh);
+    window.TRACSDropdowns?.syncAll();
+    if(scrollTop!=null)window.scrollTo(0,scrollTop);
+    return true;
+  }catch(error){
+    console.error('Unable to apply filter without reload:',error);
+    window.location.href=url;
+    return false;
+  }
+}
 function tracsVisibleModal(){
   return Array.from(document.querySelectorAll('.modal-overlay:not(.hidden), .dpc-modal, .infra-modal:not([hidden]), .cf-modal, [role="dialog"]:not([hidden])'))
-    .find(node=>!node.hidden && !node.classList.contains('hidden') && getComputedStyle(node).display!=='none') || null;
+    .find(node=>!node.hidden && !node.classList.contains('hidden') && node.getClientRects().length>0) || null;
 }
 function tracsSourceElement(sourceElement){
   if(sourceElement instanceof Element)return sourceElement;
@@ -255,6 +303,22 @@ function tracsToastDock(context='page',position='',modal=null,sourceElement=null
   tracsToastDocks.set(key,dock);
   return dock;
 }
+function tracsLoginToastDock(position='login-top'){
+  const card=document.querySelector('.login-card');
+  if(!card)return null;
+  const shell=card.closest('.login-shell') || card.parentElement || document.body;
+  if(!tracsLoginToastDockNode || !tracsLoginToastDockNode.isConnected){
+    tracsLoginToastDockNode=document.createElement('div');
+    tracsLoginToastDockNode.className=`toast-dock toast-dock--login toast-dock--${position}`;
+    tracsLoginToastDockNode.dataset.toastContext='login';
+    shell.insertBefore(tracsLoginToastDockNode,card);
+  }
+  const oldPosition=tracsLoginToastDockNode.dataset.toastPosition;
+  if(oldPosition && oldPosition!==position)tracsLoginToastDockNode.classList.remove(`toast-dock--${oldPosition}`);
+  tracsLoginToastDockNode.classList.add(`toast-dock--${position}`);
+  tracsLoginToastDockNode.dataset.toastPosition=position;
+  return tracsLoginToastDockNode;
+}
 window.addEventListener('resize',()=>{
   document.querySelectorAll('.toast-dock--modal-center, .toast-dock--modal-top-right').forEach(dock=>tracsPositionModalToastDock(dock,dock.parentElement));
 });
@@ -281,7 +345,9 @@ function showToast(...args){
   const context=tracsToastContext({...options,sourceElement});
   const position=options.position || (context === 'modal' ? 'modal-center' : '');
   const modal=options.modal || options.contextElement || (context === 'modal' ? tracsSourceModal(sourceElement) : null);
-  const dock=tracsToastDock(context,position,modal,sourceElement,options.maxWidth);
+  const dock=(context === 'page' && document.querySelector('.login-card') && options.loginGlobal !== true)
+    ? tracsLoginToastDock(position || 'login-top')
+    : tracsToastDock(context,position,modal,sourceElement,options.maxWidth);
   const title=parsed.title;
   const message=parsed.message;
   let toastTitle=String(title || '').trim();
@@ -321,9 +387,11 @@ function showToast(...args){
   t.setAttribute('aria-live',noticeType === 'error' ? 'assertive' : 'polite');
   const radar=document.createElement('span');
   radar.className='toast-radar';
+  radar.setAttribute('aria-hidden','true');
   const icon=document.createElement('i');
   icon.dataset.lucide=ic;
   icon.className='toast-icon';
+  icon.setAttribute('aria-hidden','true');
   radar.appendChild(icon);
   const body=document.createElement('span');
   body.className='toast-body';
@@ -355,7 +423,29 @@ function showToast(...args){
   const dismiss=()=>tracsDismissToast(t);
   close.addEventListener('click',dismiss);
   tracsRefreshIcons(t);
-  if(duration > 0)setTimeout(dismiss,duration);
+  if(duration > 0){
+    // Pause the auto-dismiss clock while the user is reading/hovering/
+    // focused on the toast, so it can't disappear mid-read — resume the
+    // remaining time (not a fresh full duration) once they move away.
+    let remaining=duration;
+    let timerId=null;
+    let startedAt=0;
+    const start=()=>{
+      startedAt=Date.now();
+      timerId=setTimeout(dismiss,remaining);
+    };
+    const pause=()=>{
+      if(timerId===null)return;
+      clearTimeout(timerId);
+      timerId=null;
+      remaining=Math.max(0,remaining-(Date.now()-startedAt));
+    };
+    t.addEventListener('mouseenter',pause);
+    t.addEventListener('mouseleave',start);
+    t.addEventListener('focusin',pause);
+    t.addEventListener('focusout',start);
+    start();
+  }
   return t;
 }
 function toast(msg,type='info',ms){
@@ -478,6 +568,7 @@ function tracsCloseModalElement(modal,options={}){
   }
   const trigger=target._tracsModalTrigger;
   if(trigger?.isConnected)requestAnimationFrame(()=>trigger.focus({preventScroll:true}));
+  window.TRACSDropdowns?.closeActive();
 }
 function tracsOpenModalElement(modal,options={}){
   const target=tracsResolveModal(modal);
@@ -836,6 +927,7 @@ function tracsCloseSystemDialog(result,value=''){
   const overlay=document.getElementById('tracsSystemDialog');
   tracsDialogActive=null;
   if(overlay)overlay.classList.add('hidden');
+  if(active?.previousFocus?.isConnected)active.previousFocus.focus({preventScroll:true});
   if(active)active.resolve(active.mode === 'prompt' ? (result ? value : null) : !!result);
 }
 function tracsOpenSystemDialog(options={},mode='alert'){
@@ -845,7 +937,8 @@ function tracsOpenSystemDialog(options={},mode='alert'){
   const icon=toastIconFor(type);
   overlay.dataset.type=type;
   dialog.dataset.type=type;
-  overlay.querySelector('.tracs-dialog-icon i').dataset.lucide=icon;
+  const iconWrap=overlay.querySelector('.tracs-dialog-icon');
+  iconWrap.innerHTML='<i data-lucide="'+icon+'" class="icon-sm"></i>';
   overlay.querySelector('#tracsDialogTitle').textContent=String(options.title || (mode === 'confirm' ? 'Confirm action' : 'Notice'));
   const sub=overlay.querySelector('#tracsDialogSub');
   sub.textContent=String(options.subtitle || (mode === 'confirm' ? 'Please review this action' : 'TRACS notification'));
@@ -856,6 +949,7 @@ function tracsOpenSystemDialog(options={},mode='alert'){
   const cancel=overlay.querySelector('[data-tracs-dialog-cancel]');
   const cancelButtons=overlay.querySelectorAll('[data-tracs-dialog-cancel]');
   const ok=overlay.querySelector('[data-tracs-dialog-ok]');
+  const previousFocus=document.activeElement instanceof Element ? document.activeElement : null;
   field.hidden=mode !== 'prompt';
   if(mode === 'prompt'){
     label.textContent=String(options.inputLabel || 'Response');
@@ -874,10 +968,11 @@ function tracsOpenSystemDialog(options={},mode='alert'){
   overlay.classList.remove('hidden');
   tracsRefreshIcons(overlay);
   return new Promise(resolve=>{
-    tracsDialogActive={resolve,mode};
+    tracsDialogActive={resolve,mode,previousFocus};
     const cleanup=()=>{
       ok.onclick=null;
       cancelButtons.forEach(btn=>{btn.onclick=null;});
+      overlay.onkeydown=null;
     };
     ok.onclick=()=>{
       if(mode === 'prompt' && input.required && !input.value.trim()){
@@ -893,7 +988,34 @@ function tracsOpenSystemDialog(options={},mode='alert'){
         tracsCloseSystemDialog(false,'');
       };
     });
-    window.setTimeout(()=>{(mode === 'prompt' ? input : ok).focus();},30);
+    overlay.onkeydown=event=>{
+      if(event.key === 'Escape'){
+        event.preventDefault();
+        cleanup();
+        tracsCloseSystemDialog(false,'');
+        return;
+      }
+      if(event.key === 'Enter' && mode !== 'prompt'){
+        event.preventDefault();
+        (document.activeElement === cancel ? cancel : ok).click();
+        return;
+      }
+      if(event.key !== 'Tab')return;
+      const focusable=Array.from(overlay.querySelectorAll('button:not([hidden]):not([disabled]), textarea:not([hidden]):not([disabled])'));
+      if(!focusable.length)return;
+      const first=focusable[0];
+      const last=focusable[focusable.length-1];
+      if(event.shiftKey && document.activeElement === first){
+        event.preventDefault();
+        last.focus();
+      }else if(!event.shiftKey && document.activeElement === last){
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    // Destructive confirms default focus to Cancel, not the destructive
+    // action, so a stray Enter press never triggers the irreversible option.
+    window.setTimeout(()=>{(mode === 'prompt' ? input : (mode === 'confirm' && options.destructive ? cancel : ok)).focus();},30);
   });
 }
 
@@ -950,11 +1072,20 @@ function openModal(id){
 }
 function closeModal(id){tracsCloseModalElement(document.getElementById(id+'Modal'));}
 function closeAllModals(){document.querySelectorAll('.modal-overlay:not(.hidden)').forEach(tracsCloseModalElement);}
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeAllModals();});
+function closeTopModal(){
+  const modals=Array.from(document.querySelectorAll('.modal-overlay:not(.hidden)')).filter(modal=>!modal.hidden);
+  const top=modals.at(-1);
+  if(!top)return;
+  if(top.id==='caseImageModal'){closeCaseImagePreview();return;}
+  if(top.id==='screenshotResultModal'){closeScreenshotResultModal();return;}
+  tracsCloseModalElement(top);
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape' && !tracsDialogActive)closeTopModal();});
 document.addEventListener('click',e=>{
   if(!e.target.classList.contains('modal-overlay'))return;
   if(e.target.id==='caseImageModal'){closeCaseImagePreview();return;}
-  closeAllModals();
+  if(e.target.id==='screenshotResultModal'){closeScreenshotResultModal();return;}
+  tracsCloseModalElement(e.target);
 });
 
 /* ── TRACS custom dropdowns ───────────────────────────── */
@@ -1020,7 +1151,11 @@ const TRACSDropdowns = (() => {
     const minWidth = Math.max(rect.width, 128);
     instance.menu.style.minWidth = `${minWidth}px`;
     instance.menu.style.maxWidth = `${Math.max(minWidth, Math.min(360, window.innerWidth - viewportGap * 2))}px`;
-    const menuHeight = Math.min(instance.menu.scrollHeight || 260, Math.max(160, window.innerHeight - viewportGap * 2));
+    // Cap at a comfortable ~9-row height regardless of option count (long lists
+    // like the task Assign-To people picker used to stretch to near-full
+    // viewport height); only shrink further on genuinely small viewports.
+    const preferredMaxHeight = 300;
+    const menuHeight = Math.min(instance.menu.scrollHeight || 260, preferredMaxHeight, Math.max(160, window.innerHeight - viewportGap * 2));
     const hasRoomBelow = rect.bottom + menuHeight + viewportGap <= window.innerHeight;
     const top = hasRoomBelow ? rect.bottom + 4 : Math.max(viewportGap, rect.top - menuHeight - 4);
     const left = Math.min(Math.max(viewportGap, rect.left), window.innerWidth - minWidth - viewportGap);
@@ -1067,20 +1202,64 @@ const TRACSDropdowns = (() => {
     return item;
   }
 
+  function filterMenu(instance, term) {
+    const needle = String(term || '').trim().toLowerCase();
+    instance.searchTerm = needle;
+    let firstVisible = null;
+    instance.items.forEach(item => {
+      const match = !needle || labelOf(item.option).toLowerCase().includes(needle);
+      item.node.hidden = !match;
+      if (match && !item.option.disabled && !firstVisible) firstVisible = item;
+    });
+    const empty = instance.menu.querySelector('.tracs-select-empty');
+    if (empty) empty.hidden = !!firstVisible;
+    if (firstVisible) setActiveOption(instance, instance.items.indexOf(firstVisible));
+  }
+
   function renderMenu(instance) {
     instance.menu.innerHTML = '';
     instance.menu.className = `tracs-select-menu ${instance.select.multiple ? 'is-multiple' : ''}`;
     instance.menu.setAttribute('role', 'listbox');
     instance.menu.setAttribute('aria-multiselectable', instance.select.multiple ? 'true' : 'false');
+    // Opt-in searchable dropdown (data-searchable="true"): a filter box for
+    // long option lists (e.g. the task Assign-To people picker).
+    const searchable = instance.select.dataset.searchable === 'true';
+    if (searchable) {
+      const box = document.createElement('div');
+      box.className = 'tracs-select-search';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'tracs-select-search-input';
+      input.placeholder = 'Search…';
+      input.setAttribute('aria-label', 'Filter options');
+      input.addEventListener('input', () => filterMenu(instance, input.value));
+      input.addEventListener('keydown', event => { if (!['Escape'].includes(event.key)) event.stopPropagation(); });
+      input.addEventListener('click', event => event.stopPropagation());
+      box.appendChild(input);
+      instance.menu.appendChild(box);
+      instance.searchInput = input;
+    }
     instance.items = visibleOptions(instance.select).map((option, index) => {
       const node = makeOptionNode(instance, option, index);
       instance.menu.appendChild(node);
       return { option, node };
     });
+    if (searchable) {
+      const empty = document.createElement('div');
+      empty.className = 'tracs-select-empty';
+      empty.textContent = 'No matches';
+      empty.hidden = true;
+      instance.menu.appendChild(empty);
+    }
     const selected = instance.items.find(item => item.option.selected && !item.option.disabled);
     instance.activeOption = selected || instance.items.find(item => !item.option.disabled) || null;
     instance.items.forEach(item => item.node.classList.toggle('is-active', item === instance.activeOption));
+    if (searchable && instance.searchTerm) {
+      instance.searchInput.value = instance.searchTerm;
+      filterMenu(instance, instance.searchTerm);
+    }
     positionMenu(instance);
+    if (instance.searchInput) requestAnimationFrame(() => instance.searchInput.focus());
   }
 
   function open(instance) {
@@ -1098,6 +1277,7 @@ const TRACSDropdowns = (() => {
   function close(instance) {
     if (!instance) return;
     instance.open = false;
+    instance.searchTerm = '';
     instance.root.classList.remove('is-open');
     instance.trigger.setAttribute('aria-expanded', 'false');
     instance.menu.remove();
@@ -1204,6 +1384,14 @@ const TRACSDropdowns = (() => {
     if (active.root.contains(event.target) || active.menu.contains(event.target)) return;
     close(active);
   });
+  // Capture-phase backstop: fires before any descendant's own click handler
+  // can call stopPropagation(), so an open dropdown always closes on outside
+  // interaction site-wide, regardless of what else is listening on the page.
+  document.addEventListener('pointerdown', event => {
+    if (!active) return;
+    if (active.root.contains(event.target) || active.menu.contains(event.target)) return;
+    close(active);
+  }, true);
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape' && active) close(active);
   });
@@ -1221,18 +1409,31 @@ const TRACSDropdowns = (() => {
     bodyObserver.observe(document.body, { childList: true, subtree: true });
   });
 
-  return { init, syncAll, syncSelect: select => instances.get(select) && syncInstance(instances.get(select)) };
+  return {
+    init, syncAll,
+    syncSelect: select => instances.get(select) && syncInstance(instances.get(select)),
+    // Force-close whatever custom dropdown is open, if any. Used as a safety
+    // net when a modal closes, so a floating menu can never be left orphaned
+    // on screen (which would otherwise look like "the dropdown won't close").
+    closeActive: () => { if (active) close(active); }
+  };
 })();
 window.TRACSDropdowns = TRACSDropdowns;
 
 /* ── Icon popup menus ───────────────────────────────────── */
+// .user-menu-wrap and .nav-menu-wrap are deliberately NOT included here:
+// bindSidebarMenus() already owns their open/close lifecycle (mutual
+// exclusion, outside-click, Escape-with-refocus). Having both this
+// generic system and that dedicated one independently toggle the same
+// <details> elements caused the sidebar accordion to occasionally
+// double-fire on open/close, cutting the grid-template-rows transition
+// short mid-animation.
 const TRACS_POPUP_DETAILS_SELECTOR = [
-  '.user-menu-wrap',
-  '.nav-menu-wrap',
   '.report-export-menu',
-  '.row-action-menu'
+  '.row-action-menu',
+  '.tm-more-filters'
 ].join(',');
-const TRACS_CUSTOM_POPUP_SELECTOR = '.theme-menu-wrap, .notif-bell-btn';
+const TRACS_CUSTOM_POPUP_SELECTOR = '.notif-bell-btn';
 
 function tracsClosestPopup(target) {
   return target instanceof Element
@@ -1240,14 +1441,15 @@ function tracsClosestPopup(target) {
     : null;
 }
 
+function tracsIsDateRangePopupClick(target) {
+  return target instanceof Element
+    && Boolean(target.closest('.tracs-date-range-popup'));
+}
+
 function tracsSetCustomPopupOpen(host, open) {
   if (!host) return;
   host.classList.toggle('is-open', open);
-  const toggle = host.matches('.theme-menu-wrap')
-    ? host.querySelector('#themeToggle, .theme-toggle')
-    : host.matches('.notif-bell-btn')
-      ? host
-      : null;
+  const toggle = host.matches('.notif-bell-btn') ? host : null;
   toggle?.setAttribute('aria-expanded', open ? 'true' : 'false');
 }
 
@@ -1264,6 +1466,9 @@ function tracsToggleCustomPopup(host) {
   const willOpen = !host.classList.contains('is-open');
   tracsCloseIconPopups(host);
   tracsSetCustomPopupOpen(host, willOpen);
+  if (willOpen && host.matches('.notif-bell-btn')) {
+    window.TRACSNotifications?.markVisibleRead?.();
+  }
 }
 
 function tracsInitNotificationPopups(root = document) {
@@ -1292,6 +1497,8 @@ window.tracsCloseIconPopups = tracsCloseIconPopups;
 window.tracsSetCustomPopupOpen = tracsSetCustomPopupOpen;
 
 document.addEventListener('click', e => {
+  if (tracsIsDateRangePopupClick(e.target)) return;
+
   const popup = tracsClosestPopup(e.target);
   const summary = e.target instanceof Element ? e.target.closest('summary') : null;
   const clickedPopupSummary = summary?.closest(TRACS_POPUP_DETAILS_SELECTOR);
@@ -1800,8 +2007,22 @@ function bindModalAjaxForms(){
         delay:Number(form.dataset.closeDelay || 1000),
         onAfterClose:()=>{
           const redirect=payload.redirect || form.dataset.refreshUrl || window.location.href;
-          if(redirect === window.location.href)window.location.reload();
-          else window.location.assign(redirect);
+          /* payload.redirect is commonly an absolute-path server response
+             (e.g. "/user-management.php?tab=users") which never string-equals
+             window.location.href, so compare resolved pathnames instead of
+             falling through to a real navigation on every same-page save. */
+          const redirectUrl=new URL(redirect,window.location.href);
+          if(redirectUrl.pathname !== window.location.pathname || payload.force_navigate){
+            window.location.assign(redirect);
+            return;
+          }
+          const refreshSelector=form.dataset.refreshSelector;
+          if(refreshSelector){
+            tracsSwapFragment(refreshSelector);
+            if(redirectUrl.search !== window.location.search || redirectUrl.hash !== window.location.hash){
+              window.history.replaceState({},'',redirectUrl.pathname+redirectUrl.search+redirectUrl.hash);
+            }
+          }else window.location.reload();
         }
       });
     }catch(error){
@@ -1866,6 +2087,85 @@ function renderFeedbackChips(values, critical = false) {
     return `<div class="cf-chip-row">${items.map(item => `<span class="cf-chip ${critical ? 'cf-chip-critical' : ''}">${escapeHtml(item)}</span>`).join('')}</div>`;
 }
 
+function feedbackCritical(reasons=[]){
+    const criticalReasons = ['Frequent downtime', 'DDoS / security-related instability', 'Slow server performance', 'Repeated Issue', 'Issue not resolved'];
+    return parseFeedbackMulti(reasons).some(reason => criticalReasons.includes(reason));
+}
+
+function feedbackNormalizeRecord(record={}){
+    const services=parseFeedbackMulti(record.cancelled_services || record.cancelled_service);
+    const reasons=parseFeedbackMulti(record.cancellation_reasons || record.cancellation_reason);
+    return {
+        ...record,
+        id:Number(record.id || 0),
+        cancelled_services:services,
+        cancelled_service:record.cancelled_service || JSON.stringify(services),
+        cancelled_service_display:record.cancelled_service_display || services.join(', '),
+        cancellation_reasons:reasons,
+        cancellation_reason:record.cancellation_reason || JSON.stringify(reasons),
+        cancellation_reason_display:record.cancellation_reason_display || reasons.join(', '),
+        submitter_name:record.submitter_display || record.submitter_name || record.creator_name || record.created_by_name || 'System'
+    };
+}
+
+function feedbackInitials(name=''){
+    const parts=String(name || 'System').trim().split(/\s+/);
+    return `${parts[0]?.[0] || 'S'}${parts[1]?.[0] || ''}`.toUpperCase();
+}
+
+function feedbackRowHtml(rawRecord){
+    const record=feedbackNormalizeRecord(rawRecord);
+    const id=record.id;
+    const isCritical=feedbackCritical(record.cancellation_reasons);
+    return `
+      <tr data-feedback-id="${id}" data-feedback-critical="${isCritical ? '1' : '0'}" class="${isCritical ? 'row-critical' : ''}">
+        <td><div class="user-cell"><div class="avatar">${escHtml(feedbackInitials(record.submitter_name))}</div><div class="user-info"><div class="user-name">${escHtml(record.submitter_name)}</div><div class="creator-meta">${escHtml(record.creator_name || record.created_by_name || 'System')}</div></div></div></td>
+        <td>${renderFeedbackChips(record.cancelled_services)}</td>
+        <td>${renderFeedbackChips(record.cancellation_reasons,isCritical)}</td>
+        <td class="details-cell" title="${escHtml(record.additional_details || '')}"><div class="truncate-details">${escHtml(record.additional_details || '')}</div></td>
+        <td class="mono"><div class="ref-wrap"><span class="ref-text">${escHtml(record.whmcs_reference || '')}</span><button class="btn-copy" onclick="copyToClipboard(${jsAttr(record.whmcs_reference || '')})"><i data-lucide="copy"></i></button></div></td>
+        <td>${record.email_address ? `<a href="mailto:${escHtml(record.email_address)}" class="email-link">${escHtml(record.email_address)}</a>` : ''}</td>
+        <td><span class="resolution-text">${escHtml(record.payment_resolution || '')}</span></td>
+        <td class="mono text-muted">${escHtml(formatFeedbackDate(record.created_at))}</td>
+        <td class="feedback-actions-cell"><div class="row-action-group cf-row-actions">
+          <button class="btn btn-ghost btn-icon" type="button" onclick="viewFeedback(${id})" title="View report" aria-label="View cancellation feedback report"><i data-lucide="eye" class="icon-sm"></i></button>
+          <button class="btn btn-ghost btn-icon cf-delete-action" type="button" onclick="deleteFeedback(${id})" title="Delete feedback" aria-label="Delete cancellation feedback"><i data-lucide="trash-2" class="icon-sm"></i></button>
+        </div></td>
+      </tr>`;
+}
+
+function feedbackEnsureTableBody(){
+    const tbody=tracsTableBody('.tracs-table');
+    if(!tbody)return null;
+    tbody.querySelector('td[colspan="9"]')?.closest('tr')?.remove();
+    return tbody;
+}
+
+function feedbackApplyRecord(rawRecord,{isNew=false}={}){
+    const record=feedbackNormalizeRecord(rawRecord);
+    if(!record.id)return;
+    window.feedbackRecords = window.feedbackRecords || {};
+    window.feedbackRecords[record.id]=record;
+    const tbody=feedbackEnsureTableBody();
+    if(!tbody)return;
+    const holder=document.createElement('tbody');
+    holder.innerHTML=feedbackRowHtml(record).trim();
+    tracsInsertOrReplaceRow(tbody,holder.firstElementChild,`[data-feedback-id="${record.id}"]`,true);
+    if(isNew)tracsAdjustPanelMeta(1);
+}
+
+function feedbackRemoveRecord(id){
+    delete window.feedbackRecords?.[id];
+    tracsRowFadeRemove(document.querySelector(`[data-feedback-id="${id}"]`));
+    tracsAdjustPanelMeta(-1);
+}
+
+window.TRACSFeedbackRealtime = {
+    applyRecord: feedbackApplyRecord,
+    removeRecord: feedbackRemoveRecord,
+    normalizeRecord: feedbackNormalizeRecord
+};
+
 function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, char => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
@@ -1912,6 +2212,10 @@ function openEditFeedback(data) {
     document.getElementById('feedbackDetails').value = data.additional_details;
     document.getElementById('feedbackModalTitle').innerText = 'Edit Feedback';
     openModal('feedback');
+    // Wire auto-save for this specific record
+    if (window.FeedbackAutoSave) {
+        FeedbackAutoSave.bindEditModal(data.id);
+    }
 }
 
 async function saveFeedback() {
@@ -1932,6 +2236,11 @@ async function saveFeedback() {
         return;
     }
 
+    // Flush any pending auto-save changes before the full save
+    if (window.FeedbackAutoSave && id) {
+        await FeedbackAutoSave.flushAll();
+    }
+
     try {
         const res = await withLoadingState(button,'Saving...',async()=>{
             const response=await fetch(url,{method:'POST',body:fd});
@@ -1945,11 +2254,22 @@ async function saveFeedback() {
         });
         if(!res)return;
         if (res.success) {
-            showModalSuccessAndClose({
-                modal:'feedback',
-                message:id ? 'Feedback updated.' : 'Feedback added.',
-                onAfterClose:()=>location.reload()
-            });
+            const record=tracsPayloadRecord(res);
+            if(record)feedbackApplyRecord(record,{isNew:!id});
+            tracsMarkSaved(document.getElementById('feedbackModal'));
+            if (id) {
+                if (window.FeedbackAutoSave) FeedbackAutoSave.unbindModal();
+                showModalSuccessAndClose({
+                    modal:'feedback',
+                    message:'Feedback updated.',
+                });
+            } else {
+                if (window.FeedbackAutoSave) FeedbackAutoSave.resetInlineForm();
+                showModalSuccessAndClose({
+                    modal:'feedback',
+                    message:'Feedback added.',
+                });
+            }
         } else {
             handleModalError({modal:'feedback',error:{message:res.error || res.message},fallbackMessage:'The feedback could not be saved. Please try again.'});
         }
@@ -1969,15 +2289,17 @@ async function deleteFeedback(id) {
     if (!ok) return;
     const fd = new FormData();
     fd.append('id', id);
-    fetch('api/feedback-delete.php', { method: 'POST', body: fd })
-    .then(r => r.json())
-    .then(res => {
+    try {
+      const response=await fetch('api/feedback-delete.php', { method: 'POST', body: fd });
+      const res=await response.json();
         if (res.success) {
           toast('Feedback deleted', 'success');
-          reloadAfterToast();
+          feedbackRemoveRecord(id);
         }
-        else toast(res.error || 'Delete failed', 'error');
-    });
+        else toast(res.error || "Couldn't delete the feedback entry. Please try again.", 'error');
+    } catch(error) {
+      toast(error.message || "Couldn't delete the feedback entry. Please try again.", 'error');
+    }
 }
 
 function viewFeedback(id) {
@@ -2015,28 +2337,50 @@ function copyToClipboard(text) {
 }
 
 /* ── Inline Feedback Handlers ── */
-function quickSaveFeedback() {
-    const fd = new FormData();
-    appendMultiValues(fd, 'service', selectedValues('inService'));
-    appendMultiValues(fd, 'reason', selectedValues('inReason'));
-    fd.append('reference', document.getElementById('inRef').value);
-    fd.append('email', document.getElementById('inEmail').value);
-    fd.append('resolution', document.getElementById('inResolution').value);
-    fd.append('details', document.getElementById('inDetails').value);
+async function quickSaveFeedback() {
+    // If auto-save created the record already, just flush remaining fields
+    // and reload to show the new row; no need to re-POST to feedback-create.
+    if (window.FeedbackAutoSave) {
+        const existingId = FeedbackAutoSave.getCurrentId();
+        if (existingId) {
+            await FeedbackAutoSave.flushAll();
+            FeedbackAutoSave.resetInlineForm();
+            clearInlineFeedback();
+            toast('Feedback saved', 'success');
+            tracsMarkSaved(document.querySelector('.fb-inline-form'));
+            return;
+        }
+    }
 
-    if (!selectedValues('inService').length || !selectedValues('inReason').length) {
+    // No auto-saved record yet — validate first, then POST normally
+    const services = selectedValues('inService');
+    const reasons  = selectedValues('inReason');
+
+    if (!services.length || !reasons.length) {
         toast('Service and Reason are required.', 'error');
         return;
     }
+
+    const fd = new FormData();
+    appendMultiValues(fd, 'service', services);
+    appendMultiValues(fd, 'reason', reasons);
+    fd.append('reference',  document.getElementById('inRef').value);
+    fd.append('email',      document.getElementById('inEmail').value);
+    fd.append('resolution', document.getElementById('inResolution').value);
+    fd.append('details',    document.getElementById('inDetails').value);
 
     fetch('api/feedback-create.php', { method: 'POST', body: fd })
     .then(r => r.json())
     .then(res => {
         if (res.success) {
+            const record=tracsPayloadRecord(res);
+            if(record)feedbackApplyRecord(record,{isNew:true});
+            if (window.FeedbackAutoSave) FeedbackAutoSave.resetInlineForm();
+            clearInlineFeedback();
             toast('Feedback added', 'success');
-            reloadAfterToast();
+            tracsMarkSaved(document.querySelector('.fb-inline-form'));
         } else {
-            toast(res.error || 'Save failed', 'error');
+            toast(res.error || "Couldn't save the feedback. Please check the fields and try again.", 'error');
         }
     });
 }
@@ -2070,6 +2414,107 @@ function escHtml(value=''){
 function jsAttr(value=''){
   return JSON.stringify(String(value)).replace(/"/g,'&quot;');
 }
+function jsonActionArg(value={}){
+  return encodeURIComponent(JSON.stringify(value ?? {})).replace(/'/g,'%27');
+}
+function tracsDecodeJsonActionArg(value=''){
+  try{return JSON.parse(decodeURIComponent(String(value || '')));}
+  catch(e){return {};}
+}
+function tracsRefreshNode(node){
+  if(!node)return null;
+  tracsRefreshIcons(node);
+  window.TRACSDropdowns?.refresh?.(node);
+  return node;
+}
+function tracsFlashRow(row){
+  if(!row)return;
+  row.classList.remove('tracs-row-live-updated');
+  void row.offsetWidth;
+  row.classList.add('tracs-row-live-updated');
+  window.setTimeout(()=>row.classList.remove('tracs-row-live-updated'),1400);
+}
+function tracsRowFadeRemove(row){
+  if(!row)return;
+  row.classList.add('tracs-row-removing');
+  window.setTimeout(()=>row.remove(),190);
+}
+function tracsTableBody(tableSelector){
+  return document.querySelector(`${tableSelector} tbody`);
+}
+function tracsRemoveEmptyState(selectors=''){
+  selectors.split(',').map(s=>s.trim()).filter(Boolean).forEach(selector=>{
+    document.querySelectorAll(selector).forEach(node=>node.remove());
+  });
+}
+function tracsInsertOrReplaceRow(tbody,row,selector,prepend=true){
+  if(!tbody || !row)return null;
+  const existing=tbody.querySelector(selector);
+  if(existing)existing.replaceWith(row);
+  else if(prepend)tbody.prepend(row);
+  else tbody.appendChild(row);
+  tracsRefreshNode(row);
+  tracsFlashRow(row);
+  return row;
+}
+function tracsAdjustPanelMeta(delta, pattern=/(\d+)\s+record/i){
+  const meta=document.querySelector('.panel .panel-head .panel-meta, .panel-meta');
+  if(!meta)return;
+  const text=meta.textContent || '';
+  const match=text.match(pattern);
+  if(!match)return;
+  const next=Math.max(0,(Number(match[1])||0)+delta);
+  meta.textContent=text.replace(match[1],String(next)).replace(/record(s)?/,`record${next === 1 ? '' : 's'}`);
+}
+function tracsAdjustPageSubTotal(delta, pattern=/(\d+)\s+total/i){
+  const sub=document.querySelector('.page-sub');
+  if(!sub)return;
+  const text=sub.textContent || '';
+  const match=text.match(pattern);
+  if(!match)return;
+  const next=Math.max(0,(Number(match[1])||0)+delta);
+  sub.textContent=text.replace(match[1],String(next));
+}
+function tracsStatCardByLabel(label){
+  const needle=String(label || '').trim().toLowerCase();
+  return Array.from(document.querySelectorAll('.stat-card')).find(card=>
+    (card.querySelector('.stat-label')?.textContent || '').trim().toLowerCase() === needle
+  ) || null;
+}
+function tracsNumberFromText(text=''){
+  const normalized=String(text || '').replace(/[^\d,.-]/g,'').replace(/\./g,'').replace(',', '.');
+  const value=Number(normalized);
+  return Number.isFinite(value) ? value : 0;
+}
+function tracsFormatIDR(value=0){
+  return `Rp ${Math.round(Number(value)||0).toLocaleString('id-ID')}`;
+}
+function tracsAdjustStatNumber(label,delta,{money=false}={}){
+  const card=tracsStatCardByLabel(label);
+  const el=card?.querySelector('.stat-num');
+  if(!el)return;
+  const next=Math.max(0,tracsNumberFromText(el.textContent)+Number(delta||0));
+  el.textContent=money ? tracsFormatIDR(next) : String(Math.round(next));
+}
+function tracsCurrentMonthKey(){
+  const now=new Date();
+  return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+}
+function tracsRecordMonthKey(value=''){
+  return String(value || '').slice(0,7);
+}
+function tracsMarkSaved(root){
+  window.TRACSUnsavedChanges?.markSaved(root || null);
+  if(root instanceof Element){
+    root.dispatchEvent(new CustomEvent('tracs:save-success',{bubbles:true,detail:{root}}));
+  }
+}
+function tracsPayloadRecord(payload){
+  return payload?.record || payload?.data?.record || payload?.data?.data?.record || null;
+}
+function tracsPayloadId(payload){
+  return Number(payload?.id || payload?.data?.id || payload?.data?.data?.id || tracsPayloadRecord(payload)?.id || 0);
+}
 function formatBytes(bytes=0){
   const size=Number(bytes)||0;
   if(size<1024)return `${size} B`;
@@ -2084,6 +2529,7 @@ let caseSelectedAttachments = [];
 let caseRemovedAttachmentIds = new Set();
 let currentCaseTicketId = 0;
 let currentCaseTicketData = null;
+let caseTicketRequestSeq = 0;
 const caseStatusPendingIds = new Set();
 
 const CASE_STATUS_META = {
@@ -2116,10 +2562,12 @@ const caseBoardState = {
   filteredCases: [],
   filter: 'all',
   query: '',
-  sort: 'operational',
+  sort: 'updated',
+  boardOrder: 'updated',   // Workflow-board per-column ordering (see CASE_BOARD_ORDER_MODES)
   draggedId: 0,
   initialized: false
 };
+const CASE_BOARD_ORDER_MODES = new Set(['manual','priority','next_check','created','updated','case_number','category','assigned']);
 function caseStatusMeta(status='pending'){
   return CASE_STATUS_META[String(status||'pending').toLowerCase()] || CASE_STATUS_META.pending;
 }
@@ -2324,6 +2772,33 @@ function closeCaseTicketMore(){
   if(menu)menu.classList.remove('is-open');
   if(btn)btn.setAttribute('aria-expanded','false');
 }
+function caseTicketStatusButtons(){
+  return [
+    document.getElementById('caseTicketInProgressBtn'),
+    document.getElementById('caseTicketStuckBtn'),
+    document.getElementById('caseTicketHoldBtn'),
+    document.getElementById('caseTicketResolveBtn')
+  ].filter(Boolean);
+}
+function setCaseTicketStatusPending(pending,activeButton=null){
+  caseTicketStatusButtons().forEach(button=>{
+    if(pending){
+      if(button===activeButton)setButtonLoading(button,tracsLoadingTextForButton(button));
+      else if(!button.disabled){
+        button.dataset.caseTicketTempDisabled='1';
+        button.disabled=true;
+        button.setAttribute('aria-disabled','true');
+      }
+      return;
+    }
+    resetButtonLoading(button);
+    if(button.dataset.caseTicketTempDisabled === '1'){
+      button.disabled=false;
+      button.removeAttribute('aria-disabled');
+      delete button.dataset.caseTicketTempDisabled;
+    }
+  });
+}
 function toggleCaseTicketMore(event){
   event?.preventDefault?.();
   event?.stopPropagation?.();
@@ -2411,6 +2886,7 @@ async function openCaseTicket(id){
   currentCaseTicketId=Number(id)||0;
   currentCaseTicketData=null;
   if(!currentCaseTicketId)return;
+  const requestSeq=++caseTicketRequestSeq;
   const titleEl=document.getElementById('caseTicketTitle');
   const refEl=document.getElementById('caseTicketRef');
   const badgesEl=document.getElementById('caseTicketBadges');
@@ -2422,9 +2898,29 @@ async function openCaseTicket(id){
     timelineEl.classList.remove('is-resolved');
     timelineEl.innerHTML='';
   }
+  const setLoadingText=(id,value='Loading...')=>{const el=document.getElementById(id);if(el)el.textContent=value;};
+  setLoadingText('caseTicketPic');
+  setLoadingText('caseTicketCreated');
+  setLoadingText('caseTicketUpdated');
+  setLoadingText('caseTicketNext');
+  setLoadingText('caseTicketNotes');
+  const historyLoading=document.getElementById('caseTicketHistory');
+  if(historyLoading)historyLoading.innerHTML='<span class="case-ticket-empty">Loading activity...</span>';
+  const refsLoading=document.getElementById('caseTicketReferences');
+  if(refsLoading)refsLoading.innerHTML='<span class="case-ticket-empty">Loading references...</span>';
+  const attachmentsLoading=document.getElementById('caseTicketAttachments');
+  if(attachmentsLoading)attachmentsLoading.innerHTML='';
+  const emptyLoading=document.getElementById('caseTicketAttachmentEmpty');
+  if(emptyLoading){
+    emptyLoading.hidden=false;
+    emptyLoading.textContent='Loading attachments...';
+  }
+  setCaseTicketStatusPending(caseStatusPendingIds.has(currentCaseTicketId));
   openModal('caseTicket');
 
   const d=await api(API.CASE.GET,{id:currentCaseTicketId});
+  const modal=document.getElementById('caseTicketModal');
+  if(requestSeq!==caseTicketRequestSeq || currentCaseTicketId!==Number(id) || modal?.classList.contains('hidden'))return;
   if(!d.success){
     toast(d.message||'Could not load case','error');
     closeModal('caseTicket');
@@ -2470,6 +2966,7 @@ async function openCaseTicket(id){
     tracsRefreshIcons(attachments);
   }
   if(empty)empty.hidden=list.length>0;
+  if(empty && !list.length)empty.textContent='No attachments available.';
 
   const caps=window.TRACS_CASE_CAPS||{};
   const canManage=Boolean(data.can_manage ?? caps.canManage);
@@ -2479,17 +2976,24 @@ async function openCaseTicket(id){
   const stuckBtn=document.getElementById('caseTicketStuckBtn');
   const holdBtn=document.getElementById('caseTicketHoldBtn');
   const editBtn=document.getElementById('caseTicketEditBtn');
+  const noteBtn=document.getElementById('caseTicketNoteBtn');
+  const reminderBtn=document.getElementById('caseTicketReminderBtn');
   const deleteBtn=document.getElementById('caseTicketDeleteBtn');
   const moreMenu=document.getElementById('caseTicketMoreMenu');
-  if(resolveBtn)resolveBtn.hidden=!canManage || status==='completed';
-  if(inProgressBtn)inProgressBtn.hidden=!canManage || status==='in_progress' || status==='completed';
-  if(stuckBtn)stuckBtn.hidden=!canManage || status==='stuck' || status==='completed';
-  if(holdBtn)holdBtn.hidden=!canManage || status==='on_hold' || status==='completed';
+  // Status transitions are open to every cases.view holder (drag & drop board
+  // spec, mirrored by case-status.php's endpoint permission); only Edit/Delete
+  // stay gated to cases.manage/cases.delete.
+  if(resolveBtn)resolveBtn.hidden=status==='completed';
+  if(inProgressBtn)inProgressBtn.hidden=status==='in_progress' || status==='completed';
+  if(stuckBtn)stuckBtn.hidden=status==='stuck' || status==='completed';
+  if(holdBtn)holdBtn.hidden=status==='on_hold' || status==='completed';
   if(editBtn)editBtn.hidden=!canManage;
+  if(noteBtn)noteBtn.hidden=!canManage;
+  if(reminderBtn)reminderBtn.hidden=!canManage;
   if(deleteBtn)deleteBtn.hidden=!canDelete;
   if(moreMenu){
     closeCaseTicketMore();
-    moreMenu.hidden=!((editBtn && !editBtn.hidden) || (deleteBtn && !deleteBtn.hidden));
+    moreMenu.hidden=!([editBtn,noteBtn,reminderBtn,deleteBtn].some(button=>button && !button.hidden));
   }
   const actionButtons=document.querySelector('#caseTicketModal .case-ticket-action-buttons');
   const actionBar=document.querySelector('#caseTicketModal .case-ticket-actions');
@@ -2581,8 +3085,8 @@ function caseCompareOperational(a,b){
     || caseCompareUpdated(a,b)
     || Number(b?.id||0)-Number(a?.id||0);
 }
-function sortCases(caseList,sortMode='operational'){
-  const mode=CASE_SORT_MODES.has(sortMode)?sortMode:'operational';
+function sortCases(caseList,sortMode='updated'){
+  const mode=CASE_SORT_MODES.has(sortMode)?sortMode:'updated';
   return [...caseList].sort((a,b)=>{
     if(mode==='priority')return caseComparePriority(a,b)||caseCompareOperational(a,b);
     if(mode==='overdue'){
@@ -2600,6 +3104,72 @@ function groupCasesByWorkflow(caseList){
   const groups=Object.fromEntries(Object.keys(CASE_BOARD_COLUMN_META).map(key=>[key,[]]));
   caseList.forEach(caseItem=>groups[getWorkflowColumn(caseItem)].push(caseItem));
   return groups;
+}
+function caseBoardOrderValue(item){
+  const raw=Number(item?.board_order);
+  return Number.isFinite(raw)?raw:Number.MAX_SAFE_INTEGER;
+}
+function caseCategoryValue(item){
+  return String(item?.service||item?.client||item?.domain||item?.status||'').toLowerCase();
+}
+function caseAssignedValue(item){
+  return String(item?.assigned_agent||item?.creator_name||item?.created_by_name||'').toLowerCase();
+}
+// Order a single board column. 'manual' honours the saved drag arrangement
+// (board_order); every other mode is a non-destructive view sort.
+function sortBoardColumn(items,mode='updated'){
+  const active=CASE_BOARD_ORDER_MODES.has(mode)?mode:'updated';
+  const list=[...items];
+  list.sort((a,b)=>{
+    switch(active){
+      case 'priority': return caseComparePriority(a,b)||caseBoardOrderValue(a)-caseBoardOrderValue(b)||Number(a?.id||0)-Number(b?.id||0);
+      case 'next_check': return caseCompareNextCheck(a,b)||caseComparePriority(a,b)||Number(a?.id||0)-Number(b?.id||0);
+      case 'created': return caseTimestamp(b?.created_at,0)-caseTimestamp(a?.created_at,0)||Number(b?.id||0)-Number(a?.id||0);
+      case 'updated': return caseCompareUpdated(a,b)||Number(b?.id||0)-Number(a?.id||0);
+      case 'case_number': return Number(a?.id||0)-Number(b?.id||0);
+      case 'category': return caseCategoryValue(a).localeCompare(caseCategoryValue(b))||caseBoardOrderValue(a)-caseBoardOrderValue(b);
+      case 'assigned': return caseAssignedValue(a).localeCompare(caseAssignedValue(b))||caseBoardOrderValue(a)-caseBoardOrderValue(b);
+      default: return caseBoardOrderValue(a)-caseBoardOrderValue(b)||Number(a?.id||0)-Number(b?.id||0);
+    }
+  });
+  return list;
+}
+// FLIP: capture card positions before a DOM re-order, then animate the delta so
+// neighbours glide into place instead of snapping. Keyed by case id so it also
+// survives full innerHTML re-renders; scope to specific column lists to keep the
+// per-frame cost flat on large boards. Skips under prefers-reduced-motion.
+const CASE_FLIP_LISTS=()=>[...document.querySelectorAll('.case-kanban [data-case-dropzone]')];
+const CASE_FLIP_EASE='cubic-bezier(.2,0,0,1)';   // fast, decelerating, no overshoot
+function caseFlipCards(lists){
+  const scope=(lists&&lists.length)?lists:CASE_FLIP_LISTS();
+  const cards=[];
+  scope.forEach(el=>{ if(el)cards.push(...el.querySelectorAll('.case-kanban-card:not(.is-dragging-source)')); });
+  return cards;
+}
+function caseFlipCapture(lists){
+  if(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)return null;
+  const map=new Map();
+  caseFlipCards(lists).forEach(card=>map.set(card.dataset.cid,card.getBoundingClientRect()));
+  return map;
+}
+function caseFlipPlay(before,lists){
+  if(!before)return;
+  caseFlipCards(lists).forEach(card=>{
+    const prev=before.get(card.dataset.cid);
+    if(!prev)return;
+    const next=card.getBoundingClientRect();
+    const dx=prev.left-next.left;
+    const dy=prev.top-next.top;
+    if(Math.abs(dx)<1 && Math.abs(dy)<1)return;
+    card.style.transition='none';
+    card.style.transform=`translate(${dx}px, ${dy}px)`;
+    card.style.willChange='transform';
+    requestAnimationFrame(()=>{
+      card.style.transition=`transform .18s ${CASE_FLIP_EASE}`;
+      card.style.transform='';
+    });
+    card.addEventListener('transitionend',()=>{card.style.transition='';card.style.transform='';card.style.willChange='';},{once:true});
+  });
 }
 function caseFiltersActive(){
   return caseBoardState.filter!=='all' || normalizeCaseText(caseBoardState.query)!=='';
@@ -2637,13 +3207,13 @@ function caseCardHtml(caseItem){
   return `
     <article class="case-kanban-card ${overdue?'is-overdue':''} ${status==='completed'?'is-resolved':''} ${pending?'is-status-updating':''}"
       ${caseDataAttributes(caseItem)}
-      draggable="${canManage && !pending?'true':'false'}"
+      data-case-draggable="${pending?'false':'true'}"
       aria-grabbed="false">
       <div class="case-card-click" role="button" tabindex="0" onclick="openCaseTicket(${id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openCaseTicket(${id})}">
         <div class="case-card-header">
           <span class="case-card-number">#${id}</span>
           ${caseCardToplineHtml(status,priority)}
-          ${canManage?'<i data-lucide="grip-horizontal" class="case-card-grip"></i>':''}
+          <i data-lucide="grip-horizontal" class="case-card-grip" title="Drag to reorder or move"></i>
         </div>
         <h3>${escHtml(caseItem.title||'Untitled case')}</h3>
         <div class="case-card-badges">
@@ -2668,13 +3238,11 @@ function caseCardHtml(caseItem){
         <summary title="Case actions" aria-label="Case actions"><i data-lucide="more-horizontal" class="icon-sm"></i></summary>
         <div class="case-card-popover">
           <button type="button" onclick="openCaseTicket(${id})"><i data-lucide="panel-right-open" class="icon-sm"></i>View detail</button>
-          ${canManage?`
-            <button type="button" onclick="openEditCase(${id})"><i data-lucide="pencil" class="icon-sm"></i>Edit / add note</button>
-            <button type="button" onclick="updateCaseStatusImmediately(${id},'in_progress','quick_action')"><i data-lucide="loader-circle" class="icon-sm"></i>Mark In Progress</button>
-            <button type="button" onclick="updateCaseStatusImmediately(${id},'stuck','quick_action')"><i data-lucide="pause-circle" class="icon-sm"></i>Move to Stuck</button>
-            <button type="button" onclick="updateCaseStatusImmediately(${id},'on_hold','quick_action')"><i data-lucide="archive" class="icon-sm"></i>Move to On Hold</button>
-            <button type="button" onclick="updateCaseStatusImmediately(${id},'completed','quick_action')"><i data-lucide="circle-check" class="icon-sm"></i>Resolve case</button>
-          `:''}
+          ${canManage?`<button type="button" onclick="openEditCase(${id})"><i data-lucide="pencil" class="icon-sm"></i>Edit / add note</button>`:''}
+          <button type="button" onclick="updateCaseStatusImmediately(${id},'in_progress','quick_action')"><i data-lucide="loader-circle" class="icon-sm"></i>Mark In Progress</button>
+          <button type="button" onclick="updateCaseStatusImmediately(${id},'stuck','quick_action')"><i data-lucide="pause-circle" class="icon-sm"></i>Move to Stuck</button>
+          <button type="button" onclick="updateCaseStatusImmediately(${id},'on_hold','quick_action')"><i data-lucide="archive" class="icon-sm"></i>Move to On Hold</button>
+          <button type="button" onclick="updateCaseStatusImmediately(${id},'completed','quick_action')"><i data-lucide="circle-check" class="icon-sm"></i>Resolve case</button>
           ${canDelete?`<button type="button" class="is-danger" onclick="deleteCase(${id},this)"><i data-lucide="trash-2" class="icon-sm"></i>Delete case</button>`:''}
         </div>
       </details>
@@ -2765,8 +3333,9 @@ function renderBoard(filteredCases=caseBoardState.filteredCases){
     }
     if(summary)summary.textContent=caseColumnSummary(key,items);
     if(list){
-      list.innerHTML=items.length
-        ? items.map(caseCardHtml).join('')
+      const ordered=sortBoardColumn(items,caseBoardState.boardOrder);
+      list.innerHTML=ordered.length
+        ? ordered.map(caseCardHtml).join('')
         : `<div class="case-column-empty" data-column-empty><i data-lucide="inbox" class="icon-sm"></i><span data-column-empty-label>${active?'No matching cases':'No cases in this stage'}</span></div>`;
     }
   });
@@ -2913,6 +3482,9 @@ async function updateCaseStatusImmediately(id,status,source='quick_action'){
   const targetStatus=String(status||'').toLowerCase();
   const caseItem=caseBoardState.rawCases.find(item=>Number(item.id)===caseId);
   if(!caseId || !caseItem || !CASE_STATUS_META[targetStatus] || caseStatusPendingIds.has(caseId))return;
+  const sourceButton=tracsSourceElement();
+  const ticketModal=document.getElementById('caseTicketModal');
+  const ticketOpen=currentCaseTicketId===caseId && ticketModal && !ticketModal.classList.contains('hidden');
   const previous={status:caseItem.status,overdue:caseItem.overdue,updated_at:caseItem.updated_at};
   if(String(previous.status||'').toLowerCase()===targetStatus){
     closeCaseCardMenus();
@@ -2920,6 +3492,7 @@ async function updateCaseStatusImmediately(id,status,source='quick_action'){
   }
 
   caseStatusPendingIds.add(caseId);
+  if(ticketOpen)setCaseTicketStatusPending(true,sourceButton?.closest?.('.case-ticket-status-btn, #caseTicketResolveBtn') || null);
   closeCaseCardMenus();
   caseItem.status=targetStatus;
   if(targetStatus==='completed')caseItem.overdue=false;
@@ -2931,15 +3504,14 @@ async function updateCaseStatusImmediately(id,status,source='quick_action'){
     Object.assign(caseItem,d.data||{},{id:caseId,status:targetStatus});
     caseItem.overdue=caseIsOverdue(caseItem);
     showToast(d.message||'Case status updated.','success',{context:'page'});
-    if(currentCaseTicketId===caseId && !document.getElementById('caseTicketModal')?.classList.contains('hidden'))openCaseTicket(caseId);
   }catch(error){
     Object.assign(caseItem,previous);
-    const ticketModal=document.getElementById('caseTicketModal');
-    const ticketOpen=currentCaseTicketId===caseId && ticketModal && !ticketModal.classList.contains('hidden');
     handleRequestError(error,ticketOpen?'modal':'page','The case status could not be updated. Please try again.');
   }finally{
     caseStatusPendingIds.delete(caseId);
+    if(ticketOpen)setCaseTicketStatusPending(false);
     renderCaseWorkspace();
+    if(ticketOpen && !ticketModal.classList.contains('hidden'))openCaseTicket(caseId);
   }
 }
 function requestCaseTicketStatus(status){
@@ -2957,6 +3529,45 @@ function setCaseWorkspaceView(view,remember=true){
   if(remember){
     try{localStorage.setItem('tracs:cases:view',selected);}catch(e){}
   }
+}
+async function caseRefreshFromServer(){
+  let doc;
+  try{
+    const res=await fetch(window.location.href,{headers:{'X-Requested-With':'XMLHttpRequest'}});
+    if(!res.ok)return false;
+    doc=new DOMParser().parseFromString(await res.text(),'text/html');
+  }catch(error){
+    console.error('Unable to refresh case data:',error);
+    return false;
+  }
+  let refreshed=false;
+  const dataset=doc.getElementById('caseDataset');
+  if(dataset && caseBoardState.initialized){
+    try{
+      const parsed=JSON.parse(dataset.textContent||'[]');
+      if(Array.isArray(parsed)){
+        caseBoardState.rawCases=parsed.map(item=>({
+          ...item,
+          id:Number(item.id)||0,
+          status:String(item.status||'pending').toLowerCase(),
+          priority:String(item.priority||'low').toLowerCase(),
+          attachment_count:Number(item.attachment_count)||0,
+          overdue:caseIsOverdue(item)
+        })).filter(item=>item.id>0);
+        renderCaseWorkspace();
+        refreshed=true;
+      }
+    }catch(error){
+      console.error('Unable to parse refreshed case data:',error);
+    }
+  }
+  /* The dashboard's compact "Cases" widget (index.php) is a separate,
+     plain server-rendered panel, not the caseBoardState board/table used
+     on cases.php, so it needs its own fragment swap. */
+  if(document.querySelector('.dashboard-case-panel')){
+    if(await tracsSwapFragment('.dashboard-case-panel'))refreshed=true;
+  }
+  return refreshed;
 }
 function initCaseBoard(){
   const workspace=document.getElementById('caseWorkspace');
@@ -2978,7 +3589,7 @@ function initCaseBoard(){
   }
   caseBoardState.filter=CASE_FILTER_LABELS[workspace.dataset.caseFilter]?workspace.dataset.caseFilter:'all';
   caseBoardState.query=workspace.dataset.caseQuery||'';
-  caseBoardState.sort=CASE_SORT_MODES.has(workspace.dataset.caseSort)?workspace.dataset.caseSort:'operational';
+  caseBoardState.sort=CASE_SORT_MODES.has(workspace.dataset.caseSort)?workspace.dataset.caseSort:'updated';
   caseBoardState.initialized=true;
 
   const search=document.getElementById('caseSearchInput');
@@ -3034,56 +3645,320 @@ function initCaseBoard(){
   },{passive:false});
   window.addEventListener('resize',closeCaseCardMenus,{passive:true});
 
-  if(window.TRACS_CASE_CAPS?.canManage){
-    workspace.addEventListener('dragstart',event=>{
-      const card=event.target.closest?.('.case-kanban-card[draggable="true"]');
-      if(!card)return;
-      caseBoardState.draggedId=Number(card.dataset.cid)||0;
-      card.classList.add('is-dragging');
-      card.setAttribute('aria-grabbed','true');
-      event.dataTransfer.effectAllowed='move';
-      event.dataTransfer.setData('text/plain',String(caseBoardState.draggedId));
-    });
-    workspace.addEventListener('dragend',event=>{
-      event.target.closest?.('.case-kanban-card')?.classList.remove('is-dragging');
-      event.target.closest?.('.case-kanban-card')?.setAttribute('aria-grabbed','false');
-      document.querySelectorAll('.case-kanban-column.is-drag-over').forEach(column=>column.classList.remove('is-drag-over'));
-      caseBoardState.draggedId=0;
-    });
-    workspace.addEventListener('dragover',event=>{
-      const zone=event.target.closest?.('[data-case-dropzone]');
-      if(!zone||!caseBoardState.draggedId)return;
-      event.preventDefault();
-      event.dataTransfer.dropEffect='move';
-      zone.closest('.case-kanban-column')?.classList.add('is-drag-over');
-    });
-    workspace.addEventListener('dragleave',event=>{
-      const zone=event.target.closest?.('[data-case-dropzone]');
-      if(zone && !zone.contains(event.relatedTarget))zone.closest('.case-kanban-column')?.classList.remove('is-drag-over');
-    });
-    workspace.addEventListener('drop',event=>{
-      const zone=event.target.closest?.('[data-case-dropzone]');
-      const column=zone?.closest('.case-kanban-column');
-      if(!zone||!column||!caseBoardState.draggedId)return;
-      event.preventDefault();
-      column.classList.remove('is-drag-over');
-      updateCaseStatusImmediately(caseBoardState.draggedId,column.dataset.targetStatus,'drag_drop');
-    });
-  }
+  initCaseBoardDrag(workspace);
+  initCaseReorderMenu();
 
   if(sort)sort.value=caseBoardState.sort;
   renderCaseWorkspace({preserveScroll:false,syncUrl:false});
+}
+/* ── Workflow Board: Reorder button (animated auto-sorts + manual) ── */
+function initCaseReorderMenu(){
+  const menu=document.getElementById('caseReorderMenu');
+  if(!menu)return;
+  menu.querySelectorAll('[data-board-order]').forEach(button=>{
+    button.addEventListener('click',()=>{
+      const mode=CASE_BOARD_ORDER_MODES.has(button.dataset.boardOrder)?button.dataset.boardOrder:'manual';
+      applyBoardOrder(mode);
+      menu.removeAttribute('open');
+    });
+  });
+}
+function applyBoardOrder(mode){
+  const next=CASE_BOARD_ORDER_MODES.has(mode)?mode:'manual';
+  const before=caseFlipCapture();
+  caseBoardState.boardOrder=next;
+  document.querySelectorAll('#caseReorderMenu [data-board-order]').forEach(button=>{
+    button.classList.toggle('is-active',button.dataset.boardOrder===next);
+  });
+  const trigger=document.querySelector('#caseReorderMenu .case-reorder-trigger');
+  if(trigger)trigger.classList.toggle('is-custom',next!=='manual');
+  renderCaseWorkspace();
+  requestAnimationFrame(()=>caseFlipPlay(before));
+}
+/* ── Workflow Board: pointer-based drag & drop (mouse + touch) ────────
+ * A single lifted clone follows the pointer with rotation/scale/elevation; a
+ * placeholder marks the drop slot and neighbours FLIP into place. Works for
+ * within-column reorder and cross-column moves. Optimistic: persists board
+ * order (case-reorder.php) + status change (case-status.php); on failure the
+ * previous arrangement is restored and a toast is shown. */
+const caseDrag={active:false,pointerId:null,card:null,id:0,clone:null,placeholder:null,
+  fromColumn:null,startX:0,startY:0,offsetX:0,offsetY:0,width:0,height:0,
+  pointerX:0,pointerY:0,frameDx:0,tilt:0,pointerMoved:false,
+  lastRef:undefined,lastColumn:null,autoScrollRAF:0,moved:false,suppressClickUntil:0};
+const CASE_DRAG_THRESHOLD=6;
+
+function initCaseBoardDrag(workspace){
+  const board=workspace.querySelector('.case-kanban');
+  if(!board)return;
+  // Swallow the click that some browsers synthesise right after a drag so the
+  // case ticket doesn't open on drop. Time-boxed so it never blocks real clicks.
+  workspace.addEventListener('click',event=>{
+    if(Date.now()<caseDrag.suppressClickUntil){
+      event.stopPropagation();
+      event.preventDefault();
+    }
+  },true);
+  board.addEventListener('pointerdown',onCasePointerDown);
+}
+function caseIsInteractive(target){
+  return !!target.closest?.('.case-card-menu, .case-card-menu *, a, button:not(.case-card-click), input, select, textarea');
+}
+function onCasePointerDown(event){
+  if(event.button!==undefined && event.button!==0)return;      // primary/touch only
+  const card=event.target.closest?.('.case-kanban-card[data-case-draggable="true"]');
+  if(!card||caseDrag.active)return;
+  if(caseIsInteractive(event.target))return;                    // let menus/links work
+  caseDrag.card=card;
+  caseDrag.id=Number(card.dataset.cid)||0;
+  caseDrag.pointerId=event.pointerId;
+  caseDrag.startX=caseDrag.pointerX=event.clientX;
+  caseDrag.startY=caseDrag.pointerY=event.clientY;
+  caseDrag.moved=false;
+  window.addEventListener('pointermove',onCasePointerMove,{passive:false});
+  window.addEventListener('pointerup',onCasePointerUp);
+  window.addEventListener('pointercancel',onCasePointerUp);
+}
+function beginCaseDrag(event){
+  const card=caseDrag.card;
+  const rect=card.getBoundingClientRect();
+  caseDrag.active=true;
+  caseDrag.moved=true;
+  caseDrag.fromColumn=card.closest('.case-kanban-column');
+  caseDrag.width=rect.width;
+  caseDrag.height=rect.height;
+  caseDrag.offsetX=event.clientX-rect.left;
+  caseDrag.offsetY=event.clientY-rect.top;
+  caseDrag.pointerX=event.clientX;
+  caseDrag.pointerY=event.clientY;
+  caseDrag.lastRef=undefined;
+  caseDrag.lastColumn=null;
+  caseDrag.frameDx=0;
+  caseDrag.tilt=0;
+  caseDrag.pointerMoved=true;
+
+  // Floating clone that tracks the pointer.
+  const clone=card.cloneNode(true);
+  clone.classList.add('case-drag-clone');
+  clone.style.width=`${rect.width}px`;
+  clone.style.height=`${rect.height}px`;
+  clone.setAttribute('aria-hidden','true');
+  document.body.appendChild(clone);
+  caseDrag.clone=clone;
+
+  // Placeholder occupies the original slot; original hidden.
+  const placeholder=document.createElement('div');
+  placeholder.className='case-drag-placeholder';
+  placeholder.style.height=`${rect.height}px`;
+  card.parentNode.insertBefore(placeholder,card.nextSibling);
+  caseDrag.placeholder=placeholder;
+  card.classList.add('is-dragging-source');
+  card.setAttribute('aria-grabbed','true');
+  document.body.classList.add('case-drag-active');
+  positionCaseClone(event.clientX,event.clientY,0);
+  startCaseDragFrame();
+}
+function positionCaseClone(x,y,tilt){
+  const c=caseDrag.clone;
+  if(!c)return;
+  c.style.transform=`translate(${x-caseDrag.offsetX}px, ${y-caseDrag.offsetY}px) rotate(${tilt}deg) scale(1.03)`;
+}
+// Pointer move only records state — no DOM reads/writes here. The rAF frame
+// (caseDragFrame) does all positioning, hit-testing and scrolling once per
+// frame, so high-frequency pointers never trigger sync reflows.
+function onCasePointerMove(event){
+  if(!caseDrag.card)return;
+  if(!caseDrag.active){
+    if(Math.abs(event.clientX-caseDrag.startX)<CASE_DRAG_THRESHOLD && Math.abs(event.clientY-caseDrag.startY)<CASE_DRAG_THRESHOLD)return;
+    beginCaseDrag(event);
+  }
+  event.preventDefault();
+  caseDrag.frameDx+=event.clientX-caseDrag.pointerX;
+  caseDrag.pointerX=event.clientX;
+  caseDrag.pointerY=event.clientY;
+  caseDrag.pointerMoved=true;
+}
+function updateCaseDropTarget(x,y){
+  const el=document.elementFromPoint(x,y);
+  const column=el?.closest?.('.case-kanban-column');
+  if(caseDrag.lastColumn && caseDrag.lastColumn!==column)caseDrag.lastColumn.classList.remove('is-drag-over');
+  if(!column)return;                 // outside any column: hold current slot
+  column.classList.add('is-drag-over');
+  const list=column.querySelector('[data-case-dropzone]');
+  if(!list)return;
+  const cards=list.querySelectorAll('.case-kanban-card:not(.is-dragging-source)');
+  let ref=null;
+  for(const card of cards){
+    const r=card.getBoundingClientRect();
+    if(y < r.top + r.height/2){ ref=card; break; }
+  }
+  // Only reflow + FLIP when the drop slot actually changes.
+  if(column===caseDrag.lastColumn && ref===caseDrag.lastRef)return;
+  const prevList=caseDrag.lastColumn?.querySelector('[data-case-dropzone]');
+  const scope=(prevList && prevList!==list)?[prevList,list]:[list];   // only affected columns
+  caseDrag.lastColumn=column;
+  caseDrag.lastRef=ref;
+  const before=caseFlipCapture(scope);
+  const empty=list.querySelector('[data-column-empty]');
+  if(empty)empty.remove();
+  if(ref)list.insertBefore(caseDrag.placeholder,ref);
+  else list.appendChild(caseDrag.placeholder);
+  caseFlipPlay(before,scope);        // already inside a rAF frame — play immediately
+}
+// One rAF loop drives the whole drag: smooth the tilt, position the clone,
+// hit-test for the drop slot, and edge-scroll — all reads batched after the
+// single clone write, capped at one pass per frame (60fps).
+function startCaseDragFrame(){
+  const board=document.querySelector('.case-kanban');
+  const frame=()=>{
+    if(!caseDrag.active){caseDrag.autoScrollRAF=0;return;}
+    // Velocity-based tilt that eases toward the drag direction and relaxes to
+    // upright when the pointer pauses — natural, not jittery.
+    const targetTilt=Math.max(-6,Math.min(6,caseDrag.frameDx*0.5));
+    caseDrag.frameDx=0;
+    caseDrag.tilt+=(targetTilt-caseDrag.tilt)*0.3;
+    if(Math.abs(caseDrag.tilt)<0.04)caseDrag.tilt=0;
+    positionCaseClone(caseDrag.pointerX,caseDrag.pointerY,caseDrag.tilt);
+    // Auto-scroll first; if it moved the viewport, re-hit-test even when the
+    // pointer is stationary so the placeholder keeps following the content.
+    if(caseAutoScrollStep(board))caseDrag.pointerMoved=true;
+    if(caseDrag.pointerMoved){
+      updateCaseDropTarget(caseDrag.pointerX,caseDrag.pointerY);
+      caseDrag.pointerMoved=false;
+    }
+    caseDrag.autoScrollRAF=requestAnimationFrame(frame);
+  };
+  caseDrag.autoScrollRAF=requestAnimationFrame(frame);
+}
+function caseAutoScrollStep(board){
+  const x=caseDrag.pointerX,y=caseDrag.pointerY;
+  let scrolled=false;
+  if(board){
+    const b=board.getBoundingClientRect();
+    const edge=64,before=board.scrollLeft;
+    if(x<b.left+edge)board.scrollLeft-=Math.ceil((b.left+edge-x)/6);
+    else if(x>b.right-edge)board.scrollLeft+=Math.ceil((x-(b.right-edge))/6);
+    if(board.scrollLeft!==before)scrolled=true;
+  }
+  const list=caseDrag.lastColumn?.querySelector('[data-case-dropzone]');  // reuse hit-tested column
+  if(list){
+    const r=list.getBoundingClientRect();
+    const edge=48,before=list.scrollTop;
+    if(y<r.top+edge)list.scrollTop-=Math.ceil((r.top+edge-y)/5);
+    else if(y>r.bottom-edge)list.scrollTop+=Math.ceil((y-(r.bottom-edge))/5);
+    if(list.scrollTop!==before)scrolled=true;
+  }
+  return scrolled;
+}
+function onCasePointerUp(event){
+  window.removeEventListener('pointermove',onCasePointerMove);
+  window.removeEventListener('pointerup',onCasePointerUp);
+  window.removeEventListener('pointercancel',onCasePointerUp);
+  if(!caseDrag.active){resetCaseDrag();return;}
+  caseDrag.suppressClick=true;
+  const placeholder=caseDrag.placeholder;
+  const targetColumn=placeholder?.closest('.case-kanban-column');
+  const clone=caseDrag.clone;
+  // Settle the clone onto the placeholder slot, then commit.
+  const finish=()=>{ commitCaseDrag(targetColumn); resetCaseDrag(); };
+  if(clone && placeholder){
+    const r=placeholder.getBoundingClientRect();
+    clone.classList.add('is-dropping');
+    clone.style.transform=`translate(${r.left}px, ${r.top}px) rotate(0deg) scale(1)`;
+    let done=false;
+    const settle=()=>{if(done)return;done=true;finish();};
+    clone.addEventListener('transitionend',settle,{once:true});
+    setTimeout(settle,180);
+  }else finish();
+}
+function commitCaseDrag(targetColumn){
+  const id=caseDrag.id;
+  const caseItem=caseBoardState.rawCases.find(c=>Number(c.id)===id);
+  if(!caseItem||!targetColumn){return;}
+  const targetKey=targetColumn.dataset.caseColumn;
+  const targetStatus=targetColumn.dataset.targetStatus;
+  const list=targetColumn.querySelector('[data-case-dropzone]');
+  if(!list)return;
+  // Build the new ordered id list for the target column from the live DOM,
+  // substituting the placeholder position with the dragged card.
+  const orderedIds=[];
+  [...list.children].forEach(child=>{
+    if(child===caseDrag.placeholder){orderedIds.push(id);return;}
+    if(child.classList?.contains('case-kanban-card') && !child.classList.contains('is-dragging-source')){
+      orderedIds.push(Number(child.dataset.cid)||0);
+    }
+  });
+  if(!orderedIds.includes(id))orderedIds.push(id);
+
+  const fromKey=caseDrag.fromColumn?.dataset.caseColumn;
+  const statusChanged=getWorkflowColumn(caseItem)!==targetKey;
+  const snapshot=caseBoardState.rawCases.map(c=>({id:c.id,status:c.status,board_order:c.board_order,overdue:c.overdue}));
+
+  // Optimistic client update: apply target status + per-column board_order.
+  if(statusChanged){
+    caseItem.status=targetStatus;
+    if(targetStatus==='completed')caseItem.overdue=false;
+    else caseItem.overdue=caseIsOverdue(caseItem);
+  }
+  orderedIds.forEach((cid,index)=>{
+    const item=caseBoardState.rawCases.find(c=>Number(c.id)===cid);
+    if(item)item.board_order=index;
+  });
+  caseBoardState.boardOrder='manual';
+  document.querySelectorAll('#caseReorderMenu [data-board-order]').forEach(b=>b.classList.toggle('is-active',b.dataset.boardOrder==='manual'));
+  // FLIP the settle: neighbours slide into their final slots instead of
+  // snapping when the placeholder/clone are replaced by the real re-render.
+  const flipBefore=caseFlipCapture();
+  renderCaseWorkspace();
+  requestAnimationFrame(()=>caseFlipPlay(flipBefore));
+
+  persistCaseBoardOrder(targetStatus,orderedIds,statusChanged,id,snapshot,fromKey,targetKey);
+}
+async function persistCaseBoardOrder(status,orderedIds,statusChanged,id,snapshot,fromKey,targetKey){
+  try{
+    // Reorder the target column (also carries the status move server-side).
+    const d=await api(API.CASE.REORDER,{status,ordered_ids:orderedIds});
+    if(!d?.success)throw {message:d?.message,status:d?.status};
+    // If the card left another column, persist that column's compacted order too.
+    if(statusChanged && fromKey && fromKey!==targetKey){
+      const fromStatus=CASE_BOARD_COLUMN_META[fromKey]?.status;
+      const fromList=document.querySelector(`[data-case-column="${fromKey}"] [data-case-dropzone]`);
+      if(fromStatus && fromList){
+        const fromIds=[...fromList.querySelectorAll('.case-kanban-card')].map(c=>Number(c.dataset.cid)||0).filter(Boolean);
+        fromIds.forEach((cid,index)=>{const item=caseBoardState.rawCases.find(c=>Number(c.id)===cid);if(item)item.board_order=index;});
+        await api(API.CASE.REORDER,{status:fromStatus,ordered_ids:fromIds});
+      }
+    }
+    showToast(statusChanged?'Case moved and order saved.':'Board order saved.','success',{context:'page'});
+  }catch(error){
+    // Roll back to the pre-drag arrangement (FLIP so it slides back too).
+    snapshot.forEach(s=>{const item=caseBoardState.rawCases.find(c=>Number(c.id)===Number(s.id));if(item){item.status=s.status;item.board_order=s.board_order;item.overdue=s.overdue;}});
+    const flipBefore=caseFlipCapture();
+    renderCaseWorkspace();
+    requestAnimationFrame(()=>caseFlipPlay(flipBefore));
+    handleRequestError(error,'page','The board order could not be saved. Your changes were reverted.');
+  }
+}
+function resetCaseDrag(){
+  if(caseDrag.autoScrollRAF)cancelAnimationFrame(caseDrag.autoScrollRAF);
+  caseDrag.clone?.remove();
+  caseDrag.placeholder?.remove();
+  caseDrag.card?.classList.remove('is-dragging-source');
+  caseDrag.card?.setAttribute('aria-grabbed','false');
+  document.querySelectorAll('.case-kanban-column.is-drag-over').forEach(c=>c.classList.remove('is-drag-over'));
+  document.body.classList.remove('case-drag-active');
+  Object.assign(caseDrag,{active:false,pointerId:null,card:null,id:0,clone:null,placeholder:null,fromColumn:null,moved:false,autoScrollRAF:0,frameDx:0,tilt:0,pointerMoved:false,lastRef:undefined,lastColumn:null});
 }
 async function resolveCaseFromTicket(){
   const id=currentCaseTicketId;
   if(!id)return;
   updateCaseStatusImmediately(id,'completed','drawer_action');
 }
-function editCaseFromTicket(){
+function editCaseFromTicket(focusId=''){
   const id=currentCaseTicketId;
   if(!id)return;
   closeModal('caseTicket');
   openEditCase(id);
+  if(focusId)window.setTimeout(()=>document.getElementById(focusId)?.focus({preventScroll:false}),120);
 }
 function deleteCaseFromTicket(){
   const id=currentCaseTicketId;
@@ -3108,7 +3983,7 @@ async function saveCase(){
       message:id?'Case updated.':'Case created.',
       onAfterClose:()=>{
         clearCaseAttachmentState();
-        location.reload();
+        caseRefreshFromServer();
       }
     });
   }
@@ -3133,6 +4008,11 @@ async function deleteCase(id,button=null){
       }
       caseBoardState.rawCases=caseBoardState.rawCases.filter(item=>Number(item.id)!==caseId);
       renderCaseWorkspace();
+      /* renderCaseWorkspace() is a no-op on the dashboard (no #caseWorkspace
+         there — see caseRefreshFromServer()'s comment), so the compact Cases
+         widget needs its own fragment swap or a deleted row silently stays
+         visible until a manual reload. */
+      if(document.querySelector('.dashboard-case-panel'))tracsSwapFragment('.dashboard-case-panel');
       showToast('Case deleted.','success',{context:'page'});
     }
     else handleRequestError({message:d.message,status:d.status},'page','The case could not be deleted. Please try again.');
@@ -3173,7 +4053,7 @@ async function saveReminder(){
     showModalSuccessAndClose({
       modal:'rem',
       message:id?'Reminder updated.':'Reminder created.',
-      onAfterClose:()=>location.reload()
+      onAfterClose:()=>tracsRefreshTaskMonitoringPanel('#tm-pane-checklist')
     });
   }else handleModalError({modal:'rem',error:{message:d.message,status:d.status}});
 }
@@ -3271,7 +4151,13 @@ async function toggleReminder(id,checkedOrSource,sourceElement=null){
     refreshTaskMonitoringCounters();
     _updateProgress();
   }finally{
-    rows.forEach(item=>setCheckablePending(item,false));
+    rows.forEach(item=>{
+      setCheckablePending(item,false);
+      // Same reasoning as toggleTask(): this saves via AJAX on change, not a
+      // form submit, so tell the unsaved-changes guard explicitly or it keeps
+      // showing "unsaved changes" for a toggle that already succeeded.
+      window.TRACSUnsavedChanges?.markSaved(item);
+    });
     tracsReminderTogglePending.delete(requestKey);
   }
 }
@@ -3303,33 +4189,123 @@ function syncReminderPrimaryAction(row, id, checked){
 }
 
 /* ── TASK CRUD ────────────────────────────────────────── */
+/* Checklist item screenshots: same staged-then-submit pattern as the case
+   modal (JS array + FormData built at save time), just with a "task" prefix
+   to avoid colliding with the Task Assignment modal's tmTask* functions. */
+let taskSelectedAttachments=[];
+function taskAttachmentEls(){
+  return {
+    input: document.getElementById('taskAttachments'),
+    drop: document.getElementById('taskUploadDrop'),
+    status: document.getElementById('taskUploadStatus'),
+    selected: document.getElementById('taskAttachmentPreview')
+  };
+}
+function taskSetUploadStatus(message='',type=''){
+  const el=taskAttachmentEls().status;
+  if(!el)return;
+  el.textContent=message;
+  el.className=`case-upload-status ${type||''}`.trim();
+}
+function taskValidateAttachment(file){
+  if(!file || !file.name)return 'Choose a valid image.';
+  if(file.size<=0)return `${file.name} is empty.`;
+  if(file.size>CASE_ATTACHMENT_MAX)return `${file.name} is larger than 5MB.`;
+  if(!CASE_ATTACHMENT_TYPES.has(file.type))return `${file.name} must be JPG, JPEG, PNG, or WEBP.`;
+  return '';
+}
+function taskAddAttachmentFiles(files){
+  const incoming=Array.from(files||[]);
+  const errors=[];
+  incoming.forEach(file=>{
+    const err=taskValidateAttachment(file);
+    if(err){errors.push(err);return;}
+    const duplicate=taskSelectedAttachments.some(item=>item.file.name===file.name && item.file.size===file.size && item.file.lastModified===file.lastModified);
+    if(!duplicate)taskSelectedAttachments.push({id:crypto.randomUUID?.()||String(Date.now()+Math.random()),file,url:URL.createObjectURL(file)});
+  });
+  renderTaskSelectedAttachments();
+  if(errors.length)taskSetUploadStatus(errors[0],'error');
+  else if(incoming.length)taskSetUploadStatus(`${taskSelectedAttachments.length} image${taskSelectedAttachments.length===1?'':'s'} ready to upload.`,'ok');
+}
+function clearTaskAttachmentState(){
+  taskSelectedAttachments.forEach(item=>{try{URL.revokeObjectURL(item.url);}catch(e){}});
+  taskSelectedAttachments=[];
+  const els=taskAttachmentEls();
+  if(els.input)els.input.value='';
+  if(els.selected)els.selected.innerHTML='';
+  taskSetUploadStatus('');
+}
+function removeTaskSelectedAttachment(id){
+  const item=taskSelectedAttachments.find(entry=>entry.id===id);
+  if(item){try{URL.revokeObjectURL(item.url);}catch(e){}}
+  taskSelectedAttachments=taskSelectedAttachments.filter(entry=>entry.id!==id);
+  renderTaskSelectedAttachments();
+  taskSetUploadStatus(taskSelectedAttachments.length?`${taskSelectedAttachments.length} image${taskSelectedAttachments.length===1?'':'s'} ready to upload.`:'');
+}
+function renderTaskSelectedAttachments(){
+  const el=taskAttachmentEls().selected;
+  if(!el)return;
+  el.innerHTML=taskSelectedAttachments.map(item=>`
+    <div class="case-attachment-tile">
+      <button class="case-attachment-thumb" type="button" onclick="openCaseImagePreview(${jsAttr(item.url)},${jsAttr(item.file.name)})">
+        <img src="${item.url}" alt="${escHtml(item.file.name)}">
+      </button>
+      <div class="case-attachment-meta"><span title="${escHtml(item.file.name)}">${escHtml(item.file.name)}</span><small>${formatBytes(item.file.size)}</small></div>
+      <button class="case-attachment-remove" type="button" onclick="removeTaskSelectedAttachment(${jsAttr(item.id)})" aria-label="Remove selected image"><i data-lucide="x" class="icon-xs"></i></button>
+    </div>
+  `).join('');
+  tracsRefreshIcons(el);
+}
+function taskPayloadFormData(id=''){
+  const fd=new FormData();
+  if(id)fd.append('id',id);
+  fd.append('title',val('taskTitle').trim());
+  fd.append('description',val('taskDesc'));
+  taskSelectedAttachments.forEach(item=>fd.append('attachments[]',item.file,item.file.name));
+  return fd;
+}
+function initTaskAttachmentUpload(){
+  const els=taskAttachmentEls();
+  if(!els.input||els.input.dataset.ready)return;
+  els.input.dataset.ready='1';
+  els.input.addEventListener('change',()=>taskAddAttachmentFiles(els.input.files));
+  if(els.drop){
+    ['dragenter','dragover'].forEach(evt=>els.drop.addEventListener(evt,e=>{e.preventDefault();els.drop.classList.add('drag');}));
+    ['dragleave','drop'].forEach(evt=>els.drop.addEventListener(evt,e=>{e.preventDefault();els.drop.classList.remove('drag');}));
+    els.drop.addEventListener('drop',e=>taskAddAttachmentFiles(e.dataTransfer?.files));
+  }
+}
 function openNewTask(){
+  initTaskAttachmentUpload();
   document.getElementById('taskModalTitle').textContent='New Task';
   ['taskId','taskTitle','taskDesc'].forEach(id=>setVal(id,''));
+  clearTaskAttachmentState();
   openModal('task');
 }
 function openEditTask(id){
+  initTaskAttachmentUpload();
   const row=document.querySelector(`[data-tid="${id}"]`);
   if(!row)return;
   document.getElementById('taskModalTitle').textContent='Edit Task';
   setVal('taskId',id);
   setVal('taskTitle',row.dataset.title||'');
   setVal('taskDesc',row.dataset.desc||'');
+  clearTaskAttachmentState();
   openModal('task');
 }
 async function saveTask(){
   const title=val('taskTitle').trim();
   if(!title){toast('Task title is required','error');return;}
   const id=val('taskId');
-  const d=await withLoadingState(document.getElementById('taskSaveBtn'),'Saving...',()=>api(id?API.TASK.UPDATE:API.TASK.CREATE,{
-    id,title,description:val('taskDesc')
-  }));
+  const d=await withLoadingState(document.getElementById('taskSaveBtn'),'Saving...',()=>taskSelectedAttachments.length
+    ? caseApiWithUploads(id?API.TASK.UPDATE:API.TASK.CREATE,taskPayloadFormData(id))
+    : api(id?API.TASK.UPDATE:API.TASK.CREATE,{id,title,description:val('taskDesc')}));
   if(!d)return;
   if(d.success){
     showModalSuccessAndClose({
       modal:'task',
       message:id?'Task updated.':'Task created.',
-      onAfterClose:()=>location.reload()
+      onAfterClose:()=>{clearTaskAttachmentState();tracsRefreshTaskMonitoringPanel('#tm-pane-checklist');}
     });
   }else handleModalError({modal:'task',error:{message:d.message,status:d.status}});
 }
@@ -3348,6 +4324,97 @@ async function deleteTask(id,button=null){
     }
     else handleRequestError({message:d.message,status:d.status},'page','The task could not be deleted. Please try again.');
   });
+}
+/* "View All Checklist" popup: Active tab (the full live list, same rows/
+   behavior as the dashboard widget via shared data-tid selectors) + History
+   tab (completions). */
+function openChecklistAll(){
+  switchChecklistAllTab('active',true);
+  openModal('checklistAll');
+  loadChecklistActiveList(true);
+}
+function switchChecklistAllTab(tab,skipLoad){
+  const modal=document.getElementById('checklistAllModal');
+  const current=modal?.querySelector('[data-checklist-tab].active')?.dataset.checklistTab || '';
+  modal?.querySelectorAll('[data-checklist-tab]').forEach(btn=>{
+    const active=btn.dataset.checklistTab===tab;
+    btn.classList.toggle('active',active);
+    btn.setAttribute('aria-selected',active?'true':'false');
+  });
+  modal?.querySelectorAll('[data-checklist-pane]').forEach(pane=>{
+    pane.hidden=pane.dataset.checklistPane!==tab;
+    pane.classList.toggle('is-active',pane.dataset.checklistPane===tab);
+  });
+  if(skipLoad || current===tab)return;
+  if(tab==='active')loadChecklistActiveList();
+  else loadChecklistHistoryList();
+}
+function checklistAttachmentGridHtml(attachments){
+  if(!attachments||!attachments.length)return '';
+  return `<div class="shift-photo-grid">${attachments.map(a=>`
+    <a href="${a.image_url}" target="_blank" rel="noopener noreferrer" class="shift-photo-thumb" title="${escHtml(a.original_filename||'')}">
+      <img src="${a.thumbnail_url}" alt="${escHtml(a.original_filename||'')}" loading="lazy">
+    </a>`).join('')}</div>`;
+}
+async function loadChecklistActiveList(force=false){
+  const list=document.getElementById('checklistAllActiveList');
+  if(!force && list?.dataset.loaded==='1')return;
+  if(list)list.innerHTML='<div class="tm-history-empty">Loading…</div>';
+  let items=[];
+  try{
+    const r=await fetch(API.TASK.LIST);
+    const d=await r.json();
+    items=(d.success && d.data && d.data.items) || [];
+  }catch(e){/* fall through to empty state */}
+  if(!list)return;
+  if(!items.length){
+    list.innerHTML='<div class="tm-history-empty">No checklist items yet.</div>';
+    list.dataset.loaded='1';
+    return;
+  }
+  list.innerHTML=items.map(item=>`
+    <div class="task-row checkable-row ${item.is_completed?'is-completed':''}"
+      data-tid="${item.id}"
+      data-completed="${item.is_completed?'1':'0'}"
+      data-title="${escHtml(item.title||'')}"
+      data-desc="${escHtml(item.description||'')}">
+      <input type="checkbox" class="rem-check task-chk" data-unsaved-ignore ${item.is_completed?'checked':''} onchange="toggleTask(${item.id},this)">
+      <div class="flex1">
+        <div class="task-title ${item.is_completed?'done':''}">${escHtml(item.title||'Untitled')}</div>
+        ${item.description?`<div class="task-sub">${escHtml(item.description)}</div>`:''}
+        <span class="tracs-creator-meta"><i data-lucide="user" class="icon-xs"></i><span>${escHtml(item.meta_text||'')}</span></span>
+        ${checklistAttachmentGridHtml(item.attachments)}
+      </div>
+      <div class="task-acts">
+        <button class="btn btn-ghost btn-icon" onclick="openEditTask(${item.id})" title="Edit" aria-label="Edit checklist item"><i data-lucide="pencil" class="icon-sm"></i></button>
+        ${item.can_delete?`<button class="btn btn-danger btn-icon" onclick="deleteTask(${item.id},this)" title="Delete" aria-label="Delete checklist item"><i data-lucide="trash-2" class="icon-sm"></i></button>`:''}
+      </div>
+    </div>`).join('');
+  list.dataset.loaded='1';
+  tracsRefreshIcons(list);
+}
+async function loadChecklistHistoryList(force=false){
+  const list=document.getElementById('checklistHistoryList');
+  if(!force && list?.dataset.loaded==='1')return;
+  if(list)list.innerHTML='<div class="tm-history-empty">Loading…</div>';
+  let items=[];
+  try{
+    const r=await fetch(API.TASK.HISTORY);
+    const d=await r.json();
+    items=(d.success && d.data && d.data.items) || [];
+  }catch(e){/* fall through to empty state */}
+  if(!list)return;
+  if(!items.length){
+    list.innerHTML='<div class="tm-history-empty">No checklist history recorded yet.</div>';
+    list.dataset.loaded='1';
+    return;
+  }
+  list.innerHTML=items.map(item=>`
+    <div class="tm-history-row">
+      <strong>${escHtml(item.description||'Checklist update')}</strong>
+      <span>${escHtml(item.creator_name||'System')} · ${escHtml(item.time_ago||'')}</span>
+    </div>`).join('');
+  list.dataset.loaded='1';
 }
 async function toggleTask(id,checkboxOrChecked,sourceElement=null){
   const rows=[...document.querySelectorAll(`[data-tid="${id}"]`)];
@@ -3381,6 +4448,8 @@ async function toggleTask(id,checkboxOrChecked,sourceElement=null){
       item.querySelector('.task-title')?.classList.toggle('done',checked);
       item.querySelectorAll('.task-chk').forEach(taskBox=>{taskBox.checked=checked;});
     });
+    const historyList=document.getElementById('checklistHistoryList');
+    if(historyList)historyList.dataset.loaded='0';
     const badgeContainer=document.getElementById('notif-badge-container');
     if(badgeContainer && previousChecked!==checked){
       const current=parseInt(badgeContainer.dataset.uncheckedChecklist || '0',10) || 0;
@@ -3389,10 +4458,68 @@ async function toggleTask(id,checkboxOrChecked,sourceElement=null){
     rows.forEach(item=>moveCheckableRow(item,checked));
     _updateProgress();
   }finally{
-    rows.forEach(item=>setCheckablePending(item,false));
+    rows.forEach(item=>{
+      setCheckablePending(item,false);
+      // This checkbox saves via AJAX on change, not a form submit, so the
+      // unsaved-changes guard (which watches every editable control) never
+      // hears about it otherwise and keeps showing "unsaved changes" even
+      // though the toggle already succeeded (or was correctly reverted).
+      window.TRACSUnsavedChanges?.markSaved(item);
+    });
     tracsTaskTogglePending.delete(requestKey);
   }
 }
+
+/* ── Checklist real-time sync (shared team checklist) ──────────────────
+ * Efficient polling: a cheap signature endpoint tells us when ANY user has
+ * created/updated/completed/deleted a checklist item; only then do we pull a
+ * fresh server-rendered fragment and swap it in (no JS/PHP template drift).
+ * Never swaps mid-interaction, so it can't clobber a local toggle/edit. */
+(function initChecklistLiveSync(){
+  const root=document.querySelector('[data-checklist-live]');
+  if(!root)return;
+  const SYNC_URL='/api/checklist-sync.php';
+  const POLL_MS=15000;
+  let signature=root.dataset.checklistSignature||'';
+  let busy=false;
+  function safeToSwap(){
+    if(document.visibilityState!=='visible')return false;
+    if(typeof tracsTaskTogglePending!=='undefined' && tracsTaskTogglePending.size>0)return false;
+    if(document.querySelector('.row-action-menu[open]'))return false;
+    if(document.querySelector('.modal-overlay:not(.hidden)'))return false;
+    const ae=document.activeElement;
+    if(ae && (ae.tagName==='INPUT' || ae.tagName==='TEXTAREA' || ae.isContentEditable))return false;
+    return true;
+  }
+  async function swapFragment(){
+    try{
+      const res=await fetch(window.location.href,{headers:{'X-Requested-With':'fragment'}});
+      if(!res.ok)return;
+      const doc=new DOMParser().parseFromString(await res.text(),'text/html');
+      ['.stat-strip','.checklist-progress-panel','.checklist-list-panel'].forEach(sel=>{
+        const next=doc.querySelector(sel), cur=document.querySelector(sel);
+        if(next && cur)cur.replaceWith(next);
+      });
+      const freshRoot=doc.querySelector('[data-checklist-live]');
+      if(freshRoot)signature=freshRoot.dataset.checklistSignature||signature;
+      if(window.lucide?.createIcons)window.lucide.createIcons();
+      try{showToast('Checklist updated by your team.','info',{context:'page',duration:3200});}catch(e){}
+    }catch(e){/* transient network */}
+  }
+  async function poll(){
+    if(busy || document.visibilityState!=='visible')return;
+    busy=true;
+    try{
+      const res=await fetch(SYNC_URL,{headers:{'Accept':'application/json'}});
+      const d=await res.json().catch(()=>null);
+      const sig=d?.data?.signature;
+      if(sig && sig!==signature && safeToSwap())await swapFragment();
+    }catch(e){/* offline/transient */}
+    finally{busy=false;}
+  }
+  setInterval(poll,POLL_MS);
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')poll();});
+})();
 
 function setCheckablePending(row, pending){
   if(!row)return;
@@ -3420,12 +4547,15 @@ function moveCheckableRow(row, checked){
   row.classList.add('checkable-moving');
 
   window.requestAnimationFrame(()=>{
-    if(checked){
+    const firstDone=[...parent.children].find(el=>el!==row && el.dataset?.completed==='1');
+    if(firstDone){
+      // Land right at the top of the completed group (or, when reopening,
+      // right before it) instead of always jumping to the very bottom.
+      parent.insertBefore(row, firstDone);
+    }else if(checked){
       parent.appendChild(row);
     }else{
-      const firstDone=[...parent.children].find(el=>el!==row && el.dataset?.completed==='1');
-      if(firstDone) parent.insertBefore(row, firstDone);
-      else parent.insertBefore(row, parent.firstElementChild);
+      parent.insertBefore(row, parent.firstElementChild);
     }
     window.requestAnimationFrame(()=>{
       row.classList.add('checkable-landed');
@@ -3482,38 +4612,183 @@ function syncTaskMonitoringReminderMirrors(id, completed){
   });
 }
 
+function tmSortValue(row,index,type){
+  const cell=row.children[index];
+  let raw=cell?.dataset.sortValue;
+  if(raw == null) raw=cell?.textContent || '';
+  if(type === 'number' || type === 'date'){
+    const parsed=Number.parseFloat(String(raw).replace(/,/g,''));
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return String(raw).trim().toLocaleLowerCase();
+}
+
+function tmSortIconName(state){
+  if(state === 'ascending')return 'chevron-up';
+  if(state === 'descending')return 'chevron-down';
+  return 'chevrons-up-down';
+}
+
+function tmSyncSortHeaderIcon(header){
+  const icon=header.querySelector('.tm-sort-icon');
+  if(icon)icon.setAttribute('data-lucide',tmSortIconName(header.getAttribute('aria-sort') || 'none'));
+}
+
+function tmSortTableByHeader(header,forcedDirection=''){
+  const table=header.closest('table[data-tm-sortable-table]');
+  const tbody=table?.tBodies?.[0];
+  if(!table || !tbody)return;
+  const headers=[...(table.tHead?.querySelectorAll('th') || [])];
+  const index=headers.indexOf(header);
+  if(index < 0)return;
+  const type=header.dataset.tmSortType || 'text';
+  const current=header.getAttribute('aria-sort') || 'none';
+  const preferred=header.dataset.tmSortDefaultDirection || ((type === 'date' || type === 'number') ? 'desc' : 'asc');
+  const direction=forcedDirection || (current === 'ascending' ? 'desc' : (current === 'descending' ? 'asc' : preferred));
+  const rows=[...tbody.rows].map((row,originalIndex)=>({
+    row,
+    originalIndex,
+    value:tmSortValue(row,index,type)
+  }));
+  rows.sort((a,b)=>{
+    let result=0;
+    if(type === 'number' || type === 'date'){
+      result=a.value-b.value;
+    }else{
+      result=String(a.value).localeCompare(String(b.value),undefined,{numeric:true,sensitivity:'base'});
+    }
+    if(result === 0)return a.originalIndex-b.originalIndex;
+    return direction === 'desc' ? -result : result;
+  });
+  rows.forEach(item=>tbody.appendChild(item.row));
+  headers.forEach(other=>{
+    if(other.dataset.tmSortType){
+      other.setAttribute('aria-sort','none');
+      tmSyncSortHeaderIcon(other);
+    }
+  });
+  header.setAttribute('aria-sort',direction === 'desc' ? 'descending' : 'ascending');
+  tmSyncSortHeaderIcon(header);
+  table.dataset.tmSortColumn=String(index);
+  table.dataset.tmSortDirection=direction;
+  tracsRefreshIcons(table);
+}
+
+function tmIsInteractiveRowTarget(target){
+  if(!(target instanceof Element))return false;
+  return !!target.closest('a,button,input,select,textarea,label,summary,details,[role="button"],[contenteditable="true"],.row-action-menu,.row-action-popover');
+}
+
+function tmOpenRowDetail(row){
+  const href=row?.dataset.tmRowHref;
+  if(href)window.location.assign(href);
+}
+
+function initTaskManagementTables(root=document){
+  root.querySelectorAll('table[data-tm-sortable-table]').forEach(table=>{
+    if(table.dataset.tmTableReady === '1')return;
+    table.dataset.tmTableReady='1';
+    const headers=[...(table.tHead?.querySelectorAll('th[data-tm-sort-type]') || [])];
+    headers.forEach(header=>{
+      const button=header.querySelector('[data-tm-sort-button]');
+      header.setAttribute('aria-sort',header.getAttribute('aria-sort') || 'none');
+      tmSyncSortHeaderIcon(header);
+      button?.addEventListener('click',event=>{
+        event.preventDefault();
+        tmSortTableByHeader(header);
+      });
+    });
+    const defaultHeader=headers.find(header=>header.dataset.tmDefaultSort);
+    if(defaultHeader)tmSortTableByHeader(defaultHeader,defaultHeader.dataset.tmDefaultSort || 'desc');
+    table.addEventListener('click',event=>{
+      const target=event.target instanceof Element ? event.target : null;
+      const row=target?.closest('.tm-clickable-row[data-tm-row-href]');
+      if(!row || !table.contains(row) || tmIsInteractiveRowTarget(target))return;
+      tmOpenRowDetail(row);
+    });
+    table.addEventListener('keydown',event=>{
+      const target=event.target instanceof Element ? event.target : null;
+      const row=target?.closest('.tm-clickable-row[data-tm-row-href]');
+      if(!row || event.target !== row || !['Enter',' '].includes(event.key))return;
+      event.preventDefault();
+      tmOpenRowDetail(row);
+    });
+  });
+}
+
 function initTaskMonitoringTabs(){
-  const root=document.querySelector('[data-task-monitoring]');
-  if(!root)return;
-  const tabs=[...root.querySelectorAll('[data-task-monitor-tab]')];
-  const panes=[...root.querySelectorAll('[data-task-monitor-pane]')];
-  const allLink=root.querySelector('[data-task-monitor-all]');
-  const activate=(name)=>{
-    const activeTab=tabs.find(tab=>tab.dataset.taskMonitorTab===name) || tabs[0];
-    if(!activeTab)return;
-    tabs.forEach(tab=>{
-      const selected=tab===activeTab;
-      tab.classList.toggle('active',selected);
-      tab.setAttribute('aria-selected',selected?'true':'false');
+  document.querySelectorAll('[data-task-monitoring]').forEach(root=>{
+    if(root.dataset.taskMonitoringReady==='1')return;
+    root.dataset.taskMonitoringReady='1';
+    const tabs=[...root.querySelectorAll('[data-task-monitor-tab]')];
+    const panes=[...root.querySelectorAll('[data-task-monitor-pane]')];
+    const allLink=root.querySelector('[data-task-monitor-all]');
+    const activate=(name,focus=false)=>{
+      const activeTab=tabs.find(tab=>tab.dataset.taskMonitorTab===name) || tabs[0];
+      if(!activeTab)return;
+      tabs.forEach(tab=>{
+        const selected=tab===activeTab;
+        tab.classList.toggle('active',selected);
+        tab.setAttribute('aria-selected',selected?'true':'false');
+        tab.tabIndex=selected?0:-1;
+      });
+      panes.forEach(pane=>{
+        const selected=pane.dataset.taskMonitorPane===activeTab.dataset.taskMonitorTab;
+        pane.hidden=!selected;
+        pane.classList.toggle('is-active',selected);
+      });
+      if(allLink)allLink.href=activeTab.dataset.allHref || '#';
+      if(focus)activeTab.focus();
+      tracsRefreshIcons(root);
+    };
+    tabs.forEach((tab,index)=>{
+      tab.addEventListener('click',()=>activate(tab.dataset.taskMonitorTab));
+      tab.addEventListener('keydown',event=>{
+        const key=event.key;
+        if(!['ArrowLeft','ArrowRight','Home','End'].includes(key))return;
+        event.preventDefault();
+        const last=tabs.length-1;
+        const nextIndex=key==='Home'
+          ? 0
+          : key==='End'
+            ? last
+            : key==='ArrowRight'
+              ? (index+1)%tabs.length
+              : (index-1+tabs.length)%tabs.length;
+        activate(tabs[nextIndex]?.dataset.taskMonitorTab,true);
+      });
     });
-    panes.forEach(pane=>{
-      const selected=pane.dataset.taskMonitorPane===activeTab.dataset.taskMonitorTab;
-      pane.hidden=!selected;
-      pane.classList.toggle('is-active',selected);
-    });
-    if(allLink)allLink.href=activeTab.dataset.allHref || '#';
-    tracsRefreshIcons(root);
-  };
-  tabs.forEach(tab=>{
-    tab.addEventListener('click',()=>activate(tab.dataset.taskMonitorTab));
+    activate(tabs.find(tab=>tab.classList.contains('active'))?.dataset.taskMonitorTab || tabs[0]?.dataset.taskMonitorTab);
   });
-  root.querySelectorAll('[data-task-monitor-switch]').forEach(control=>{
-    control.addEventListener('click',()=>{
-      activate(control.dataset.taskMonitorSwitch || 'assignments');
-    });
-  });
-  activate(tabs.find(tab=>tab.classList.contains('active'))?.dataset.taskMonitorTab || tabs[0]?.dataset.taskMonitorTab);
   refreshTaskMonitoringCounters();
+}
+
+/* Refreshes a [data-task-monitoring] widget (Shift Handover/Screenshot/Currency/
+   Activity, or Checklist&Reminder/Assignments) after a save, without a page
+   reload. Re-fetches the current page, swaps in the fresh panel markup, then
+   re-binds tab handling and restores whichever tab/scroll position was active
+   so the save doesn't silently kick the user back to the first tab. */
+async function tracsRefreshTaskMonitoringPanel(containedSelector){
+  const anchor=document.querySelector(containedSelector);
+  const panel=anchor?.closest('[data-task-monitoring]');
+  if(!panel)return false;
+  const activeTab=panel.querySelector('[data-task-monitor-tab].active')?.dataset.taskMonitorTab;
+  const scrollHosts=[...panel.querySelectorAll('.scroll-y,.tm-scroll')];
+  const scrollTops=scrollHosts.map(el=>el.scrollTop);
+  let doc;
+  try{ doc=await tracsFetchDocument(); }catch(error){ console.error('Unable to refresh task monitoring panel:',error); return false; }
+  const fresh=[...doc.querySelectorAll('[data-task-monitoring]')].find(node=>node.querySelector(containedSelector));
+  if(!fresh)return false;
+  panel.replaceWith(fresh);
+  delete fresh.dataset.taskMonitoringReady;
+  initTaskMonitoringTabs();
+  if(activeTab && fresh.querySelector(`[data-task-monitor-tab="${activeTab}"]`) && !fresh.querySelector(`[data-task-monitor-tab="${activeTab}"]`).classList.contains('active')){
+    fresh.querySelector(`[data-task-monitor-tab="${activeTab}"]`).click();
+  }
+  fresh.querySelectorAll('.scroll-y,.tm-scroll').forEach((el,i)=>{ if(scrollTops[i]!=null)el.scrollTop=scrollTops[i]; });
+  tracsRefreshIcons(fresh);
+  window.TRACSDropdowns?.syncAll();
+  return true;
 }
 
 function refreshNotificationBadge(pendingOverride){
@@ -3548,6 +4823,7 @@ const TRACSNotifications = (() => {
   let polling = false;
   let pollTimer = null;
   let initialPoll = true;
+  let lastItems = [];
 
   function supported() {
     return typeof window.Notification !== 'undefined';
@@ -3704,6 +4980,16 @@ const TRACSNotifications = (() => {
     } catch (e) {}
   }
 
+  function markVisibleRead() {
+    const unreadIds = lastItems
+      .filter(item => !(item.is_read === '1' || item.is_read === 1))
+      .map(item => Number(item.id))
+      .filter(Boolean);
+    if (!unreadIds.length) return;
+    updateBadge(0);
+    markRead(unreadIds);
+  }
+
   function notifyInApp(items = []) {
     let lastSeen = 0;
     try { lastSeen = parseInt(localStorage.getItem(SEEN_KEY) || '0', 10) || 0; } catch (e) {}
@@ -3761,6 +5047,7 @@ const TRACSNotifications = (() => {
       if (!json.success) return;
       const data = json.data || {};
       const items = data.items || [];
+      lastItems = items;
       renderList(items);
       updateBadge(data.unread_count || 0);
       notifyInApp(items);
@@ -3803,7 +5090,7 @@ const TRACSNotifications = (() => {
     pollTimer = setInterval(poll, POLL_MS);
   }
 
-  return { start, poll, requestPermission, markRead };
+  return { start, poll, requestPermission, markRead, markVisibleRead };
 })();
 
 window.TRACSNotifications = TRACSNotifications;
@@ -3829,7 +5116,8 @@ async function addTickerMsg(){
       message:'Announcement added.',
       onAfterClose:()=>{
         setVal('newTickerText','');
-        location.reload();
+        refreshTickerBar();
+        tracsSwapFragment('.ticker-entry-list');
       }
     });
   }else handleModalError({modal:'ticker',error:{message:d.message,status:d.status},fallbackMessage:'The announcement could not be added. Please try again.'});
@@ -3853,10 +5141,20 @@ async function archiveTickerMsg(id){
         toast('Announcement archived','success');
 
         removeRow(`#tmgr-${id}`);
+        refreshTickerBar();
+        const list=document.querySelector('.ticker-entry-list');
+        if(list){
+          setTimeout(()=>{
+            if(!list.querySelector('.tmgr-row')){
+              list.innerHTML='<div class="empty"><div class="empty-ic"><i data-lucide="megaphone"></i></div><div class="empty-t">No custom announcements</div></div>';
+              tracsRefreshIcons(list);
+            }
+          },190);
+        }
 
       } else {
 
-        toast(d.message || 'Error','error');
+        toast(d.message || "Couldn't archive the announcement. Please try again.",'error');
       }
 
     },
@@ -3864,22 +5162,62 @@ async function archiveTickerMsg(id){
   );
 }
 
-/* ── SHIFT REPORT CRUD ────────────────────────────────── */
-let shiftSelectedAttachments = [];
+/* ── TICKER LIVE SYNC ─────────────────────────────────────
+   The ticker bar is a shared public feed (announcements + operational
+   signals): every connected user must see the same content, and new/edited/
+   deleted items must show up without a page reload. We poll the merged feed
+   and only touch the DOM when the content actually changed, so the CSS
+   marquee animation isn't restarted on every poll tick. */
+const TICKER_POLL_MS = 20000;
+let _tickerLastSignature = null;
 
-function shiftAttachmentEls(){
-  return {
-    input: document.getElementById('shiftAttachments'),
-    drop: document.getElementById('shiftUploadDrop'),
-    status: document.getElementById('shiftUploadStatus'),
-    selected: document.getElementById('shiftAttachmentPreview')
-  };
+function _tickerHolidayClass(text) {
+  return /\b(holiday|public holiday|hari libur|hari raya|waisak|vesak|idul|eid|nyepi|imlek|natal)\b/i.test(text) ? ' holiday' : '';
 }
-function shiftSetUploadStatus(message='',type=''){
-  const el=shiftAttachmentEls().status;
-  if(!el)return;
-  el.textContent=message;
-  el.className=`case-upload-status ${type||''}`.trim();
+function _tickerSignature(items) {
+  return items.map(t => `${String(t.class || 'normal').trim()}|${t.text || ''}`).join('');
+}
+function _renderTickerBar(items) {
+  const track = document.getElementById('tickerScroll');
+  if (!track) return;
+  const list = items.length ? items : [{ text: 'All systems operational', class: 'normal' }];
+  const html = list.map(t => {
+    const cls = escapeHtml(String(t.class || 'normal').trim()) + _tickerHolidayClass(String(t.text || ''));
+    return `<span class="ticker-item ${cls}">${escapeHtml(String(t.text || ''))}</span>`;
+  }).join('');
+  track.innerHTML = html + html;
+}
+async function refreshTickerBar() {
+  const d = await api(API.TICKER.FEED, {});
+  if (!d || !d.success || !Array.isArray(d.data)) return;
+  const signature = _tickerSignature(d.data);
+  if (signature === _tickerLastSignature) return;
+  _tickerLastSignature = signature;
+  _renderTickerBar(d.data);
+}
+if (document.getElementById('tickerScroll')) {
+  _tickerLastSignature = _tickerSignature(window.__TRACS_TICKER_ITEMS__ || []);
+  setInterval(refreshTickerBar, TICKER_POLL_MS);
+}
+
+/* ── SHIFT REPORT CRUD ────────────────────────────────── */
+/* A shift handover is ONE report by one agent: a mandatory shift summary (with
+   its own shared screenshots) plus optional case items. Create posts the
+   summary + items in one multipart request (so shared screenshots ride along),
+   then uploads per-item screenshots in a second pass that reuses the existing
+   shift-update attachment pipeline. Edit mode reuses the same modal for a
+   single existing item. */
+const SHIFT_PRIORITIES=[['low','Low'],['medium','Medium'],['high','High'],['critical','Critical']];
+const SHIFT_STATUSES=[['active','Active / Need Handover'],['on_hold','On Hold'],['resolved','Resolved']];
+let shiftModalMode='create';   // 'create' | 'edit'
+let shiftItems=[];             // [{uid,title,details,priority,status,resolution_note,resolved_at}]
+let shiftItemFiles={};         // uid -> [{id,file,url}]
+let shiftSummaryFiles=[];      // [{id,file,url}] shared handover-level screenshots
+let shiftItemSeq=0;
+
+function shiftNewUid(){return 'it'+(++shiftItemSeq)+'_'+(crypto.randomUUID?.()||String(Date.now()+Math.random()).replace('.','' ));}
+function shiftBlankItem(overrides={}){
+  return Object.assign({uid:shiftNewUid(),title:'',details:'',priority:'medium',status:'active',resolution_note:'',resolved_at:''},overrides);
 }
 function shiftValidateAttachment(file){
   if(!file || !file.name)return 'Choose a valid image.';
@@ -3888,138 +5226,378 @@ function shiftValidateAttachment(file){
   if(!CASE_ATTACHMENT_TYPES.has(file.type))return `${file.name} must be JPG, JPEG, PNG, or WEBP.`;
   return '';
 }
-function shiftAddAttachmentFiles(files){
+function shiftCardByUid(uid){return document.querySelector(`.shift-item-card[data-uid="${uid}"]`);}
+
+function shiftItemCardHtml(item,index,total){
+  const uid=item.uid;
+  const removable=shiftModalMode==='create';
+  const prioOpts=SHIFT_PRIORITIES.map(([v,l])=>`<option value="${v}"${item.priority===v?' selected':''}>${l}</option>`).join('');
+  const statOpts=SHIFT_STATUSES.map(([v,l])=>`<option value="${v}"${item.status===v?' selected':''}>${l}</option>`).join('');
+  const resShown=item.status==='resolved';
+  return `
+  <div class="shift-item-card" data-uid="${uid}">
+    <div class="shift-item-card-head">
+      <span class="shift-item-idx">${index+1}</span>
+      <input type="text" class="form-input shift-i-title" placeholder="Case title, e.g. VPS node monitoring required" value="${escHtml(item.title)}" autocomplete="off">
+      ${removable?`<button type="button" class="btn btn-ghost btn-icon shift-item-remove" onclick="removeShiftItem(${jsAttr(uid)})" aria-label="Remove item"><i data-lucide="trash-2" class="icon-sm"></i></button>`:''}
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Priority</label><select class="form-select shift-i-priority">${prioOpts}</select></div>
+      <div class="form-group"><label class="form-label">Status</label><select class="form-select shift-i-status" onchange="shiftToggleItemResolution(this)">${statOpts}</select></div>
+    </div>
+    <div class="form-group"><label class="form-label">Handover Details</label><textarea class="form-textarea shift-i-details" placeholder="Context, steps taken, customer impact, next actions" style="min-height:70px">${escHtml(item.details)}</textarea></div>
+    <div class="shift-resolution-fields ${resShown?'':'hidden'}">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Resolved Time</label><input type="datetime-local" class="form-input shift-i-resolved-at" value="${escHtml(item.resolved_at||'')}"></div>
+        <div class="form-group"><label class="form-label">Resolution Summary</label><input type="text" class="form-input shift-i-resolution-note" maxlength="255" value="${escHtml(item.resolution_note||'')}" placeholder="Short note for next shift visibility"></div>
+      </div>
+    </div>
+    <div class="shift-item-photos">
+      <input class="case-upload-input" type="file" id="shiftFile_${uid}" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" multiple onchange="shiftItemAddFiles(${jsAttr(uid)},this.files)">
+      <div class="shift-item-photo-list" id="shiftItemPhotos_${uid}"></div>
+      <label class="shift-item-photo-add" for="shiftFile_${uid}"><i data-lucide="image-plus" class="icon-xs"></i>Add photo</label>
+    </div>
+  </div>`;
+}
+function renderShiftItems(){
+  const c=document.getElementById('shiftItemsContainer');
+  if(!c)return;
+  const total=shiftItems.length;
+  c.innerHTML=shiftItems.map((it,i)=>shiftItemCardHtml(it,i,total)).join('');
+  shiftItems.forEach(it=>renderShiftItemFiles(it.uid));
+  tracsRefreshIcons(c);
+  updateShiftItemsMeta();
+}
+function syncShiftItemsFromDom(){
+  const c=document.getElementById('shiftItemsContainer');
+  if(!c)return;
+  c.querySelectorAll('.shift-item-card').forEach(card=>{
+    const it=shiftItems.find(x=>x.uid===card.dataset.uid);
+    if(!it)return;
+    it.title=card.querySelector('.shift-i-title')?.value||'';
+    it.priority=card.querySelector('.shift-i-priority')?.value||'medium';
+    it.status=card.querySelector('.shift-i-status')?.value||'active';
+    it.details=card.querySelector('.shift-i-details')?.value||'';
+    it.resolved_at=card.querySelector('.shift-i-resolved-at')?.value||'';
+    it.resolution_note=card.querySelector('.shift-i-resolution-note')?.value||'';
+  });
+}
+function shiftToggleItemResolution(sel){
+  const card=sel.closest('.shift-item-card');
+  if(!card)return;
+  const isResolved=sel.value==='resolved';
+  card.querySelector('.shift-resolution-fields')?.classList.toggle('hidden',!isResolved);
+  const at=card.querySelector('.shift-i-resolved-at');
+  if(isResolved && at && !at.value){const now=new Date();now.setMinutes(now.getMinutes()-now.getTimezoneOffset());at.value=now.toISOString().slice(0,16);}
+}
+function updateShiftItemsMeta(){
+  const c=document.getElementById('shiftItemsCount');
+  const btn=document.getElementById('shiftAddItemBtn');
+  const n=shiftItems.length;
+  if(c)c.textContent=(shiftModalMode==='create')?`${n} item${n===1?'':'s'}`:'';
+  if(btn){
+    const label=btn.querySelector('span')||btn;
+    const text=n===0?'Add item':'Add another item';
+    if(btn.querySelector('span'))label.textContent=text;
+    else btn.innerHTML=`<i data-lucide="plus" class="icon-sm"></i><span>${text}</span>`;
+    tracsRefreshIcons(btn);
+  }
+}
+function addShiftItem(){
+  syncShiftItemsFromDom();
+  shiftItems.push(shiftBlankItem());
+  renderShiftItems();
+  const cards=document.querySelectorAll('.shift-item-card');
+  cards[cards.length-1]?.querySelector('.shift-i-title')?.focus();
+}
+function removeShiftItem(uid){
+  syncShiftItemsFromDom();
+  (shiftItemFiles[uid]||[]).forEach(x=>{try{URL.revokeObjectURL(x.url);}catch(e){}});
+  delete shiftItemFiles[uid];
+  shiftItems=shiftItems.filter(x=>x.uid!==uid);
+  renderShiftItems();
+}
+function shiftItemAddFiles(uid,files){
+  const incoming=Array.from(files||[]);
+  const list=shiftItemFiles[uid]||(shiftItemFiles[uid]=[]);
+  const errors=[];
+  incoming.forEach(file=>{
+    const err=shiftValidateAttachment(file);
+    if(err){errors.push(err);return;}
+    const dup=list.some(x=>x.file.name===file.name && x.file.size===file.size && x.file.lastModified===file.lastModified);
+    if(!dup)list.push({id:crypto.randomUUID?.()||String(Date.now()+Math.random()),file,url:URL.createObjectURL(file)});
+  });
+  renderShiftItemFiles(uid);
+  if(errors.length)toast(errors[0],'error');
+}
+function shiftItemRemoveFile(uid,fileId){
+  const list=shiftItemFiles[uid]||[];
+  const f=list.find(x=>x.id===fileId);
+  if(f){try{URL.revokeObjectURL(f.url);}catch(e){}}
+  shiftItemFiles[uid]=list.filter(x=>x.id!==fileId);
+  renderShiftItemFiles(uid);
+}
+function renderShiftItemFiles(uid){
+  const list=shiftItemFiles[uid]||[];
+  const wrap=shiftCardByUid(uid)?.querySelector(`#shiftItemPhotos_${uid}`);
+  if(!wrap)return;
+  wrap.innerHTML=list.map(item=>`
+    <span class="shift-item-photo-chip" title="${escHtml(item.file.name)}">
+      <button type="button" onclick="openCaseImagePreview(${jsAttr(item.url)},${jsAttr(item.file.name)})"><img src="${item.url}" alt="${escHtml(item.file.name)}"></button>
+      <button type="button" class="shift-item-photo-remove" onclick="shiftItemRemoveFile(${jsAttr(uid)},${jsAttr(item.id)})" aria-label="Remove selected image"><i data-lucide="x" class="icon-xs"></i></button>
+    </span>`).join('');
+  tracsRefreshIcons(wrap);
+}
+function clearShiftAllFiles(){
+  Object.values(shiftItemFiles).forEach(list=>list.forEach(x=>{try{URL.revokeObjectURL(x.url);}catch(e){}}));
+  shiftItemFiles={};
+}
+function shiftSummaryAttachmentEls(){
+  return {
+    input: document.getElementById('shiftSummaryAttachments'),
+    drop: document.getElementById('shiftSummaryUploadDrop'),
+    status: document.getElementById('shiftSummaryUploadStatus'),
+    selected: document.getElementById('shiftSummaryAttachmentPreview')
+  };
+}
+function shiftSummaryAddFiles(files){
   const incoming=Array.from(files||[]);
   const errors=[];
   incoming.forEach(file=>{
     const err=shiftValidateAttachment(file);
     if(err){errors.push(err);return;}
-    const duplicate=shiftSelectedAttachments.some(item=>item.file.name===file.name && item.file.size===file.size && item.file.lastModified===file.lastModified);
-    if(!duplicate)shiftSelectedAttachments.push({id:crypto.randomUUID?.()||String(Date.now()+Math.random()),file,url:URL.createObjectURL(file)});
+    const dup=shiftSummaryFiles.some(x=>x.file.name===file.name && x.file.size===file.size && x.file.lastModified===file.lastModified);
+    if(!dup)shiftSummaryFiles.push({id:crypto.randomUUID?.()||String(Date.now()+Math.random()),file,url:URL.createObjectURL(file)});
   });
-  renderShiftSelectedAttachments();
-  if(errors.length)shiftSetUploadStatus(errors[0],'error');
-  else if(incoming.length)shiftSetUploadStatus(`${shiftSelectedAttachments.length} image${shiftSelectedAttachments.length===1?'':'s'} ready to upload.`,'ok');
+  renderShiftSummaryFiles();
+  const st=shiftSummaryAttachmentEls().status;
+  if(st){
+    if(errors.length){st.textContent=errors[0];st.className='case-upload-status error';}
+    else{st.textContent=shiftSummaryFiles.length?`${shiftSummaryFiles.length} image${shiftSummaryFiles.length===1?'':'s'} ready.`:'';st.className='case-upload-status ok';}
+  }
 }
-function clearShiftAttachmentState(){
-  shiftSelectedAttachments.forEach(item=>{try{URL.revokeObjectURL(item.url);}catch(e){}});
-  shiftSelectedAttachments=[];
-  const els=shiftAttachmentEls();
-  if(els.input)els.input.value='';
-  if(els.selected)els.selected.innerHTML='';
-  shiftSetUploadStatus('');
+function shiftSummaryRemoveFile(fileId){
+  const f=shiftSummaryFiles.find(x=>x.id===fileId);
+  if(f){try{URL.revokeObjectURL(f.url);}catch(e){}}
+  shiftSummaryFiles=shiftSummaryFiles.filter(x=>x.id!==fileId);
+  renderShiftSummaryFiles();
 }
-function removeShiftSelectedAttachment(id){
-  const item=shiftSelectedAttachments.find(entry=>entry.id===id);
-  if(item){try{URL.revokeObjectURL(item.url);}catch(e){}}
-  shiftSelectedAttachments=shiftSelectedAttachments.filter(entry=>entry.id!==id);
-  renderShiftSelectedAttachments();
-  shiftSetUploadStatus(shiftSelectedAttachments.length?`${shiftSelectedAttachments.length} image${shiftSelectedAttachments.length===1?'':'s'} ready to upload.`:'');
-}
-function renderShiftSelectedAttachments(){
-  const el=shiftAttachmentEls().selected;
+function renderShiftSummaryFiles(){
+  const el=shiftSummaryAttachmentEls().selected;
   if(!el)return;
-  el.innerHTML=shiftSelectedAttachments.map(item=>`
+  el.innerHTML=shiftSummaryFiles.map(item=>`
     <div class="case-attachment-tile">
-      <button class="case-attachment-thumb" type="button" onclick="openCaseImagePreview(${jsAttr(item.url)},${jsAttr(item.file.name)})">
-        <img src="${item.url}" alt="${escHtml(item.file.name)}">
-      </button>
+      <button class="case-attachment-thumb" type="button" onclick="openCaseImagePreview(${jsAttr(item.url)},${jsAttr(item.file.name)})"><img src="${item.url}" alt="${escHtml(item.file.name)}"></button>
       <div class="case-attachment-meta"><span title="${escHtml(item.file.name)}">${escHtml(item.file.name)}</span><small>${formatBytes(item.file.size)}</small></div>
-      <button class="case-attachment-remove" type="button" onclick="removeShiftSelectedAttachment(${jsAttr(item.id)})" aria-label="Remove selected image"><i data-lucide="x" class="icon-xs"></i></button>
-    </div>
-  `).join('');
+      <button class="case-attachment-remove" type="button" onclick="shiftSummaryRemoveFile(${jsAttr(item.id)})" aria-label="Remove selected image"><i data-lucide="x" class="icon-xs"></i></button>
+    </div>`).join('');
   tracsRefreshIcons(el);
 }
-function shiftPayloadFormData(id=''){
-  const fd=new FormData();
-  if(id)fd.append('id',id);
-  fd.append('title',val('shiftTitle').trim());
-  fd.append('shift_name',val('shiftName'));
-  fd.append('priority',val('shiftPriority'));
-  fd.append('status',val('shiftStatus')||'active');
-  fd.append('details',val('shiftDetails'));
-  fd.append('active_date',val('shiftDate'));
-  fd.append('resolution_note',val('shiftResolutionNote'));
-  fd.append('resolved_at',val('shiftResolvedAt'));
-  shiftSelectedAttachments.forEach(item=>fd.append('attachments[]',item.file,item.file.name));
-  return fd;
+function clearShiftSummaryFiles(){
+  shiftSummaryFiles.forEach(x=>{try{URL.revokeObjectURL(x.url);}catch(e){}});
+  shiftSummaryFiles=[];
+  const els=shiftSummaryAttachmentEls();
+  if(els.input)els.input.value='';
+  if(els.selected)els.selected.innerHTML='';
+  if(els.status){els.status.textContent='';els.status.className='case-upload-status';}
 }
-function toggleShiftResolutionFields(){
-  const fields=document.getElementById('shiftResolutionFields');
-  if(!fields)return;
-  const isResolved=val('shiftStatus')==='resolved';
-  fields.classList.toggle('hidden',!isResolved);
-  if(isResolved && !val('shiftResolvedAt')){
-    const now=new Date();
-    now.setMinutes(now.getMinutes()-now.getTimezoneOffset());
-    setVal('shiftResolvedAt',now.toISOString().slice(0,16));
+function shiftInitSummaryUploadDrop(){
+  const els=shiftSummaryAttachmentEls();
+  if(!els.drop||els.drop.dataset.ready)return;
+  els.drop.dataset.ready='1';
+  ['dragenter','dragover'].forEach(evt=>els.drop.addEventListener(evt,e=>{e.preventDefault();els.drop.classList.add('drag');}));
+  ['dragleave','drop'].forEach(evt=>els.drop.addEventListener(evt,e=>{e.preventDefault();els.drop.classList.remove('drag');}));
+  els.drop.addEventListener('drop',e=>shiftSummaryAddFiles(e.dataTransfer?.files));
+}
+/* Shared paste-to-upload: every screenshot/photo dropzone in the app (case
+   modal, shift handover summary, shift item chips) accepts a pasted image the
+   same way it accepts a click or a drag-drop. Whichever upload modal is open
+   wins; within the shift modal, a focused item card takes the paste over the
+   shared summary uploader. */
+function tracsExtractPastedImages(e){
+  const items=e.clipboardData?.items;
+  if(!items||!items.length)return[];
+  const files=[];
+  for(const it of items){
+    if(it.kind==='file' && it.type && it.type.startsWith('image/')){
+      const f=it.getAsFile();
+      if(f)files.push(f);
+    }
+  }
+  return files;
+}
+function tracsHandleImagePaste(e){
+  const shiftModal=document.getElementById('shiftModal');
+  const caseModal=document.getElementById('caseModal');
+  if(shiftModal && !shiftModal.classList.contains('hidden')){
+    const files=tracsExtractPastedImages(e);
+    if(!files.length)return;
+    e.preventDefault();
+    const card=document.activeElement?.closest?.('.shift-item-card');
+    if(card)shiftItemAddFiles(card.dataset.uid,files);
+    else shiftSummaryAddFiles(files);
+    return;
+  }
+  if(caseModal && !caseModal.classList.contains('hidden')){
+    const files=tracsExtractPastedImages(e);
+    if(!files.length)return;
+    e.preventDefault();
+    caseAddAttachmentFiles(files);
+    return;
+  }
+  const taskModal=document.getElementById('taskModal');
+  if(taskModal && !taskModal.classList.contains('hidden')){
+    const files=tracsExtractPastedImages(e);
+    if(!files.length)return;
+    e.preventDefault();
+    taskAddAttachmentFiles(files);
+    return;
+  }
+  const tmTaskModal=document.getElementById('tmTaskModal');
+  if(tmTaskModal && !tmTaskModal.classList.contains('hidden') && typeof tmTaskAddFiles === 'function'){
+    const files=tracsExtractPastedImages(e);
+    if(!files.length)return;
+    e.preventDefault();
+    tmTaskAddFiles(files);
   }
 }
-function initShiftAttachmentUpload(){
-  const els=shiftAttachmentEls();
-  if(!els.input||els.input.dataset.ready)return;
-  els.input.dataset.ready='1';
-  els.input.addEventListener('change',()=>shiftAddAttachmentFiles(els.input.files));
-  if(els.drop){
-    ['dragenter','dragover'].forEach(evt=>els.drop.addEventListener(evt,e=>{e.preventDefault();els.drop.classList.add('drag');}));
-    ['dragleave','drop'].forEach(evt=>els.drop.addEventListener(evt,e=>{e.preventDefault();els.drop.classList.remove('drag');}));
-    els.drop.addEventListener('drop',e=>shiftAddAttachmentFiles(e.dataTransfer?.files));
-  }
+document.addEventListener('paste',tracsHandleImagePaste);
+function applyShiftModalMode(){
+  const isCreate=shiftModalMode==='create';
+  document.getElementById('shiftSummaryGroup')?.classList.toggle('hidden',!isCreate);
+  document.getElementById('shiftSummaryUploadGroup')?.classList.toggle('hidden',!isCreate);
+  document.getElementById('shiftAddItemBtn')?.classList.toggle('hidden',!isCreate);
+  const label=document.getElementById('shiftItemsLabel');
+  if(label)label.textContent=isCreate?'Handover Items':'Case Detail';
+  const saveLabel=document.getElementById('shiftSaveLabel');
+  if(saveLabel)saveLabel.textContent=isCreate?'Save Handover':'Save Item';
+  if(isCreate)shiftInitSummaryUploadDrop();
 }
 function openNewShiftReport(){
-  initShiftAttachmentUpload();
-  document.getElementById('shiftModalTitle').textContent='New Shift Report';
-  ['shiftId','shiftTitle','shiftDetails','shiftResolutionNote','shiftResolvedAt'].forEach(id=>setVal(id,''));
-  setVal('shiftPriority','medium');
-  setVal('shiftStatus','active');
+  shiftModalMode='create';
+  setVal('shiftId','');
+  document.getElementById('shiftModalTitle').textContent='New Shift Handover';
+  document.getElementById('shiftModalSub').textContent="One report, all the cases you're handing over";
   setVal('shiftDate', new Date().toISOString().split('T')[0]);
-  toggleShiftResolutionFields();
-  clearShiftAttachmentState();
+  if(!val('shiftName'))setVal('shiftName','Shift 1');
+  setVal('shiftSummary','');
+  clearShiftAllFiles();
+  clearShiftSummaryFiles();
+  shiftItems=[];
+  applyShiftModalMode();
+  renderShiftItems();
   openModal('shift');
 }
 function openEditShiftReport(id){
-  initShiftAttachmentUpload();
   const row=document.querySelector(`[data-id="${id}"]`);
   if(!row)return;
-  document.getElementById('shiftModalTitle').textContent='Edit Shift Report';
+  shiftModalMode='edit';
   setVal('shiftId',id);
-  setVal('shiftTitle',row.dataset.title||'');
+  document.getElementById('shiftModalTitle').textContent='Edit Handover Item';
+  document.getElementById('shiftModalSub').textContent='Update a single case';
   setVal('shiftName',row.dataset.shift||'Shift 1');
-  setVal('shiftPriority',row.dataset.prio||'medium');
-  setVal('shiftStatus',row.dataset.status||'active');
   setVal('shiftDate', row.dataset.date || new Date().toISOString().split('T')[0]);
-  setVal('shiftDetails',row.dataset.details||'');
-  setVal('shiftResolutionNote',row.dataset.resolutionNote||'');
-  setVal('shiftResolvedAt',(row.dataset.resolvedAt||'').replace(' ','T').slice(0,16));
-  toggleShiftResolutionFields();
-  clearShiftAttachmentState();
+  clearShiftAllFiles();
+  shiftItems=[shiftBlankItem({
+    title:row.dataset.title||'',
+    details:row.dataset.details||'',
+    priority:row.dataset.prio||'medium',
+    status:row.dataset.status||'active',
+    resolution_note:row.dataset.resolutionNote||'',
+    resolved_at:(row.dataset.resolvedAt||'').replace(' ','T').slice(0,16)
+  })];
+  applyShiftModalMode();
+  renderShiftItems();
   openModal('shift');
 }
 async function saveShiftReport(){
-  const title=val('shiftTitle').trim();
+  syncShiftItemsFromDom();
+  if(shiftModalMode==='edit')return saveShiftItemEdit();
+  const summary=val('shiftSummary').trim();
+  if(!summary){toast('Shift summary is required','error');return;}
+  const items=shiftItems.filter(it=>it.title.trim());
+  const shiftName=val('shiftName');
+  const activeDate=val('shiftDate');
+  const fd=new FormData();
+  fd.append('shift_name',shiftName);
+  fd.append('active_date',activeDate);
+  fd.append('summary',summary);
+  fd.append('items',JSON.stringify(items.map(it=>({title:it.title.trim(),details:it.details,priority:it.priority,status:it.status||'active',resolution_note:it.resolution_note,resolved_at:it.resolved_at}))));
+  shiftSummaryFiles.forEach(f=>fd.append('attachments[]',f.file,f.file.name));
+  const btn=document.getElementById('shiftSaveBtn');
+  const d=await withLoadingState(btn,'Saving...',()=>caseApiWithUploads(API.SHIFT.HANDOVER_CREATE,fd));
+  if(!d)return;
+  if(!d.success){handleModalError({modal:'shift',error:{message:d.message,status:d.status}});return;}
+  const created=(d.data&&d.data.items)||[];
+  const uploads=[];
+  created.forEach(ci=>{
+    const src=items[ci.client_index];
+    if(!src)return;
+    const files=shiftItemFiles[src.uid]||[];
+    if(!files.length)return;
+    const ifd=new FormData();
+    ifd.append('id',ci.id);
+    ifd.append('title',src.title.trim());
+    ifd.append('shift_name',shiftName);
+    ifd.append('priority',src.priority);
+    ifd.append('status',src.status||'active');
+    ifd.append('details',src.details);
+    ifd.append('active_date',activeDate);
+    ifd.append('resolution_note',src.resolution_note||'');
+    ifd.append('resolved_at',src.resolved_at||'');
+    files.forEach(f=>ifd.append('attachments[]',f.file,f.file.name));
+    uploads.push(caseApiWithUploads(API.SHIFT.UPDATE,ifd));
+  });
+  if(uploads.length){try{await Promise.all(uploads);}catch(e){/* screenshots are best-effort */}}
+  showModalSuccessAndClose({
+    modal:'shift',
+    message:'Handover filed.',
+    onAfterClose:()=>{clearShiftAllFiles();clearShiftSummaryFiles();tracsRefreshTaskMonitoringPanel('#dashboard-pane-shift-handover');}
+  });
+}
+async function saveShiftItemEdit(){
+  const it=shiftItems[0];
+  const title=(it?.title||'').trim();
   if(!title){toast('Title is required','error');return;}
   const id=val('shiftId');
-  shiftSetUploadStatus(shiftSelectedAttachments.length?'Uploading images...':'Saving report...');
-  const d=await withLoadingState(document.getElementById('shiftSaveBtn'),'Saving...',()=>shiftSelectedAttachments.length
-    ? caseApiWithUploads(id?API.SHIFT.UPDATE:API.SHIFT.CREATE,shiftPayloadFormData(id))
-    : api(id?API.SHIFT.UPDATE:API.SHIFT.CREATE,{id,title,shift_name:val('shiftName'),priority:val('shiftPriority'),status:val('shiftStatus')||'active',details:val('shiftDetails'),active_date:val('shiftDate'),resolution_note:val('shiftResolutionNote'),resolved_at:val('shiftResolvedAt')}));
+  const files=shiftItemFiles[it.uid]||[];
+  const btn=document.getElementById('shiftSaveBtn');
+  const d=await withLoadingState(btn,'Saving...',()=>{
+    if(files.length){
+      const fd=new FormData();
+      fd.append('id',id);
+      fd.append('title',title);
+      fd.append('shift_name',val('shiftName'));
+      fd.append('priority',it.priority);
+      fd.append('status',it.status||'active');
+      fd.append('details',it.details);
+      fd.append('active_date',val('shiftDate'));
+      fd.append('resolution_note',it.resolution_note||'');
+      fd.append('resolved_at',it.resolved_at||'');
+      files.forEach(f=>fd.append('attachments[]',f.file,f.file.name));
+      return caseApiWithUploads(API.SHIFT.UPDATE,fd);
+    }
+    return api(API.SHIFT.UPDATE,{id,title,shift_name:val('shiftName'),priority:it.priority,status:it.status||'active',details:it.details,active_date:val('shiftDate'),resolution_note:it.resolution_note,resolved_at:it.resolved_at});
+  });
   if(!d)return;
   if(d.success){
-    showModalSuccessAndClose({
-      modal:'shift',
-      message:id?'Report updated.':'Report created.',
-      onAfterClose:()=>{
-        clearShiftAttachmentState();
-        location.reload();
-      }
-    });
+    showModalSuccessAndClose({modal:'shift',message:'Item updated.',onAfterClose:()=>{clearShiftAllFiles();tracsRefreshTaskMonitoringPanel('#dashboard-pane-shift-handover');}});
   }else handleModalError({modal:'shift',error:{message:d.message,status:d.status}});
+}
+async function editHandoverSummary(id,btn){
+  const wrap=btn?.closest('.shift-report-agent-summary');
+  const current=wrap?.querySelector('.search-text')?.textContent?.trim()||'';
+  const next=await tracsPrompt({title:'Edit shift summary',message:'Shift summary for this handover (what to watch, how the shift went):',defaultValue:current,inputLabel:'Shift summary',required:true});
+  if(next===null || next===undefined)return;
+  const d=await api(API.SHIFT.HANDOVER_UPDATE,{id,summary:next});
+  if(d&&d.success){showToast('Handover summary updated.','success',{context:'page'});tracsRefreshTaskMonitoringPanel('#dashboard-pane-shift-handover');}
+  else handleRequestError({message:d?.message,status:d?.status},'page','The summary could not be updated. Please try again.');
 }
 async function resolveShiftReport(id,button=null){
   tracsConfirm('Mark this shift report as resolved?',async()=>{
     const d=await withLoadingState(button,'Resolving...',()=>api(API.SHIFT.RESOLVE,{id}));
     if(!d)return;
-    if(d.success){showToast('Report resolved.','success',{context:'page'});_reload();}
+    if(d.success){showToast('Report resolved.','success',{context:'page'});tracsRefreshTaskMonitoringPanel('#dashboard-pane-shift-handover');}
     else handleRequestError({message:d.message,status:d.status},'page','The shift report could not be resolved. Please try again.');
   });
 }
@@ -4049,7 +5627,6 @@ async function convertCurrency() {
   const amount = document.getElementById('currency-amount')?.value;
 
   if (!from || !to || !amount) {
-    console.warn("Missing input", { from, to, amount });
     return;
   }
 
@@ -4060,20 +5637,16 @@ async function convertCurrency() {
     const res = await fetch(url);
 
     const text = await res.text();
-    console.log("RAW RESPONSE:", text);
 
     let data;
     try {
       data = JSON.parse(text);
     } catch (e) {
-      console.error("JSON PARSE ERROR:", text);
       return;
     }
 
-    console.log("PARSED DATA:", data);
-
     if (!data.success) {
-      console.error("API FAILED:", data.message);
+      handleRequestError({ message: data.message }, 'page', 'Could not convert currency.');
       return;
     }
 
@@ -4094,8 +5667,14 @@ async function convertCurrency() {
     document.getElementById('currency-time').textContent =
       data.time;
 
+    const converted = { from, to, amount: parseFloat(amount), result, rate, created_at: data.time };
+    renderCurrencyLastConverted(converted);
+    currencyHistoryItems = [converted, ...currencyHistoryItems].slice(0, 5);
+    renderCurrencyHistory();
+
   } catch (err) {
     console.error("FETCH ERROR:", err);
+    handleRequestError(err, 'page', 'Could not convert currency.');
   }
 }
 
@@ -4110,6 +5689,654 @@ function formatCurrencyConverterNumber(value, allowSmallMarker = false) {
     minimumFractionDigits: hadFraction || hasRoundedFraction ? 2 : 0,
     maximumFractionDigits: 2,
   });
+}
+
+/* ── Currency Converter widget: realtime rate + history ────── */
+
+const CURRENCY_RATE_REFRESH_MS = 5 * 60 * 1000;
+let currencyRateTimer = null;
+let currencyHistoryItems = [];
+
+function tracsRelativeTime(input) {
+  if (!input) return '';
+  const iso = typeof input === 'string' && input.includes(' ') && !input.includes('T') ? input.replace(' ', 'T') : input;
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '';
+  const diffSec = Math.round((Date.now() - then) / 1000);
+  if (diffSec < 5) return 'just now';
+  if (diffSec < 60) return `${diffSec} seconds ago`;
+  const diffMin = Math.round(diffSec / 60);
+  if (diffMin < 60) return `${diffMin} minute${diffMin === 1 ? '' : 's'} ago`;
+  const diffHr = Math.round(diffMin / 60);
+  if (diffHr < 24) return `${diffHr} hour${diffHr === 1 ? '' : 's'} ago`;
+  const diffDay = Math.round(diffHr / 24);
+  return `${diffDay} day${diffDay === 1 ? '' : 's'} ago`;
+}
+
+async function fetchCurrencyRate(from = 'USD', to = 'IDR') {
+  const res = await fetch(`/api/currency-rate.php?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, {
+    headers: { Accept: 'application/json' },
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !data || !data.success) {
+    throw new Error(data?.message || `Could not load exchange rate (HTTP ${res.status}).`);
+  }
+  return data.data;
+}
+
+/* Compact single-line status pill living in the panel-head's right side
+   (like the Screenshot widget's region select in .panel-right) — contextual
+   metadata next to the title, not a body card competing with the form. */
+function renderCurrencyRateCard(rate) {
+  const card = document.getElementById('currency-rate-card');
+  if (!card) return;
+  card.dataset.state = 'ready';
+  const updated = new Date(rate.fetched_at);
+  const timeText = Number.isNaN(updated.getTime())
+    ? '—'
+    : updated.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }) + ' WIB';
+  card.title = `Updated ${timeText}`;
+  card.innerHTML = `
+    <span class="cri-pair">${escapeHtml(rate.from)} → ${escapeHtml(rate.to)}</span>
+    <span class="cri-rate">${formatCurrencyConverterNumber(rate.rate, true)}</span>
+    <button type="button" class="btn btn-ghost btn-icon cri-refresh" id="currency-rate-refresh" title="Refresh rate" aria-label="Refresh rate"><i data-lucide="refresh-cw" class="icon-xs"></i></button>
+  `;
+  tracsRefreshIcons(card);
+}
+
+function renderCurrencyRateError() {
+  const card = document.getElementById('currency-rate-card');
+  if (!card) return;
+  card.dataset.state = 'error';
+  card.innerHTML = `
+    <span class="cri-error">Rate unavailable</span>
+    <button type="button" class="cf-as-retry-btn" data-action="retry-rate">Retry</button>
+  `;
+}
+
+async function loadCurrencyRate() {
+  const card = document.getElementById('currency-rate-card');
+  if (card && card.dataset.state !== 'ready') card.dataset.state = 'loading';
+  try {
+    const rate = await fetchCurrencyRate('USD', 'IDR');
+    renderCurrencyRateCard(rate);
+  } catch (err) {
+    console.error('Currency rate error:', err);
+    renderCurrencyRateError();
+  }
+}
+
+function renderCurrencyLastConverted(item) {
+  const host = document.getElementById('currency-last-converted');
+  if (!host) return;
+  if (!item) {
+    host.hidden = true;
+    host.innerHTML = '';
+    return;
+  }
+  host.hidden = false;
+  host.innerHTML = `
+    <div class="clc-label">Last Converted</div>
+    <div class="clc-row">
+      <span>${formatCurrencyConverterNumber(item.amount)} ${escapeHtml(item.from)}</span>
+      <i data-lucide="arrow-right" class="icon-xs"></i>
+      <span>${formatCurrencyConverterNumber(item.result)} ${escapeHtml(item.to)}</span>
+    </div>
+    <div class="clc-time">${escapeHtml(tracsRelativeTime(item.created_at))}</div>
+  `;
+  tracsRefreshIcons(host);
+}
+
+function currencyHistoryRowHtml(item) {
+  return `
+    <div class="currency-history-row">
+      <span class="chr-pair">${escapeHtml(item.from)} → ${escapeHtml(item.to)}</span>
+      <span class="chr-amounts">${formatCurrencyConverterNumber(item.amount)} → ${formatCurrencyConverterNumber(item.result)}</span>
+      <span class="chr-time">${escapeHtml(tracsRelativeTime(item.created_at))}</span>
+    </div>
+  `;
+}
+
+function renderCurrencyHistory() {
+  const host = document.getElementById('currency-history-list');
+  if (!host) return;
+  host.innerHTML = currencyHistoryItems.length
+    ? currencyHistoryItems.map(currencyHistoryRowHtml).join('')
+    : `<div class="currency-history-empty">No conversion history</div>`;
+}
+
+async function loadCurrencyHistory() {
+  try {
+    const res = await fetch('/api/currency-history.php', { headers: { Accept: 'application/json' } });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data || !data.success) {
+      throw new Error(data?.message || `Could not load conversion history (HTTP ${res.status}).`);
+    }
+    currencyHistoryItems = Array.isArray(data.data?.items) ? data.data.items : [];
+    renderCurrencyLastConverted(data.data?.latest || null);
+    renderCurrencyHistory();
+  } catch (err) {
+    console.error('Currency history error:', err);
+    const host = document.getElementById('currency-history-list');
+    if (host) {
+      host.innerHTML = `
+        <div class="currency-history-error">
+          <span>Could not load conversion history.</span>
+          <button type="button" class="cf-as-retry-btn" data-action="retry-currency-history">Retry</button>
+        </div>
+      `;
+    }
+  }
+}
+
+function startCurrencyRateAutoRefresh() {
+  if (currencyRateTimer) clearInterval(currencyRateTimer);
+  currencyRateTimer = setInterval(() => {
+    if (document.hidden) return;
+    loadCurrencyRate();
+  }, CURRENCY_RATE_REFRESH_MS);
+}
+
+function initCurrencyWidget() {
+  loadCurrencyRate();
+  loadCurrencyHistory();
+  startCurrencyRateAutoRefresh();
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) loadCurrencyRate();
+  });
+
+  document.getElementById('currency-rate-card')?.addEventListener('click', (e) => {
+    if (e.target.closest('#currency-rate-refresh') || e.target.closest('[data-action="retry-rate"]')) {
+      loadCurrencyRate();
+    }
+  });
+
+  document.getElementById('currency-history-list')?.addEventListener('click', (e) => {
+    if (e.target.closest('[data-action="retry-currency-history"]')) loadCurrencyHistory();
+  });
+}
+
+/* ── Website Screenshot widget ─────────────────── */
+
+// Capture regions come from PageFleets' /api/v1/regions — never hardcoded,
+// so the dropdown always reflects whatever the API currently serves.
+let screenshotRegionsCache = null;
+let screenshotRegionsPromise = null;
+let screenshotHistoryItems = [];
+let screenshotCaptureInFlight = false;
+let lastScreenshotCapture = null; // { raw, region }
+
+const screenshotResults = new Map(); // 'single' or region value -> { dataUrl, host, imageUrl }
+
+async function fetchScreenshotRegions(force = false) {
+  if (screenshotRegionsCache && !force) return screenshotRegionsCache;
+  if (screenshotRegionsPromise) return screenshotRegionsPromise;
+  screenshotRegionsPromise = (async () => {
+    try {
+      const res = await fetch('/api/screenshot-regions.php', { headers: { Accept: 'application/json' } });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data || !data.success || !Array.isArray(data.data?.regions)) {
+        throw new Error(data?.message || `Could not load capture regions (HTTP ${res.status}).`);
+      }
+      screenshotRegionsCache = data.data.regions.map((r) => ({ value: r.code, label: r.name }));
+      return screenshotRegionsCache;
+    } finally {
+      screenshotRegionsPromise = null;
+    }
+  })();
+  return screenshotRegionsPromise;
+}
+
+function populateScreenshotRegionSelect(regions) {
+  const select = document.getElementById('screenshot-region');
+  if (!select) return;
+  [...select.querySelectorAll('option[data-region-option]')].forEach((o) => o.remove());
+  const allOpt = select.querySelector('option[value="all"]');
+  regions.forEach(({ value, label }) => {
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = label;
+    opt.dataset.regionOption = '1';
+    select.insertBefore(opt, allOpt || null);
+  });
+}
+
+async function loadScreenshotRegionOptions() {
+  try {
+    populateScreenshotRegionSelect(await fetchScreenshotRegions());
+  } catch (err) {
+    console.error('Screenshot regions error:', err);
+    // Auto/All options still work without the per-region list; the widget
+    // just won't offer individual regions until this succeeds (retried the
+    // next time the dropdown is repopulated).
+  }
+}
+
+function screenshotRegionLabel(value) {
+  const found = (screenshotRegionsCache || []).find((r) => r.value === value);
+  return found ? found.label : value;
+}
+
+function screenshotFileSizeText(bytes) {
+  if (!bytes || bytes <= 0) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+}
+
+function screenshotTimingText(meta) {
+  const m = meta || {};
+  const bits = [];
+  if (m.load != null) bits.push(`Load ${m.load}ms`);
+  if (m.dns != null) bits.push(`DNS ${m.dns}ms`);
+  if (m.tcp != null) bits.push(`TCP ${m.tcp}ms`);
+  if (m.ssl != null) bits.push(`SSL ${m.ssl}ms`);
+  if (m.ttfb != null) bits.push(`TTFB ${m.ttfb}ms`);
+  return bits.join(' · ');
+}
+
+function screenshotHistoryCardHtml(item) {
+  const statusBadge = item.status === 'failed'
+    ? '<span class="badge badge-sm b-hold">Failed</span>'
+    : '<span class="badge badge-sm b-resolved">Captured</span>';
+  const region = item.region_label || item.region || 'Auto';
+  return `
+    <button type="button" class="screenshot-history-card" data-history-id="${item.id}" title="${escapeHtml(item.host)}">
+      <span class="shc-thumb">
+        <img src="${escapeHtml(item.thumbnail_url)}" alt="Screenshot of ${escapeHtml(item.host)}" loading="lazy">
+      </span>
+      <span class="shc-foot">
+        ${statusBadge}
+        <span class="shc-region">${escapeHtml(region)}</span>
+        <span class="shc-time">${escapeHtml(tracsRelativeTime(item.created_at))}</span>
+      </span>
+    </button>
+  `;
+}
+
+function renderScreenshotHistory() {
+  const host = document.getElementById('screenshot-history');
+  if (!host) return;
+  if (!screenshotHistoryItems.length) {
+    host.dataset.state = 'empty';
+    host.innerHTML = `
+      <div class="empty screenshot-history-empty">
+        <div class="empty-ic"><i data-lucide="camera" class="icon-sm"></i></div>
+        <div class="empty-t">No screenshots captured yet</div>
+        <div class="empty-s">Capture a website above to see it here.</div>
+      </div>
+    `;
+  } else {
+    host.dataset.state = 'ready';
+    host.innerHTML = `<div class="screenshot-history-grid">${screenshotHistoryItems.map(screenshotHistoryCardHtml).join('')}</div>`;
+  }
+  tracsRefreshIcons(host);
+}
+
+async function loadScreenshotHistory() {
+  const host = document.getElementById('screenshot-history');
+  if (host && host.dataset.state !== 'ready') host.dataset.state = 'loading';
+  try {
+    const res = await fetch('/api/screenshot-history-list.php', { headers: { Accept: 'application/json' } });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data || !data.success) {
+      throw new Error(data?.message || `Could not load screenshot history (HTTP ${res.status}).`);
+    }
+    screenshotHistoryItems = Array.isArray(data.data?.items) ? data.data.items : [];
+    renderScreenshotHistory();
+  } catch (err) {
+    console.error('Screenshot history error:', err);
+    if (host) {
+      host.dataset.state = 'error';
+      host.innerHTML = `
+        <div class="screenshot-history-error">
+          <span>Could not load screenshot history.</span>
+          <button type="button" class="cf-as-retry-btn" data-action="retry-history">Retry</button>
+        </div>
+      `;
+    }
+  }
+}
+
+/* Clicking a history card opens the same two-column modal a fresh capture
+   uses, populated from the already-fetched history row — no extra request
+   needed since screenshot-history-list.php already returns dims/size/timing. */
+function openScreenshotHistoryModal(id) {
+  const item = screenshotHistoryItems.find((it) => String(it.id) === String(id));
+  if (!item) return;
+
+  const imageUrl = window.location.origin + item.image_url;
+  screenshotResults.set('single', { dataUrl: item.image_url, host: item.host, imageUrl });
+  lastScreenshotCapture = { raw: item.raw_input || item.host, region: item.region || '' };
+
+  const body = document.getElementById('screenshotResultBody');
+  if (!body) return;
+  const regionLabel = item.region_label || item.region || 'Auto';
+  const dims = item.width && item.height ? `${item.width}×${item.height}` : '';
+  const sizeText = screenshotFileSizeText(item.file_size_bytes);
+  const timingText = screenshotTimingText(item.meta);
+  const capturedAt = new Date((item.created_at || '').replace(' ', 'T'));
+  body.innerHTML = `
+    <div class="screenshot-result-image">
+      <button type="button" class="screenshot-preview" data-action="view" data-region="single">
+        <img src="${escapeHtml(item.image_url)}" alt="Captured website screenshot">
+      </button>
+    </div>
+    <div class="screenshot-result-meta">
+      <dl class="screenshot-result-fields">
+        <div><dt>URL</dt><dd>${escapeHtml(item.raw_input || item.host)}</dd></div>
+        <div><dt>Region</dt><dd>${escapeHtml(regionLabel)}</dd></div>
+        <div><dt>Captured</dt><dd>${escapeHtml(Number.isNaN(capturedAt.getTime()) ? item.created_at : capturedAt.toLocaleString())}</dd></div>
+        ${dims ? `<div><dt>Resolution</dt><dd>${escapeHtml(dims)}</dd></div>` : ''}
+        ${sizeText ? `<div><dt>Size</dt><dd>${escapeHtml(sizeText)}</dd></div>` : ''}
+      </dl>
+      ${timingText ? `<div class="screenshot-result-timing">Capture duration: ${escapeHtml(timingText)}</div>` : ''}
+      <div class="screenshot-result-actions">
+        <button type="button" class="btn btn-ghost screenshot-action" data-action="download" data-region="single"><i data-lucide="download" class="icon-sm"></i> Download</button>
+        <button type="button" class="btn btn-ghost screenshot-action" data-action="view" data-region="single"><i data-lucide="maximize-2" class="icon-sm"></i> Open Full Size</button>
+        <button type="button" class="btn btn-ghost screenshot-action" data-action="recapture-modal"><i data-lucide="rotate-cw" class="icon-sm"></i> Capture Again</button>
+      </div>
+    </div>
+  `;
+  if (window.lucide?.createIcons) window.lucide.createIcons();
+  openScreenshotResultModal(item.host);
+}
+
+function initScreenshotWidget() {
+  loadScreenshotRegionOptions();
+  loadScreenshotHistory();
+
+  document.getElementById('screenshot-history')?.addEventListener('click', (e) => {
+    if (e.target.closest('[data-action="retry-history"]')) {
+      loadScreenshotHistory();
+      return;
+    }
+    const card = e.target.closest('.screenshot-history-card');
+    if (card?.dataset.historyId) openScreenshotHistoryModal(card.dataset.historyId);
+  });
+}
+
+function setScreenshotStatus(message, isError = false) {
+  const el = document.getElementById('screenshot-status');
+  if (!el) return;
+  if (!message) {
+    el.hidden = true;
+    el.textContent = '';
+    return;
+  }
+  el.hidden = false;
+  el.textContent = message;
+  el.classList.toggle('is-error', !!isError);
+}
+
+function screenshotMetaText(host, meta) {
+  const m = meta || {};
+  const bits = [];
+  if (m.load != null) bits.push(`Load ${m.load}ms`);
+  if (m.dns != null) bits.push(`DNS ${m.dns}ms`);
+  if (m.ttfb != null) bits.push(`TTFB ${m.ttfb}ms`);
+  return bits.length ? `${host} · ${bits.join(' · ')}` : host;
+}
+
+async function fetchScreenshot(raw, region) {
+  const params = new URLSearchParams({ url: raw });
+  if (region) {
+    params.set('region', region);
+    params.set('region_label', screenshotRegionLabel(region));
+  }
+  const res = await fetch(`/api/screenshot-capture.php?${params.toString()}`, {
+    headers: { 'Accept': 'application/json' },
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !data || !data.success || !data.data?.image) {
+    throw new Error(data?.message || `Capture failed (HTTP ${res.status}).`);
+  }
+  return data.data;
+}
+
+function openScreenshotResultModal(title) {
+  const modal = document.getElementById('screenshotResultModal');
+  const titleEl = document.getElementById('screenshotResultTitle');
+  if (titleEl) titleEl.textContent = title;
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeScreenshotResultModal() {
+  const modal = document.getElementById('screenshotResultModal');
+  const body = document.getElementById('screenshotResultBody');
+  if (modal) modal.classList.add('hidden');
+  if (body) body.innerHTML = '';
+  screenshotResults.clear();
+}
+
+function screenshotCardHtml(key, label) {
+  return `
+    <div class="screenshot-grid-item" data-region="${escapeHtml(key)}">
+      <div class="screenshot-grid-label">${escapeHtml(label)}</div>
+      <button type="button" class="screenshot-preview" data-action="view" data-region="${escapeHtml(key)}" disabled>
+        <img alt="Captured website screenshot for ${escapeHtml(label)}" hidden>
+      </button>
+      <div class="screenshot-status" data-role="status">Capturing…</div>
+      <div class="screenshot-toolbar">
+        <span class="screenshot-meta" data-role="meta"></span>
+        <div class="screenshot-actions">
+          <button type="button" class="btn btn-ghost screenshot-action" data-action="view" data-region="${escapeHtml(key)}" disabled><i data-lucide="maximize-2" class="icon-sm"></i> View</button>
+          <button type="button" class="btn btn-ghost screenshot-action" data-action="download" data-region="${escapeHtml(key)}" disabled><i data-lucide="download" class="icon-sm"></i> Download</button>
+          <button type="button" class="btn btn-ghost screenshot-action" data-action="copy" data-region="${escapeHtml(key)}" disabled><i data-lucide="copy" class="icon-sm"></i> <span class="screenshot-copy-label">Copy</span></button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function fillScreenshotCard(body, key, payload, label) {
+  const card = body.querySelector(`.screenshot-grid-item[data-region="${CSS.escape(key)}"]`);
+  if (!card) return;
+  const statusEl = card.querySelector('[data-role="status"]');
+  const img = card.querySelector('img');
+  const actionBtns = card.querySelectorAll('[data-action]');
+  const host = payload.host || label;
+  screenshotResults.set(key, { dataUrl: payload.image, host });
+
+  if (img) {
+    img.onerror = () => {
+      screenshotResults.delete(key);
+      img.hidden = true;
+      if (statusEl) {
+        statusEl.hidden = false;
+        statusEl.textContent = 'The screenshot service returned an unreadable image.';
+        statusEl.classList.add('is-error');
+      }
+      actionBtns.forEach((b) => { b.disabled = true; });
+    };
+    img.src = payload.image;
+    img.hidden = false;
+  }
+  if (statusEl) statusEl.hidden = true;
+  const metaEl = card.querySelector('[data-role="meta"]');
+  if (metaEl) metaEl.textContent = screenshotMetaText(host, payload.meta);
+  actionBtns.forEach((b) => { b.disabled = false; });
+}
+
+function failScreenshotCard(body, key, message) {
+  const card = body.querySelector(`.screenshot-grid-item[data-region="${CSS.escape(key)}"]`);
+  const statusEl = card?.querySelector('[data-role="status"]');
+  if (statusEl) {
+    statusEl.textContent = message || 'Capture failed for this region.';
+    statusEl.classList.add('is-error');
+  }
+}
+
+async function captureScreenshot() {
+  if (screenshotCaptureInFlight) return;
+  const input = document.getElementById('screenshot-url');
+  const btn = document.getElementById('screenshot-btn');
+  const label = btn?.querySelector('.screenshot-btn-label');
+  const region = document.getElementById('screenshot-region')?.value || '';
+
+  const raw = (input?.value || '').trim();
+  if (!raw) {
+    setScreenshotStatus('Enter a domain, URL, or IP address first.', true);
+    input?.focus();
+    return;
+  }
+
+  screenshotCaptureInFlight = true;
+  if (btn) btn.disabled = true;
+  if (label) label.textContent = 'Capturing…';
+  const statStrip = document.querySelector('.dashboard-stat-strip');
+  statStrip?.classList.add('is-scanning');
+  try {
+    if (region === 'all') {
+      await captureAllRegions(raw);
+    } else {
+      await captureSingleRegion(raw, region);
+    }
+  } finally {
+    screenshotCaptureInFlight = false;
+    if (btn) btn.disabled = false;
+    if (label) label.textContent = 'Capture';
+    statStrip?.classList.remove('is-scanning');
+  }
+}
+
+async function captureSingleRegion(raw, region) {
+  screenshotResults.clear();
+  setScreenshotStatus('Capturing screenshot…');
+  lastScreenshotCapture = { raw, region };
+
+  try {
+    const payload = await fetchScreenshot(raw, region);
+    const host = payload.host || 'screenshot';
+    const historyMeta = payload.history || null;
+    const imageUrl = historyMeta ? window.location.origin + historyMeta.image_url : null;
+    screenshotResults.set('single', { dataUrl: payload.image, host, imageUrl });
+
+    const body = document.getElementById('screenshotResultBody');
+    if (body) {
+      const regionLabel = region ? screenshotRegionLabel(region) : 'Auto';
+      const dims = historyMeta?.width && historyMeta?.height ? `${historyMeta.width}×${historyMeta.height}` : '';
+      const sizeText = screenshotFileSizeText(historyMeta?.file_size_bytes);
+      const timingText = screenshotTimingText(payload.meta);
+      body.innerHTML = `
+        <div class="screenshot-result-image">
+          <button type="button" class="screenshot-preview" data-action="view" data-region="single">
+            <img alt="Captured website screenshot">
+          </button>
+        </div>
+        <div class="screenshot-result-meta">
+          <dl class="screenshot-result-fields">
+            <div><dt>URL</dt><dd>${escapeHtml(host)}</dd></div>
+            <div><dt>Region</dt><dd>${escapeHtml(regionLabel)}</dd></div>
+            <div><dt>Captured</dt><dd>${escapeHtml(new Date().toLocaleString())}</dd></div>
+            ${dims ? `<div><dt>Resolution</dt><dd>${escapeHtml(dims)}</dd></div>` : ''}
+            ${sizeText ? `<div><dt>Size</dt><dd>${escapeHtml(sizeText)}</dd></div>` : ''}
+          </dl>
+          ${timingText ? `<div class="screenshot-result-timing">${escapeHtml(timingText)}</div>` : ''}
+          <div class="screenshot-result-actions">
+            <button type="button" class="btn btn-ghost screenshot-action" data-action="download" data-region="single"><i data-lucide="download" class="icon-sm"></i> Download</button>
+            <button type="button" class="btn btn-ghost screenshot-action" data-action="view" data-region="single"><i data-lucide="maximize-2" class="icon-sm"></i> Open Full Size</button>
+            <button type="button" class="btn btn-ghost screenshot-action" data-action="recapture-modal"><i data-lucide="rotate-cw" class="icon-sm"></i> Capture Again</button>
+          </div>
+        </div>
+      `;
+      const img = body.querySelector('img');
+      if (img) {
+        img.onerror = () => {
+          screenshotResults.delete('single');
+          setScreenshotStatus('The screenshot service returned an unreadable image.', true);
+          closeScreenshotResultModal();
+        };
+        img.src = payload.image;
+      }
+      if (window.lucide?.createIcons) window.lucide.createIcons();
+    }
+    setScreenshotStatus('');
+    showToast('Screenshot captured.', 'success', { context: 'page' });
+    openScreenshotResultModal(host);
+    loadScreenshotHistory();
+  } catch (err) {
+    console.error('Screenshot capture error:', err);
+    setScreenshotStatus(err.message || 'Could not reach the screenshot service.', true);
+    handleRequestError(err, 'page', 'Could not capture the screenshot.');
+  }
+}
+
+async function captureAllRegions(raw) {
+  screenshotResults.clear();
+  lastScreenshotCapture = { raw, region: 'all' };
+  let regions;
+  try {
+    regions = await fetchScreenshotRegions();
+  } catch (err) {
+    console.error('Screenshot regions error:', err);
+    setScreenshotStatus(err.message || 'Could not load capture regions.', true);
+    return;
+  }
+  setScreenshotStatus(`Capturing from ${regions.length} regions…`);
+
+  const body = document.getElementById('screenshotResultBody');
+  if (!body) return;
+  body.innerHTML = `<div class="screenshot-grid">${regions.map(({ value, label }) => screenshotCardHtml(value, label)).join('')}</div>`;
+  if (window.lucide?.createIcons) window.lucide.createIcons();
+  openScreenshotResultModal(`${raw} · All regions`);
+
+  const settled = await Promise.allSettled(
+    regions.map(({ value }) => fetchScreenshot(raw, value))
+  );
+
+  settled.forEach((outcome, i) => {
+    const { value, label } = regions[i];
+    if (outcome.status === 'rejected') {
+      failScreenshotCard(body, value, outcome.reason?.message);
+    } else {
+      fillScreenshotCard(body, value, outcome.value, label);
+    }
+  });
+
+  const failures = settled.filter((o) => o.status === 'rejected').length;
+  if (failures === settled.length) {
+    setScreenshotStatus('All regions failed to capture.', true);
+  } else if (failures > 0) {
+    setScreenshotStatus(`${failures} of ${settled.length} regions failed to capture.`, true);
+  } else {
+    setScreenshotStatus('');
+  }
+  loadScreenshotHistory();
+}
+
+async function screenshotResultAction(action, key) {
+  const entry = screenshotResults.get(key);
+  if (!entry) return;
+  if (action === 'view') {
+    const res = await fetch(entry.dataUrl);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank', 'noopener');
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } else if (action === 'download') {
+    const safeHost = (entry.host || key).replace(/[^a-z0-9.-]+/gi, '_');
+    const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+    const a = document.createElement('a');
+    a.href = entry.dataUrl;
+    a.download = `screenshot_${safeHost}_${key}_${stamp}.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } else if (action === 'copy') {
+    try {
+      const res = await fetch(entry.dataUrl);
+      const blob = await res.blob();
+      if (!navigator.clipboard || typeof ClipboardItem === 'undefined') {
+        throw new Error('Clipboard image copy unsupported');
+      }
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    } catch (err) {
+      console.error('Screenshot copy failed:', err);
+      setScreenshotStatus('Copy not supported in this browser — use Download instead.', true);
+    }
+  }
 }
 
 function setOpsModalMode(isEdit) {
@@ -4184,7 +6411,7 @@ async function saveOpsStatus() {
     showModalSuccessAndClose({
       modal:'ops',
       message:'Operational status saved.',
-      onAfterClose:()=>location.reload()
+      onAfterClose:()=>refreshOpsStatusWidget()
     });
 
   } catch (err) {
@@ -4221,7 +6448,7 @@ async function archiveOpsStatus() {
     showModalSuccessAndClose({
       modal:'ops',
       message:'Operational status archived.',
-      onAfterClose:()=>location.reload()
+      onAfterClose:()=>refreshOpsStatusWidget()
     });
 
   } catch (err) {
@@ -4229,6 +6456,66 @@ async function archiveOpsStatus() {
     console.error(err);
     handleModalError({modal:'ops',button,error:err,fallbackMessage:'The operational status could not be archived. Please try again.'});
   }
+}
+
+/* Ops-status marquee. State lives at module scope (not inside bindOpsStatusSlider)
+   so a post-save refresh can re-run bind without stacking duplicate listeners on
+   the persistent opsNext/opsPrev buttons, while nextOps/prevOps always look up
+   #opsTrack/.ops-item fresh since that markup gets swapped in on refresh. */
+let _opsIndex=0;
+let _opsAnimating=false;
+let _opsAutoTimer=null;
+function _opsItems(){ return document.querySelectorAll('.ops-item'); }
+function updateOpsSlider(){
+  const track=document.getElementById('opsTrack');
+  const items=_opsItems();
+  if(!track||!items.length)return;
+  _opsAnimating=true;
+  items.forEach((item,index)=>{
+    item.classList.remove('active');
+    if(index===_opsIndex)setTimeout(()=>item.classList.add('active'),120);
+  });
+  track.style.transform=`translateX(-${_opsIndex*100}%)`;
+  setTimeout(()=>{_opsAnimating=false;},500);
+}
+function nextOps(){
+  const items=_opsItems();
+  if(!items.length||_opsAnimating)return;
+  _opsIndex=(_opsIndex+1)%items.length;
+  updateOpsSlider();
+}
+function prevOps(){
+  const items=_opsItems();
+  if(!items.length||_opsAnimating)return;
+  _opsIndex=(_opsIndex-1+items.length)%items.length;
+  updateOpsSlider();
+}
+function bindOpsStatusSlider(){
+  const opsNextBtn=document.getElementById('opsNext');
+  const opsPrevBtn=document.getElementById('opsPrev');
+  if(opsNextBtn && opsNextBtn.dataset.opsBound!=='1'){
+    opsNextBtn.addEventListener('click',nextOps);
+    opsNextBtn.dataset.opsBound='1';
+  }
+  if(opsPrevBtn && opsPrevBtn.dataset.opsBound!=='1'){
+    opsPrevBtn.addEventListener('click',prevOps);
+    opsPrevBtn.dataset.opsBound='1';
+  }
+  const items=_opsItems();
+  _opsIndex=0;
+  _opsAnimating=false;
+  if(_opsAutoTimer){clearInterval(_opsAutoTimer);_opsAutoTimer=null;}
+  if(items.length>0){
+    items.forEach(item=>item.classList.remove('active'));
+    items[0].classList.add('active');
+    updateOpsSlider();
+    if(items.length>1)_opsAutoTimer=setInterval(nextOps,6500);
+  }
+}
+async function refreshOpsStatusWidget(){
+  const ok=await tracsSwapFragment('#opsTrack',{preserveScroll:false});
+  if(ok)bindOpsStatusSlider();
+  return ok;
 }
 
 function bindOpsStatusControls() {
@@ -4399,54 +6686,74 @@ function setQuickTime(type, sourceBtn = null) {
 
 window.setQuickTime = setQuickTime;
 
-function bindSidebarTooltips() {
-  const hosts = document.querySelectorAll('.sidebar .nav-item, .sidebar .user-avatar, .sidebar .theme-toggle');
-  if (!hosts.length) return;
+const TRACS_SIDEBAR_PIN_KEY = 'tracs_sidebar_pins';
+const TRACS_SIDEBAR_PIN_MAX = 4;
 
-  const placeTip = (host) => {
-    if (!host) return;
-    const tip = host.querySelector('.nav-tip');
-    const sidebar = host.closest('.sidebar');
-    if (!sidebar) return;
+function tracsGetSidebarPins() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(TRACS_SIDEBAR_PIN_KEY) || '[]');
+    return Array.isArray(raw) ? raw.filter(v => typeof v === 'string') : [];
+  } catch (e) {
+    return [];
+  }
+}
 
-    const hostRect = host.getBoundingClientRect();
-    const sideRect = sidebar.getBoundingClientRect();
-    if (tip) {
-      tip.style.setProperty('--nav-tip-left', `${sideRect.right + 10}px`);
-      tip.style.setProperty('--nav-tip-top', `${hostRect.top + hostRect.height / 2}px`);
-    }
+function tracsSetSidebarPins(pins) {
+  try { localStorage.setItem(TRACS_SIDEBAR_PIN_KEY, JSON.stringify(pins)); } catch (e) {}
+}
 
-    const submenu = host.closest('.nav-menu-wrap')?.querySelector('.nav-submenu');
-    if (submenu) {
-      submenu.style.setProperty('--nav-submenu-left', `${sideRect.right + 10}px`);
-      submenu.style.setProperty('--nav-submenu-top', `${hostRect.top + hostRect.height / 2}px`);
-    }
-  };
+function bindSidebarFavorites() {
+  const sidebar = document.querySelector('.sidebar');
+  const favSection = document.getElementById('navFavorites');
+  const favList = document.getElementById('navFavoritesList');
+  if (!sidebar || !favSection || !favList) return;
 
-  const placeOpenSubmenus = () => {
-    document.querySelectorAll('.sidebar .nav-menu-wrap[open] > .nav-item').forEach(host => placeTip(host));
-  };
-
-  hosts.forEach((host) => {
-    host.addEventListener('mouseenter', () => placeTip(host));
-    host.addEventListener('focusin', () => placeTip(host));
-    if (host.closest('.nav-menu-wrap')) {
-      host.addEventListener('click', () => placeTip(host));
-      host.addEventListener('keydown', event => {
-        if (event.key === 'Enter' || event.key === ' ') placeTip(host);
-      });
-    }
-  });
-
-  document.querySelectorAll('.sidebar .nav-menu-wrap').forEach(menu => {
-    menu.addEventListener('toggle', () => {
-      if (menu.open) placeTip(menu.querySelector('summary.nav-item'));
+  const syncPinButtons = () => {
+    const pins = tracsGetSidebarPins();
+    sidebar.querySelectorAll('[data-pin-toggle]').forEach(btn => {
+      const pinned = pins.includes(btn.dataset.pinKey);
+      btn.classList.toggle('is-pinned', pinned);
+      btn.setAttribute('aria-pressed', pinned ? 'true' : 'false');
+      btn.title = pinned ? `Unpin ${btn.dataset.pinLabel}` : `Pin ${btn.dataset.pinLabel} to favorites`;
     });
+  };
+
+  const renderFavorites = () => {
+    const pins = tracsGetSidebarPins();
+    favList.innerHTML = '';
+    pins.forEach(key => {
+      const source = sidebar.querySelector(`.sidebar-nav > .nav-group .nav-item-wrap[data-nav-key="${key}"]`);
+      if (!source) return;
+      const clone = source.cloneNode(true);
+      clone.querySelectorAll('[id]').forEach(node => node.removeAttribute('id'));
+      favList.appendChild(clone);
+    });
+    favSection.hidden = pins.length === 0;
+    tracsRefreshIcons(favList);
+    syncPinButtons();
+  };
+
+  const togglePin = (key) => {
+    if (!key) return;
+    let pins = tracsGetSidebarPins();
+    if (pins.includes(key)) {
+      pins = pins.filter(k => k !== key);
+    } else {
+      if (pins.length >= TRACS_SIDEBAR_PIN_MAX) return;
+      pins = [...pins, key];
+    }
+    tracsSetSidebarPins(pins);
+    renderFavorites();
+  };
+
+  sidebar.addEventListener('click', event => {
+    const btn = event.target.closest('[data-pin-toggle]');
+    if (!btn) return;
+    event.preventDefault();
+    togglePin(btn.dataset.pinKey);
   });
 
-  window.addEventListener('resize', placeOpenSubmenus);
-  window.addEventListener('scroll', placeOpenSubmenus, true);
-  requestAnimationFrame(placeOpenSubmenus);
+  renderFavorites();
 }
 
 function bindSidebarMenus() {
@@ -4466,6 +6773,21 @@ function bindSidebarMenus() {
   allMenus.forEach(menu => {
     menu.addEventListener('toggle', () => {
       if (menu.open) closeMenus(menu);
+    });
+  });
+
+  // On a short viewport, the sidebar's own scroll container can leave a
+  // just-expanded submenu (e.g. User Management's two links) below the
+  // visible area, so opening it looks like nothing happened until the user
+  // manually scrolls. Scroll the whole <details> into view once the
+  // grid-template-rows expand transition finishes (scrolling immediately
+  // would compute against the pre-expansion, still-collapsed height).
+  navMenus.forEach(menu => {
+    const track = menu.querySelector('.nav-submenu-track');
+    if (!track) return;
+    track.addEventListener('transitionend', event => {
+      if (event.propertyName !== 'grid-template-rows' || !menu.open) return;
+      menu.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     });
   });
 
@@ -4527,19 +6849,8 @@ document.addEventListener('DOMContentLoaded', () => {
   bindQuickDatetimeInputs();
   bindOpsStatusControls();
   bindSidebarMenus();
-  bindSidebarTooltips();
+  bindSidebarFavorites();
   initShiftReportReminders();
-
-  const loginError=document.querySelector('.login-card .err-box');
-  if(loginError?.textContent.trim()){
-    showToast(loginError.textContent.trim(),'error',{
-      context:'page',
-      position:'top-right',
-      persistent:true,
-      closable:true,
-      priority:'critical'
-    });
-  }
 
   /* ── Currency Converter ───────────────────── */
 
@@ -4562,79 +6873,40 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
   if (document.getElementById('currency-result')) {
-    convertCurrency();
+    initCurrencyWidget();
   }
 
-  /* ── OPS STATUS SLIDER ────────────────────── */
+  /* ── Website Screenshot widget ────────────── */
 
-  const opsTrack = document.getElementById('opsTrack');
-  const opsItems = document.querySelectorAll('.ops-item');
+  if (document.getElementById('screenshot-history')) {
+    initScreenshotWidget();
+  }
 
-  let opsIndex = 0;
-  let opsAnimating = false;
+  document.getElementById('screenshot-btn')
+    ?.addEventListener('click', captureScreenshot);
 
-  function updateOpsSlider() {
-
-    if (!opsTrack || !opsItems.length) return;
-
-    opsAnimating = true;
-
-    opsItems.forEach((item, index) => {
-
-      item.classList.remove('active');
-
-      if (index === opsIndex) {
-
-        setTimeout(() => {
-          item.classList.add('active');
-        }, 120);
+  document.getElementById('screenshot-url')
+    ?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        captureScreenshot();
       }
     });
 
-    opsTrack.style.transform =
-      `translateX(-${opsIndex * 100}%)`;
+  document.getElementById('screenshotResultBody')
+    ?.addEventListener('click', (e) => {
+      const actionEl = e.target.closest('[data-action]');
+      if (!actionEl || actionEl.disabled) return;
+      if (actionEl.dataset.action === 'recapture-modal') {
+        if (lastScreenshotCapture) captureSingleRegion(lastScreenshotCapture.raw, lastScreenshotCapture.region);
+        return;
+      }
+      const key = actionEl.dataset.region || actionEl.closest('.screenshot-grid-item')?.dataset.region;
+      if (key) screenshotResultAction(actionEl.dataset.action, key);
+    });
 
-    setTimeout(() => {
-      opsAnimating = false;
-    }, 500);
-  }
-
-  function nextOps() {
-
-    if (!opsItems.length || opsAnimating) return;
-
-    opsIndex =
-      (opsIndex + 1) % opsItems.length;
-
-    updateOpsSlider();
-  }
-
-  function prevOps() {
-
-    if (!opsItems.length || opsAnimating) return;
-
-    opsIndex =
-      (opsIndex - 1 + opsItems.length) % opsItems.length;
-
-    updateOpsSlider();
-  }
-
-  document.getElementById('opsNext')
-    ?.addEventListener('click', nextOps);
-
-  document.getElementById('opsPrev')
-    ?.addEventListener('click', prevOps);
-
-  if (opsItems.length > 0) {
-
-    opsItems[0].classList.add('active');
-
-    updateOpsSlider();
-
-    if (opsItems.length > 1) {
-      setInterval(nextOps, 6500);
-    }
-  }
+  /* ── OPS STATUS SLIDER ────────────────────── */
+  bindOpsStatusSlider();
 
 });
 
@@ -4650,6 +6922,7 @@ API.DT = {
 
 /* Status badge class map (mirrors PHP dt_status_class) */
 const DT_STATUS_CLASS = {
+  'pending'              : 'dt-status-awaiting',
   'pending transfer'    : 'dt-status-pending',
   'locked'              : 'dt-status-locked',
   'error epp code'      : 'dt-status-error',
@@ -4662,17 +6935,129 @@ const DT_STATUS_CLASS = {
   'renew period'        : 'dt-status-renew',
 };
 const DT_STATUS_LABEL = {
+  'done'                : 'Done',
+  'pending'              : 'Pending',
   'pending transfer'    : 'Pending Transfer',
   'locked'              : 'Locked',
   'error epp code'      : 'Error EPP Code',
   'move domain'         : 'Move Domain',
-  'done'                : 'Done',
   'cancelled'           : 'Cancelled',
   'retransferred'       : 'Retransferred',
   'transferred away'    : 'Transferred Away',
   'pending verification': 'Pending Verification',
   'renew period'        : 'Renew Period',
 };
+function dtStatusStatLabel(status=''){
+  if(status === 'pending transfer')return 'Pending Transfer';
+  if(status === 'done')return 'Completed';
+  if(status === 'cancelled')return 'Cancelled';
+  if(status === 'locked' || status === 'error epp code')return 'Error / Problem';
+  return '';
+}
+function dtModalPayload(record){
+  return {
+    id: Number(record?.id || 0),
+    domain_name: record?.domain_name || '',
+    transfer_status: record?.transfer_status || 'pending transfer',
+    process_start_date: record?.process_start_date || '',
+    process_end_date: record?.process_end_date || '',
+    webnic_reseller_transfer: record?.webnic_reseller_transfer || '',
+    notes: record?.notes || ''
+  };
+}
+function dtFormatDate(value=''){
+  if(!value)return '';
+  const date=new Date(`${value}T00:00:00`);
+  if(Number.isNaN(date.getTime()))return value;
+  return date.toLocaleDateString(undefined,{day:'2-digit',month:'short',year:'numeric'});
+}
+function dtMoveOptions(selected=''){
+  const source=document.getElementById('nWebnic') || document.getElementById('dtWebnic');
+  const values=source ? Array.from(source.options).map(option=>option.value) : ['','Webnic','Resellercamp'];
+  if(selected && !values.includes(selected))values.push(selected);
+  return values.map(value=>{
+    const label=value || '—';
+    return `<option value="${escHtml(value)}"${value===selected?' selected':''}>${escHtml(label)}</option>`;
+  }).join('');
+}
+function dtStatusOptions(selected='pending transfer'){
+  return Object.keys(DT_STATUS_LABEL).map(value=>
+    `<option value="${escHtml(value)}"${value===selected?' selected':''}>${escHtml(DT_STATUS_LABEL[value])}</option>`
+  ).join('');
+}
+function dtEnsureTable(){
+  let tbody=tracsTableBody('.dt-table');
+  if(tbody)return tbody;
+  const empty=document.querySelector('.dt-empty');
+  if(!empty)return null;
+  const wrap=document.createElement('div');
+  wrap.className='dt-table-wrap';
+  wrap.innerHTML=`
+    <table class="dt-table">
+      <thead><tr><th style="width:38px">No</th><th>Domain</th><th>Status</th><th>Start Date</th><th>End Date</th><th>Registrar</th><th>Notes</th></tr></thead>
+      <tbody></tbody>
+    </table>`;
+  empty.replaceWith(wrap);
+  return wrap.querySelector('tbody');
+}
+function dtRowHtml(record){
+  const id=Number(record?.id || 0);
+  const status=record?.transfer_status || 'pending transfer';
+  const move=record?.webnic_reseller_transfer || '';
+  const notes=record?.notes || '';
+  const payload=jsonActionArg(dtModalPayload(record));
+  return `
+    <tr data-dt-id="${id}" data-dt-status="${escHtml(status)}" data-dt-start-date="${escHtml(record?.process_start_date || '')}" data-dt-end-date="${escHtml(record?.process_end_date || '')}" data-dt-move="${escHtml(move)}">
+      <td><span class="dt-rownum">1</span></td>
+      <td><div class="dt-domain-name" title="${escHtml(record?.domain_name || '')}">${escHtml(record?.domain_name || '')}</div><div class="dt-domain-sub">#${id}</div><div class="creator-meta">${escHtml(record?.creator_name || 'System')}</div></td>
+      <td><div class="dt-status-wrap" title="Click to change status"><span class="dt-status ${DT_STATUS_CLASS[status] || ''}" id="dt-status-badge-${id}">${escHtml(DT_STATUS_LABEL[status] || status)}</span><select class="dt-status-select" onchange="quickStatusUpdate(${id}, this)" aria-label="Change status for ${escHtml(record?.domain_name || 'domain')}">${dtStatusOptions(status)}</select></div></td>
+      <td>${record?.process_start_date ? `<span class="dt-date">${escHtml(dtFormatDate(record.process_start_date))}</span>` : '<span class="dt-date-none">—</span>'}</td>
+      <td><input type="date" class="dt-date-input ${record?.process_end_date ? 'has-value' : ''}" id="dt-end-${id}" value="${escHtml(record?.process_end_date || '')}" data-prev="${escHtml(record?.process_end_date || '')}" onchange="quickEndDateUpdate(${id}, this)" title="Click to set end date"></td>
+      <td><select class="dt-move-select ${move ? 'has-value' : ''}" id="dt-move-${id}" onchange="quickMoveUpdate(${id}, this)" aria-label="Registrar for ${escHtml(record?.domain_name || 'domain')}">${dtMoveOptions(move)}</select></td>
+      <td>${notes ? `<span class="dt-notes" title="${escHtml(notes)}">${escHtml(notes)}</span>` : '<span class="dt-notes-none">—</span>'}
+        <details class="row-action-menu">
+          <summary class="btn btn-ghost btn-icon" title="Actions" aria-label="Row actions"><i data-lucide="more-vertical" class="icon-sm"></i></summary>
+          <div class="row-action-popover">
+            <button class="btn btn-ghost btn-sm" type="button" onclick="openEditDt(tracsDecodeJsonActionArg('${payload}'))">Edit</button>
+            <button class="btn btn-danger btn-sm" type="button" onclick="deleteDt(${id})">Delete</button>
+          </div>
+        </details>
+      </td>
+    </tr>`;
+}
+function dtRenumberRows(){
+  document.querySelectorAll('.dt-table tbody .dt-rownum').forEach((el,index)=>{el.textContent=String(index+1);});
+}
+function dtRecordFromRow(row){
+  if(!row)return null;
+  return {id:Number(row.dataset.dtId || 0),transfer_status:row.dataset.dtStatus || ''};
+}
+function dtStatsDelta(oldRecord,newRecord){
+  if(!oldRecord && newRecord){
+    tracsAdjustStatNumber('Total Transfers',1);
+  }else if(oldRecord && !newRecord){
+    tracsAdjustStatNumber('Total Transfers',-1);
+  }
+  const oldLabel=dtStatusStatLabel(oldRecord?.transfer_status || '');
+  const newLabel=dtStatusStatLabel(newRecord?.transfer_status || '');
+  if(oldLabel)tracsAdjustStatNumber(oldLabel,-1);
+  if(newLabel)tracsAdjustStatNumber(newLabel,1);
+}
+function dtApplyRecord(record,{isNew=false,oldRecord=null}={}){
+  if(!record?.id)return;
+  const tbody=dtEnsureTable();
+  const holder=document.createElement('tbody');
+  holder.innerHTML=dtRowHtml(record).trim();
+  const previous=oldRecord || dtRecordFromRow(document.querySelector(`[data-dt-id="${record.id}"]`));
+  const rendered=holder.firstElementChild;
+  tracsInsertOrReplaceRow(tbody,rendered,`[data-dt-id="${record.id}"]`,true);
+  dtRenumberRows();
+  dtStatsDelta(previous,record);
+  if(isNew){
+    tracsAdjustPanelMeta(1);
+    tracsAdjustPageSubTotal(1);
+  }
+}
 
 /* Inline row: status update */
 async function quickStatusUpdate(id, selectEl) {
@@ -4680,6 +7065,8 @@ async function quickStatusUpdate(id, selectEl) {
   const badge     = document.getElementById('dt-status-badge-' + id);
   const prevOpt   = [...selectEl.options].find(o => o.defaultSelected);
   const prevStatus = prevOpt ? prevOpt.value : null;
+  const row=selectEl.closest('tr');
+  const oldRecord=dtRecordFromRow(row);
 
   /* Optimistic UI */
   if (badge) {
@@ -4692,10 +7079,13 @@ async function quickStatusUpdate(id, selectEl) {
   });
 
   if (d.success) {
+    const record=tracsPayloadRecord(d);
+    if(record)dtApplyRecord(record,{oldRecord});
     toast('Status updated', 'success');
     [...selectEl.options].forEach(o => { o.defaultSelected = (o.value === newStatus); });
+    tracsMarkSaved(selectEl);
   } else {
-    toast(d.message || 'Error updating status', 'error');
+    toast(d.message || "Couldn't update the status. Please try again.", 'error');
     if (badge && prevStatus) {
       badge.className  = 'dt-status ' + (DT_STATUS_CLASS[prevStatus] || '');
       badge.textContent = DT_STATUS_LABEL[prevStatus] || prevStatus;
@@ -4718,10 +7108,13 @@ async function quickMoveUpdate(id, selectEl) {
   });
 
   if (d.success) {
-    toast(newVal ? 'Move domain: ' + newVal : 'Move domain cleared', 'success');
+    const record=tracsPayloadRecord(d);
+    if(record)dtApplyRecord(record);
+    toast(newVal ? 'Registrar: ' + newVal : 'Registrar cleared', 'success');
     [...selectEl.options].forEach(o => { o.defaultSelected = (o.value === newVal); });
+    tracsMarkSaved(selectEl);
   } else {
-    toast(d.message || 'Error updating', 'error');
+    toast(d.message || "Couldn't update the registrar. Please try again.", 'error');
     selectEl.value = prevVal;
     selectEl.classList.toggle('has-value', !!prevVal);
     window.TRACSDropdowns?.syncSelect(selectEl);
@@ -4742,11 +7135,14 @@ async function quickEndDateUpdate(id, inputEl) {
   inputEl.classList.remove('saving');
 
   if (d.success) {
+    const record=tracsPayloadRecord(d);
+    if(record)dtApplyRecord(record);
     inputEl.classList.toggle('has-value', !!newVal);
     inputEl.dataset.prev = newVal;
     toast(newVal ? 'End date set' : 'End date cleared', 'success');
+    tracsMarkSaved(inputEl);
   } else {
-    toast(d.message || 'Error updating end date', 'error');
+    toast(d.message || "Couldn't update the end date. Please try again.", 'error');
     inputEl.value = prevVal;
     inputEl.classList.toggle('has-value', !!prevVal);
   }
@@ -4776,13 +7172,15 @@ async function quickSaveDt() {
   }
 
   if (d.success) {
+    const record=tracsPayloadRecord(d);
+    if(record)dtApplyRecord(record,{isNew:true});
     toast('Domain transfer recorded', 'success');
     ['nDomain','nStartDate','nEndDate','nWebnic'].forEach(id => setVal(id, ''));
     setVal('nStatus', 'pending transfer');
     document.getElementById('nDomain').focus();
-    _reload();
+    tracsMarkSaved(document.querySelector('.dt-inline-form'));
   } else {
-    toast(d.message || 'Error saving transfer', 'error');
+    toast(d.message || "Couldn't save the transfer. Please try again.", 'error');
   }
 }
 
@@ -4824,10 +7222,12 @@ async function saveEditDt() {
   if(!d)return;
 
   if (d.success) {
+    const record=tracsPayloadRecord(d);
+    if(record)dtApplyRecord(record);
+    tracsMarkSaved(document.getElementById('dtModal'));
     showModalSuccessAndClose({
       modal:'dt',
       message:'Transfer updated.',
-      onAfterClose:()=>location.reload()
     });
   } else {
     handleModalError({modal:'dt',error:{message:d.message,status:d.status},fallbackMessage:'The transfer could not be updated. Please try again.'});
@@ -4837,12 +7237,17 @@ async function saveEditDt() {
 /* Delete Domain Transfer */
 function deleteDt(id) {
   tracsConfirm('Delete this domain transfer record? This cannot be undone.', async () => {
+    const row=document.querySelector(`[data-dt-id="${id}"]`);
+    const oldRecord=dtRecordFromRow(row);
     const d = await api(window.location.pathname, { action: 'delete', id });
     if (d.success) {
       toast('Transfer deleted', 'success');
-      removeRow(`[data-dt-id="${id}"]`);
+      tracsRowFadeRemove(row);
+      dtStatsDelta(oldRecord,null);
+      tracsAdjustPanelMeta(-1);
+      tracsAdjustPageSubTotal(-1);
     } else {
-      toast(d.message || 'Error deleting transfer', 'error');
+      toast(d.message || "Couldn't delete the transfer. Please try again.", 'error');
     }
   });
 }
@@ -4856,6 +7261,124 @@ API.BT = {
   UPDATE : API_BASE + 'bt-update.php',
   DELETE : API_BASE + 'bt-delete.php'
 };
+
+const BT_TYPE_LABEL = {
+  client_area: 'Client Area',
+  billing_console: 'Billing Console',
+  billing_awan: 'Billing Awan'
+};
+const BT_TYPE_CLASS = {
+  client_area: 'type-ca',
+  billing_console: 'type-bc',
+  billing_awan: 'type-ba'
+};
+function btFormatDateParts(value=''){
+  const date=new Date(String(value || '').replace(' ','T'));
+  if(Number.isNaN(date.getTime()))return {date:'—',time:'—'};
+  return {
+    date:date.toLocaleDateString(undefined,{day:'2-digit',month:'short',year:'numeric'}),
+    time:date.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit',hour12:false})
+  };
+}
+function btModalPayload(record){
+  return {
+    id: Number(record?.id || 0),
+    transfer_date: String(record?.transfer_date || '').replace(' ','T').slice(0,16),
+    sender_email: record?.sender_email || '',
+    sender_user_id: record?.sender_user_id || '',
+    sender_type: record?.sender_type || 'client_area',
+    receiver_email: record?.receiver_email || '',
+    receiver_user_id: record?.receiver_user_id || '',
+    receiver_type: record?.receiver_type || 'client_area',
+    amount: Number(record?.amount || 0),
+    status: record?.status || 'pending',
+    ticket_id: record?.ticket_id || ''
+  };
+}
+function btEnsureTable(){
+  let tbody=tracsTableBody('.bt-table');
+  if(tbody)return tbody;
+  const empty=document.querySelector('.bt-empty');
+  if(!empty)return null;
+  const wrap=document.createElement('div');
+  wrap.className='bt-table-wrap';
+  wrap.innerHTML=`
+    <table class="bt-table">
+      <thead><tr><th style="width:38px">No</th><th>Transfer Date</th><th>Sender</th><th>Type</th><th style="width:20px"></th><th>Receiver</th><th>Type</th><th style="text-align:right">Amount</th><th>Status</th><th>Ticket ID</th></tr></thead>
+      <tbody></tbody>
+    </table>`;
+  empty.replaceWith(wrap);
+  return wrap.querySelector('tbody');
+}
+function btRowHtml(record){
+  const id=Number(record?.id || 0);
+  const amount=Number(record?.amount || 0);
+  const status=String(record?.status || 'pending');
+  const parts=btFormatDateParts(record?.transfer_date);
+  const senderType=record?.sender_type || 'client_area';
+  const receiverType=record?.receiver_type || 'client_area';
+  const ticket=record?.ticket_id || '';
+  const payload=jsonActionArg(btModalPayload(record));
+  return `
+    <tr data-bt-id="${id}" data-bt-amount="${amount}" data-bt-status="${escHtml(status)}" data-bt-transfer-date="${escHtml(record?.transfer_date || '')}">
+      <td><span class="bt-rownum">1</span></td>
+      <td><div class="bt-date-main">${escHtml(parts.date)}</div><div class="bt-date-time">${escHtml(parts.time)}</div><div class="creator-meta">${escHtml(record?.creator_name || 'System')}</div></td>
+      <td><div class="bt-acct-email" title="${escHtml(record?.sender_email || '')}">${escHtml(record?.sender_email || '')}</div><div class="bt-acct-uid">${escHtml(record?.sender_user_id || '')}</div></td>
+      <td><span class="bt-type ${BT_TYPE_CLASS[senderType] || ''}">${escHtml(BT_TYPE_LABEL[senderType] || senderType)}</span></td>
+      <td><div class="bt-dir-arrow"><i data-lucide="chevron-right" class="icon-sm"></i></div></td>
+      <td><div class="bt-acct-email" title="${escHtml(record?.receiver_email || '')}">${escHtml(record?.receiver_email || '')}</div><div class="bt-acct-uid">${escHtml(record?.receiver_user_id || '')}</div></td>
+      <td><span class="bt-type ${BT_TYPE_CLASS[receiverType] || ''}">${escHtml(BT_TYPE_LABEL[receiverType] || receiverType)}</span></td>
+      <td style="text-align:right"><div class="bt-amount"><span class="bt-amount-cur">Rp</span>${amount.toLocaleString('id-ID',{minimumFractionDigits:2,maximumFractionDigits:2})}</div></td>
+      <td><span class="bt-status ${escHtml(status)}">${escHtml(status.charAt(0).toUpperCase()+status.slice(1))}</span></td>
+      <td>${ticket ? `<span class="bt-ticket">${escHtml(ticket)}</span>` : '<span class="bt-ticket-none">—</span>'}
+        <details class="row-action-menu">
+          <summary class="btn btn-ghost btn-icon" title="Actions" aria-label="Row actions"><i data-lucide="more-vertical" class="icon-sm"></i></summary>
+          <div class="row-action-popover">
+            <button class="btn btn-ghost btn-sm" type="button" onclick="openEditBt(tracsDecodeJsonActionArg('${payload}'))">Edit</button>
+            <button class="btn btn-danger btn-sm" type="button" onclick="deleteBt(${id})">Delete</button>
+          </div>
+        </details>
+      </td>
+    </tr>`;
+}
+function btRenumberRows(){
+  document.querySelectorAll('.bt-table tbody .bt-rownum').forEach((el,index)=>{el.textContent=String(index+1);});
+}
+function btStatsDelta(oldRecord,newRecord){
+  const oldAmount=Number(oldRecord?.amount || 0);
+  const newAmount=Number(newRecord?.amount || 0);
+  const oldStatus=oldRecord?.status || '';
+  const newStatus=newRecord?.status || '';
+  tracsAdjustStatNumber('Total Transferred',newAmount-oldAmount,{money:true});
+  tracsAdjustStatNumber('Completed',(newStatus==='done'?newAmount:0)-(oldStatus==='done'?oldAmount:0),{money:true});
+  tracsAdjustStatNumber('Pending Transfers',(newStatus==='pending'?1:0)-(oldStatus==='pending'?1:0));
+  if(tracsRecordMonthKey(oldRecord?.transfer_date) === tracsCurrentMonthKey())tracsAdjustStatNumber('This Month',-oldAmount,{money:true});
+  if(tracsRecordMonthKey(newRecord?.transfer_date) === tracsCurrentMonthKey())tracsAdjustStatNumber('This Month',newAmount,{money:true});
+}
+function btRecordFromRow(row){
+  if(!row)return null;
+  return {
+    id:Number(row.dataset.btId || 0),
+    amount:Number(row.dataset.btAmount || 0),
+    status:row.dataset.btStatus || '',
+    transfer_date:row.dataset.btTransferDate || ''
+  };
+}
+function btApplyRecord(record,{isNew=false,oldRecord=null}={}){
+  if(!record?.id)return;
+  const tbody=btEnsureTable();
+  const row=document.createElement('tbody');
+  row.innerHTML=btRowHtml(record).trim();
+  const rendered=row.firstElementChild;
+  const previous=oldRecord || btRecordFromRow(document.querySelector(`[data-bt-id="${record.id}"]`));
+  tracsInsertOrReplaceRow(tbody,rendered,`[data-bt-id="${record.id}"]`,true);
+  btRenumberRows();
+  btStatsDelta(previous,record);
+  if(isNew){
+    tracsAdjustPanelMeta(1);
+    tracsAdjustPageSubTotal(1);
+  }
+}
 
 /* Set default datetime in inline form (only if on finance page) */
 (function(){
@@ -4898,14 +7421,16 @@ async function quickSaveBt() {
   if (btn) { btn.disabled = false; btn.innerHTML = '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg> Save'; }
 
   if (d.success) {
+    const record=tracsPayloadRecord(d);
+    if(record)btApplyRecord(record,{isNew:true});
     toast('Transfer recorded', 'success');
     ['nSenderEmail','nSenderUid','nReceiverEmail','nReceiverUid','nAmount','nTicket'].forEach(id => setVal(id, ''));
     setVal('nDate', new Date().toISOString().slice(0, 16));
     setVal('nStatus', 'pending');
     document.getElementById('nAmount').focus();
-    _reload();
+    tracsMarkSaved(document.getElementById('btInlineForm') || document.querySelector('.bt-inline-form'));
   } else {
-    toast(d.message || 'Error saving transfer', 'error');
+    toast(d.message || "Couldn't save the transfer. Please try again.", 'error');
   }
 }
 
@@ -4956,10 +7481,12 @@ async function saveEditBt() {
   if(!d)return;
 
   if (d.success) {
+    const record=tracsPayloadRecord(d);
+    if(record)btApplyRecord(record);
+    tracsMarkSaved(document.getElementById('btModal'));
     showModalSuccessAndClose({
       modal:'bt',
       message:'Transfer updated.',
-      onAfterClose:()=>location.reload()
     });
   } else {
     handleModalError({modal:'bt',error:{message:d.message,status:d.status},fallbackMessage:'The transfer could not be updated. Please try again.'});
@@ -4969,12 +7496,17 @@ async function saveEditBt() {
 /* Delete Balance Transfer */
 function deleteBt(id) {
   tracsConfirm('Delete this transfer record? This cannot be undone.', async () => {
+    const row=document.querySelector(`[data-bt-id="${id}"]`);
+    const oldRecord=btRecordFromRow(row);
     const d = await api(API.BT.DELETE, { id });
     if (d.success) {
       toast('Transfer deleted', 'success');
-      removeRow(`[data-bt-id="${id}"]`);
+      tracsRowFadeRemove(row);
+      btStatsDelta(oldRecord,null);
+      tracsAdjustPanelMeta(-1);
+      tracsAdjustPageSubTotal(-1);
     } else {
-      toast(d.message || 'Error deleting transfer', 'error');
+      toast(d.message || "Couldn't delete the transfer. Please try again.", 'error');
     }
   });
 }
@@ -5101,19 +7633,6 @@ function tracsSetVisualThemePreference(preference) {
 
 function tracsSyncThemeMenu(preference = tracsGetThemePreference(), applied = tracsResolveTheme(preference)) {
   const selected = preference || '';
-  const tip = document.getElementById('themeTip');
-  const toggle = document.getElementById('themeToggle');
-  const label = selected === 'auto'
-    ? `Theme: Auto (${applied === 'dark' ? 'Dark' : 'Light'})`
-    : selected === 'dark'
-      ? 'Theme: Dark'
-      : selected === 'light'
-        ? 'Theme: Light'
-        : `Theme: Browser (${applied === 'dark' ? 'Dark' : 'Light'})`;
-
-  if (tip) tip.textContent = label;
-  if (toggle) toggle.setAttribute('aria-label', label);
-
   document.querySelectorAll('[data-theme-choice]').forEach(option => {
     const isActive = option.getAttribute('data-theme-choice') === selected;
     option.classList.toggle('is-active', isActive);
@@ -5121,57 +7640,18 @@ function tracsSyncThemeMenu(preference = tracsGetThemePreference(), applied = tr
   });
 }
 
-function tracsOpenThemeMenu() {
-  const wrap = document.getElementById('themeMenuWrap');
-  const toggle = document.getElementById('themeToggle');
-  if (!wrap || !toggle) return;
-  tracsCloseIconPopups?.(wrap);
-  tracsSetCustomPopupOpen?.(wrap, true);
-}
-
-function tracsCloseThemeMenu() {
-  const wrap = document.getElementById('themeMenuWrap');
-  const toggle = document.getElementById('themeToggle');
-  if (!wrap || !toggle) return;
-  tracsSetCustomPopupOpen?.(wrap, false);
-}
-
-function tracsToggleThemeMenu() {
-  const wrap = document.getElementById('themeMenuWrap');
-  if (wrap?.classList.contains('is-open')) tracsCloseThemeMenu();
-  else tracsOpenThemeMenu();
-}
-
-function tracsToggleTheme() {
-  tracsToggleThemeMenu();
-}
-
 function tracsInitThemeMemory() {
   tracsApplyTheme();
   tracsApplyVisualTheme();
 
-  const toggle = document.getElementById('themeToggle');
-  const wrap = document.getElementById('themeMenuWrap');
-  const menu = document.getElementById('themeMenu');
-
-  toggle?.addEventListener('click', event => {
-    event.stopPropagation();
-    tracsToggleThemeMenu();
-  });
-
-  menu?.addEventListener('click', event => {
+  // Theme options now live inline inside the sidebar's profile dropdown
+  // (.user-menu), not a separate popup -- picking one just applies the
+  // theme; bindSidebarMenus() already closes the dropdown on any button
+  // click inside it.
+  document.addEventListener('click', event => {
     const option = event.target.closest('[data-theme-choice]');
     if (!option) return;
     tracsSetThemePreference(option.getAttribute('data-theme-choice'));
-    tracsCloseThemeMenu();
-  });
-
-  document.addEventListener('click', event => {
-    if (wrap && !wrap.contains(event.target)) tracsCloseThemeMenu();
-  });
-
-  document.addEventListener('keydown', event => {
-    if (event.key === 'Escape') tracsCloseThemeMenu();
   });
 
   setInterval(() => {
@@ -5198,12 +7678,17 @@ if (document.readyState === 'loading') {
 /* ── Calendar Initialization (Flatpickr) ── */
 document.addEventListener('DOMContentLoaded', () => {
   initTaskMonitoringTabs();
+  initTaskManagementTables();
 
   // Only init visible inputs, avoid hidden master inputs
   document.querySelectorAll('.form-input[type="date"], .form-input[type="datetime-local"], .form-input[type="time"], .dt-date-input').forEach(el => {
     const isDateTime = el.type === 'datetime-local' || el.classList.contains('quick-datetime');
     const isTimeOnly = el.type === 'time' || el.classList.contains('split-time');
     const isDateOnly = el.type === 'date' || el.classList.contains('split-date');
+    // Fields like a person's internship/employment start date routinely need
+    // a date already in the past (paperwork trails the real start date), so
+    // the blanket minDate:"today" floor below must not apply to them.
+    const allowPastDates = el.hasAttribute('data-allow-past-dates');
 
     // Default to 'Now' for new split inputs if empty
     let defDate = null;
@@ -5228,7 +7713,7 @@ document.addEventListener('DOMContentLoaded', () => {
       altInputClass: altClass,
       placeholder: isTimeOnly ? "HH:MM" : (isDateTime ? "DD-MM-YYYY --:--" : "DD-MM-YYYY"),
       defaultDate: defDate,
-      minDate: "today",
+      minDate: allowPastDates ? null : "today",
       onOpen: function(selectedDates, dateStr, instance) {
         const theme = document.documentElement.getAttribute('data-theme') || 'light';
         instance.calendarContainer.classList.add('tracs-flatpickr-' + theme);

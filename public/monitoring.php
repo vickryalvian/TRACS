@@ -7,6 +7,7 @@ require_once __DIR__ . '/auth/auth_check.php';
 require_once __DIR__ . '/../core/access_control.php';
 require_once __DIR__ . '/../modules/task-management/controller.php';
 require_once __DIR__ . '/../modules/alert-ticker/controller.php';
+require_once __DIR__ . '/api/task-attachment-lib.php';
 require_once __DIR__ . '/includes/page_helpers.php';
 
 $uid = (int)($_SESSION['user_id'] ?? 0);
@@ -40,6 +41,12 @@ function tm_is_ajax_request(): bool {
 }
 function tm_json_response(bool $success, string $message, string $tab = 'my', int $status = 200): never {
     $base = str_ends_with((string)($_SERVER['SCRIPT_NAME'] ?? ''), '/tasks.php') ? '/tasks.php' : '/monitoring.php';
+    // On success the client reloads the page; stash a flash so the reloaded
+    // page can surface it as a toast. Errors stay in the modal (no reload), so
+    // don't queue those.
+    if ($success) {
+        $_SESSION['tracs_flash'] = ['type' => 'success', 'message' => $message];
+    }
     http_response_code($status);
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode([
@@ -86,8 +93,27 @@ function tm_time_delta(?string $dueAt, string $status): array {
     if (in_array($status, ['completed_on_time','completed_late','reviewed','cancelled'], true)) return ['label' => '-', 'class' => ''];
     $delta = strtotime($dueAt) - time();
     return $delta < 0
-        ? ['label' => 'Overdue ' . tm_duration($delta), 'class' => 'tm-danger']
+        ? ['label' => 'Overdue ' . tm_duration(abs($delta)), 'class' => 'tm-danger']
         : ['label' => tm_duration($delta) . ' left', 'class' => 'tm-ok'];
+}
+// Denominator / sample-size note for a rate or timing metric, e.g. "n=1".
+// Renders as a subordinate caption so a metric derived from a tiny sample
+// (or a rate whose denominator is small) can't be misread as a stable trend.
+function tm_sample_note(int $n, string $noun = ''): string {
+    $body = 'n=' . $n . ($noun !== '' ? ' ' . $noun : '');
+    return '<em class="tm-kpi-note">' . htmlspecialchars($body, ENT_QUOTES) . '</em>';
+}
+function tm_sort_header(string $label, string $type = 'text', string $default = '', string $firstDirection = ''): string {
+    $aria = $default === 'desc' ? 'descending' : ($default === 'asc' ? 'ascending' : 'none');
+    $icon = $aria === 'descending' ? 'chevron-down' : ($aria === 'ascending' ? 'chevron-up' : 'chevrons-up-down');
+    $attrs = 'scope="col" data-tm-sort-type="' . esc($type) . '" aria-sort="' . esc($aria) . '"';
+    if ($default !== '') {
+        $attrs .= ' data-tm-default-sort="' . esc($default) . '"';
+    }
+    if ($firstDirection !== '') {
+        $attrs .= ' data-tm-sort-default-direction="' . esc($firstDirection) . '"';
+    }
+    return '<th ' . $attrs . '><button type="button" class="tm-sort-btn" data-tm-sort-button title="Sort by ' . esc($label) . '"><span>' . esc($label) . '</span><i data-lucide="' . esc($icon) . '" class="icon-xs tm-sort-icon" aria-hidden="true"></i></button></th>';
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -104,8 +130,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $result = match ($action) {
             'create_task' => $TM->create($_POST, tracs_current_user_display($conn)),
             'update_assignment' => $TM->updateAssignment($_POST),
+            'update_task' => $TM->updateTask($_POST),
+            'reassign_task' => $TM->reassign($_POST, tracs_current_user_display($conn)),
+            'unassign_user' => $TM->unassignUser($_POST),
+            'delete_task' => $TM->deleteTask($_POST),
             default => throw new InvalidArgumentException('Unknown task action.'),
         };
+        if ($action === 'create_task' && !empty($_FILES['attachments']) && !empty($result['task_id'])) {
+            try {
+                task_attachment_ensure_table($conn);
+                task_attachment_store_uploads($conn, $_FILES['attachments'], (int)$result['task_id'], $uid);
+            } catch (Throwable $e) {
+                error_log('TRACS task attachment upload failed: ' . $e->getMessage());
+                $result['message'] = ($result['message'] ?? 'Task created.') . ' Some screenshots could not be attached.';
+            }
+        }
         $return_tab = (string)($_POST['return_tab'] ?? 'my');
         if (tm_is_ajax_request()) {
             tm_json_response(true, $result['message'] ?? 'Saved.', $return_tab);
@@ -132,6 +171,7 @@ $requested_tab = (string)($_GET['tab'] ?? 'my');
 $tab = in_array($requested_tab, $allowed_tabs, true) ? $requested_tab : 'my';
 
 if ($schema_ready) {
+    $TM->refreshRecurringTasks();
     $TM->refreshOverdueStatuses();
 }
 $summary = $schema_ready ? $TM->summary() : [];
@@ -175,31 +215,71 @@ include __DIR__ . '/includes/header.php';
       <div class="page-title">Task Management & Monitoring</div>
       <div class="page-sub">Assign daily work, watch overdue risk, and keep intern progress traceable.</div>
     </div>
-    <?php if($can_create): ?><button type="button" class="btn btn-primary" onclick="openModal('tmTask')"><i data-lucide="plus-circle" class="icon-sm"></i>Add Task</button><?php endif; ?>
+    <div class="tm-topbar-actions">
+      <?php if($schema_ready && $critical_count > 0): ?>
+        <a class="tm-overdue-pill" href="?tab=<?=esc($tab)?>&status=overdue" title="Show overdue tasks">
+          <span class="tm-overdue-dot" aria-hidden="true"></span>
+          <strong><?=esc($critical_count)?></strong> overdue
+        </a>
+      <?php endif; ?>
+      <?php if($can_create): ?><button type="button" class="btn btn-primary" onclick="tmOpenNewTask()"><i data-lucide="plus-circle" class="icon-sm"></i>Add Task</button><?php endif; ?>
+    </div>
   </div>
 
-  <?php if($flash): ?><div class="panel tm-flash tm-flash-<?=esc($flash['type'])?>"><?=esc($flash['message'])?></div><?php endif; ?>
+  <?php if($flash): ?>
+  <script>
+    (function(){
+      var fire=function(){ if(window.tracsToast) window.tracsToast(<?=json_encode($flash['type']==='error'?'error':'success')?>, '', <?=json_encode($flash['message'])?>); };
+      if(document.readyState!=='loading') fire(); else document.addEventListener('DOMContentLoaded', fire);
+    })();
+  </script>
+  <?php endif; ?>
 
   <?php if(!$schema_ready): ?>
     <div class="panel"><div class="um-empty-state"><div class="empty-ic"><i data-lucide="database"></i></div><div class="empty-t">Task Management schema is not installed yet</div><div class="empty-sub">Run <code>config/migrations/2026_05_18_task_management.sql</code>, then reload this page.</div></div></div>
   <?php else: ?>
-    <section class="panel tm-metrics-strip">
-      <div><span>Total assigned</span><strong><?=esc($summary['total_assigned'] ?? 0)?></strong></div>
-      <div><span>Active</span><strong><?=esc($summary['active_tasks'] ?? 0)?></strong></div>
-      <div><span>Not started</span><strong><?=esc($summary['not_started'] ?? 0)?></strong></div>
-      <div><span>In progress</span><strong><?=esc($summary['in_progress'] ?? 0)?></strong></div>
-      <div><span>Completed today</span><strong><?=esc($summary['completed_today'] ?? 0)?></strong></div>
-      <div><span>Overdue</span><strong><?=esc($summary['overdue_tasks'] ?? 0)?></strong></div>
-      <div><span>Late</span><strong><?=esc($summary['completed_late'] ?? 0)?></strong></div>
-      <div><span>Need review</span><strong><?=esc($summary['need_review'] ?? 0)?></strong></div>
-    </section>
-    <section class="panel tm-rate-strip">
-      <div><span>Avg completion</span><strong><?=tm_duration(isset($summary['avg_completion_seconds']) ? (int)$summary['avg_completion_seconds'] : null)?></strong></div>
-      <div><span>Fastest</span><strong><?=tm_duration(isset($summary['fastest_completion_seconds']) ? (int)$summary['fastest_completion_seconds'] : null)?></strong></div>
-      <div><span>Slowest</span><strong><?=tm_duration(isset($summary['slowest_completion_seconds']) ? (int)$summary['slowest_completion_seconds'] : null)?></strong></div>
-      <div><span>Completion rate</span><strong><?=esc($summary['completion_rate'] ?? 0)?>%</strong></div>
-      <div><span>On-time rate</span><strong><?=esc($summary['on_time_rate'] ?? 0)?>%</strong></div>
-      <div><span>Overdue rate</span><strong><?=esc($summary['overdue_rate'] ?? 0)?>%</strong></div>
+    <?php
+      $total_assigned  = (int)($summary['total_assigned'] ?? 0);
+      $completed_count = (int)($summary['completed_count'] ?? 0);
+      $timing_n        = (int)($summary['timing_sample_size'] ?? 0);
+      $risk_count      = (int)($summary['overdue_tasks'] ?? 0) + (int)($summary['completed_late'] ?? 0) + (int)($summary['need_review'] ?? 0);
+    ?>
+    <section class="tm-kpi-clusters">
+      <div class="tm-cluster">
+        <div class="tm-cluster-head">Workload</div>
+        <div class="tm-cluster-body">
+          <div class="tm-kpi"><span>Total assigned</span><strong><?=esc($total_assigned)?></strong></div>
+          <div class="tm-kpi"><span>Active</span><strong><?=esc($summary['active_tasks'] ?? 0)?></strong></div>
+          <div class="tm-kpi"><span>Not started</span><strong><?=esc($summary['not_started'] ?? 0)?></strong></div>
+          <div class="tm-kpi"><span>In progress</span><strong><?=esc($summary['in_progress'] ?? 0)?></strong></div>
+          <div class="tm-kpi"><span>Completed today</span><strong><?=esc($summary['completed_today'] ?? 0)?></strong></div>
+        </div>
+      </div>
+      <div class="tm-cluster tm-cluster-risk<?=$risk_count > 0 ? ' is-active' : ''?>">
+        <div class="tm-cluster-head">Risk</div>
+        <div class="tm-cluster-body">
+          <div class="tm-kpi"><span>Overdue</span><strong><?=esc($summary['overdue_tasks'] ?? 0)?></strong></div>
+          <div class="tm-kpi"><span>Late</span><strong><?=esc($summary['completed_late'] ?? 0)?></strong></div>
+          <div class="tm-kpi"><span>Need review</span><strong><?=esc($summary['need_review'] ?? 0)?></strong></div>
+        </div>
+      </div>
+      <div class="tm-cluster">
+        <div class="tm-cluster-head">Performance</div>
+        <div class="tm-cluster-body">
+          <div class="tm-kpi"><span>Completion rate</span><strong><?=esc($summary['completion_rate'] ?? 0)?>%</strong><?=tm_sample_note($total_assigned, 'assigned')?></div>
+          <div class="tm-kpi"><span>On-time rate</span><strong><?=$completed_count > 0 ? esc($summary['on_time_rate'] ?? 0) . '%' : '—'?></strong><?=tm_sample_note($completed_count, 'completed')?></div>
+          <div class="tm-kpi"><span>Overdue rate</span><strong><?=esc($summary['overdue_rate'] ?? 0)?>%</strong><?=tm_sample_note($total_assigned, 'assigned')?></div>
+          <?php if($timing_n >= 2): ?>
+          <div class="tm-kpi"><span>Avg completion</span><strong><?=tm_duration((int)($summary['avg_completion_seconds'] ?? 0))?></strong><?=tm_sample_note($timing_n, 'tasks')?></div>
+          <div class="tm-kpi"><span>Fastest</span><strong><?=tm_duration((int)($summary['fastest_completion_seconds'] ?? 0))?></strong></div>
+          <div class="tm-kpi"><span>Slowest</span><strong><?=tm_duration((int)($summary['slowest_completion_seconds'] ?? 0))?></strong></div>
+          <?php elseif($timing_n === 1): ?>
+          <div class="tm-kpi"><span>Completion time</span><strong><?=tm_duration((int)($summary['avg_completion_seconds'] ?? 0))?></strong><?=tm_sample_note(1, 'task')?></div>
+          <?php else: ?>
+          <div class="tm-kpi tm-kpi-muted"><span>Completion time</span><strong>—</strong><em class="tm-kpi-note">no completions yet</em></div>
+          <?php endif; ?>
+        </div>
+      </div>
     </section>
 
     <div class="filter-bar tm-tabs">
@@ -212,20 +292,68 @@ include __DIR__ . '/includes/header.php';
       <?php endif; ?>
     </div>
 
+    <?php
+      // Which advanced filters are currently in use — used to auto-open the
+      // "More filters" drawer so an active filter is never hidden.
+      $adv_active = array_filter([
+        (string)($_GET['role_id'] ?? ''),
+        (string)($_GET['division_id'] ?? ''),
+        (string)($_GET['priority'] ?? ''),
+        (string)($_GET['category'] ?? ''),
+      ], static fn($v) => $v !== '');
+      // Human-readable active-filter chips (label + a URL that clears just that one).
+      $user_names = [];
+      foreach($users as $u){ $user_names[(string)$u['id']] = $u['display_name']; }
+      $role_names = [];
+      foreach($roles as $r){ $role_names[(string)$r['id']] = $r['name']; }
+      $div_names = [];
+      foreach($divisions as $d){ $div_names[(string)$d['id']] = $d['name']; }
+      $chips = [];
+      $add_chip = function(string $key, string $prefix, string $value) use (&$chips) {
+        if ($value === '') return;
+        $rest = $_GET; unset($rest[$key]);
+        $chips[] = ['label' => $prefix . ': ' . $value, 'url' => '?' . http_build_query($rest)];
+      };
+      $add_chip('user_id', 'User', $user_names[(string)($_GET['user_id'] ?? '')] ?? '');
+      $add_chip('status', 'Status', ($_GET['status'] ?? '') !== '' ? tm_label((string)$_GET['status']) : '');
+      $add_chip('due_date', 'Due', (string)($_GET['due_date'] ?? ''));
+      $add_chip('role_id', 'Role', $role_names[(string)($_GET['role_id'] ?? '')] ?? '');
+      $add_chip('division_id', 'Division', $div_names[(string)($_GET['division_id'] ?? '')] ?? '');
+      $add_chip('priority', 'Priority', ($_GET['priority'] ?? '') !== '' ? tm_label((string)$_GET['priority']) : '');
+      $add_chip('category', 'Category', ($_GET['category'] ?? '') !== '' ? tm_label((string)$_GET['category']) : '');
+      if($tab !== 'interns') { $add_chip('intern_only', 'Scope', !empty($_GET['intern_only']) ? 'Interns only' : ''); }
+    ?>
     <form method="get" class="tm-filter panel">
       <input type="hidden" name="tab" value="<?=esc($tab)?>">
-      <?php if($can_monitor): ?>
-      <select class="form-select compact-select" name="user_id"><option value="">All Users</option><?php foreach($users as $u): ?><option value="<?=$u['id']?>" <?=((string)($_GET['user_id'] ?? '')===(string)$u['id'])?'selected':''?>><?=esc($u['display_name'])?></option><?php endforeach; ?></select>
-      <select class="form-select compact-select" name="role_id"><option value="">All Roles</option><?php foreach($roles as $r): ?><option value="<?=$r['id']?>" <?=((string)($_GET['role_id'] ?? '')===(string)$r['id'])?'selected':''?>><?=esc($r['name'])?></option><?php endforeach; ?></select>
-      <select class="form-select compact-select" name="division_id"><option value="">All Divisions</option><?php foreach($divisions as $d): ?><option value="<?=$d['id']?>" <?=((string)($_GET['division_id'] ?? '')===(string)$d['id'])?'selected':''?>><?=esc($d['name'])?></option><?php endforeach; ?></select>
-      <?php endif; ?>
-      <select class="form-select compact-select" name="status"><option value="">Any Status</option><?php foreach(['assigned','not_started','in_progress','completed_on_time','completed_late','overdue','need_review','reviewed','cancelled','reassigned'] as $s): ?><option value="<?=$s?>" <?=($_GET['status'] ?? '')===$s?'selected':''?>><?=tm_label($s)?></option><?php endforeach; ?></select>
-      <select class="form-select compact-select" name="priority"><option value="">Any Priority</option><?php foreach(['low','normal','high','urgent'] as $p): ?><option value="<?=$p?>" <?=($_GET['priority'] ?? '')===$p?'selected':''?>><?=tm_label($p)?></option><?php endforeach; ?></select>
-      <select class="form-select compact-select" name="category"><option value="">Any Category</option><?php foreach(['daily_checklist','case_follow_up','domain_transfer','balance_transfer','finance_log_mutasi','ssl_check','mom_follow_up','training_task','intern_task','custom'] as $c): ?><option value="<?=$c?>" <?=($_GET['category'] ?? '')===$c?'selected':''?>><?=tm_label($c)?></option><?php endforeach; ?></select>
-      <input class="form-input" type="date" name="due_date" value="<?=esc($_GET['due_date'] ?? '')?>" aria-label="Due date">
-      <?php if($can_monitor): ?><label class="tm-check"><input type="checkbox" name="intern_only" value="1" <?=!empty($_GET['intern_only'])?'checked':''?>><span>Intern only</span></label><?php endif; ?>
-      <button class="btn btn-primary" type="submit"><i data-lucide="filter" class="icon-sm"></i>Apply</button>
+      <div class="tm-filter-row">
+        <?php if($can_monitor): ?>
+        <select class="form-select compact-select" name="user_id" aria-label="User"><option value="">All Users</option><?php foreach($users as $u): ?><option value="<?=$u['id']?>" <?=((string)($_GET['user_id'] ?? '')===(string)$u['id'])?'selected':''?>><?=esc($u['display_name'])?></option><?php endforeach; ?></select>
+        <?php endif; ?>
+        <select class="form-select compact-select" name="status" aria-label="Status"><option value="">Any Status</option><?php foreach(['assigned','not_started','in_progress','completed_on_time','completed_late','overdue','need_review','reviewed','cancelled','reassigned'] as $s): ?><option value="<?=$s?>" <?=($_GET['status'] ?? '')===$s?'selected':''?>><?=tm_label($s)?></option><?php endforeach; ?></select>
+        <input class="form-input" type="date" name="due_date" value="<?=esc($_GET['due_date'] ?? '')?>" aria-label="Due date">
+        <details class="tm-more-filters"<?=(!empty($adv_active) || ($can_monitor && !empty($_GET['intern_only']))) ? ' open' : ''?>>
+          <summary><i data-lucide="sliders-horizontal" class="icon-xs"></i>More filters<?php if($adv_active): ?> <span class="tm-more-count"><?=count($adv_active)?></span><?php endif; ?></summary>
+          <div class="tm-more-grid">
+            <?php if($can_monitor): ?>
+            <select class="form-select compact-select" name="role_id" aria-label="Role"><option value="">All Roles</option><?php foreach($roles as $r): ?><option value="<?=$r['id']?>" <?=((string)($_GET['role_id'] ?? '')===(string)$r['id'])?'selected':''?>><?=esc($r['name'])?></option><?php endforeach; ?></select>
+            <select class="form-select compact-select" name="division_id" aria-label="Division"><option value="">All Divisions</option><?php foreach($divisions as $d): ?><option value="<?=$d['id']?>" <?=((string)($_GET['division_id'] ?? '')===(string)$d['id'])?'selected':''?>><?=esc($d['name'])?></option><?php endforeach; ?></select>
+            <?php endif; ?>
+            <select class="form-select compact-select" name="priority" aria-label="Priority"><option value="">Any Priority</option><?php foreach(['low','normal','high','urgent'] as $p): ?><option value="<?=$p?>" <?=($_GET['priority'] ?? '')===$p?'selected':''?>><?=tm_label($p)?></option><?php endforeach; ?></select>
+            <select class="form-select compact-select" name="category" aria-label="Category"><option value="">Any Category</option><?php foreach(['daily_checklist','case_follow_up','domain_transfer','balance_transfer','finance_log_mutasi','ssl_check','mom_follow_up','training_task','intern_task','custom'] as $c): ?><option value="<?=$c?>" <?=($_GET['category'] ?? '')===$c?'selected':''?>><?=tm_label($c)?></option><?php endforeach; ?></select>
+            <?php if($can_monitor && $tab !== 'interns'): ?><label class="tm-check"><input type="checkbox" name="intern_only" value="1" <?=!empty($_GET['intern_only'])?'checked':''?>><span>Intern only</span></label><?php endif; ?>
+          </div>
+        </details>
+        <button class="btn btn-primary" type="submit"><i data-lucide="filter" class="icon-sm"></i>Apply</button>
+      </div>
     </form>
+    <?php if($chips): ?>
+    <div class="tm-filter-chips">
+      <?php foreach($chips as $chip): ?>
+        <a class="tm-chip" href="<?=esc($chip['url'])?>"><?=esc($chip['label'])?><i data-lucide="x" class="icon-xs"></i></a>
+      <?php endforeach; ?>
+      <a class="tm-chip tm-chip-clear" href="?tab=<?=esc($tab)?>">Clear all</a>
+    </div>
+    <?php endif; ?>
 
     <?php if($tab === 'monitoring'): ?>
       <div class="panel tm-panel">
@@ -279,23 +407,48 @@ include __DIR__ . '/includes/header.php';
         <div class="um-empty-state"><div class="empty-ic"><i data-lucide="list-checks"></i></div><div class="empty-t">No matching tasks</div><div class="empty-sub">Assigned tasks also appear in Checklist, and timed tasks appear in Reminders.</div></div>
       <?php else: ?>
       <div class="table-wrap">
-        <table class="tracs-table tm-table">
-          <thead><tr><th>Task</th><th>Assigned To</th><th>Priority</th><th>Due</th><th>Status</th><th>Time Left / Overdue</th><th>Completion Time</th><th>Last Update</th><th>Actions</th></tr></thead>
+        <table class="tracs-table tm-table" data-tm-sortable-table>
+          <thead><tr><?=tm_sort_header('Task')?><?=tm_sort_header('Assigned To')?><?=tm_sort_header('Priority', 'number', '', 'desc')?><?=tm_sort_header('Due', 'date', '', 'desc')?><?=tm_sort_header('Status & SLA')?><?=tm_sort_header('Last Update', 'date', 'desc')?><th scope="col" aria-label="Actions"></th></tr></thead>
           <tbody>
-          <?php foreach($tasks as $task): $delta = tm_time_delta($task['due_at'] ?? null, (string)$task['assignment_status']); ?>
-            <tr>
-              <td><strong><?=esc($task['title'])?></strong><?php if(!empty($task['description'])): ?><span><?=esc($task['description'])?></span><?php endif; ?></td>
-              <td><?=esc($task['assignee_name'])?><span><?=esc($task['role_name'] ?? '')?> · <?=esc($task['division_name'] ?? 'No division')?></span></td>
-              <td><span class="badge <?=tm_badge_class($task['priority'], 'priority')?>"><?=esc(tm_label($task['priority']))?></span></td>
-              <td><?=!empty($task['due_at']) ? esc(date('d M Y, H:i', strtotime($task['due_at']))) : '—'?></td>
-              <td><span class="badge <?=tm_badge_class($task['assignment_status'])?>"><?=esc(tm_label($task['assignment_status']))?></span></td>
-              <td><span class="<?=esc($delta['class'])?>"><?=esc($delta['label'])?></span></td>
-              <td><?=tm_duration(isset($task['completion_seconds']) ? (int)$task['completion_seconds'] : null)?></td>
-              <td><?=!empty($task['assignment_updated_at']) ? esc(date('d M Y, H:i', strtotime($task['assignment_updated_at']))) : '—'?></td>
+          <?php foreach($tasks as $task):
+            $delta = tm_time_delta($task['due_at'] ?? null, (string)$task['assignment_status']);
+            $tm_can_edit = $can_monitor || (int)($task['created_by'] ?? 0) === $uid;
+            $tm_is_done = in_array((string)$task['assignment_status'], ['completed_on_time','completed_late','reviewed','cancelled'], true);
+            $tm_detail_url = '?' . http_build_query(array_merge($_GET, ['assignment_id' => (int)$task['assignment_id']])) . '#tmDetail';
+            $tm_priority_rank = match ((string)$task['priority']) {
+              'urgent' => 4,
+              'high' => 3,
+              'normal' => 2,
+              default => 1,
+            };
+            $tm_due_sort = !empty($task['due_at']) ? strtotime((string)$task['due_at']) : 0;
+            $tm_update_sort = !empty($task['assignment_updated_at'])
+              ? strtotime((string)$task['assignment_updated_at'])
+              : (!empty($task['updated_at']) ? strtotime((string)$task['updated_at']) : (!empty($task['created_at']) ? strtotime((string)$task['created_at']) : 0));
+          ?>
+            <tr class="tm-clickable-row" data-tm-row-href="<?=esc($tm_detail_url)?>" tabindex="0" role="link" aria-label="View task details for <?=esc($task['title'])?>">
+              <td data-sort-value="<?=esc($task['title'])?>"><a class="tm-task-title-link" href="<?=esc($tm_detail_url)?>" title="View task details"><?=esc($task['title'])?></a><?php if(!empty($task['description'])): ?><span><?=esc($task['description'])?></span><?php endif; ?></td>
+              <td data-sort-value="<?=esc(($task['assignee_name'] ?? '') . ' ' . ($task['role_name'] ?? '') . ' ' . ($task['division_name'] ?? ''))?>"><?=esc($task['assignee_name'])?><span><?=esc($task['role_name'] ?? '')?> · <?=esc($task['division_name'] ?? 'No division')?></span></td>
+              <td data-sort-value="<?=esc((string)$tm_priority_rank)?>"><span class="badge <?=tm_badge_class($task['priority'], 'priority')?>"><?=esc(tm_label($task['priority']))?></span></td>
+              <td data-sort-value="<?=esc((string)$tm_due_sort)?>"><?=!empty($task['due_at']) ? esc(date('d M Y, H:i', strtotime($task['due_at']))) : '—'?></td>
+              <td class="tm-status-cell" data-sort-value="<?=esc(tm_label((string)$task['assignment_status']))?>">
+                <span class="badge <?=tm_badge_class($task['assignment_status'])?>"><?=esc(tm_label($task['assignment_status']))?></span>
+                <?php if($delta['label'] !== '-'): ?><span class="tm-sla <?=esc($delta['class'])?>"><?=esc($delta['label'])?></span><?php endif; ?>
+              </td>
+              <td data-sort-value="<?=esc((string)$tm_update_sort)?>"><?=!empty($task['assignment_updated_at']) ? esc(date('d M Y, H:i', strtotime($task['assignment_updated_at']))) : '—'?></td>
               <td>
-                <div class="tm-row-actions">
-                  <a class="btn btn-ghost btn-sm" href="?<?=http_build_query(array_merge($_GET, ['assignment_id' => (int)$task['assignment_id']]))?>"><i data-lucide="eye" class="icon-xs"></i>Details</a>
-                  <button type="button" class="btn btn-ghost btn-sm" onclick="tmOpenUpdate(<?=$task['assignment_id']?>,'<?=esc($task['stored_status'] ?: $task['assignment_status'])?>')"><i data-lucide="pencil" class="icon-xs"></i>Update</button>
+                <div class="row-action-group tm-actions">
+                  <details class="row-action-menu">
+                    <summary class="btn btn-ghost btn-icon btn-sm" title="Actions" aria-label="Row actions"><i data-lucide="more-vertical" class="icon-xs"></i></summary>
+                    <div class="row-action-popover">
+                      <?php if(!$tm_is_done): ?>
+                      <button type="button" class="btn btn-ghost btn-sm" data-assignment-id="<?=(int)$task['assignment_id']?>" onclick="tmMarkDone(this)"><i data-lucide="check-circle" class="icon-xs"></i>Mark done</button>
+                      <?php endif; ?>
+                      <?php if($tm_can_edit): ?>
+                      <button type="button" class="btn btn-danger btn-sm" data-task-id="<?=(int)$task['task_id']?>" data-title="<?=esc($task['title'])?>" onclick="tmDeleteTask(this)"><i data-lucide="trash-2" class="icon-xs"></i>Delete</button>
+                      <?php endif; ?>
+                    </div>
+                  </details>
                 </div>
               </td>
             </tr>
@@ -305,41 +458,87 @@ include __DIR__ . '/includes/header.php';
       </div>
       <?php endif; ?>
     </div>
-    <aside class="panel tm-detail-panel">
+    <aside class="panel tm-detail-panel" id="tmDetail">
       <div class="panel-head"><span class="panel-title">Task Timing Insight</span></div>
       <?php if(!$selected_task): ?>
         <div class="um-empty-state um-empty-compact"><div class="empty-t">Select or create a task to see SLA timing, reminder, and review details.</div></div>
-      <?php else: $delta = tm_time_delta($selected_task['due_at'] ?? null, (string)$selected_task['assignment_status']); ?>
+      <?php else:
+        $delta = tm_time_delta($selected_task['due_at'] ?? null, (string)$selected_task['assignment_status']);
+        $tm_detail_can_edit = $can_monitor || (int)($selected_task['created_by'] ?? 0) === $uid;
+        $tm_detail_due_dt = !empty($selected_task['due_at']) ? strtotime($selected_task['due_at']) : 0;
+      ?>
       <div class="tm-detail-body">
         <div class="tm-detail-title"><strong><?=esc($selected_task['title'])?></strong><span><?=esc($selected_task['assignee_name'])?> · <?=esc(tm_label($selected_task['category']))?></span></div>
+        <div class="tm-detail-actions">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="tmOpenUpdate(<?=(int)$selected_task['assignment_id']?>,'<?=esc($selected_task['stored_status'] ?: $selected_task['assignment_status'])?>')"><i data-lucide="pencil" class="icon-xs"></i>Update Status</button>
+          <?php if($tm_detail_can_edit): ?>
+          <button type="button" class="btn btn-ghost btn-sm"
+            data-task-id="<?=(int)$selected_task['task_id']?>"
+            data-title="<?=esc($selected_task['title'])?>"
+            data-category="<?=esc($selected_task['category'])?>"
+            data-desc="<?=esc($selected_task['description'] ?? '')?>"
+            data-priority="<?=esc($selected_task['priority'])?>"
+            data-due="<?=$tm_detail_due_dt ? date('Y-m-d', $tm_detail_due_dt) : ''?>"
+            data-time="<?=$tm_detail_due_dt ? date('H:i', $tm_detail_due_dt) : ''?>"
+            data-url="<?=esc($selected_task['reference_url'] ?? '')?>"
+            data-review="<?=!empty($selected_task['requires_review']) ? '1' : '0'?>"
+            data-recurring="<?=(($selected_task['recurrence_type'] ?? 'none') !== 'none') ? '1' : '0'?>"
+            data-interval="<?=(int)($selected_task['recurrence_interval_days'] ?? 1)?>"
+            onclick="tmOpenEdit(this)"><i data-lucide="pencil-line" class="icon-xs"></i>Edit</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-title="<?=esc($selected_task['title'])?>" onclick="tmOpenReassign(<?=(int)$selected_task['task_id']?>,this)"><i data-lucide="user-plus" class="icon-xs"></i>Reassign</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-task-id="<?=(int)$selected_task['task_id']?>" data-assignment-id="<?=(int)$selected_task['assignment_id']?>" data-assignee="<?=esc($selected_task['assignee_name'])?>" onclick="tmUnassign(this)"><i data-lucide="user-minus" class="icon-xs"></i>Unassign</button>
+          <button type="button" class="btn btn-danger btn-sm" data-task-id="<?=(int)$selected_task['task_id']?>" data-title="<?=esc($selected_task['title'])?>" onclick="tmDeleteTask(this)"><i data-lucide="trash-2" class="icon-xs"></i>Delete</button>
+          <?php endif; ?>
+        </div>
         <div class="tm-detail-grid">
-          <div><span>Created</span><strong><?=!empty($selected_task['created_at']) ? esc(date('d M Y, H:i', strtotime($selected_task['created_at']))) : '-'?></strong></div>
-          <div><span>Assigned by</span><strong><?=esc($selected_task['assigned_by_name'] ?? $selected_task['created_by_name'] ?? 'System')?></strong></div>
-          <div><span>SLA status</span><strong class="<?=esc($delta['class'])?>"><?=esc($delta['label'])?></strong></div>
           <div><span>Status</span><strong><?=esc(tm_label($selected_task['assignment_status']))?></strong></div>
+          <div><span>SLA status</span><strong class="<?=esc($delta['class'])?>"><?=esc($delta['label'] === '-' ? '—' : $delta['label'])?></strong></div>
           <div><span>Due</span><strong><?=!empty($selected_task['due_at']) ? esc(date('d M Y, H:i', strtotime($selected_task['due_at']))) : '-'?></strong></div>
-          <div><span>Assigned</span><strong><?=!empty($selected_task['assigned_at']) ? esc(date('d M Y, H:i', strtotime($selected_task['assigned_at']))) : '-'?></strong></div>
-          <div><span>Started</span><strong><?=!empty($selected_task['started_at']) ? esc(date('d M Y, H:i', strtotime($selected_task['started_at']))) : '-'?></strong></div>
-          <div><span>Completed</span><strong><?=!empty($selected_task['completed_at']) ? esc(date('d M Y, H:i', strtotime($selected_task['completed_at']))) : '-'?></strong></div>
-          <div><span>Completion duration</span><strong><?=tm_duration(isset($selected_task['completion_seconds']) ? (int)$selected_task['completion_seconds'] : null)?></strong></div>
-          <div><span>Start delay</span><strong><?=tm_duration(isset($selected_task['start_delay_seconds']) ? (int)$selected_task['start_delay_seconds'] : null)?></strong></div>
-          <div><span>Overdue duration</span><strong><?=tm_duration(isset($selected_task['overdue_seconds']) ? (int)$selected_task['overdue_seconds'] : null)?></strong></div>
-          <div><span>Reminder</span><strong><?=!empty($selected_task['linked_reminder_id']) ? 'Linked #' . (int)$selected_task['linked_reminder_id'] : 'No timed reminder'?></strong></div>
-          <div><span>Review</span><strong><?=!empty($selected_task['reviewed_at']) ? 'Reviewed' : ($selected_task['requires_review'] ? 'Required' : 'Optional')?></strong></div>
+          <div><span>Assigned by</span><strong><?=esc($selected_task['assigned_by_name'] ?? $selected_task['created_by_name'] ?? 'System')?></strong></div>
+          <div><span>Cadence</span><strong><?=(($selected_task['recurrence_type'] ?? 'none') !== 'none') ? 'Recurring · every ' . (int)($selected_task['recurrence_interval_days'] ?? 1) . ' day(s)' : 'One-time'?></strong></div>
         </div>
         <div class="tm-detail-notes"><span>Instruction / notes</span><strong><?=esc($selected_task['description'] ?: 'No instruction provided.')?></strong></div>
-        <div class="tm-history">
-          <div class="tm-history-title">Activity Log</div>
-          <?php if(!$task_logs): ?>
-            <div class="tm-history-empty">No task history recorded yet.</div>
-          <?php else: foreach($task_logs as $log): ?>
-            <div class="tm-history-row">
-              <strong><?=esc(tm_label((string)$log['action']))?></strong>
-              <span><?=esc($log['actor_name'] ?? 'System')?> · <?=!empty($log['created_at']) ? esc(date('d M Y, H:i', strtotime($log['created_at']))) : '-'?></span>
-              <?php if(!empty($log['note'])): ?><em><?=esc($log['note'])?></em><?php endif; ?>
-            </div>
-          <?php endforeach; endif; ?>
+        <?php $tm_task_attachments = task_attachment_list_for_task($conn, (int)$selected_task['task_id']); ?>
+        <?php if(!empty($tm_task_attachments)): ?>
+        <div class="tm-detail-notes">
+          <span>Screenshots</span>
+          <div class="shift-photo-grid">
+            <?php foreach($tm_task_attachments as $attachment): ?>
+            <a href="<?=esc($attachment['image_url'])?>" target="_blank" rel="noopener noreferrer" class="shift-photo-thumb" title="<?=esc($attachment['original_filename'])?>">
+              <img src="<?=esc($attachment['thumbnail_url'])?>" alt="<?=esc($attachment['original_filename'])?>" loading="lazy">
+            </a>
+            <?php endforeach; ?>
+          </div>
         </div>
+        <?php endif; ?>
+        <details class="tm-detail-section">
+          <summary><i data-lucide="chevron-right" class="icon-xs tm-caret"></i>Timing detail</summary>
+          <div class="tm-detail-grid">
+            <div><span>Created</span><strong><?=!empty($selected_task['created_at']) ? esc(date('d M Y, H:i', strtotime($selected_task['created_at']))) : '-'?></strong></div>
+            <div><span>Assigned</span><strong><?=!empty($selected_task['assigned_at']) ? esc(date('d M Y, H:i', strtotime($selected_task['assigned_at']))) : '-'?></strong></div>
+            <div><span>Started</span><strong><?=!empty($selected_task['started_at']) ? esc(date('d M Y, H:i', strtotime($selected_task['started_at']))) : '-'?></strong></div>
+            <div><span>Completed</span><strong><?=!empty($selected_task['completed_at']) ? esc(date('d M Y, H:i', strtotime($selected_task['completed_at']))) : '-'?></strong></div>
+            <div><span>Completion duration</span><strong><?=tm_duration(isset($selected_task['completion_seconds']) ? (int)$selected_task['completion_seconds'] : null)?></strong></div>
+            <div><span>Start delay</span><strong><?=tm_duration(isset($selected_task['start_delay_seconds']) ? (int)$selected_task['start_delay_seconds'] : null)?></strong></div>
+            <div><span>Overdue duration</span><strong><?=tm_duration(isset($selected_task['overdue_seconds']) ? (int)$selected_task['overdue_seconds'] : null)?></strong></div>
+            <div><span>Reminder</span><strong><?=!empty($selected_task['linked_reminder_id']) ? 'Linked #' . (int)$selected_task['linked_reminder_id'] : 'No timed reminder'?></strong></div>
+            <div><span>Review</span><strong><?=!empty($selected_task['reviewed_at']) ? 'Reviewed' : ($selected_task['requires_review'] ? 'Required' : 'Optional')?></strong></div>
+          </div>
+        </details>
+        <details class="tm-detail-section"<?=$task_logs ? ' open' : ''?>>
+          <summary><i data-lucide="chevron-right" class="icon-xs tm-caret"></i>Activity log<?php if($task_logs): ?> <span class="tm-more-count"><?=count($task_logs)?></span><?php endif; ?></summary>
+          <div class="tm-history">
+            <?php if(!$task_logs): ?>
+              <div class="tm-history-empty">No task history recorded yet.</div>
+            <?php else: foreach($task_logs as $log): ?>
+              <div class="tm-history-row">
+                <strong><?=esc(tm_label((string)$log['action']))?></strong>
+                <span><?=esc($log['actor_name'] ?? 'System')?> · <?=!empty($log['created_at']) ? esc(date('d M Y, H:i', strtotime($log['created_at']))) : '-'?></span>
+                <?php if(!empty($log['note'])): ?><em><?=esc($log['note'])?></em><?php endif; ?>
+              </div>
+            <?php endforeach; endif; ?>
+          </div>
+        </details>
       </div>
       <?php endif; ?>
     </aside>
@@ -349,17 +548,63 @@ include __DIR__ . '/includes/header.php';
 
 <?php if($schema_ready && $can_create): ?>
 <div class="modal-overlay hidden" id="tmTaskModal">
-  <form method="post" class="modal modal-lg" data-tracs-modal-ajax data-close-delay="1000">
+  <form method="post" class="modal modal-lg" data-tracs-modal-ajax data-refresh-selector=".tm-split-layout" data-close-delay="1000" enctype="multipart/form-data">
     <?=csrf_input()?><input type="hidden" name="action" value="create_task"><input type="hidden" name="return_tab" value="<?=esc($tab)?>">
     <div class="modal-head"><div><div class="modal-title">Add Task Assignment</div><div class="modal-sub">Assign once or daily, with checklist and reminder sync.</div></div><button type="button" class="modal-close" onclick="closeModal('tmTask')"><i data-lucide="x"></i></button></div>
     <div class="modal-body tm-form">
-      <div class="form-row"><div class="form-group"><label class="form-label">Task Title</label><input class="form-input" name="title" required></div><div class="form-group"><label class="form-label">Category</label><select class="form-select" name="category"><?php foreach(['daily_checklist','case_follow_up','domain_transfer','balance_transfer','finance_log_mutasi','ssl_check','mom_follow_up','training_task','intern_task','custom'] as $c): ?><option value="<?=$c?>"><?=tm_label($c)?></option><?php endforeach; ?></select></div></div>
-      <div class="form-group"><label class="form-label">Instruction</label><textarea class="form-textarea" name="description" rows="4"></textarea></div>
-      <div class="form-row"><div class="form-group"><label class="form-label">Priority</label><select class="form-select" name="priority"><option value="normal">Normal</option><option value="low">Low</option><option value="high">High</option><option value="urgent">Urgent</option></select></div><div class="form-group"><label class="form-label">Reference URL</label><input class="form-input" type="url" name="reference_url" placeholder="https://..."></div></div>
-      <div class="form-row"><div class="form-group"><label class="form-label">Due Date</label><input class="form-input" type="date" name="due_date"></div><div class="form-group"><label class="form-label">Due Time</label><input class="form-input" type="time" name="due_time"></div></div>
-      <div class="form-row"><label class="tm-check"><input type="checkbox" name="is_recurring" value="1"><span>Daily recurring task</span></label><label class="tm-check"><input type="checkbox" name="requires_review" value="1"><span>Require review after completion</span></label></div>
-      <div class="form-row"><div class="form-group"><label class="form-label">Assign Users</label><select class="form-select" name="assignee_user_ids[]" multiple><?php foreach($users as $u): ?><option value="<?=$u['id']?>"><?=esc($u['display_name'])?></option><?php endforeach; ?></select></div><div class="form-group"><label class="form-label">Assign Roles</label><select class="form-select" name="assignee_role_ids[]" multiple><?php foreach($roles as $r): ?><option value="<?=$r['id']?>"><?=esc($r['name'])?></option><?php endforeach; ?></select></div></div>
-      <div class="form-group"><label class="form-label">Assign Divisions</label><select class="form-select" name="assignee_division_ids[]" multiple><?php foreach($divisions as $d): ?><option value="<?=$d['id']?>"><?=esc($d['name'])?></option><?php endforeach; ?></select></div>
+      <div class="tm-form-section">
+        <div class="tm-section-label">Task details</div>
+        <div class="form-row"><div class="form-group"><label class="form-label">Task Title <span class="tm-req">*</span></label><input class="form-input" name="title" required></div><div class="form-group"><label class="form-label">Category</label><select class="form-select" name="category"><?php foreach(['daily_checklist','case_follow_up','domain_transfer','balance_transfer','finance_log_mutasi','ssl_check','mom_follow_up','training_task','intern_task','custom'] as $c): ?><option value="<?=$c?>" <?=$c==='custom'?'selected':''?>><?=tm_label($c)?></option><?php endforeach; ?></select></div></div>
+        <div class="form-group"><label class="form-label">Instruction</label><textarea class="form-textarea" name="description" rows="3" placeholder="What needs to be done?"></textarea></div>
+        <div class="form-row"><div class="form-group"><label class="form-label">Priority</label><select class="form-select" name="priority"><option value="normal" selected>Normal</option><option value="low">Low</option><option value="high">High</option><option value="urgent">Urgent</option></select></div><div class="form-group"><label class="form-label">Reference URL</label><input class="form-input" type="url" name="reference_url" placeholder="https://..."></div></div>
+        <label class="tm-check"><input type="checkbox" name="requires_review" value="1"><span>Require review after completion</span></label>
+        <div class="form-group case-upload-group">
+          <label class="form-label">Screenshots / Photos</label>
+          <input class="case-upload-input" type="file" id="tmTaskAttachments" name="attachments[]" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" multiple>
+          <label class="case-upload-drop" id="tmTaskUploadDrop" for="tmTaskAttachments">
+            <i data-lucide="image-plus" class="icon-sm"></i>
+            <span>Click, drop, or paste images here</span>
+            <small>JPG, JPEG, PNG, WEBP. Max 5MB each.</small>
+          </label>
+          <div class="case-upload-status" id="tmTaskUploadStatus" aria-live="polite"></div>
+          <div class="case-attachment-grid" id="tmTaskAttachmentPreview"></div>
+        </div>
+      </div>
+      <div class="tm-form-section">
+        <div class="tm-section-label">Schedule</div>
+        <div class="form-group">
+          <label class="form-label">Cadence <span class="tm-req">*</span></label>
+          <div class="tm-cadence-toggle" role="group" aria-label="Task cadence">
+            <button type="button" class="tm-cadence-btn active" data-cadence="none" onclick="tmSetCadence(this,'tm')">One-time</button>
+            <button type="button" class="tm-cadence-btn" data-cadence="daily" onclick="tmSetCadence(this,'tm')">Recurring</button>
+          </div>
+          <input type="hidden" name="is_recurring" id="tmIsRecurring" value="0">
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label" id="tmDueLabel">Due Date</label><input class="form-input" type="date" name="due_date" id="tmDue"></div>
+          <div class="form-group"><label class="form-label">Due Time</label><input class="form-input" type="time" name="due_time"></div>
+        </div>
+        <p class="tm-due-hint hidden" id="tmDueHint"><i data-lucide="repeat" class="icon-xs"></i>This is the first cycle's due date/time — it repeats automatically from here.</p>
+        <div class="tm-recur-panel hidden" id="tmRecurDetail">
+          <label class="form-label">Repeat every</label>
+          <div class="tm-recur-chips">
+            <button type="button" class="tm-recur-chip active" data-days="1" onclick="tmSetInterval(this,'tm')">Daily</button>
+            <button type="button" class="tm-recur-chip" data-days="2" onclick="tmSetInterval(this,'tm')">2 days</button>
+            <button type="button" class="tm-recur-chip" data-days="3" onclick="tmSetInterval(this,'tm')">3 days</button>
+            <button type="button" class="tm-recur-chip" data-days="5" onclick="tmSetInterval(this,'tm')">5 days</button>
+          </div>
+          <div class="tm-recur-custom"><input type="number" min="1" max="90" class="form-input" name="recurrence_interval_days" id="tmRecurDays" value="1" oninput="tmSyncIntervalChips(this,'tm')"><span>day(s)</span></div>
+        </div>
+      </div>
+      <div class="tm-form-section tm-assign-section">
+        <div class="tm-section-label">Assign to <span class="tm-req">*</span></div>
+        <p class="tm-assign-hint"><i data-lucide="info" class="icon-xs"></i>Pick any combination of people, roles, or divisions. Everyone selected gets their own checklist entry and (if a due time is set) a reminder.</p>
+        <div class="form-group"><label class="form-label"><i data-lucide="user-round" class="icon-xs"></i> People</label><select class="form-select tm-assignee-select" name="assignee_user_ids[]" multiple data-searchable="true" data-placeholder="Search &amp; select people…"><?php foreach($users as $u): ?><option value="<?=$u['id']?>"><?=esc($u['display_name'])?></option><?php endforeach; ?></select></div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label"><i data-lucide="shield" class="icon-xs"></i> Roles</label><select class="form-select tm-assignee-select" name="assignee_role_ids[]" multiple data-searchable="true" data-placeholder="By role…"><?php foreach($roles as $r): ?><option value="<?=$r['id']?>"><?=esc($r['name'])?></option><?php endforeach; ?></select></div>
+          <div class="form-group"><label class="form-label"><i data-lucide="building-2" class="icon-xs"></i> Divisions</label><select class="form-select tm-assignee-select" name="assignee_division_ids[]" multiple data-searchable="true" data-placeholder="By division…"><?php foreach($divisions as $d): ?><option value="<?=$d['id']?>"><?=esc($d['name'])?></option><?php endforeach; ?></select></div>
+        </div>
+      </div>
     </div>
     <div class="modal-foot"><button type="button" class="btn btn-ghost" onclick="closeModal('tmTask')">Cancel</button><button type="submit" class="btn btn-primary"><i data-lucide="send" class="icon-sm"></i>Assign Task</button></div>
   </form>
@@ -368,7 +613,7 @@ include __DIR__ . '/includes/header.php';
 
 <?php if($schema_ready): ?>
 <div class="modal-overlay hidden" id="tmUpdateModal">
-  <form method="post" class="modal" data-tracs-modal-ajax data-close-delay="1000">
+  <form method="post" class="modal" data-tracs-modal-ajax data-refresh-selector=".tm-split-layout" data-close-delay="1000">
     <?=csrf_input()?><input type="hidden" name="action" value="update_assignment"><input type="hidden" name="assignment_id" id="tmAssignmentId"><input type="hidden" name="return_tab" value="<?=esc($tab)?>">
     <div class="modal-head"><div><div class="modal-title">Update Task</div><div class="modal-sub">Progress is saved to the assignment history.</div></div><button type="button" class="modal-close" onclick="closeModal('tmUpdate')"><i data-lucide="x"></i></button></div>
     <div class="modal-body">
@@ -384,9 +629,255 @@ function tmOpenUpdate(id,status){document.getElementById('tmAssignmentId').value
 </script>
 <?php endif; ?>
 
+<?php if($schema_ready && ($can_monitor || $can_create)): ?>
+<!-- EDIT TASK MODAL -->
+<div class="modal-overlay hidden" id="tmEditModal">
+  <form method="post" class="modal modal-lg" data-tracs-modal-ajax data-refresh-selector=".tm-split-layout" data-close-delay="1000">
+    <?=csrf_input()?><input type="hidden" name="action" value="update_task"><input type="hidden" name="task_id" id="tmEditTaskId"><input type="hidden" name="return_tab" value="<?=esc($tab)?>">
+    <div class="modal-head"><div><div class="modal-title">Edit Task</div><div class="modal-sub">Changes sync to the linked checklist items and reminders.</div></div><button type="button" class="modal-close" onclick="closeModal('tmEdit')"><i data-lucide="x"></i></button></div>
+    <div class="modal-body tm-form">
+      <div class="form-row"><div class="form-group"><label class="form-label">Task Title</label><input class="form-input" name="title" id="tmEditTitle" required></div><div class="form-group"><label class="form-label">Category</label><select class="form-select" name="category" id="tmEditCategory"><?php foreach(['daily_checklist','case_follow_up','domain_transfer','balance_transfer','finance_log_mutasi','ssl_check','mom_follow_up','training_task','intern_task','custom'] as $c): ?><option value="<?=$c?>"><?=tm_label($c)?></option><?php endforeach; ?></select></div></div>
+      <div class="form-group"><label class="form-label">Instruction</label><textarea class="form-textarea" name="description" id="tmEditDesc" rows="4"></textarea></div>
+      <div class="form-row"><div class="form-group"><label class="form-label">Priority</label><select class="form-select" name="priority" id="tmEditPriority"><option value="normal">Normal</option><option value="low">Low</option><option value="high">High</option><option value="urgent">Urgent</option></select></div><div class="form-group"><label class="form-label">Reference URL</label><input class="form-input" type="url" name="reference_url" id="tmEditUrl" placeholder="https://..."></div></div>
+      <label class="tm-check"><input type="checkbox" name="requires_review" id="tmEditReview" value="1"><span>Require review after completion</span></label>
+      <div class="tm-form-section">
+        <div class="tm-section-label">Schedule</div>
+        <div class="form-group">
+          <label class="form-label">Cadence <span class="tm-req">*</span></label>
+          <div class="tm-cadence-toggle" role="group" aria-label="Task cadence" id="tmEditCadence">
+            <button type="button" class="tm-cadence-btn active" data-cadence="none" onclick="tmSetCadence(this,'tmEdit')">One-time</button>
+            <button type="button" class="tm-cadence-btn" data-cadence="daily" onclick="tmSetCadence(this,'tmEdit')">Recurring</button>
+          </div>
+          <input type="hidden" name="is_recurring" id="tmEditIsRecurring" value="0">
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label" id="tmEditDueLabel">Due Date</label><input class="form-input" type="date" name="due_date" id="tmEditDue"></div>
+          <div class="form-group"><label class="form-label">Due Time</label><input class="form-input" type="time" name="due_time" id="tmEditTime"></div>
+        </div>
+        <p class="tm-due-hint hidden" id="tmEditDueHint"><i data-lucide="repeat" class="icon-xs"></i>This is the current cycle's due date/time — it repeats automatically from here.</p>
+        <div class="tm-recur-panel hidden" id="tmEditRecurDetail">
+          <label class="form-label">Repeat every</label>
+          <div class="tm-recur-chips">
+            <button type="button" class="tm-recur-chip active" data-days="1" onclick="tmSetInterval(this,'tmEdit')">Daily</button>
+            <button type="button" class="tm-recur-chip" data-days="2" onclick="tmSetInterval(this,'tmEdit')">2 days</button>
+            <button type="button" class="tm-recur-chip" data-days="3" onclick="tmSetInterval(this,'tmEdit')">3 days</button>
+            <button type="button" class="tm-recur-chip" data-days="5" onclick="tmSetInterval(this,'tmEdit')">5 days</button>
+          </div>
+          <div class="tm-recur-custom"><input type="number" min="1" max="90" class="form-input" name="recurrence_interval_days" id="tmEditRecurDays" value="1" oninput="tmSyncIntervalChips(this,'tmEdit')"><span>day(s)</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot"><button type="button" class="btn btn-ghost" onclick="closeModal('tmEdit')">Cancel</button><button type="submit" class="btn btn-primary"><i data-lucide="save" class="icon-sm"></i>Save Changes</button></div>
+  </form>
+</div>
+
+<!-- REASSIGN MODAL -->
+<div class="modal-overlay hidden" id="tmReassignModal">
+  <form method="post" class="modal" data-tracs-modal-ajax data-refresh-selector=".tm-split-layout" data-close-delay="1000">
+    <?=csrf_input()?><input type="hidden" name="action" value="reassign_task"><input type="hidden" name="task_id" id="tmReassignTaskId"><input type="hidden" name="return_tab" value="<?=esc($tab)?>">
+    <div class="modal-head"><div><div class="modal-title">Reassign Task</div><div class="modal-sub" id="tmReassignSub">Add more people to this task.</div></div><button type="button" class="modal-close" onclick="closeModal('tmReassign')"><i data-lucide="x"></i></button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Add Assignees</label><select class="form-select" name="assignee_user_ids[]" id="tmReassignUsers" multiple data-searchable="true"><?php foreach($users as $u): ?><option value="<?=$u['id']?>"><?=esc($u['display_name'])?></option><?php endforeach; ?></select><small class="tm-field-hint">New assignees get their own checklist entry and reminder; already-assigned users are skipped.</small></div>
+    </div>
+    <div class="modal-foot"><button type="button" class="btn btn-ghost" onclick="closeModal('tmReassign')">Cancel</button><button type="submit" class="btn btn-primary"><i data-lucide="user-plus" class="icon-sm"></i>Assign</button></div>
+  </form>
+</div>
+
+<!-- DELETE TASK (hidden form posted after confirm) -->
+<form method="post" id="tmDeleteForm" class="hidden" data-tracs-modal-ajax data-refresh-selector=".tm-split-layout">
+  <?=csrf_input()?><input type="hidden" name="action" value="delete_task"><input type="hidden" name="task_id" id="tmDeleteTaskId"><input type="hidden" name="return_tab" value="<?=esc($tab)?>">
+</form>
+
+<!-- UNASSIGN USER (hidden form posted after confirm) -->
+<form method="post" id="tmUnassignForm" class="hidden" data-tracs-modal-ajax data-refresh-selector=".tm-split-layout">
+  <?=csrf_input()?><input type="hidden" name="action" value="unassign_user"><input type="hidden" name="task_id" id="tmUnassignTaskId"><input type="hidden" name="assignment_id" id="tmUnassignAssignmentId"><input type="hidden" name="return_tab" value="<?=esc($tab)?>">
+</form>
+
+<!-- MARK DONE (hidden form, one-click quick action) -->
+<form method="post" id="tmMarkDoneForm" class="hidden" data-tracs-modal-ajax data-refresh-selector=".tm-split-layout">
+  <?=csrf_input()?><input type="hidden" name="action" value="update_assignment"><input type="hidden" name="status" value="completed"><input type="hidden" name="assignment_id" id="tmMarkDoneAssignmentId"><input type="hidden" name="progress_note" value=""><input type="hidden" name="return_tab" value="<?=esc($tab)?>">
+</form>
+<script>
+// Cadence toggle shared by the Add Task and Edit Task modals (prefix 'tm' / 'tmEdit').
+// Segmented "One-time / Recurring" control instead of a bare checkbox, so the
+// choice reads as a question with an answer rather than one item in a checklist.
+function tmSetCadence(btn,prefix){
+  btn.parentElement.querySelectorAll('.tm-cadence-btn').forEach(b=>b.classList.toggle('active', b===btn));
+  const isRecurring=btn.dataset.cadence==='daily';
+  const hidden=document.getElementById(prefix+'IsRecurring');
+  if(hidden) hidden.value=isRecurring?'1':'0';
+  const panel=document.getElementById(prefix+'RecurDetail');
+  if(panel) panel.classList.toggle('hidden', !isRecurring);
+  const hint=document.getElementById(prefix+'DueHint');
+  if(hint) hint.classList.toggle('hidden', !isRecurring);
+  const label=document.getElementById(prefix+'DueLabel');
+  if(label) label.textContent=isRecurring?'Starts On':'Due Date';
+  const dueInput=document.getElementById(prefix+'Due');
+  if(dueInput) dueInput.required=isRecurring;
+}
+function tmSetInterval(btn,prefix){
+  btn.parentElement.querySelectorAll('.tm-recur-chip').forEach(b=>b.classList.toggle('active', b===btn));
+  const input=document.getElementById(prefix+'RecurDays');
+  if(input) input.value=btn.dataset.days;
+}
+function tmSyncIntervalChips(input,prefix){
+  const panel=document.getElementById(prefix+'RecurDetail');
+  if(!panel) return;
+  panel.querySelectorAll('.tm-recur-chip').forEach(b=>b.classList.toggle('active', b.dataset.days===input.value));
+}
+function tmOpenEdit(btn){
+  const d=btn.dataset;
+  document.getElementById('tmEditTaskId').value=d.taskId||'';
+  document.getElementById('tmEditTitle').value=d.title||'';
+  document.getElementById('tmEditCategory').value=d.category||'custom';
+  document.getElementById('tmEditDesc').value=d.desc||'';
+  document.getElementById('tmEditPriority').value=d.priority||'normal';
+  document.getElementById('tmEditUrl').value=d.url||'';
+  document.getElementById('tmEditDue').value=d.due||'';
+  document.getElementById('tmEditTime').value=d.time||'';
+  document.getElementById('tmEditReview').checked=(d.review==='1');
+  const isRecurring=d.recurring==='1';
+  const days=d.interval||'1';
+  document.getElementById('tmEditIsRecurring').value=isRecurring?'1':'0';
+  document.querySelectorAll('#tmEditCadence .tm-cadence-btn').forEach(b=>b.classList.toggle('active', (b.dataset.cadence==='daily')===isRecurring));
+  document.getElementById('tmEditRecurDetail').classList.toggle('hidden', !isRecurring);
+  document.getElementById('tmEditDueHint').classList.toggle('hidden', !isRecurring);
+  document.getElementById('tmEditDueLabel').textContent=isRecurring?'Starts On':'Due Date';
+  document.getElementById('tmEditDue').required=isRecurring;
+  document.getElementById('tmEditRecurDays').value=days;
+  document.querySelectorAll('#tmEditRecurDetail .tm-recur-chip').forEach(b=>b.classList.toggle('active', b.dataset.days===days));
+  btn.closest('details')?.removeAttribute('open');
+  openModal('tmEdit');window.TRACSDropdowns?.syncAll();
+}
+function tmOpenReassign(taskId,btn){
+  document.getElementById('tmReassignTaskId').value=taskId;
+  const sub=document.getElementById('tmReassignSub');
+  if(sub&&btn?.dataset.title)sub.textContent='Add more people to: '+btn.dataset.title;
+  const sel=document.getElementById('tmReassignUsers');
+  if(sel)[...sel.options].forEach(o=>o.selected=false);
+  btn.closest('details')?.removeAttribute('open');
+  openModal('tmReassign');window.TRACSDropdowns?.syncAll();
+}
+function tmDeleteTask(btn){
+  const id=btn.dataset.taskId, title=btn.dataset.title||'this task';
+  btn.closest('details')?.removeAttribute('open');
+  tracsConfirm('Delete "'+title+'"? This removes the task, its assignments, and the linked checklist items and reminders. This cannot be undone.', ()=>{
+    document.getElementById('tmDeleteTaskId').value=id;
+    document.getElementById('tmDeleteForm').requestSubmit();
+  });
+}
+function tmUnassign(btn){
+  const taskId=btn.dataset.taskId, assignmentId=btn.dataset.assignmentId, who=btn.dataset.assignee||'this user';
+  btn.closest('details')?.removeAttribute('open');
+  tracsConfirm('Unassign '+who+' from this task? Their checklist entry and reminder for it are removed. The task and any other assignees stay.', ()=>{
+    document.getElementById('tmUnassignTaskId').value=taskId;
+    document.getElementById('tmUnassignAssignmentId').value=assignmentId;
+    document.getElementById('tmUnassignForm').requestSubmit();
+  });
+}
+function tmMarkDone(btn){
+  document.getElementById('tmMarkDoneAssignmentId').value=btn.dataset.assignmentId||'';
+  document.getElementById('tmMarkDoneForm').requestSubmit();
+}
+
+/* Screenshots on the Add Task modal: same click/drag/paste model as the case
+   and shift handover modals. Files stay in the native <input> itself (via
+   DataTransfer) so the existing data-tracs-modal-ajax form submit picks them
+   up automatically — no manual FormData building needed here. */
+let tmTaskStagedFiles=[];
+const tmTaskFileUrls=new Map();
+function tmTaskAttachmentEls(){
+  return {
+    input: document.getElementById('tmTaskAttachments'),
+    drop: document.getElementById('tmTaskUploadDrop'),
+    status: document.getElementById('tmTaskUploadStatus'),
+    preview: document.getElementById('tmTaskAttachmentPreview')
+  };
+}
+function tmTaskUrlFor(file){
+  if(!tmTaskFileUrls.has(file))tmTaskFileUrls.set(file,URL.createObjectURL(file));
+  return tmTaskFileUrls.get(file);
+}
+function tmTaskSyncInputFiles(){
+  const input=tmTaskAttachmentEls().input;
+  if(!input)return;
+  const dt=new DataTransfer();
+  tmTaskStagedFiles.forEach(f=>dt.items.add(f));
+  input.files=dt.files;
+}
+function tmTaskValidateFile(file){
+  if(!file || !file.type || !file.type.startsWith('image/'))return `${file?.name||'File'} must be an image.`;
+  if(file.size<=0)return `${file.name} is empty.`;
+  if(file.size>CASE_ATTACHMENT_MAX)return `${file.name} is larger than 5MB.`;
+  if(!CASE_ATTACHMENT_TYPES.has(file.type))return `${file.name} must be JPG, JPEG, PNG, or WEBP.`;
+  return '';
+}
+function tmTaskAddFiles(files){
+  const incoming=Array.from(files||[]);
+  const errors=[];
+  incoming.forEach(file=>{
+    const err=tmTaskValidateFile(file);
+    if(err){errors.push(err);return;}
+    const dup=tmTaskStagedFiles.some(f=>f.name===file.name && f.size===file.size && f.lastModified===file.lastModified);
+    if(!dup)tmTaskStagedFiles.push(file);
+  });
+  tmTaskSyncInputFiles();
+  renderTmTaskAttachments();
+  const st=tmTaskAttachmentEls().status;
+  if(st){
+    if(errors.length){st.textContent=errors[0];st.className='case-upload-status error';}
+    else{const n=tmTaskStagedFiles.length;st.textContent=n?`${n} image${n===1?'':'s'} ready to upload.`:'';st.className='case-upload-status ok';}
+  }
+}
+function tmTaskRemoveFile(index){
+  const file=tmTaskStagedFiles[index];
+  if(file && tmTaskFileUrls.has(file)){try{URL.revokeObjectURL(tmTaskFileUrls.get(file));}catch(e){} tmTaskFileUrls.delete(file);}
+  tmTaskStagedFiles=tmTaskStagedFiles.filter((_,i)=>i!==index);
+  tmTaskSyncInputFiles();
+  renderTmTaskAttachments();
+}
+function renderTmTaskAttachments(){
+  const el=tmTaskAttachmentEls().preview;
+  if(!el)return;
+  el.innerHTML=tmTaskStagedFiles.map((file,i)=>`
+    <div class="case-attachment-tile">
+      <button class="case-attachment-thumb" type="button" onclick="openCaseImagePreview(${jsAttr(tmTaskUrlFor(file))},${jsAttr(file.name)})"><img src="${tmTaskUrlFor(file)}" alt="${escHtml(file.name)}"></button>
+      <div class="case-attachment-meta"><span title="${escHtml(file.name)}">${escHtml(file.name)}</span><small>${formatBytes(file.size)}</small></div>
+      <button class="case-attachment-remove" type="button" onclick="tmTaskRemoveFile(${i})" aria-label="Remove selected image"><i data-lucide="x" class="icon-xs"></i></button>
+    </div>`).join('');
+  tracsRefreshIcons(el);
+}
+function tmTaskClearAttachments(){
+  tmTaskFileUrls.forEach(url=>{try{URL.revokeObjectURL(url);}catch(e){}});
+  tmTaskFileUrls.clear();
+  tmTaskStagedFiles=[];
+  const els=tmTaskAttachmentEls();
+  if(els.input)els.input.value='';
+  if(els.preview)els.preview.innerHTML='';
+  if(els.status){els.status.textContent='';els.status.className='case-upload-status';}
+}
+function tmInitTaskAttachmentUpload(){
+  const els=tmTaskAttachmentEls();
+  if(!els.input||els.input.dataset.ready)return;
+  els.input.dataset.ready='1';
+  els.input.addEventListener('change',()=>tmTaskAddFiles(els.input.files));
+  if(els.drop){
+    ['dragenter','dragover'].forEach(evt=>els.drop.addEventListener(evt,e=>{e.preventDefault();els.drop.classList.add('drag');}));
+    ['dragleave','drop'].forEach(evt=>els.drop.addEventListener(evt,e=>{e.preventDefault();els.drop.classList.remove('drag');}));
+    els.drop.addEventListener('drop',e=>tmTaskAddFiles(e.dataTransfer?.files));
+  }
+}
+function tmOpenNewTask(){
+  tmInitTaskAttachmentUpload();
+  tmTaskClearAttachments();
+  openModal('tmTask');
+}
+</script>
+<?php endif; ?>
+
 <?php if($can_create && (string)($_GET['add'] ?? '') === '1'): ?>
 <script>
-document.addEventListener('DOMContentLoaded', () => openModal('tmTask'));
+document.addEventListener('DOMContentLoaded', () => tmOpenNewTask());
 </script>
 <?php endif; ?>
 

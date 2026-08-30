@@ -36,16 +36,16 @@ try {
     $conn->begin_transaction();
 
     $stmt = $conn->prepare("
-        SELECT id, title, status, priority, next_check_at, notes, created_at, updated_at
+        SELECT id, title, status, priority, next_check_at, notes, created_at, updated_at, user_id
         FROM tracs_cases
-        WHERE id = ? AND user_id = ?
+        WHERE id = ?
         LIMIT 1
         FOR UPDATE
     ");
     if (!$stmt) {
         throw new RuntimeException('Unable to load case');
     }
-    $stmt->bind_param('ii', $id, $uid);
+    $stmt->bind_param('i', $id);
     $stmt->execute();
     $case = $stmt->get_result()->fetch_assoc();
     $stmt->close();
@@ -53,6 +53,9 @@ try {
         $conn->rollback();
         fail_not_found();
     }
+    // Per the Workflow Board spec, any authenticated user who can view cases may
+    // move a card between columns (change its status). Endpoint-level permission
+    // (cases.view) is enforced in _bootstrap.php, so no owner/manage gate here.
 
     $previous = strtolower((string)($case['status'] ?? 'pending'));
     if ($previous === $status) {
@@ -61,11 +64,11 @@ try {
         ok($case, 'Case is already in this workflow stage');
     }
 
-    $stmt = $conn->prepare("UPDATE tracs_cases SET status = ?, updated_at = NOW() WHERE id = ? AND user_id = ?");
+    $stmt = $conn->prepare("UPDATE tracs_cases SET status = ?, updated_at = NOW() WHERE id = ?");
     if (!$stmt) {
         throw new RuntimeException('Unable to update case');
     }
-    $stmt->bind_param('sii', $status, $id, $uid);
+    $stmt->bind_param('si', $status, $id);
     if (!$stmt->execute() || $stmt->affected_rows !== 1) {
         $stmt->close();
         throw new RuntimeException('Unable to update case');
@@ -102,13 +105,13 @@ try {
     $stmt = $conn->prepare("
         SELECT id, title, status, priority, next_check_at, notes, created_at, updated_at
         FROM tracs_cases
-        WHERE id = ? AND user_id = ?
+        WHERE id = ?
         LIMIT 1
     ");
     if (!$stmt) {
         throw new RuntimeException('Unable to reload case');
     }
-    $stmt->bind_param('ii', $id, $uid);
+    $stmt->bind_param('i', $id);
     $stmt->execute();
     $updated = $stmt->get_result()->fetch_assoc();
     $stmt->close();

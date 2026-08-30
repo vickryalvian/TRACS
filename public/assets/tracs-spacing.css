@@ -19,15 +19,19 @@
   margin-top: var(--space-1);
 }
 
-.dashboard-content,
-.dash-grid,
-.col-left,
-.dashboard-workspace,
-.col-productivity,
-.col-center,
-.col-right {
-  gap: var(--card-gap);
-}
+/* Deliberately not duplicated here: .dashboard-content, .dash-grid,
+   .col-left, .dashboard-workspace, .col-productivity, .col-center, and
+   .col-right each already declare their own gap in tracs.css via the
+   dashboard-specific --dashboard-row-gap/--dashboard-column-gap tokens
+   (not the generic --card-gap this file uses elsewhere). This stylesheet
+   loads after tracs.css with equal selector specificity, so a duplicate
+   `gap: var(--card-gap)` rule here would silently win the cascade and
+   collapse every one of those back to the generic token — for .dash-grid
+   specifically, the `gap` shorthand would even overwrite its separately
+   tuned row-gap/column-gap longhands with a single shared value. This bit
+   the Cases-widget top-padding/row-gap fixes for real: the token was
+   correctly changed in tracs.css but never took visual effect because of
+   this exact duplicate rule. */
 
 .stat-strip,
 .dashboard-stat-strip,

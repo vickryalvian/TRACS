@@ -14,6 +14,9 @@ class CaseModel {
         if (function_exists('tracs_ensure_case_status_values')) {
             tracs_ensure_case_status_values($this->conn);
         }
+        if (function_exists('tracs_ensure_case_board_order')) {
+            tracs_ensure_case_board_order($this->conn);
+        }
     }
 
     private function ensureAttachmentTable(): bool {
@@ -67,21 +70,20 @@ class CaseModel {
                 c.updated_at,
                 c.created_by,
                 c.created_by_name,
+                c.board_order,
                 {$attachmentSelect} AS attachment_count,
                 COALESCE(NULLIF(c.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name
             FROM tracs_cases c
             LEFT JOIN tracs_users u ON c.created_by = u.id
             {$attachmentJoin}
-            WHERE c.user_id = ?
-            ORDER BY FIELD(c.status, 'stuck', 'active', 'in_progress', 'pending', 'on_hold', 'completed'), c.next_check_at ASC, c.updated_at DESC
+            ORDER BY FIELD(c.status, 'stuck', 'active', 'in_progress', 'pending', 'on_hold', 'completed'), c.board_order ASC, c.next_check_at ASC, c.updated_at DESC
         ";
-        
+
         $stmt = $this->conn->prepare($query);
         if (!$stmt) {
             return false;
         }
-        
-        $stmt->bind_param('i', $user_id);
+
         $stmt->execute();
         $result = $stmt->get_result();
         
@@ -136,8 +138,7 @@ class CaseModel {
                 COALESCE(NULLIF(c.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name
             FROM tracs_cases c
             LEFT JOIN tracs_users u ON c.created_by = u.id
-            WHERE c.user_id = ?
-            AND (
+            WHERE (
                 c.priority = 'critical'
                 OR c.next_check_at < NOW()
                 OR c.status = 'stuck'
@@ -145,13 +146,12 @@ class CaseModel {
             ORDER BY c.priority DESC, c.next_check_at ASC
             LIMIT 10
         ";
-        
+
         $stmt = $this->conn->prepare($query);
         if (!$stmt) {
             return false;
         }
-        
-        $stmt->bind_param('i', $user_id);
+
         $stmt->execute();
         $result = $stmt->get_result();
         
@@ -180,17 +180,15 @@ class CaseModel {
                 COALESCE(NULLIF(c.created_by_name,''), NULLIF(u.name,''), u.email, 'System') AS creator_name
             FROM tracs_cases c
             LEFT JOIN tracs_users u ON c.created_by = u.id
-            WHERE c.user_id = ?
-            AND DATE(c.next_check_at) = CURDATE()
+            WHERE DATE(c.next_check_at) = CURDATE()
             ORDER BY c.next_check_at ASC
         ";
-        
+
         $stmt = $this->conn->prepare($query);
         if (!$stmt) {
             return false;
         }
-        
-        $stmt->bind_param('i', $user_id);
+
         $stmt->execute();
         $result = $stmt->get_result();
         

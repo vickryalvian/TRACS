@@ -59,6 +59,14 @@ Current migrations:
 - `2026_06_08_shifting_assignment.sql`
 - `2026_06_13_main_shift_hours.sql`
 - `2026_06_13_shifting_assignment_audit_fixes.sql`
+- `2026_06_30_user_removed_status.sql` — adds the `removed` user status value.
+- `2026_06_30_user_removal_release.sql` — safe user removal (archive + identity
+  release) plus `dashboard.view` repair for operational roles. Idempotent;
+  supersedes the status-only migration above by also ensuring the enum.
+- `2026_08_04_abuse_reports.sql` — abuse report workflow tables, evidence,
+  timeline/audit storage, and permissions. See
+  [`docs/ABUSE_REPORTS.md`](../docs/ABUSE_REPORTS.md) for the application and
+  API contract.
 
 ## File Structure
 
@@ -70,6 +78,7 @@ config/
     auth.sql
     users.sql
     cases.sql
+    abuse_reports.sql
     reminders.sql
     checklist.sql
     finance.sql
@@ -93,6 +102,7 @@ config/
 | --- | --- |
 | Users/Auth | `tracs_users`, `tracs_login_attempts`, `tracs_auth_events` |
 | Cases | `tracs_cases`, `case_attachments` |
+| Abuse Reports | `tracs_abuse_reports`, `tracs_abuse_report_events`, `tracs_abuse_report_notes`, `tracs_abuse_report_evidence` |
 | Reminders | `tracs_reminders` |
 | Checklist | `tracs_side_tasks`, `tracs_side_task_logs` |
 | Finance | `balance_transfers`, `tracs_finance_transfers` |
@@ -140,10 +150,18 @@ config/
 Use this naming pattern:
 
 ```text
-YYYY_MM_DD_short_description.sql
+YYYY_MM_DD_short_description/
+  up.sql
+  down.sql
 ```
 
-Migrations should be safe to re-run when practical. For column/index additions, use `information_schema` checks or helper procedures. For destructive changes, include backup instructions, rollback notes, and a clear reason.
+Existing single-file migrations remain part of the current deployment history.
+New refactor-phase migrations must use paired `up.sql` and `down.sql` files.
+They should be safe to re-run when practical. For column/index additions, use
+`information_schema` checks or helper procedures. For destructive changes,
+include backup instructions, rollback notes, verification queries, data-loss
+warnings, and a clear reason. A database backup remains mandatory when a down
+migration cannot recreate removed or transformed data.
 
 ## Backup Recommendation
 

@@ -1,5 +1,14 @@
 Options -Indexes
+ErrorDocument 400 /400.php
+ErrorDocument 401 /401.php
+ErrorDocument 403 /403.php
 ErrorDocument 404 /404.php
+ErrorDocument 405 /405.php
+ErrorDocument 408 /408.php
+ErrorDocument 429 /429.php
+ErrorDocument 500 /500.php
+ErrorDocument 502 /502.html
+ErrorDocument 503 /503.html
 RewriteEngine On
 RewriteRule ^modules/ - [F,L]
 RewriteRule ^includes/ - [F,L]
@@ -7,7 +16,7 @@ RewriteRule ^api/(?:_|.*-lib\.php$) - [F,L,NC]
 RewriteRule ^api/(?:.*/)?_ - [F,L,NC]
 RewriteRule ^uploads/(?!avatars/[A-Za-z0-9._-]+\.(?:png|jpe?g|webp)$) - [F,L,NC]
 RewriteRule ^uploads/.*\.(php|phtml|phar|cgi|pl|py|asp|aspx|jsp|sh)$ - [F,L,NC]
-RewriteRule (^|/)[^/]*(backup|bak|old|orig|save|copy)[^/]*\.(css|js|php|html?|json|txt|sql|zip|tar|gz)$ - [F,L,NC]
+RewriteRule (^|/)[^/]*(?<![a-zA-Z])(backup|bak|old|orig|save|copy)(?![a-zA-Z])[^/]*\.(css|js|php|html?|json|txt|sql|zip|tar|gz)$ - [F,L,NC]
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^$ index.php [L]

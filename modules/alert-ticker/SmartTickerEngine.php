@@ -24,23 +24,38 @@ class SmartTickerEngine {
         $items = array_merge($items, $this->reminderItems());
         $items = array_merge($items, $this->checklistItems());
         $items = array_merge($items, $this->caseItems());
+        $items = array_merge($items, $this->abuseReportItems());
         $items = array_merge($items, $this->domainItems());
         $items = array_merge($items, $this->financeItems());
         $items = array_merge($items, $this->meetingItems());
         $items = array_merge($items, $this->shiftReportItems());
         $items = array_merge($items, $this->shiftingAssignmentItems());
         $items = array_merge($items, $this->tickerEventItems());
-        $items = array_merge($items, $this->customMessageItems());
+
+        $custom = $this->customMessageItems();
+        $items = array_merge($items, $custom);
 
         $items = $this->dedupe($items);
         $items = $this->groupLowPriority($items);
 
-        usort($items, function($a, $b) {
+        $sorter = function($a, $b) {
             $pa = $a['sort_weight'] ?? 99;
             $pb = $b['sort_weight'] ?? 99;
             if ($pa !== $pb) return $pa <=> $pb;
             return strtotime($b['created_at'] ?? 'now') <=> strtotime($a['created_at'] ?? 'now');
-        });
+        };
+        usort($items, $sorter);
+
+        if (count($items) > self::MAX_ITEMS) {
+            // Public announcements must never be silently crowded out by a
+            // single user's volume of personal reminders/checklist/case
+            // items, so they're guaranteed a slot before the cap is applied.
+            $customIds = array_flip(array_filter(array_map(fn($i) => $i['id'] ?? null, $custom)));
+            $announced = array_values(array_filter($items, fn($i) => isset($customIds[$i['id'] ?? null])));
+            $others = array_values(array_filter($items, fn($i) => !isset($customIds[$i['id'] ?? null])));
+            $items = array_merge($announced, array_slice($others, 0, max(0, self::MAX_ITEMS - count($announced))));
+            usort($items, $sorter);
+        }
 
         return array_slice($items, 0, self::MAX_ITEMS);
     }
@@ -216,6 +231,53 @@ class SmartTickerEngine {
                 $items[] = $this->item('case', 'medium', 'new', 'New case', 'New case added: '.$r['title'], $created, null, 'case-'.$r['id']);
             } else {
                 $items[] = $this->item('case', 'medium', 'updated', 'Case updated', 'Case updated: '.$r['title'].' moved to '.ucfirst($r['status']), $created, null, 'case-'.$r['id']);
+            }
+        }
+        return $items;
+    }
+
+    private function abuseReportItems(): array {
+        if (!$this->tableExists('tracs_abuse_reports')) return [];
+        if (function_exists('tracs_user_can') && !tracs_user_can($this->conn, 'abuse_reports.view', $this->uid)) return [];
+
+        $stmt = $this->conn->prepare("
+            SELECT id, report_number, title, status, priority, waiting_until, created_at, updated_at
+            FROM tracs_abuse_reports
+            WHERE status NOT IN ('resolved','closed')
+              AND (
+                priority IN ('critical','high')
+                OR status='action_taken'
+                OR (waiting_until IS NOT NULL AND waiting_until < NOW())
+                OR updated_at >= DATE_SUB(NOW(), INTERVAL " . self::RECENT_HOURS . " HOUR)
+                OR created_at >= DATE_SUB(NOW(), INTERVAL " . self::RECENT_HOURS . " HOUR)
+              )
+            ORDER BY
+              CASE
+                WHEN status='action_taken' OR (waiting_until IS NOT NULL AND waiting_until < NOW()) THEN 1
+                WHEN priority='critical' THEN 2
+                WHEN priority='high' THEN 3
+                ELSE 4
+              END,
+              updated_at DESC
+            LIMIT 8
+        ");
+        if (!$stmt) return [];
+        $stmt->execute();
+        $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+
+        $items = [];
+        foreach ($rows as $r) {
+            $created = $r['updated_at'] ?: $r['created_at'];
+            $ref = trim((string)($r['report_number'] ?? '')) ?: ('AR #'.$r['id']);
+            if (($r['status'] ?? '') === 'action_taken' || (!empty($r['waiting_until']) && strtotime((string)$r['waiting_until']) < time())) {
+                $items[] = $this->item('abuse_report', 'critical', 'overdue', 'Abuse action required', 'Abuse report requires action: '.$ref.' '.$r['title'], $created, null, 'abuse-'.$r['id']);
+            } elseif ($r['priority'] === 'critical') {
+                $items[] = $this->item('abuse_report', 'critical', 'pending', 'Critical abuse report', 'Critical abuse report: '.$ref.' '.$r['title'], $created, null, 'abuse-'.$r['id']);
+            } elseif ($r['priority'] === 'high') {
+                $items[] = $this->item('abuse_report', 'high', 'pending', 'High abuse report', 'High abuse report: '.$ref.' '.$r['title'], $created, null, 'abuse-'.$r['id']);
+            } else {
+                $items[] = $this->item('abuse_report', 'medium', 'updated', 'Abuse report updated', 'Abuse report updated: '.$ref.' '.$r['title'], $created, null, 'abuse-'.$r['id']);
             }
         }
         return $items;
@@ -431,15 +493,18 @@ class SmartTickerEngine {
     private function customMessageItems(): array {
         if (!$this->tableExists('tracs_ticker_messages')) return [];
 
+        // Manual announcements are public operational information: every user
+        // must see the same messages in the same order, so this is
+        // intentionally not scoped by user_id (unlike the personal work-queue
+        // signals above, e.g. reminders/checklist/cases).
         $stmt = $this->conn->prepare("
             SELECT id, text, class, created_at
             FROM tracs_ticker_messages
-            WHERE user_id=? AND enabled=1
-            ORDER BY created_at DESC
+            WHERE enabled=1
+            ORDER BY created_at ASC, id ASC
             LIMIT 8
         ");
         if (!$stmt) return [];
-        $stmt->bind_param('i', $this->uid);
         $stmt->execute();
         $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
         $stmt->close();

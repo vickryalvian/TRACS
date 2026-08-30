@@ -236,6 +236,65 @@ class CancellationFeedbackModel {
         return $stmt->execute();
     }
 
+    /**
+     * Patch a single field on an existing feedback record.
+     * Only columns in the allowed-fields whitelist may be patched.
+     *
+     * @param  int    $id    Record primary key
+     * @param  string $field Column name (must be in the whitelist)
+     * @param  mixed  $value New column value (string)
+     * @return array{updated_at:string}|false  Updated timestamp on success, false on failure
+     */
+    public function patchField(int $id, string $field, mixed $value): array|false {
+        static $allowedFields = [
+            'cancelled_service',
+            'cancellation_reason',
+            'additional_details',
+            'whmcs_reference',
+            'email_address',
+            'payment_resolution',
+        ];
+
+        if (!in_array($field, $allowedFields, true)) {
+            return false;
+        }
+
+        // Use a dynamic prepared statement. The field name is safe because
+        // it has been validated against the allowedFields whitelist above.
+        $sql = "UPDATE tracs_cancellation_feedback
+                SET `{$field}` = ?, updated_at = NOW()
+                WHERE id = ?";
+
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return false;
+        }
+
+        $valueStr = (string)$value;
+        $stmt->bind_param('si', $valueStr, $id);
+
+        if (!$stmt->execute()) {
+            return false;
+        }
+
+        if ($stmt->affected_rows < 0) {
+            // affected_rows = 0 is fine (value unchanged), < 0 indicates error
+            return false;
+        }
+
+        // Fetch the updated timestamp so the client can display it
+        $tsSql  = "SELECT updated_at FROM tracs_cancellation_feedback WHERE id = ?";
+        $tsStmt = $this->db->prepare($tsSql);
+        if (!$tsStmt) {
+            return ['updated_at' => date('Y-m-d H:i:s')];
+        }
+        $tsStmt->bind_param('i', $id);
+        $tsStmt->execute();
+        $row = $tsStmt->get_result()->fetch_assoc();
+
+        return ['updated_at' => $row['updated_at'] ?? date('Y-m-d H:i:s')];
+    }
+
     public function delete($id) {
         $sql = "DELETE FROM tracs_cancellation_feedback WHERE id = ?";
         $stmt = $this->db->prepare($sql);

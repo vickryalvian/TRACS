@@ -65,6 +65,8 @@ System roles are Super Admin, Admin, Supervisor / Leader, Agent, Intern, and Vie
 
 `core/user_management.php` is the source of truth for the catalog and default role mappings. `public/includes/header.php` derives navigation visibility from permissions.
 
+Page guards return a generic **404** for unauthorized accounts (`tracs_abort_404`), so every operational role that lands on the dashboard must hold `dashboard.view`. To keep a successful login from ever dead-ending in a 404, `tracs_auth_resolve_safe_landing()` verifies the resolved landing is permitted and otherwise falls back through accessible pages to `profile.php` (which every account can open via `profile.view_own`).
+
 Server Health & Logs is deliberately role-based rather than permission-based: only the exact `super_admin` role can discover the menu, open `public/server-health.php`, or call `public/api/server-health.php`. Admin, Supervisor, Agent, Intern, Viewer, unauthenticated, and pending-2FA sessions are blocked.
 
 ## Server Health And Logs
@@ -171,6 +173,7 @@ See `docs/DOMAIN_PRICE_CROSSCHECK.md` and `docs/DOMAIN_PRICE_CROSSCHECK_ARCHITEC
 - Domain Transfer Log: `public/domains.php`; retained legacy tables include `domain_transfers` and `activity_feed`.
 - Finance: `public/finance.php`; retained legacy storage includes `balance_transfers`.
 - User Management: `public/user-management.php`, `public/intern-management.php`, and `modules/user-management/*`.
+- User removal is a non-destructive archive: `archiveUserForRemoval()` marks the account `removed`, revokes sign-in, preserves the original identity in `archived_email`/`archived_username`, and releases the live `email`/`username` (id-tied tombstones) so the same values can be reused by a new account. The identity row is never deleted, so case history, audit logs, reporting, and ISO 9001 traceability stay linked to the original id. See `docs/USER_LIFECYCLE_REMEDIATION.md`.
 - Settings are under the avatar menu and route to `profile.php?section=preferences`.
 - TV Mode: `public/tv-mode.php`, role-gated to Super Admin/Admin/Supervisor, with responsive compact/narrow/4K modes and data from `public/api/tv-mode-summary.php`.
 
@@ -178,7 +181,7 @@ See `docs/DOMAIN_PRICE_CROSSCHECK.md` and `docs/DOMAIN_PRICE_CROSSCHECK_ARCHITEC
 
 | Area | Important tables |
 | --- | --- |
-| Auth/users | `tracs_users`, `tracs_login_attempts`, `tracs_auth_events`, `tracs_roles`, `tracs_permissions`, `tracs_role_permissions`, `tracs_divisions`, `user_intern_profiles` |
+| Auth/users | `tracs_users` (incl. `status` with `removed`, `archived_email`, `archived_username`, `removed_at`, `removed_by`), `tracs_login_attempts`, `tracs_auth_events`, `tracs_roles`, `tracs_permissions`, `tracs_role_permissions`, `tracs_divisions`, `user_intern_profiles` |
 | Cases | `tracs_cases`, `case_attachments` |
 | Checklist/reminders/tasks | `tracs_side_tasks`, `tracs_side_task_logs`, `tracs_reminders`, `tracs_tasks`, `tracs_task_assignments`, `tracs_task_logs`, `tracs_task_reviews`, `tracs_task_reminders` |
 | Shift | `tracs_shift_reports`, `tracs_shift_activities`, `shift_report_attachments` |
@@ -194,6 +197,76 @@ Use `config/install.sql` for a fresh database and dated files in `config/migrati
 - Font stack is `Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif`.
 - Prefer compact panels, consistent gaps/padding, contextual icons, readable completed states, and blue only for active/highlighted state.
 - Use shared modal, toast, loading, error, dropdown, and theme helpers before adding module-specific copies.
+
+## Refactor Frontend Direction
+
+The current application remains server-rendered PHP during the incremental
+refactor. New React modules follow the Calendar pilot pattern: authenticated PHP
+shell, explicit React root, module-specific manifest assets, same-origin PHP
+APIs, and source-owned business rules.
+
+Tailwind must not load Preflight into hybrid pages. React bundles use prefixed
+utilities, separate output, root-scoped handwritten CSS, and semantic theme
+tokens mapped to the existing TRACS CSS variables. Existing Calendar uses the
+`cal:` prefix and remains unchanged until a dedicated migration is approved.
+
+The future consolidated source root is `frontend/`, with shared UI/pattern
+components and independent module entries. PHP loads hashed assets through a
+shared allowlisted Vite manifest helper. Existing PHP rendering remains the
+fallback until characterization, permission, API, visual, and smoke checks pass.
+
+Phase 4 establishes that source root as an independent package. Its only Vite
+entry is `frontend/src/modules/_sandbox/main.jsx`; local builds write to ignored
+`frontend/dist/` and are not loaded by PHP. The package includes initial
+stateless UI primitives and request/date formatting helpers, but no TRACS
+module, API endpoint, or business rule has moved into it.
+
+Future approved production entries will remain named per module and emit to
+`public/assets/react-dist/`. An authenticated PHP shell must perform session and
+permission checks, render a dedicated `.tracs-react-root`, expose reviewed CSRF
+and user metadata, and load an allowlisted entry from the Vite manifest. React
+then calls same-origin PHP APIs; it never becomes the permission authority.
+
+## Refactor Backend Direction
+
+Phase 5 adds an internal, namespaced API foundation under `api/`. It is outside
+the current `public/` web root and is not required by legacy routes. The
+foundation reuses the existing database connection, hardened session/2FA
+checks, permission catalog, CSRF token strategy, active-user lookup, audit
+tables, and public error sanitizer.
+
+New endpoint batches may use `TRACS\Api` helpers for the standard JSON envelope,
+request parsing, validation, authentication, permissions, CSRF, audit logging,
+private error correlation, and strict backend dates. Existing endpoints retain
+their characterized contracts until a separately tested compatibility batch
+adopts the foundation.
+
+The first adopter is the additive `GET /api/v1/context.php` contract. It proves
+the authenticated bootstrap, response envelope, request ID, permission
+discovery, and CSRF handoff without replacing a legacy endpoint or moving
+module business logic. It is read-only, cache-disabled, and available to every
+fully authenticated active account; module permissions are still enforced by
+each module endpoint.
+
+The route boundary remains:
+
+```text
+public/api/<route>.php
+  -> internal api/_bootstrap.php
+  -> controller/service/repository as appropriate
+  -> existing MySQL connection
+```
+
+No endpoint may treat React state, hidden controls, or client-provided roles as
+authorization.
+
+See:
+
+- `docs/react-tailwind-architecture.md`
+- `docs/frontend-migration-plan.md`
+- `docs/php-api-architecture-plan.md`
+- `docs/tailwind-design-system-plan.md`
+- `docs/design-token-map.md`
 
 ## Deployment And Docker
 

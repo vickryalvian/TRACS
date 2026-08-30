@@ -2,6 +2,7 @@
 /* ── api/bt-create.php — Create balance transfer ────────────────
    TRACS · Prepared statements only · No framework               */
 require '_bootstrap.php';
+require_once __DIR__ . '/_realtime_payloads.php';
 
 $sender_email    = trim($body['sender_email']    ?? '');
 $sender_user_id  = trim($body['sender_user_id']  ?? '');
@@ -87,11 +88,16 @@ if (!$stmt->execute()) {
   fail('Database error', 500);
 }
 
-try { logAct('balance_transfer','create',$conn->insert_id,'Logged transfer: '.$sender_email.' → '.$receiver_email); } catch(Throwable $e){}
+$id = (int)$conn->insert_id;
+
+try { logAct($conn, $uid, 'create', 'Balance Transfer', 'Logged transfer: '.$sender_email.' -> '.$receiver_email, $id); } catch(Throwable $e){}
 
 // The signature of tickerEvent requires $uid which we get from session in _bootstrap.php.
 if (isset($uid)) {
-    tickerEvent($conn, $uid, "Finance transfer recorded: " . number_format($amount, 0) . " to " . ($receiver_email ?: $receiver_user_id), 'info', 'finance', $conn->insert_id);
+    tickerEvent($conn, $uid, "Finance transfer recorded: " . number_format($amount, 0) . " to " . ($receiver_email ?: $receiver_user_id), 'info', 'finance', $id);
 }
 
-ok(['id' => $conn->insert_id], 'Transfer recorded');
+ok([
+  'id' => $id,
+  'record' => tracs_realtime_balance_transfer($conn, $id),
+], 'Transfer recorded');

@@ -13,6 +13,7 @@ require_once __DIR__.'/../core/access_control.php';
 tracs_require_page_permission($conn, 'dashboard.view');
 
 require_once __DIR__.'/../modules/case/controller.php';
+require_once __DIR__.'/../modules/abuse-report/controller.php';
 require_once __DIR__.'/../modules/reminder/controller.php';
 require_once __DIR__.'/../modules/checklist/controller.php';
 require_once __DIR__.'/../modules/alert-ticker/controller.php';
@@ -21,16 +22,22 @@ require_once __DIR__.'/../modules/ops-status/controller.php';
 require_once __DIR__.'/../modules/shift-reports/controller.php';
 require_once __DIR__.'/../modules/mom/controller.php';
 require_once __DIR__.'/../modules/task-management/controller.php';
+require_once __DIR__.'/api/checklist-attachment-lib.php';
 require_once __DIR__.'/../core/notifications.php';
+require_once __DIR__.'/../core/infrastructure_servers.php';
 
 require_once __DIR__.'/includes/page_helpers.php';
+
+$infra_real_servers = tracs_infra_server_list_active_for_json($conn);
+$infra_hidden_seed_codes = tracs_infra_hidden_seed_codes($conn);
 
 // TRACS Operations System: first-deployment dashboard direction by Vickry.
 $uid        = (int)($_SESSION['user_id']??0);
 $user_email = $_SESSION['user_email']??'operator@tracs.local';
 $case_can_manage = tracs_user_can($conn, 'cases.manage');
 $case_role = (string)($_SESSION['user_role_slug'] ?? '');
-$case_can_delete = in_array($case_role, ['super_admin','admin'], true) || tracs_user_can($conn, 'cases.delete');
+$case_can_delete = tracs_user_can_delete_cases($conn, $uid);
+$abuse_can_view = tracs_user_can($conn, 'abuse_reports.view');
 tracs_ensure_creator_columns($conn, 'tracs_cases', 'user_id');
 tracs_ensure_creator_columns($conn, 'tracs_reminders', 'user_id');
 tracs_ensure_creator_columns($conn, 'tracs_side_tasks', 'user_id');
@@ -44,6 +51,8 @@ $AC = new ActivityLogController($conn,$uid);
 $SC = new ShiftReportController($conn,$uid);
 $MC = new MOMController($conn,$uid);
 $TM = new TaskManagementController($conn,$uid);
+$task_monitor_base_href = tracs_user_can($conn, 'tasks.monitor') ? 'monitoring.php' : 'tasks.php';
+$AR = $abuse_can_view ? new AbuseReportController($conn,$uid) : null;
 
 $opsStatus = getOpsStatus($conn);
 $shift_reports = $SC->getDashboardByShift();
@@ -56,6 +65,23 @@ $tasks      = $KC->getTasks()?:[];
 $activities = [];
 foreach($AC->getRecentActivity(20)?:[] as $a){try{$activities[]=$AC->formatActivity($a);}catch(Exception $e){}}
 $ticker_items = $TC->formatAlertsForTicker();
+$abuse_summary = $AR ? $AR->dashboardSummary() : null;
+$abuse_open = 0;
+$abuse_critical = 0;
+$abuse_waiting_external = 0;
+$abuse_action_required = 0;
+$abuse_resolved_today = 0;
+$abuse_oldest = null;
+$abuse_href = 'abuse-reports.php';
+if($abuse_summary){
+  $abuse_open = (int)($abuse_summary['open'] ?? 0);
+  $abuse_critical = (int)($abuse_summary['critical'] ?? 0);
+  $abuse_waiting_external = (int)($abuse_summary['waiting_external'] ?? 0);
+  $abuse_action_required = (int)($abuse_summary['action_required'] ?? $abuse_summary['over_sla'] ?? 0);
+  $abuse_resolved_today = (int)($abuse_summary['resolved_today'] ?? 0);
+  $abuse_oldest = is_array($abuse_summary['oldest_open'] ?? null) ? $abuse_summary['oldest_open'] : null;
+  $abuse_href = $abuse_oldest ? 'abuse-reports.php?id='.(int)$abuse_oldest['id'] : 'abuse-reports.php';
+}
 $mom_dashboard = [];
 $weekly_suggestions = [];
 if($MC->isInstalled()){
@@ -75,6 +101,7 @@ try {
   $task_assignment_schema_ready = $TM->schemaReady();
   if($task_assignment_schema_ready){
     $task_assignment_can_create = $TM->canCreate();
+    $TM->refreshRecurringTasks();
     $TM->refreshOverdueStatuses();
     $stmt = $conn->prepare("
       SELECT t.*, ta.id AS assignment_id, ta.user_id, ta.status AS stored_status,
@@ -125,6 +152,9 @@ $stuck_cases    = count(array_filter($cases,fn($c)=>($c['status']??'')==='stuck'
 $overdue_rem    = count(array_filter($reminders,fn($r)=>($r['status']??'')==='Overdue'));
 $today_rem      = count(array_filter($reminders,fn($r)=>($r['status']??'')==='Today'));
 $critical_count = $critical_cases + $overdue_rem;
+if($abuse_summary){
+  $critical_count += $abuse_critical + $abuse_action_required;
+}
 
 $total_tasks = count($tasks);
 $done_tasks  = count(array_filter($tasks,fn($t)=>!empty($t['is_completed'])));
@@ -335,15 +365,9 @@ usort($dashboard_cases, function($a, $b) {
     ?: dashboard_case_time_rank($a) <=> dashboard_case_time_rank($b)
     ?: (int)($b['id'] ?? 0) <=> (int)($a['id'] ?? 0);
 });
-$dashboard_case_widget_cases = array_slice($dashboard_cases, 0, 8);
-$dashboard_case_widget_ids = array_flip(array_map(fn($c)=>(int)($c['id']??0), $dashboard_case_widget_cases));
-foreach($dashboard_cases as $case_for_widget){
-  $case_id_for_widget = (int)($case_for_widget['id'] ?? 0);
-  if(dashboard_case_status($case_for_widget) === 'on_hold' && !isset($dashboard_case_widget_ids[$case_id_for_widget])){
-    $dashboard_case_widget_cases[] = $case_for_widget;
-    $dashboard_case_widget_ids[$case_id_for_widget] = true;
-  }
-}
+// No artificial cap: the widget shows every dashboard-visible case and
+// relies on internal scrolling (.dashboard-case-list) to stay bounded.
+$dashboard_case_widget_cases = $dashboard_cases;
 $attention_cases = array_values(array_filter($active_cases, function($c){
   $time = (string)($c['time_until']??'');
   return ($c['priority']??'') === 'critical' || ($c['status']??'') === 'stuck' || str_starts_with($time, 'Overdue');
@@ -398,6 +422,7 @@ usort($notification_alerts, fn($a,$b)=>(int)($a['sort_key']??0) <=> (int)($b['so
 $notification_alerts = array_slice($notification_alerts, 0, 6);
 $notif_count = count($notification_alerts);
 tracs_notifications_schedule_shift_handover($conn);
+if(function_exists('tracs_notifications_schedule_abuse_sla')) tracs_notifications_schedule_abuse_sla($conn);
 $notification_center = tracs_notification_recent($conn, $uid, 8);
 $notification_unread_count = (int)($notification_center['unread_count'] ?? 0);
 $notification_items = array_slice($notification_center['items'] ?? [], 0, 6);
@@ -436,6 +461,16 @@ $notification_groups = [
     'href' => 'mom.php',
   ],
 ];
+if($abuse_summary){
+  $notification_groups[] = [
+    'status' => 'abuse',
+    'label' => 'Abuse',
+    'count' => $abuse_open,
+    'title' => $abuse_open.' open abuse '.($abuse_open===1?'report':'reports'),
+    'meta' => (int)($abuse_summary['critical'] ?? 0).' critical · '.$abuse_action_required.' action required',
+    'href' => 'abuse-reports.php',
+  ];
+}
 
 function dashboard_counter_class(int $count): string {
   if($count <= 0) return 'is-zero';
@@ -821,7 +856,6 @@ function dashboard_monitor_reminder_status(array $item): array {
 function dashboard_monitor_reminder_item_html(array $item): string {
   $status = dashboard_monitor_reminder_status($item);
   $priority = strtolower((string)($item['priority'] ?? 'low'));
-  $icon = trim((string)($item['icon'] ?? 'bell'));
   $typeClass = dashboard_monitor_type_class((string)($item['type'] ?? 'Reminder'));
   $href = trim((string)($item['href'] ?? ''));
   $tag = ($href !== '' && $href !== '#') ? 'a' : 'div';
@@ -833,7 +867,6 @@ function dashboard_monitor_reminder_item_html(array $item): string {
   ob_start();
   ?>
   <<?=$tag?> class="tm-reminder-list-item is-<?=esc($status['key'])?> type-<?=esc($typeClass)?>" <?=$tag === 'a' ? 'href="'.esc($href).'"' : ''?><?=$source_attr?>>
-    <?php if($icon !== ''): ?><span class="tm-reminder-list-icon"><i data-lucide="<?=esc($icon)?>" class="icon-sm"></i></span><?php endif; ?>
     <span class="tm-reminder-list-main">
       <span class="tm-reminder-list-line"><span class="tm-type-badge"><?=esc($item['type'] ?? 'Reminder')?></span><span class="tm-reminder-list-title"><?=esc($item['title'] ?? 'Untitled reminder')?></span></span>
       <span class="tm-reminder-list-meta"><?=esc($item['due_label'] ?? 'No schedule')?></span>
@@ -861,6 +894,25 @@ function dashboard_monitor_reminder_list_html(array $items, string $empty_text =
       <?php foreach($visible_items as $item): ?><?=dashboard_monitor_reminder_item_html($item)?><?php endforeach; ?>
     </div>
   <?php endif;
+  return trim((string)ob_get_clean());
+}
+
+function dashboard_monitor_metric_row_html(string $label, int $count, string $meta, string $href, string $status_key = 'new', string $priority = 'low'): string {
+  $status_key = in_array($status_key, ['overdue','due-soon','new','in-progress','done','upcoming'], true) ? $status_key : 'new';
+  $priority = in_array($priority, ['low','medium','high','critical'], true) ? $priority : 'low';
+  ob_start();
+  ?>
+  <a class="tm-reminder-list-item is-<?=esc($status_key)?> type-case-due" href="<?=esc($href)?>">
+    <span class="tm-reminder-list-main">
+      <span class="tm-reminder-list-line"><span class="tm-type-badge">Abuse</span><span class="tm-reminder-list-title"><?=esc($label)?></span></span>
+      <span class="tm-reminder-list-meta"><?=esc($meta)?></span>
+    </span>
+    <span class="tm-reminder-list-side">
+      <span class="tm-reminder-status-pill is-<?=esc($status_key)?>"><?=esc(number_format(max(0, $count)))?></span>
+      <span class="tm-priority-dot is-<?=esc($priority)?>" title="<?=esc(ucfirst($priority))?> priority"></span>
+    </span>
+  </a>
+  <?php
   return trim((string)ob_get_clean());
 }
 
@@ -892,11 +944,11 @@ function dashboard_assignment_active(array $assignment): bool {
   return $status['key'] !== 'done';
 }
 
-function dashboard_assignment_row_html(array $assignment): string {
+function dashboard_assignment_row_html(array $assignment, string $baseHref = 'monitoring.php'): string {
   $status = dashboard_assignment_status_meta($assignment);
   $priority = dashboard_assignment_priority($assignment);
   $aid = (int)($assignment['assignment_id'] ?? 0);
-  $href = $aid > 0 ? 'monitoring.php?assignment_id='.$aid : 'monitoring.php';
+  $href = $aid > 0 ? $baseHref.'?assignment_id='.$aid : $baseHref;
   ob_start();
   ?>
   <a class="tm-assignment-row is-<?=esc($status['key'])?>" href="<?=esc($href)?>">
@@ -949,7 +1001,6 @@ foreach($task_monitor_regular_reminders as $r){
 }
 
 $task_monitor_assignment_alert_items = [];
-$task_monitor_assignment_awareness = [];
 foreach($task_assignment_rows as $assignment){
   if(!dashboard_assignment_active($assignment)) continue;
   $status = dashboard_assignment_status_meta($assignment);
@@ -961,16 +1012,12 @@ foreach($task_assignment_rows as $assignment){
     dashboard_assignment_priority($assignment),
     $status['label'],
     !empty($assignment['assignee_name']) ? 'For '.$assignment['assignee_name'] : '',
-    $aid > 0 ? 'monitoring.php?assignment_id='.$aid : 'monitoring.php',
+    $aid > 0 ? $task_monitor_base_href.'?assignment_id='.$aid : $task_monitor_base_href,
     false,
     'assignment',
     $aid
   );
-  if((int)($assignment['user_id'] ?? 0) === $uid && in_array($status['key'], ['new','due-soon','overdue'], true)){
-    $task_monitor_assignment_awareness[] = $assignment;
-  }
 }
-$task_monitor_assignment_awareness = array_slice($task_monitor_assignment_awareness, 0, 3);
 $task_monitor_active_assignment_count = count(array_filter($task_assignment_rows, 'dashboard_assignment_active'));
 
 $task_monitor_meeting_items = [];
@@ -1069,6 +1116,49 @@ dashboard_monitor_sort_items($task_monitor_reminder_list_items);
 dashboard_monitor_sort_items($task_monitor_upcoming_items);
 $task_monitor_upcoming_items = array_slice($task_monitor_upcoming_items, 0, 8);
 $task_monitor_active_reminder_count = count(array_filter($task_monitor_reminder_list_items, fn($i)=>empty($i['is_completed'])));
+$abuse_tab_alert_count = $abuse_action_required ?: $abuse_critical;
+$task_monitor_abuse_metrics = [];
+if($abuse_summary){
+  $task_monitor_abuse_metrics = [
+    [
+      'label' => 'Action Required',
+      'count' => $abuse_action_required,
+      'meta' => $abuse_action_required > 0 ? 'Requires operator attention' : 'No action required',
+      'status' => $abuse_action_required > 0 ? 'overdue' : 'done',
+      'priority' => $abuse_action_required > 0 ? 'critical' : 'low',
+    ],
+    [
+      'label' => 'Open',
+      'count' => $abuse_open,
+      'meta' => 'Unresolved abuse reports',
+      'status' => $abuse_open > 0 ? 'new' : 'done',
+      'priority' => $abuse_open > 0 ? 'medium' : 'low',
+    ],
+    [
+      'label' => 'Waiting External',
+      'count' => $abuse_waiting_external,
+      'meta' => 'Waiting on required external response',
+      'status' => $abuse_waiting_external > 0 ? 'due-soon' : 'done',
+      'priority' => $abuse_waiting_external > 0 ? 'high' : 'low',
+    ],
+    [
+      'label' => 'Critical',
+      'count' => $abuse_critical,
+      'meta' => 'Critical open reports',
+      'status' => $abuse_critical > 0 ? 'overdue' : 'done',
+      'priority' => $abuse_critical > 0 ? 'critical' : 'low',
+    ],
+  ];
+  if($abuse_resolved_today > 0){
+    $task_monitor_abuse_metrics[] = [
+      'label' => 'Resolved Today',
+      'count' => $abuse_resolved_today,
+      'meta' => 'Closed during today\'s operations',
+      'status' => 'done',
+      'priority' => 'low',
+    ];
+  }
+}
 
 $page_title='Dashboard'; $active_page='dashboard';
 include 'includes/header.php';
@@ -1219,17 +1309,6 @@ include 'includes/header.php';
       <div class="dashboard-widget-slider" aria-label="Operations summary widgets">
         <div class="dashboard-widget-track">
           <div class="dashboard-widget-slide">
-            <a class="panel infra-dashboard-widget" href="infrastructure-pulse.php" data-infra-dashboard-widget>
-              <div class="infra-dashboard-widget__head">
-                <div>
-                  <span>Infrastructure Pulse</span>
-                  <strong>Loading</strong>
-                </div>
-                <i data-lucide="radar" class="dashboard-widget-main-icon"></i>
-              </div>
-            </a>
-          </div>
-          <div class="dashboard-widget-slide">
             <a class="panel shift-dashboard-widget is-<?=esc($shift_summary_status)?>" href="shift-reports.php"
               data-shift-report-reminder
               data-shift-end-time="<?=esc($shift_end_iso)?>"
@@ -1279,6 +1358,17 @@ include 'includes/header.php';
               </div>
             </a>
           </div>
+          <div class="dashboard-widget-slide">
+            <a class="panel infra-dashboard-widget" href="infrastructure-pulse.php" data-infra-dashboard-widget>
+              <div class="infra-dashboard-widget__head">
+                <div>
+                  <span>Infrastructure Pulse</span>
+                  <strong>Loading</strong>
+                </div>
+                <i data-lucide="radar" class="dashboard-widget-main-icon"></i>
+              </div>
+            </a>
+          </div>
         </div>
         <button type="button" class="dashboard-widget-next" data-dashboard-widget-next aria-label="Show next summary widget">›</button>
       </div>
@@ -1291,9 +1381,11 @@ include 'includes/header.php';
             <span class="panel-meta"><?=$total_cases?> total</span>
             <span class="panel-counter <?=dashboard_counter_class($active_case_count)?>" title="<?=$active_case_count?> unresolved cases"><?=$active_case_count?></span>
             <a href="cases.php" class="btn btn-ghost btn-sm">All →</a>
+            <?php if($case_can_manage): ?>
             <button class="btn btn-primary btn-sm btn-add-reveal" onclick="openNewCase()">
               <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span class="btn-add-label">Add</span>
             </button>
+            <?php endif; ?>
           </div>
         </div>
 
@@ -1371,7 +1463,7 @@ include 'includes/header.php';
         </div>
         <?php endif; ?>
 
-        <?php if($total_cases>count($dashboard_case_widget_cases)): ?>
+        <?php if($total_cases>0): ?>
         <div class="case-more-link">
           <a href="cases.php" class="btn btn-ghost btn-sm">View all <?=$total_cases?> cases →</a>
         </div>
@@ -1381,6 +1473,230 @@ include 'includes/header.php';
     </div><!-- /col-left -->
 
     <div class="dashboard-workspace">
+
+    <div class="col-dashboard-tabs">
+      <section class="panel task-monitoring-panel dashboard-widget-tabs-panel" data-task-monitoring>
+        <div class="panel-head task-monitoring-head">
+          <div class="task-monitoring-title">
+            <span class="panel-title">Quick Tools</span>
+          </div>
+        </div>
+
+        <div class="task-monitoring-tabs" role="tablist" aria-label="Quick Tools">
+          <button type="button" class="task-monitoring-tab active" role="tab" aria-selected="true" aria-controls="dashboard-pane-shift-handover" data-task-monitor-tab="shift-handover"><i data-lucide="refresh-cw" class="icon-xs"></i>Shift Handover</button>
+          <button type="button" class="task-monitoring-tab" role="tab" aria-selected="false" aria-controls="dashboard-pane-screenshot" data-task-monitor-tab="screenshot"><i data-lucide="camera" class="icon-xs"></i>Website Screenshot</button>
+          <button type="button" class="task-monitoring-tab" role="tab" aria-selected="false" aria-controls="dashboard-pane-currency" data-task-monitor-tab="currency"><i data-lucide="arrow-right-left" class="icon-xs"></i>Currency Converter</button>
+          <button type="button" class="task-monitoring-tab" role="tab" aria-selected="false" aria-controls="dashboard-pane-activity" data-task-monitor-tab="activity"><i data-lucide="activity" class="icon-xs"></i>Recent Activity<?php if(count($activities) > 0): ?><span class="tm-tab-count"><?=count($activities)?></span><?php endif; ?></button>
+        </div>
+
+        <div class="task-monitoring-viewport dashboard-widget-viewport">
+          <section class="task-monitoring-pane dashboard-widget-pane is-active" id="dashboard-pane-shift-handover" role="tabpanel" data-task-monitor-pane="shift-handover">
+            <!-- SHIFT HANDOVER PANEL -->
+            <div class="panel shift-handover-panel dashboard-tab-widget">
+              <div class="panel-head">
+                <span class="panel-title">Shift Handover</span>
+                <div class="panel-right">
+                  <span class="panel-meta"><?=esc($shift_handover_label)?></span>
+                  <a href="shift-reports.php" class="btn btn-ghost btn-sm">History →</a>
+                  <button class="btn btn-primary btn-sm btn-add-reveal" onclick="openNewShiftReport()">
+                    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span class="btn-add-label">Add</span>
+                  </button>
+                </div>
+              </div>
+              
+              <?php if(empty($shift_reports)): ?>
+              <div class="empty shift-handover-empty">
+                <div class="empty-ic"><i data-lucide="refresh-cw"></i></div>
+                <div class="empty-t">No reports today</div>
+              </div>
+              <?php else: ?>
+              <div class="scroll-y dashboard-shift-scroll">
+                <?php foreach($shift_reports as $sname => $items): ?>
+                <div class="shift-group">
+                  <div class="shift-group-title"><?=esc($sname)?></div>
+                  <?php
+                    // Sub-group a shift's items by the agent's handover (one report per
+                    // agent). Falls back to author+date when a legacy row has no handover.
+                    $handoverBlocks = [];
+                    foreach($items as $it) {
+                      $hkey = !empty($it['handover_id'])
+                        ? 'h'.$it['handover_id']
+                        : 'u'.($it['created_by'] ?? '0').'|'.($it['active_date'] ?? '');
+                      if(!isset($handoverBlocks[$hkey])) {
+                        $handoverBlocks[$hkey] = [
+                          'agent' => tracs_creator_label($it),
+                          'summary' => trim((string)($it['handover_summary'] ?? '')),
+                          'items' => [],
+                        ];
+                      }
+                      $handoverBlocks[$hkey]['items'][] = $it;
+                    }
+                  ?>
+                  <?php foreach($handoverBlocks as $block):
+                    $blockItems = $block['items'];
+                    $cActive = count(array_filter($blockItems, fn($sr) => ($sr['status'] ?? 'active') === 'active'));
+                    $cHold = count(array_filter($blockItems, fn($sr) => ($sr['status'] ?? '') === 'on_hold'));
+                    $cResolved = count(array_filter($blockItems, fn($sr) => ($sr['status'] ?? '') === 'resolved'));
+                    $shiftStatusGroups = [
+                      'active' => ['label' => 'Needs Handover', 'items' => array_values(array_filter($blockItems, fn($sr) => ($sr['status'] ?? 'active') === 'active'))],
+                      'on_hold' => ['label' => 'On Hold / Monitoring', 'items' => array_values(array_filter($blockItems, fn($sr) => ($sr['status'] ?? '') === 'on_hold'))],
+                      'resolved' => ['label' => 'Resolved This Shift', 'items' => array_values(array_filter($blockItems, fn($sr) => ($sr['status'] ?? '') === 'resolved'))],
+                    ];
+                  ?>
+                  <div class="shift-handover-block">
+                    <div class="shift-handover-agent">
+                      <span class="shift-agent-name"><i data-lucide="user" class="icon-xs"></i><?=esc($block['agent'])?></span>
+                      <span class="shift-agent-counts">
+                        <?php if($cActive): ?><span class="badge badge-sm b-active"><?=$cActive?></span><?php endif; ?>
+                        <?php if($cHold): ?><span class="badge badge-sm b-hold"><?=$cHold?></span><?php endif; ?>
+                        <?php if($cResolved): ?><span class="badge badge-sm b-resolved"><?=$cResolved?></span><?php endif; ?>
+                      </span>
+                    </div>
+                    <?php if($block['summary'] !== ''): ?>
+                    <div class="shift-handover-summary"><?=esc($block['summary'])?></div>
+                    <?php endif; ?>
+                    <?php foreach($shiftStatusGroups as $statusKey => $statusGroup): if(empty($statusGroup['items'])) continue; ?>
+                    <div class="shift-status-lane is-<?=esc($statusKey)?>">
+                      <div class="shift-status-lane-title"><?=esc($statusGroup['label'])?></div>
+                      <?php foreach($statusGroup['items'] as $sr):
+                      $srid=intval($sr['id']);
+                      $srtit=esc($sr['title']);
+                      $srprio=strtolower($sr['priority']);
+                      $srstatus=$sr['status'];
+                      $pclass=prio_bar($srprio);
+                      $statusBadge = $srstatus === 'resolved' ? 'b-resolved' : ($srstatus === 'on_hold' ? 'b-hold' : 'b-active');
+                      $statusText = $srstatus === 'active' ? 'Need Handover' : ucwords(str_replace('_', ' ', $srstatus));
+                    ?>
+                    <div class="shift-item <?=$srstatus==='resolved'?'resolved':''?> <?=$srstatus==='on_hold'?'on-hold':''?>"
+                      data-id="<?=$srid?>"
+                      data-title="<?=$srtit?>"
+                      data-shift="<?=esc($sr['shift_name'] ?? $sname)?>"
+                      data-prio="<?=esc($srprio)?>"
+                      data-status="<?=esc($srstatus)?>"
+                      data-details="<?=esc($sr['details'] ?? '')?>"
+                      data-date="<?=esc($sr['active_date'] ?? '')?>"
+                      data-resolution-note="<?=esc($sr['resolution_note'] ?? '')?>"
+                      data-resolved-at="<?=esc($sr['resolved_at'] ?? '')?>"
+                      role="button"
+                      tabindex="0"
+                      onclick="openEditShiftReport(<?=$srid?>)"
+                      onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openEditShiftReport(<?=$srid?>)}">
+                      <div class="shift-priority <?=$pclass?>"></div>
+                      <div class="shift-text"><?=$srtit?></div>
+                      <span class="badge badge-sm <?=$statusBadge?>"><?=esc($statusText)?></span>
+                    </div>
+                      <?php endforeach; ?>
+                    </div>
+                    <?php endforeach; ?>
+                  </div>
+                  <?php endforeach; ?>
+                </div>
+                <?php endforeach; ?>
+              </div>
+              <?php endif; ?>
+            </div><!-- /shift handover -->
+          </section>
+
+          <section class="task-monitoring-pane dashboard-widget-pane" id="dashboard-pane-screenshot" role="tabpanel" data-task-monitor-pane="screenshot" hidden>
+            <!-- WEBSITE SCREENSHOT PANEL -->
+            <div class="panel screenshot-panel dashboard-tab-widget">
+              <div class="panel-head">
+                <span class="panel-title">Website Screenshot</span>
+              </div>
+              <div class="screenshot-body">
+                <div class="screenshot-input-row">
+                  <input type="text" id="screenshot-url" class="form-input" placeholder="Enter domain, URL, or IP — e.g. example.com" autocomplete="off" spellcheck="false" data-unsaved-ignore>
+                  <button type="button" class="btn btn-primary" id="screenshot-btn">
+                    <i data-lucide="camera" class="icon-sm"></i> <span class="screenshot-btn-label">Capture</span>
+                  </button>
+                </div>
+                <div class="screenshot-region-row">
+                  <select id="screenshot-region" class="form-select" aria-label="Capture region" data-unsaved-ignore>
+                    <option value="">🌍 Auto region</option>
+                    <option value="all" selected>🌐 All regions</option>
+                  </select>
+                </div>
+                <div class="screenshot-status" id="screenshot-status" role="status" hidden></div>
+                <div class="screenshot-history" id="screenshot-history" data-state="loading" aria-live="polite">
+                  <div class="skeleton-block screenshot-history-skeleton"></div>
+                </div>
+              </div>
+            </div><!-- /screenshot -->
+          </section>
+
+          <section class="task-monitoring-pane dashboard-widget-pane" id="dashboard-pane-currency" role="tabpanel" data-task-monitor-pane="currency" hidden>
+            <!-- CURRENCY CONVERTER PANEL -->
+            <div class="panel dashboard-tab-widget">
+              <div class="panel-head">
+                <span class="panel-title">Currency Converter</span>
+                <div class="panel-right">
+                  <div class="currency-rate-card" id="currency-rate-card" data-state="loading" aria-live="polite">
+                    <div class="skeleton-block currency-rate-skeleton"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="currency-body">
+                <div class="currency-row">
+                  <select id="currency-from" class="form-select" data-unsaved-ignore>
+                    <option value="IDR">IDR</option>
+                    <option value="USD">USD</option>
+                    <option value="SGD">SGD</option>
+                  </select>
+                  <button type="button" class="btn btn-ghost btn-icon" id="swap-currency"><i data-lucide="arrow-right-left" class="icon-sm"></i></button>
+                  <select id="currency-to" class="form-select" data-unsaved-ignore>
+                    <option value="USD">USD</option>
+                    <option value="IDR">IDR</option>
+                    <option value="SGD">SGD</option>
+                  </select>
+                </div>
+                <input type="number" id="currency-amount" class="form-input" placeholder="Transfer amount" data-unsaved-ignore>
+                <button type="button" class="btn btn-primary" id="convert-btn">Convert</button>
+                <div class="currency-result">
+                  <div id="currency-result">—</div>
+                  <small id="currency-rate"></small>
+                </div>
+                <div class="currency-updated">Updated: <span id="currency-time">—</span></div>
+                <div class="currency-last-converted" id="currency-last-converted" hidden></div>
+                <div class="currency-history" id="currency-history-list"></div>
+              </div>
+            </div><!-- /currency -->
+          </section>
+
+          <section class="task-monitoring-pane dashboard-widget-pane" id="dashboard-pane-activity" role="tabpanel" data-task-monitor-pane="activity" hidden>
+            <!-- RECENT ACTIVITY PANEL -->
+            <div class="panel dashboard-activity-panel dashboard-tab-widget">
+              <div class="panel-head">
+                <span class="panel-title">Recent Activity</span>
+                <div class="panel-right">
+                  <span class="panel-meta"><?=count($activities)?> events</span>
+                  <a href="activity.php" class="btn btn-ghost btn-sm">All →</a>
+                </div>
+              </div>
+              <?php if(empty($activities)): ?>
+              <div class="empty">
+                <div class="empty-ic"><i data-lucide="activity"></i></div>
+                <div class="empty-t">No activity yet</div>
+              </div>
+              <?php else: ?>
+              <div class="dashboard-activity-scroll scroll-y">
+                <?php foreach(array_slice($activities,0,10) as $a): ?>
+                <div class="act-row">
+                  <div class="act-ic"><i data-lucide="<?=esc($a['icon']??'file-text')?>" class="icon-sm"></i></div>
+                  <div class="flex1 min0">
+                    <div class="act-text"><strong><?=esc(ucfirst($a['action']??''))?></strong><span>· <?=esc($a['module']??'')?></span></div>
+                    <div class="act-desc"><?=esc($a['description']??'')?></div>
+                    <div class="act-time"><?=esc($a['time_ago']??'')?> · <?=tracs_creator_meta($a, $a['created_at'] ?? null, false)?></div>
+                  </div>
+                </div>
+                <?php endforeach; ?>
+              </div>
+              <?php endif; ?>
+            </div><!-- /recent activity -->
+          </section>
+        </div>
+      </section>
+    </div><!-- /col-dashboard-tabs -->
+
     <!-- ════════════════════════════
          PRODUCTIVITY - Task Monitoring
     ════════════════════════════ -->
@@ -1393,17 +1709,20 @@ include 'includes/header.php';
               <span title="Checklist progress"><i data-lucide="list-checks" class="icon-xs"></i><b data-task-monitor-progress><?=$done_tasks?>/<?=$total_tasks?></b></span>
               <span title="Active reminders"><i data-lucide="bell" class="icon-xs"></i><b data-task-monitor-active-reminders><?=$task_monitor_active_reminder_count?></b></span>
               <span title="Meetings today"><i data-lucide="calendar-clock" class="icon-xs"></i><b><?=$task_monitor_today_meetings?></b></span>
+              <?php if($abuse_summary): ?><span title="Abuse reports"><i data-lucide="shield-alert" class="icon-xs"></i><b><?=$abuse_action_required?>/<?=$abuse_open?></b></span><?php endif; ?>
             </div>
           </div>
           <div class="panel-right task-monitoring-actions">
-            <a href="checklist.php" class="btn btn-ghost btn-sm" data-task-monitor-all>All</a>
+            <a href="monitoring.php" class="btn btn-ghost btn-sm" data-task-monitor-all>All →</a>
           </div>
         </div>
 
         <div class="task-monitoring-tabs" role="tablist" aria-label="Task Monitoring">
-          <button type="button" class="task-monitoring-tab active" role="tab" aria-selected="true" aria-controls="tm-pane-checklist" data-task-monitor-tab="checklist" data-all-href="checklist.php"><i data-lucide="list-checks" class="icon-xs"></i>Checklist and Reminder</button>
+          <button type="button" class="task-monitoring-tab active" role="tab" aria-selected="true" aria-controls="tm-pane-checklist" data-task-monitor-tab="checklist" data-all-href="monitoring.php"><i data-lucide="list-checks" class="icon-xs"></i>Checklist and Reminder</button>
           <button type="button" class="task-monitoring-tab" role="tab" aria-selected="false" aria-controls="tm-pane-assignments" data-task-monitor-tab="assignments" data-all-href="monitoring.php"><i data-lucide="user-check" class="icon-xs"></i>Assignments<?php if($task_monitor_active_assignment_count > 0): ?><span class="tm-tab-count"><?=esc($task_monitor_active_assignment_count)?></span><?php endif; ?></button>
-          <button type="button" class="task-monitoring-tab" role="tab" aria-selected="false" aria-controls="tm-pane-activity" data-task-monitor-tab="activity" data-all-href="activity.php"><i data-lucide="activity" class="icon-xs"></i>Activity</button>
+          <?php if($abuse_summary): ?>
+          <button type="button" class="task-monitoring-tab" role="tab" aria-selected="false" aria-controls="tm-pane-abuse" data-task-monitor-tab="abuse" data-all-href="abuse-reports.php"><i data-lucide="shield-alert" class="icon-xs"></i>Abuse Reports<?php if($abuse_tab_alert_count > 0): ?><span class="tm-tab-count"><?=esc((string)min($abuse_tab_alert_count, 99))?></span><?php endif; ?></button>
+          <?php endif; ?>
         </div>
 
         <div class="task-monitoring-viewport">
@@ -1417,6 +1736,7 @@ include 'includes/header.php';
                   </div>
                   <div class="tm-column-actions">
                     <span class="panel-counter <?=dashboard_counter_class($unchecked_task_count)?>" data-task-monitor-unchecked title="<?=$unchecked_task_count?> unchecked checklist items"><?=$unchecked_task_count?></span>
+                    <button type="button" class="btn btn-ghost btn-icon btn-sm" onclick="openChecklistAll()" title="View all checklist" aria-label="View all checklist"><i data-lucide="list-checks" class="icon-sm"></i></button>
                     <button type="button" class="btn btn-primary btn-sm btn-add-reveal tm-column-add" onclick="openNewTask()" title="Add checklist item" aria-label="Add checklist item">
                       <i data-lucide="plus" class="icon-sm"></i><span class="btn-add-label">Add</span>
                     </button>
@@ -1426,20 +1746,6 @@ include 'includes/header.php';
                   <div class="prog-track"><div class="prog-fill" id="prog-fill" style="width:<?=$pct?>%"></div></div>
                   <div class="prog-info"><span>Progress</span><span id="prog-pct"><?=$pct?>%</span></div>
                 </div>
-                <?php if(!empty($task_monitor_assignment_awareness)): ?>
-                <div class="tm-assignment-awareness">
-                  <?php foreach($task_monitor_assignment_awareness as $assignment):
-                    $status = dashboard_assignment_status_meta($assignment);
-                    $aid = (int)($assignment['assignment_id'] ?? 0);
-                  ?>
-                  <button type="button" class="tm-assignment-awareness-item is-<?=esc($status['key'])?>" data-task-monitor-switch="assignments" data-assignment-href="<?=esc($aid > 0 ? 'monitoring.php?assignment_id='.$aid : 'monitoring.php')?>">
-                    <span class="tm-type-badge">Assigned</span>
-                    <span>New assigned task: <?=esc($assignment['title'] ?? 'Untitled assignment')?></span>
-                    <i data-lucide="arrow-right" class="icon-xs"></i>
-                  </button>
-                  <?php endforeach; ?>
-                </div>
-                <?php endif; ?>
                 <?php if(empty($dashboard_tasks_sorted)): ?>
                 <div class="tm-empty"><i data-lucide="list-checks" class="icon-sm"></i><span>No active checklist items</span></div>
                 <?php else: ?>
@@ -1455,15 +1761,27 @@ include 'includes/header.php';
                     data-completed="<?=$tdone?'1':'0'?>"
                     data-title="<?=esc($t['title']??'')?>"
                     data-desc="<?=esc($t['description']??'')?>">
-                    <input type="checkbox" class="rem-check task-chk" <?=$tdone?'checked':''?> onchange="toggleTask(<?=$tid?>,this)">
+                    <input type="checkbox" class="rem-check task-chk" data-unsaved-ignore <?=$tdone?'checked':''?> onchange="toggleTask(<?=$tid?>,this)">
                     <div class="flex1">
                       <div class="task-title <?=$tdone?'done':''?>"><?=$ttit?></div>
                       <?php if($tdesc): ?><div class="task-sub"><?=$tdesc?></div><?php endif; ?>
                       <?=tracs_creator_meta($t, $t['created_at'] ?? null, false)?>
+                      <?php $t_attachments = checklist_attachment_list_for_task($conn, $tid); ?>
+                      <?php if(!empty($t_attachments)): ?>
+                      <div class="shift-photo-grid">
+                        <?php foreach($t_attachments as $attachment): ?>
+                        <a href="<?=esc($attachment['image_url'])?>" target="_blank" rel="noopener noreferrer" class="shift-photo-thumb" title="<?=esc($attachment['original_filename'])?>">
+                          <img src="<?=esc($attachment['thumbnail_url'])?>" alt="<?=esc($attachment['original_filename'])?>" loading="lazy">
+                        </a>
+                        <?php endforeach; ?>
+                      </div>
+                      <?php endif; ?>
                     </div>
                     <div class="task-acts">
                       <button class="btn btn-ghost btn-icon" onclick="openEditTask(<?=$tid?>)" title="Edit" aria-label="Edit checklist item"><i data-lucide="pencil" class="icon-sm"></i></button>
+                      <?php if((int)($t['created_by']??0)===(int)$uid): ?>
                       <button class="btn btn-danger btn-icon" onclick="deleteTask(<?=$tid?>,this)" title="Delete" aria-label="Delete checklist item"><i data-lucide="trash-2" class="icon-sm"></i></button>
+                      <?php endif; ?>
                     </div>
                   </div>
                   <?php endforeach; ?>
@@ -1491,9 +1809,9 @@ include 'includes/header.php';
                 <div class="tm-column-head">
                   <div><span>Task Assignments</span><strong><?=$task_monitor_active_assignment_count?> active</strong></div>
                   <div class="tm-column-actions">
-                    <a href="monitoring.php" class="btn btn-ghost btn-sm">All</a>
+                    <a href="<?=esc($task_monitor_base_href)?>" class="btn btn-ghost btn-sm">All →</a>
                     <?php if($task_assignment_can_create): ?>
-                    <a href="monitoring.php?tab=assigned&amp;add=1" class="btn btn-primary btn-sm btn-add-reveal tm-column-add" title="Add task assignment" aria-label="Add task assignment">
+                    <a href="<?=esc($task_monitor_base_href)?>?tab=assigned&amp;add=1" class="btn btn-primary btn-sm btn-add-reveal tm-column-add" title="Add task assignment" aria-label="Add task assignment">
                       <i data-lucide="plus" class="icon-sm"></i><span class="btn-add-label">Add</span>
                     </a>
                     <?php endif; ?>
@@ -1505,7 +1823,7 @@ include 'includes/header.php';
                 <div class="tm-empty"><i data-lucide="user-check" class="icon-sm"></i><span>No task assignments</span></div>
                 <?php else: ?>
                 <div class="tm-scroll tm-assignment-list">
-                  <?php foreach($task_assignment_rows as $assignment): ?><?=dashboard_assignment_row_html($assignment)?><?php endforeach; ?>
+                  <?php foreach($task_assignment_rows as $assignment): ?><?=dashboard_assignment_row_html($assignment, $task_monitor_base_href)?><?php endforeach; ?>
                 </div>
                 <?php endif; ?>
               </div>
@@ -1519,155 +1837,74 @@ include 'includes/header.php';
             </div>
           </section>
 
-          <section class="task-monitoring-pane" id="tm-pane-activity" role="tabpanel" data-task-monitor-pane="activity" hidden>
+          <?php if($abuse_summary): ?>
+          <section class="task-monitoring-pane" id="tm-pane-abuse" role="tabpanel" data-task-monitor-pane="abuse" hidden>
             <div class="task-monitoring-grid">
               <div class="tm-column tm-primary">
                 <div class="tm-column-head">
-                  <div><span>Recent Activity</span><strong><?=count($activities)?> events</strong></div>
-                </div>
-                <?php if(empty($activities)): ?>
-                <div class="tm-empty"><i data-lucide="activity" class="icon-sm"></i><span>No activity yet</span></div>
-                <?php else: ?>
-                <div class="dashboard-activity-scroll tm-scroll">
-                  <?php foreach(array_slice($activities,0,10) as $a): ?>
-                  <div class="act-row">
-                    <div class="act-ic"><i data-lucide="<?=esc($a['icon']??'file-text')?>" class="icon-sm"></i></div>
-                    <div class="flex1 min0">
-                      <div class="act-text"><strong><?=esc(ucfirst($a['action']??''))?></strong><span>· <?=esc($a['module']??'')?></span></div>
-                      <div class="act-desc"><?=esc($a['description']??'')?></div>
-                      <div class="act-time"><?=esc($a['time_ago']??'')?> · <?=tracs_creator_meta($a, $a['created_at'] ?? null, false)?></div>
-                    </div>
+                  <div><span>Abuse Reports</span><strong><?=$abuse_action_required?> action required · <?=$abuse_open?> open</strong></div>
+                  <div class="tm-column-actions">
+                    <span class="panel-counter <?=dashboard_counter_class($abuse_action_required)?>" title="<?=$abuse_action_required?> abuse reports require action"><?=$abuse_action_required?></span>
+                    <a href="abuse-reports.php" class="btn btn-ghost btn-sm">View All</a>
                   </div>
+                </div>
+                <div class="tm-scroll tm-reminder-list" aria-label="Abuse report summary">
+                  <?php foreach($task_monitor_abuse_metrics as $metric): ?>
+                  <?=dashboard_monitor_metric_row_html($metric['label'], (int)$metric['count'], $metric['meta'], 'abuse-reports.php', $metric['status'], $metric['priority'])?>
                   <?php endforeach; ?>
                 </div>
-                <?php endif; ?>
               </div>
 
               <div class="tm-column">
                 <div class="tm-column-head">
-                  <div><span>Reminder List</span><strong><?=count($task_monitor_reminder_list_items)?> active</strong></div>
-                  <div class="tm-column-actions">
-                    <button type="button" class="btn btn-primary btn-sm btn-add-reveal tm-column-add" onclick="openNewReminder()" title="Add reminder" aria-label="Add reminder">
-                      <i data-lucide="plus" class="icon-sm"></i><span class="btn-add-label">Add</span>
-                    </button>
-                  </div>
+                  <div><span>Operational Focus</span><strong><?=$abuse_action_required > 0 ? 'Needs review' : 'No action required'?></strong></div>
                 </div>
-                <?=dashboard_monitor_reminder_list_html($task_monitor_reminder_list_items, 'No active reminders', 'Recent activity has no open task reminders.')?>
+                <?php if($abuse_action_required <= 0): ?>
+                <div class="tm-reminder-empty">
+                  <i data-lucide="shield-check" class="icon-sm"></i>
+                  <span>No action required</span>
+                  <small><?=$abuse_open > 0 ? esc($abuse_open.' open report'.($abuse_open===1?'':'s').' remain in monitoring.') : 'The abuse queue is clear.'?></small>
+                </div>
+                <?php elseif($abuse_oldest): ?>
+                <div class="tm-feed tm-scroll">
+                  <a class="tm-feed-item is-critical type-case-due" href="<?=esc($abuse_href)?>">
+                    <span class="tm-feed-icon"><i data-lucide="timer-off" class="icon-sm"></i></span>
+                    <span class="tm-feed-main">
+                      <span class="tm-feed-line">
+                        <span class="tm-type-badge">Action</span>
+                        <span class="tm-feed-title"><?=esc($abuse_oldest['report_number'] ?? ('#'.(int)$abuse_oldest['id']))?></span>
+                      </span>
+                      <span class="tm-feed-meta">
+                        <span><?=esc(dashboard_context_excerpt($abuse_oldest['title'] ?? 'Untitled abuse report', 72))?></span>
+                        <?php if(!empty($abuse_oldest['waiting_until'])): ?><span><?=esc(dashboard_context_when($abuse_oldest['waiting_until']))?></span><?php endif; ?>
+                      </span>
+                    </span>
+                    <span class="tm-priority-dot is-critical" title="Critical priority"></span>
+                  </a>
+                </div>
+                <?php else: ?>
+                <div class="tm-reminder-empty">
+                  <i data-lucide="shield-alert" class="icon-sm"></i>
+                  <span>Review abuse queue</span>
+                  <small>Action-required reports are available in Abuse Reports.</small>
+                </div>
+                <?php endif; ?>
               </div>
             </div>
           </section>
+          <?php endif; ?>
+
         </div>
       </section>
     </div><!-- /col-productivity -->
 
-    <!-- ════════════════════════════
-         CENTER COL — Workstream
-    ════════════════════════════ -->
-    <div class="col-center">
+    <!-- Dobby easter egg — fills the blank space below the utility row -->
+    <div class="dobby-egg" aria-hidden="true" title="Dobby says hi">
+      <span class="dobby-egg-cat"><i data-lucide="cat" class="icon-xs"></i></span>
+      <span class="dobby-egg-text">Dobby is working on something more<span class="dobby-egg-dots"><span>.</span><span>.</span><span>.</span></span></span>
+      <span class="dobby-egg-paw"><i data-lucide="footprints" class="icon-xs"></i></span>
+    </div>
 
-      <!-- SHIFT HANDOVER PANEL -->
-      <div class="panel shift-handover-panel">
-        <div class="panel-head">
-          <span class="panel-title">Shift Handover</span>
-          <div class="panel-right">
-            <span class="panel-meta"><?=esc($shift_handover_label)?></span>
-            <a href="shift-reports.php" class="btn btn-ghost btn-sm">History →</a>
-            <button class="btn btn-primary btn-sm btn-add-reveal" onclick="openNewShiftReport()">
-              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span class="btn-add-label">Add</span>
-            </button>
-          </div>
-        </div>
-        
-        <?php if(empty($shift_reports)): ?>
-        <div class="empty shift-handover-empty">
-          <div class="empty-ic"><i data-lucide="refresh-cw"></i></div>
-          <div class="empty-t">No reports today</div>
-        </div>
-        <?php else: ?>
-        <div class="scroll-y dashboard-shift-scroll">
-          <?php foreach($shift_reports as $sname => $items): ?>
-          <div class="shift-group">
-            <div class="shift-group-title"><?=esc($sname)?></div>
-            <?php
-              $shiftStatusGroups = [
-                'active' => ['label' => 'Needs Handover', 'items' => array_values(array_filter($items, fn($sr) => ($sr['status'] ?? 'active') === 'active'))],
-                'on_hold' => ['label' => 'On Hold / Monitoring', 'items' => array_values(array_filter($items, fn($sr) => ($sr['status'] ?? '') === 'on_hold'))],
-                'resolved' => ['label' => 'Resolved This Shift', 'items' => array_values(array_filter($items, fn($sr) => ($sr['status'] ?? '') === 'resolved'))],
-              ];
-            ?>
-            <?php foreach($shiftStatusGroups as $statusKey => $statusGroup): if(empty($statusGroup['items'])) continue; ?>
-            <div class="shift-status-lane is-<?=esc($statusKey)?>">
-              <div class="shift-status-lane-title"><?=esc($statusGroup['label'])?></div>
-              <?php foreach($statusGroup['items'] as $sr):
-              $srid=intval($sr['id']);
-              $srtit=esc($sr['title']);
-              $srprio=strtolower($sr['priority']);
-              $srstatus=$sr['status'];
-              $pclass=prio_bar($srprio);
-              $statusBadge = $srstatus === 'resolved' ? 'b-resolved' : ($srstatus === 'on_hold' ? 'b-hold' : 'b-active');
-              $statusText = $srstatus === 'active' ? 'Need Handover' : ucwords(str_replace('_', ' ', $srstatus));
-            ?>
-            <div class="shift-item <?=$srstatus==='resolved'?'resolved':''?> <?=$srstatus==='on_hold'?'on-hold':''?>"
-              data-id="<?=$srid?>"
-              data-title="<?=$srtit?>"
-              data-shift="<?=esc($sr['shift_name'] ?? $sname)?>"
-              data-prio="<?=esc($srprio)?>"
-              data-status="<?=esc($srstatus)?>"
-              data-details="<?=esc($sr['details'] ?? '')?>"
-              data-date="<?=esc($sr['active_date'] ?? '')?>"
-              data-resolution-note="<?=esc($sr['resolution_note'] ?? '')?>"
-              data-resolved-at="<?=esc($sr['resolved_at'] ?? '')?>"
-              onclick="openEditShiftReport(<?=$srid?>)">
-              <div class="shift-priority <?=$pclass?>"></div>
-              <div class="shift-text"><?=$srtit?><?=tracs_creator_meta($sr, $sr['created_at'] ?? null, false)?></div>
-              <span class="badge <?=$statusBadge?>" style="transform:scale(0.8)"><?=esc($statusText)?></span>
-            </div>
-              <?php endforeach; ?>
-            </div>
-            <?php endforeach; ?>
-          </div>
-          <?php endforeach; ?>
-        </div>
-        <?php endif; ?>
-      </div><!-- /shift handover -->
-
-    </div><!-- /col-center -->
-
-    <!-- ════════════════════════════
-         RIGHT COL — Utilities
-    ════════════════════════════ -->
-    <div class="col-right">
-
-      <!-- CURRENCY CONVERTER PANEL -->
-      <div class="panel">
-        <div class="panel-head">
-          <span class="panel-title">Currency Converter</span>
-        </div>
-        <div class="currency-body">
-          <div class="currency-row">
-            <select id="currency-from" class="form-select">
-              <option value="IDR">IDR</option>
-              <option value="USD">USD</option>
-              <option value="SGD">SGD</option>
-            </select>
-            <button type="button" class="btn btn-ghost btn-icon" id="swap-currency" style="width:30px;height:30px;"><i data-lucide="arrow-right-left" class="icon-sm"></i></button>
-            <select id="currency-to" class="form-select">
-              <option value="USD">USD</option>
-              <option value="IDR">IDR</option>
-              <option value="SGD">SGD</option>
-            </select>
-          </div>
-          <input type="number" id="currency-amount" class="form-input" placeholder="Transfer amount" value="1000000">
-          <button type="button" class="btn btn-primary" id="convert-btn" style="width:100%">Convert</button>
-          <div class="currency-result">
-            <div id="currency-result">—</div>
-            <small id="currency-rate"></small>
-          </div>
-          <div class="currency-updated">Updated: <span id="currency-time">—</span></div>
-        </div>
-      </div><!-- /currency -->
-
-    </div><!-- /col-right -->
     </div><!-- /dashboard-workspace -->
 
     </div><!-- /dash-grid -->
@@ -1678,6 +1915,8 @@ include 'includes/header.php';
 <?php include __DIR__.'/../modules/ops-status/modal.php'; ?>
 <?php $_infra_data_v = @filemtime(__DIR__.'/assets/infrastructure-pulse-data.js') ?: time(); ?>
 <?php $_infra_js_v = @filemtime(__DIR__.'/assets/infrastructure-pulse.js') ?: time(); ?>
+<script>window.TRACS_INFRA_REAL_SERVERS = <?=json_encode($infra_real_servers, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)?>;
+window.TRACS_INFRA_HIDDEN_SEED_CODES = <?=json_encode($infra_hidden_seed_codes, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)?>;</script>
 <script src="assets/infrastructure-pulse-data.js?v=<?=$_infra_data_v?>"></script>
 <script src="assets/infrastructure-pulse.js?v=<?=$_infra_js_v?>"></script>
 <?php include 'includes/footer.php'; ?>

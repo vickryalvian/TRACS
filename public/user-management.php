@@ -33,14 +33,14 @@ function um_is_ajax_request(): bool {
     return strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest'
         || str_contains(strtolower((string)($_SERVER['HTTP_ACCEPT'] ?? '')), 'application/json');
 }
-function um_json_response(bool $success, string $message, string $tab = 'users', int $status = 200): never {
+function um_json_response(bool $success, string $message, string $tab = 'users', int $status = 200, array $extra = []): never {
     http_response_code($status);
     header('Content-Type: application/json; charset=utf-8');
-    echo json_encode([
+    echo json_encode(array_merge([
         'success' => $success,
         'message' => $message,
         'redirect' => '/user-management.php?tab=' . urlencode($tab),
-    ], JSON_UNESCAPED_SLASHES);
+    ], $extra), JSON_UNESCAPED_SLASHES);
     exit;
 }
 
@@ -60,7 +60,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'create_user' => $UM->createUser($_POST),
             'update_user' => $UM->updateUser((int)($_POST['user_id'] ?? 0), $_POST),
             'set_user_status' => $UM->setUserStatus((int)($_POST['user_id'] ?? 0), (string)($_POST['status'] ?? ''), (string)($_POST['reason'] ?? '')),
-            'reset_password' => $UM->resetPassword((int)($_POST['user_id'] ?? 0), (string)($_POST['reason'] ?? '')),
+            'remove_user' => $UM->removeUser((int)($_POST['user_id'] ?? 0), (string)($_POST['reason'] ?? '')),
+            'reset_password' => $UM->resetPassword((int)($_POST['user_id'] ?? 0), (string)($_POST['reason'] ?? ''), (string)($_POST['new_password'] ?? '')),
             'reset_two_factor' => $UM->resetTwoFactor((int)($_POST['user_id'] ?? 0), (string)($_POST['reason'] ?? '')),
             'create_division' => $UM->createDivision($_POST),
             'update_division' => $UM->updateDivision((int)($_POST['division_id'] ?? 0), $_POST),
@@ -73,11 +74,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['um_temp_password'] = [
                 'password' => $result['temporary_password'],
                 'for' => $result['temporary_password_for'] ?? 'User',
+                'manual' => !empty($result['manual_password']),
             ];
         }
         $tab = ($action === 'update_permissions') ? 'roles' : 'users';
         if (um_is_ajax_request()) {
-            um_json_response(true, $result['message'] ?? 'Saved successfully.', $tab);
+            /* A generated/temporary password is a show-once secret rendered
+               server-side from session flash data (see $temp_password below)
+               — it isn't included in this JSON body, so the client must do a
+               real navigation to the redirect URL to actually see it. */
+            um_json_response(true, $result['message'] ?? 'Saved successfully.', $tab, 200, [
+                'force_navigate' => !empty($result['temporary_password']),
+            ]);
         }
         um_flash('success', $result['message'] ?? 'Saved successfully.');
         um_redirect($tab);
@@ -144,6 +152,7 @@ $can_update_user = tracs_user_can($conn, 'users.update');
 $can_suspend_user = tracs_user_can($conn, 'users.suspend');
 $can_activate_user = tracs_user_can($conn, 'users.activate');
 $can_reset_password = tracs_user_can($conn, 'users.reset_password');
+$can_remove_user = tracs_user_can($conn, 'users.delete');
 $can_create_division = tracs_user_can($conn, 'divisions.create');
 $can_update_division = tracs_user_can($conn, 'divisions.update');
 $can_archive_division = tracs_user_can($conn, 'divisions.archive');
@@ -151,7 +160,9 @@ $can_manage_permissions = tracs_user_can($conn, 'roles.manage_permissions');
 $actor = tracs_get_user_by_id($conn, $uid) ?? [];
 $actor_permissions = tracs_user_permissions($conn, $uid);
 $is_super_admin = ($actor['role_slug'] ?? '') === 'super_admin';
-$can_reset_2fa = $schema_ready && $is_super_admin && tracs_two_factor_schema_ready($conn);
+$is_admin_or_above = in_array((string)($actor['role_slug'] ?? ''), ['super_admin', 'admin'], true);
+$can_reset_2fa = $schema_ready && $is_admin_or_above && tracs_two_factor_schema_ready($conn);
+$can_view_user_notes = $schema_ready && tracs_is_supervisor_or_above($conn, $uid);
 $build_signature = tracs_build_public_payload();
 
 $TC = new AlertTickerController($conn, $uid);
@@ -313,8 +324,8 @@ include __DIR__ . '/includes/header.php';
   <div class="panel um-once-panel">
     <div class="um-once-copy">
       <div>
-        <div class="um-once-title"><i data-lucide="key-round" class="icon-sm"></i> Temporary password for <?=esc($temp_password['for'])?></div>
-        <div class="page-sub">Shown once. Share it securely and ask the user to change it after login.</div>
+        <div class="um-once-title"><i data-lucide="key-round" class="icon-sm"></i> <?=!empty($temp_password['manual']) ? 'New password for ' : 'Temporary password for '?><?=esc($temp_password['for'])?></div>
+        <div class="page-sub"><?=!empty($temp_password['manual']) ? 'Shown once. Share it securely with the user.' : 'Shown once. Share it securely and ask the user to change it after login.'?></div>
       </div>
       <div class="um-copy-row">
         <input type="text" class="form-input" id="umTempPassword" value="<?=esc($temp_password['password'])?>" readonly>
@@ -365,14 +376,12 @@ include __DIR__ . '/includes/header.php';
     <form method="get" class="um-user-filter" aria-label="Filter users">
       <input type="hidden" name="tab" value="users">
       <div class="um-filter-search">
-        <label class="um-filter-label" for="umUserSearch">Search users</label>
         <div class="search-form-wrap">
           <i data-lucide="search" class="search-ic icon-sm"></i>
-          <input id="umUserSearch" type="text" name="q" class="search-input" placeholder="Name, username, email, phone, position" value="<?=esc($_GET['q'] ?? '')?>">
+          <input id="umUserSearch" type="text" name="q" class="search-input" placeholder="Name, username, email, phone, position" value="<?=esc($_GET['q'] ?? '')?>" aria-label="Search users">
         </div>
       </div>
-      <fieldset class="um-filter-group">
-        <legend>People</legend>
+      <fieldset class="um-filter-group" aria-label="Filter people">
         <select name="division_id" class="form-select compact-select" aria-label="Division">
           <option value="">All Divisions</option>
           <option value="0" <?=($_GET['division_id'] ?? '')==='0'?'selected':''?>>Without Division</option>
@@ -388,7 +397,7 @@ include __DIR__ . '/includes/header.php';
         </select>
         <select name="status" class="form-select compact-select" aria-label="Account status">
           <option value="">All Status</option>
-          <?php foreach(['active'=>'Active','inactive'=>'Inactive','suspended'=>'Suspended'] as $value=>$label): ?>
+          <?php foreach(['active'=>'Active','inactive'=>'Inactive','suspended'=>'Suspended','removed'=>'Removed'] as $value=>$label): ?>
             <option value="<?=$value?>" <?=($_GET['status'] ?? '')===$value?'selected':''?>><?=$label?></option>
           <?php endforeach; ?>
         </select>
@@ -508,7 +517,7 @@ include __DIR__ . '/includes/header.php';
     <?php endforeach; ?>
   </div>
 
-  <form method="post" class="panel um-permission-panel" onsubmit="return tracsConfirmSubmit(this, {type:'warning', title:'Save permission matrix', message:'Save role permission changes? This affects every user assigned to those roles.', confirmText:'Save changes', destructive:false})">
+  <form method="post" class="panel um-permission-panel" onsubmit="return umSubmitPermissionMatrix(this)">
     <?=csrf_input()?><input type="hidden" name="action" value="update_permissions">
     <div class="panel-head">
       <span class="panel-title">Permission Matrix</span>
@@ -674,7 +683,7 @@ include __DIR__ . '/includes/header.php';
 
 <?php if($schema_ready): ?>
 <div class="modal-overlay hidden" id="userFormModal">
-  <form method="post" class="modal modal-lg um-modal" data-tracs-modal-ajax data-close-delay="1000" onsubmit="return umUserFormSubmit(this)">
+  <form method="post" class="modal modal-lg um-modal" data-tracs-modal-ajax data-refresh-selector=".um-filebook" data-close-delay="1000" onsubmit="return umUserFormSubmit(this)">
     <?=csrf_input()?>
     <input type="hidden" name="action" id="umUserAction" value="create_user">
     <input type="hidden" name="user_id" id="umUserId" value="">
@@ -712,8 +721,8 @@ include __DIR__ . '/includes/header.php';
           <div class="form-group"><label class="form-label">Study Program / Major</label><input class="form-input" name="study_program" id="umStudyProgram"></div>
         </div>
         <div class="form-row">
-          <div class="form-group"><label class="form-label">Internship Start Date</label><input class="form-input" type="date" name="internship_start_date" id="umInternStart" data-intern-required></div>
-          <div class="form-group"><label class="form-label">Internship End Date</label><input class="form-input" type="date" name="internship_end_date" id="umInternEnd" data-intern-required></div>
+          <div class="form-group"><label class="form-label">Internship Start Date</label><input class="form-input" type="date" name="internship_start_date" id="umInternStart" data-intern-required data-allow-past-dates></div>
+          <div class="form-group"><label class="form-label">Internship End Date</label><input class="form-input" type="date" name="internship_end_date" id="umInternEnd" data-intern-required data-allow-past-dates><div class="form-hint" id="umInternDateWarning" hidden>End date must be on or after the start date.</div></div>
         </div>
         <div class="form-row">
           <div class="form-group"><label class="form-label">Mentor / Supervisor</label><select class="form-select" name="mentor_user_id" id="umMentorUserId"><option value="">No Mentor</option><?php foreach($mentor_options as $mentor): ?><option value="<?=$mentor['id']?>"><?=esc($mentor['display_name'])?></option><?php endforeach; ?></select></div>
@@ -731,6 +740,24 @@ include __DIR__ . '/includes/header.php';
       <div class="um-form-section" id="umSecuritySection"><div class="um-form-section-title">Security</div>
         <div class="form-group"><label class="form-label">Initial Password</label><input class="form-input" type="password" name="password" id="umPassword" placeholder="Leave blank to generate a secure temporary password"><div class="form-hint">Minimum 8 characters. Generated passwords are shown once after save.</div></div>
       </div>
+      <?php if ($can_view_user_notes): ?>
+      <div class="um-form-section um-notes-section" id="umNotesSection" hidden>
+        <div class="um-form-section-title">Internal Notes <span class="form-hint">(Supervisor+ only — not visible to this user)</span></div>
+        <div class="um-notes-add-row">
+          <select class="form-select compact-select" id="umNoteCategory">
+            <option value="access_provisioning">Access Provisioning</option>
+            <option value="training">Training</option>
+            <option value="performance">Performance</option>
+            <option value="monitoring">Monitoring</option>
+            <option value="internship_evaluation">Internship Evaluation</option>
+            <option value="administrative" selected>Administrative</option>
+          </select>
+          <textarea class="form-textarea" id="umNoteContent" rows="2" placeholder="Add an internal note..."></textarea>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="umAddUserNote()"><i data-lucide="plus" class="icon-sm"></i>Add Note</button>
+        </div>
+        <div class="um-notes-list" id="umNotesList"><div class="form-hint">No notes yet.</div></div>
+      </div>
+      <?php endif; ?>
     </div>
     <div class="modal-foot"><button type="button" class="btn btn-ghost" onclick="closeModal('userForm')">Cancel</button><button type="submit" class="btn btn-primary"><i data-lucide="check" class="icon-sm"></i>Save User</button></div>
   </form>
@@ -738,7 +765,7 @@ include __DIR__ . '/includes/header.php';
 
 <?php if($can_reset_2fa): ?>
 <div class="modal-overlay hidden" id="twoFactorResetModal">
-  <form method="post" class="modal" data-tracs-modal-ajax data-close-delay="1000" onsubmit="return umConfirmTwoFactorResetSubmit(this)">
+  <form method="post" class="modal" data-tracs-modal-ajax data-refresh-selector=".um-filebook" data-close-delay="1000" onsubmit="return umConfirmTwoFactorResetSubmit(this)">
     <?=csrf_input()?>
     <input type="hidden" name="action" value="reset_two_factor">
     <input type="hidden" name="user_id" id="umTwoFactorResetUserId" value="">
@@ -762,8 +789,34 @@ include __DIR__ . '/includes/header.php';
 </div>
 <?php endif; ?>
 
+<?php if($can_reset_password): ?>
+<div class="modal-overlay hidden" id="passwordResetModal">
+  <form method="post" class="modal" onsubmit="return umConfirmPasswordResetSubmit(this)">
+    <?=csrf_input()?>
+    <input type="hidden" name="action" value="reset_password">
+    <input type="hidden" name="user_id" id="umPasswordResetUserId" value="">
+    <div class="modal-head">
+      <div><div class="modal-title">Reset password</div><div class="modal-sub" id="umPasswordResetSub">Set a new password or auto-generate one.</div></div>
+      <button type="button" class="modal-close" onclick="closeModal('passwordReset')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="um-permission-note warning"><i data-lucide="key-round" class="icon-sm"></i><span>This overrides the user's password immediately — their current password is not required. Leave both fields blank to auto-generate a temporary password, or set one manually (minimum 8 characters). The result is shown once and this action is logged.</span></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label" for="umPasswordResetNew">New Password <span style="color:var(--tx4)">(optional)</span></label><input class="form-input" type="password" id="umPasswordResetNew" name="new_password" autocomplete="new-password" placeholder="Leave blank to auto-generate"></div>
+        <div class="form-group"><label class="form-label" for="umPasswordResetConfirm">Confirm New Password</label><input class="form-input" type="password" id="umPasswordResetConfirm" autocomplete="new-password" placeholder="Re-type the new password"></div>
+      </div>
+      <div class="form-group"><label class="form-label" for="umPasswordResetReason">Reason <span style="color:var(--tx4)">(optional)</span></label><input class="form-input" type="text" id="umPasswordResetReason" name="reason" placeholder="Operational note for the audit log"></div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-ghost" onclick="closeModal('passwordReset')">Cancel</button>
+      <button type="submit" class="btn btn-primary"><i data-lucide="key-round" class="icon-sm"></i>Update Password</button>
+    </div>
+  </form>
+</div>
+<?php endif; ?>
+
 <div class="modal-overlay hidden" id="divisionFormModal">
-  <form method="post" class="modal" data-tracs-modal-ajax data-close-delay="1000">
+  <form method="post" class="modal" data-tracs-modal-ajax data-refresh-selector=".um-filebook" data-close-delay="1000">
     <?=csrf_input()?>
     <input type="hidden" name="action" id="umDivisionAction" value="create_division">
     <input type="hidden" name="division_id" id="umDivisionFormId" value="">
@@ -853,6 +906,7 @@ const UM_PERMISSION_CATALOG = <?=json_encode($permission_catalog_payload, JSON_U
 const UM_ROLE_PERMISSIONS = <?=json_encode($role_permission_payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)?>;
 const UM_CAN_MANAGE_PERMISSIONS = <?=json_encode($can_manage_permissions)?>;
 const UM_CAN_RESET_2FA = <?=json_encode($can_reset_2fa)?>;
+const UM_CAN_RESET_PASSWORD = <?=json_encode($can_reset_password)?>;
 const UM_ACTOR_ROLE_ID = <?=json_encode((int)($actor['role_id'] ?? 0))?>;
 const UM_IS_SUPER_ADMIN = <?=json_encode($is_super_admin)?>;
 function umEsc(value){ return String(value ?? '').replace(/[&<>"']/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch])); }
@@ -869,6 +923,41 @@ function umSubmitAfterDialog(form){
   form.dataset.tracsConfirmed='1';
   if(typeof form.requestSubmit === 'function') form.requestSubmit();
   else form.submit();
+}
+/* The permission matrix is an in-page panel, not a modal, so it can't go
+   through bindModalAjaxForms (that flow hides the submitted element on
+   success, which would hide this panel instead of a dialog). */
+function umSubmitPermissionMatrix(form){
+  tracsConfirm({
+    type:'warning',
+    title:'Save permission matrix',
+    message:'Save role permission changes? This affects every user assigned to those roles.',
+    confirmText:'Save changes',
+    destructive:false
+  }).then(async ok=>{
+    if(!ok)return;
+    const btn=form.querySelector('button[type="submit"]');
+    const formData=new FormData(form);
+    if(btn && !setButtonLoading(btn,'Saving...'))return;
+    try{
+      const res=await fetch(form.getAttribute('action') || window.location.href,{
+        method:'POST',
+        body:formData,
+        headers:{'Accept':'application/json','X-Requested-With':'XMLHttpRequest'}
+      });
+      const contentType=res.headers.get('content-type') || '';
+      if(!contentType.includes('application/json'))throw new Error('The server returned an invalid response.');
+      const payload=await res.json();
+      if(!res.ok || payload.success === false)throw new Error(payload.message || 'Permissions could not be saved.');
+      resetButtonLoading(btn);
+      toast(payload.message || 'Permissions saved.','success');
+      tracsSwapFragment('.um-permission-panel');
+    }catch(error){
+      resetButtonLoading(btn);
+      toast(error.message || 'Permissions could not be saved.','error');
+    }
+  });
+  return false;
 }
 async function umPromptText(options){
   const value=await tracsPrompt({
@@ -911,18 +1000,109 @@ function umCurrentRoleSlug(){
   const select=document.getElementById('umRoleId');
   return select?.selectedOptions?.[0]?.dataset?.roleSlug || '';
 }
+/* Fields flatpickr controls via an altInput (see tracs.js's global date-input
+   initializer). Writing .value directly bypasses flatpickr's own state and its
+   altInput display, so the visible field can keep showing a stale/default date
+   (e.g. today's date from page load) while the real value is actually empty or
+   different — the field looks filled but validation and the payload see
+   nothing. Always go through window.setDateLikeInput for these two. */
+const UM_INTERN_DATE_FIELD_IDS=['umInternStart','umInternEnd'];
+function umInternDateDisplay(value){
+  const [y,m,d]=String(value || '').split('-');
+  return y && m && d ? `${d}-${m}-${y}` : '';
+}
+function umInternFieldSpec(){
+  return [
+    {id:'umUniversityName', label:'University / Campus', test:el=>!!el.value.trim()},
+    {id:'umInternStart', label:'Internship Start Date', test:el=>!!el.value},
+    {id:'umInternEnd', label:'Internship End Date', test:el=>!!el.value},
+  ];
+}
+function umClearInternFieldErrors(){
+  umInternFieldSpec().forEach(({id})=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    el.removeAttribute('aria-invalid');
+    window.tracsValidationTarget?.(el)?.classList.remove('is-invalid');
+  });
+}
 function umToggleInternSection(){
   const isIntern=umCurrentRoleSlug()==='intern';
   const section=document.getElementById('umInternSection');
   if(section) section.hidden=!isIntern;
   section?.querySelectorAll('[data-intern-required]').forEach(el=>{ el.required=isIntern; });
+  if(!isIntern) umClearInternFieldErrors();
   window.TRACSDropdowns?.syncAll();
 }
 function umClearInternFields(){
-  ['umUniversityName','umStudyProgram','umInternStart','umInternEnd','umSpecialNotes'].forEach(id=>umSetValue(id,''));
+  ['umUniversityName','umStudyProgram','umSpecialNotes'].forEach(id=>umSetValue(id,''));
+  UM_INTERN_DATE_FIELD_IDS.forEach(id=>window.setDateLikeInput?.(document.getElementById(id),''));
   umSetValue('umMentorUserId',''); umSetValue('umInternshipStatus','active'); umSetValue('umEvaluationStatus','not_started');
   umSetValue('umSkillLevel','beginner'); umSetValue('umAllowedTaskScope','');
+  umClearInternFieldErrors();
 }
+function umInternDateRangeValid(){
+  const startEl=document.getElementById('umInternStart');
+  const endEl=document.getElementById('umInternEnd');
+  if(!startEl?.value || !endEl?.value) return true;
+  return new Date(endEl.value) > new Date(startEl.value);
+}
+function umUpdateInternDateRangeHint(){
+  const endEl=document.getElementById('umInternEnd');
+  const warning=document.getElementById('umInternDateWarning');
+  if(!endEl || !warning) return;
+  const valid=umInternDateRangeValid();
+  warning.hidden=valid;
+  endEl.classList.toggle('is-invalid',!valid);
+  window.tracsValidationTarget?.(endEl)?.classList.toggle('is-invalid',!valid);
+  if(valid){
+    endEl.removeAttribute('aria-invalid');
+  }else{
+    endEl.setAttribute('aria-invalid','true');
+  }
+}
+function umValidateInternFields(form){
+  if(umCurrentRoleSlug()!=='intern'){ umClearInternFieldErrors(); return true; }
+  const modal=form?.closest('.modal-overlay') || form;
+  for(const {id,label,test} of umInternFieldSpec()){
+    const el=document.getElementById(id);
+    if(!el) continue;
+    if(!test(el)){
+      toast(`${label} is required for Intern accounts.`,'error');
+      window.tracsFocusInvalidField?.(el,{modal});
+      return false;
+    }
+    el.removeAttribute('aria-invalid');
+    window.tracsValidationTarget?.(el)?.classList.remove('is-invalid');
+  }
+  if(!umInternDateRangeValid()){
+    umUpdateInternDateRangeHint();
+    const endEl=document.getElementById('umInternEnd');
+    toast('Internship End Date must be after the Internship Start Date.','error');
+    window.tracsFocusInvalidField?.(endEl,{modal});
+    return false;
+  }
+  return true;
+}
+(function umBindInternLiveValidation(){
+  umInternFieldSpec().forEach(({id,test})=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    const clearIfValid=()=>{
+      if(!test(el)) return;
+      el.removeAttribute('aria-invalid');
+      window.tracsValidationTarget?.(el)?.classList.remove('is-invalid');
+    };
+    el.addEventListener('input',clearIfValid);
+    el.addEventListener('change',clearIfValid);
+  });
+  ['umInternStart','umInternEnd'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    el.addEventListener('input',umUpdateInternDateRangeHint);
+    el.addEventListener('change',umUpdateInternDateRangeHint);
+  });
+})();
 function umCreateUser(){
   document.getElementById('umUserModalTitle').textContent='Add User';
   document.getElementById('umUserModalSub').textContent='Create a secure TRACS account';
@@ -932,6 +1112,8 @@ function umCreateUser(){
   umSetAvatarEditor({id:'', name:'User', email:'U'});
   umClearInternFields();
   umSetValue('umStatus','active'); umSetValue('umDivisionId',''); document.getElementById('umSecuritySection').style.display='';
+  const notesSection=document.getElementById('umNotesSection');
+  if(notesSection) notesSection.hidden=true;
   openModal('userForm'); umToggleInternSection(); window.TRACSDropdowns?.syncAll();
 }
 function umCreateUserInDivision(divisionId){ umCreateUser(); umSetValue('umDivisionId', divisionId); window.TRACSDropdowns?.syncAll(); }
@@ -945,12 +1127,106 @@ function umEditUser(btn){
   umSetValue('umPosition',u.position); umSetValue('umAvatarColor',u.avatar_initials_color); umSetValue('umRoleId',u.role_id);
   umSetAvatarEditor(u);
   umSetValue('umDivisionId',u.division_id || ''); umSetValue('umStatus',u.status); umSetValue('umShift',u.shift_preference);
-  umSetValue('umUniversityName',u.university_name); umSetValue('umStudyProgram',u.study_program); umSetValue('umInternStart',u.internship_start_date);
-  umSetValue('umInternEnd',u.internship_end_date); umSetValue('umMentorUserId',u.mentor_user_id || ''); umSetValue('umInternshipStatus',u.internship_status || 'active');
+  umSetValue('umUniversityName',u.university_name); umSetValue('umStudyProgram',u.study_program);
+  window.setDateLikeInput?.(document.getElementById('umInternStart'), u.internship_start_date || '', umInternDateDisplay(u.internship_start_date));
+  window.setDateLikeInput?.(document.getElementById('umInternEnd'), u.internship_end_date || '', umInternDateDisplay(u.internship_end_date));
+  umSetValue('umMentorUserId',u.mentor_user_id || ''); umSetValue('umInternshipStatus',u.internship_status || 'active');
   umSetValue('umEvaluationStatus',u.evaluation_status || 'not_started'); umSetValue('umSkillLevel',u.skill_level || 'beginner'); umSetValue('umAllowedTaskScope',u.allowed_task_scope || '');
   umSetValue('umSpecialNotes',u.special_notes);
   umSetValue('umPassword',''); document.getElementById('umSecuritySection').style.display='none';
+  const notesSection=document.getElementById('umNotesSection');
+  if(notesSection){ notesSection.hidden=false; notesSection.dataset.targetUserId=u.id; umLoadUserNotes(u.id); }
   openModal('userForm'); umToggleInternSection(); window.TRACSDropdowns?.syncAll();
+}
+
+/* ── Internal Notes (supervisor+ only) ───────────────── */
+function umNoteCategoryLabel(category){
+  const labels={access_provisioning:'Access Provisioning',training:'Training',performance:'Performance',monitoring:'Monitoring',internship_evaluation:'Internship Evaluation',administrative:'Administrative'};
+  return labels[category] || 'Administrative';
+}
+function umRenderUserNotes(notes){
+  const host=document.getElementById('umNotesList');
+  if(!host) return;
+  if(!notes || !notes.length){ host.innerHTML='<div class="form-hint">No notes yet.</div>'; return; }
+  host.innerHTML=notes.map(n=>`
+    <div class="um-note-item" data-note-id="${n.id}" data-note-category="${umEscapeHtml(n.category || 'administrative')}">
+      <div class="um-note-meta">
+        <span class="um-note-category">${umEscapeHtml(n.category_label || umNoteCategoryLabel(n.category))}</span>
+        <span class="um-note-author">${umEscapeHtml(n.author_name || 'Unknown')}</span>
+        <span class="um-note-time">${umEscapeHtml(n.created_at || '')}${n.updated_at && n.updated_at!==n.created_at ? ' (edited '+umEscapeHtml(n.updated_at)+')' : ''}</span>
+      </div>
+      <div class="um-note-content">${umEscapeHtml(n.content)}</div>
+      <div class="um-note-actions">
+        <button type="button" class="btn btn-ghost btn-xs" onclick="umEditUserNotePrompt(${n.id}, this)">Edit</button>
+        <button type="button" class="btn btn-ghost btn-xs is-danger" onclick="umDeleteUserNote(${n.id})">Delete</button>
+      </div>
+    </div>
+  `).join('');
+}
+function umEscapeHtml(value){
+  const div=document.createElement('div');
+  div.textContent=String(value ?? '');
+  return div.innerHTML;
+}
+async function umLoadUserNotes(userId){
+  const host=document.getElementById('umNotesList');
+  if(!userId || !host) return;
+  host.innerHTML='<div class="form-hint">Loading notes...</div>';
+  try{
+    const res=await fetch(`/api/user-notes-list.php?user_id=${encodeURIComponent(userId)}`, {headers:{'Accept':'application/json'}});
+    const json=await res.json();
+    if(!json.success){ host.innerHTML='<div class="form-hint">Unable to load notes.</div>'; return; }
+    umRenderUserNotes(json.data?.notes || []);
+  }catch(e){ host.innerHTML='<div class="form-hint">Unable to load notes.</div>'; }
+}
+async function umAddUserNote(){
+  const section=document.getElementById('umNotesSection');
+  const userId=section?.dataset.targetUserId;
+  const category=document.getElementById('umNoteCategory')?.value || 'administrative';
+  const contentEl=document.getElementById('umNoteContent');
+  const content=(contentEl?.value || '').trim();
+  if(!userId || !content) return;
+  try{
+    const res=await fetch('/api/user-notes-create.php', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({user_id:Number(userId), category, content})
+    });
+    const json=await res.json();
+    if(json.success){ if(contentEl) contentEl.value=''; umLoadUserNotes(userId); }
+    else toast?.(json.message || 'Unable to add note', 'error');
+  }catch(e){ toast?.('Unable to add note', 'error'); }
+}
+async function umEditUserNotePrompt(noteId, btn){
+  const item=btn.closest('.um-note-item');
+  const currentContent=item?.querySelector('.um-note-content')?.textContent || '';
+  const currentCategory=item?.dataset.noteCategory || 'administrative';
+  const updated=prompt('Edit note', currentContent);
+  if(updated===null || updated.trim()==='') return;
+  const section=document.getElementById('umNotesSection');
+  const userId=section?.dataset.targetUserId;
+  try{
+    const res=await fetch('/api/user-notes-update.php', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({id:noteId, category:currentCategory, content:updated.trim()})
+    });
+    const json=await res.json();
+    if(json.success) umLoadUserNotes(userId);
+    else toast?.(json.message || 'Unable to update note', 'error');
+  }catch(e){ toast?.('Unable to update note', 'error'); }
+}
+async function umDeleteUserNote(noteId){
+  if(!confirm('Delete this internal note? This cannot be undone.')) return;
+  const section=document.getElementById('umNotesSection');
+  const userId=section?.dataset.targetUserId;
+  try{
+    const res=await fetch('/api/user-notes-delete.php', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({id:noteId})
+    });
+    const json=await res.json();
+    if(json.success) umLoadUserNotes(userId);
+    else toast?.(json.message || 'Unable to delete note', 'error');
+  }catch(e){ toast?.('Unable to delete note', 'error'); }
 }
 function umCreateDivision(){
   document.getElementById('umDivisionModalTitle').textContent='Add Division';
@@ -995,13 +1271,7 @@ function umUserFormSubmit(form){
   const action=form.querySelector('[name="action"]')?.value;
   const original=form.querySelector('[name="original_status"]')?.value || '';
   const next=form.querySelector('[name="status"]')?.value || '';
-  if(umCurrentRoleSlug()==='intern'){
-    const university=document.getElementById('umUniversityName')?.value.trim();
-    const start=document.getElementById('umInternStart')?.value;
-    const end=document.getElementById('umInternEnd')?.value;
-    if(!university || !start || !end){ toast('University, start date, and end date are required for interns.','error'); return false; }
-    if(new Date(end) <= new Date(start)){ toast('Internship end date must be after start date.','error'); return false; }
-  }
+  if(!umValidateInternFields(form)) return false;
   if(action === 'update_user' && original && original !== next){
     (async()=>{
       if(next !== 'active'){
@@ -1028,28 +1298,27 @@ function umUserFormSubmit(form){
   }
   return true;
 }
-function umConfirmReset(form){
-  if(umAllowDialogSubmit(form)) return true;
-  (async()=>{
-    const reason=await umPromptText({
-      type:'warning',
-      title:'Password reset reason',
-      message:'Add an optional reason for this password reset.',
-      inputLabel:'Reason (optional)',
-      required:false,
-      confirmText:'Continue'
-    });
-    form.querySelector('[name="reason"]').value=reason;
-    const ok=await tracsConfirm({
-      type:'warning',
-      title:'Generate temporary password',
-      message:'Generate a temporary password for this user? It will be shown once.',
-      confirmText:'Generate',
-      destructive:true
-    });
-    if(ok) umSubmitAfterDialog(form);
-  })();
-  return false;
+function umOpenPasswordResetModal(userId, userName){
+  if(!UM_CAN_RESET_PASSWORD || !userId) return;
+  umSetValue('umPasswordResetUserId', userId);
+  umSetValue('umPasswordResetNew', '');
+  umSetValue('umPasswordResetConfirm', '');
+  umSetValue('umPasswordResetReason', '');
+  const sub=document.getElementById('umPasswordResetSub');
+  if(sub) sub.textContent=`Set a new password for ${userName || 'this user'}, or leave blank to auto-generate.`;
+  openModal('passwordReset');
+}
+function umResetPasswordForUser(u){
+  umOpenPasswordResetModal(u?.id, u?.name || u?.email);
+}
+function umConfirmPasswordResetSubmit(form){
+  const newPw=document.getElementById('umPasswordResetNew')?.value || '';
+  const confirmPw=document.getElementById('umPasswordResetConfirm')?.value || '';
+  if(newPw !== ''){
+    if(newPw.length < 8){ toast('Password must be at least 8 characters.','error'); return false; }
+    if(newPw !== confirmPw){ toast('New password and confirmation do not match.','error'); return false; }
+  }
+  return true;
 }
 function umOpenTwoFactorResetModal(btn){
   umOpenTwoFactorResetModalForUser(umData(btn,'user'));
@@ -1147,6 +1416,9 @@ function umOpenUserDrawer(btn){
     `<button type="button" class="btn btn-ghost btn-sm" onclick="umRenderPermissionDrawer(window.UM_DRAWER_USER || {})"><i data-lucide="shield-check" class="icon-sm"></i>Permissions</button>`,
     `<a class="btn btn-ghost btn-sm" href="?tab=activity&target_user_id=${u.id}"><i data-lucide="history" class="icon-sm"></i>Activity</a>`
   ];
+  if(UM_CAN_RESET_PASSWORD){
+    drawerActions.push(`<button type="button" class="btn btn-ghost btn-sm" onclick="umResetPasswordForUser(window.UM_DRAWER_USER || {})"><i data-lucide="key-round" class="icon-sm"></i>Reset Password</button>`);
+  }
   if(UM_CAN_RESET_2FA){
     drawerActions.push(`<button type="button" class="btn btn-ghost btn-sm" onclick="umOpenTwoFactorResetModalForUser(window.UM_DRAWER_USER || {})"><i data-lucide="shield-off" class="icon-sm"></i>Reset 2FA</button>`);
   }
@@ -1209,7 +1481,7 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape') umCloseDrawers();
 
 <?php if($flash): ?>
 <script>
-document.addEventListener('DOMContentLoaded', () => toast(<?=json_encode($flash['message'])?>, <?=json_encode($flash['type'])?>));
+document.addEventListener('DOMContentLoaded', () => toast(<?=json_encode($flash['message'])?>, <?=json_encode($flash['type'])?><?= ($flash['type'] ?? '') === 'success' ? ', 5000' : '' ?>));
 </script>
 <?php endif; ?>
 

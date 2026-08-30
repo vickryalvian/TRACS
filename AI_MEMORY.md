@@ -11,6 +11,30 @@
 - **Timezone:** `Asia/Jakarta` / WIB.
 - **Runtime style:** Server-rendered pages plus authenticated JSON/CSV APIs. There is no Composer, npm, SPA router, or frontend build step.
 
+## Multi-Machine Git Workflow
+
+This repo is actively developed from more than one machine (PC and MacBook). The
+GitHub remote (`origin`) is the single source of truth, not either local working
+tree. To avoid divergent or lost work:
+
+1. **At the start of every session**, before editing anything: `git fetch origin`,
+   then compare local `HEAD` against `origin/<current-branch>`. If local is
+   behind, `git pull --rebase origin <branch>` before making changes. If
+   uncommitted changes already exist in the working tree, surface them to the
+   user rather than assuming they are stale or safe to discard.
+2. **Never force-push** a shared branch (e.g.
+   `feat/user-mgmt-auth-domain-ui-improvements`, `main`) unless the user
+   explicitly asks for it. A force-push from one machine can silently discard
+   unpushed commits made on the other machine.
+3. **At natural stopping points** — end of a task, before a long pause, or
+   whenever the user is likely to switch machines — commit and push completed
+   work rather than leaving it only on local disk. If a session ends with
+   unpushed commits, say so explicitly.
+4. Production (`/opt/tracs` on the VPS) is deployed via manual file-copy, not a
+   `git pull` of `main` — see `deployment-summary.md` and
+   `docs/USER_LIFECYCLE_REMEDIATION.md`. Do not assume pushing to GitHub alone
+   updates production.
+
 ## Current Direction
 
 - Keep the interface clean, compact, operational-first, and low-noise.
@@ -30,6 +54,10 @@ font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Ro
 
 - Main dashboard areas are Cases, Task Monitoring, Shift Handover, Currency Converter, and the Infrastructure Pulse summary.
 - Dashboard case rows and `cases.php` rows open the same shared ticket-detail modal.
+- The tabbed widget panel (Shift Handover / Website Screenshot / Currency Converter / Recent Activity) is titled **Quick Tools**, not "Dashboard Widgets" — renamed to avoid overlapping with the adjacent Task Monitoring panel's language.
+- Website Screenshot and Currency Converter never open empty: Screenshot shows the last 5 captures (`screenshot_history` table + disk storage under `public/uploads/screenshot_history/`, served via `api/screenshot-history-image.php`) or a proper empty state; Currency shows a live USD/IDR rate card (`api/currency-rate.php`, 5 min server cache) plus last-converted and recent history (`api/currency-history.php`) from `tracs_currency_history`.
+- Screenshot capture regions are fetched live from PageFleets `GET /api/v1/regions` (`api/screenshot-regions.php`) — never hardcode the region list in the frontend; the API currently serves `id-1`, `us-1`, and `sg-1`.
+- The `dashboard-case-panel` (Cases) fills its full grid-stretched height (`min-height` floor only, no fixed clamp) so it matches the taller Quick-Tools-plus-Task-Monitoring stack beside it instead of leaving dead space below the card.
 - Task Monitoring has exactly these dashboard tabs:
   - `Checklist and Reminder`
   - `Assignments`
@@ -37,6 +65,24 @@ font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Ro
 - Checklist and Reminder are merged. Do not recreate a separate dashboard Reminder tab unless explicitly requested.
 - Reminder List belongs inside the combined tab. The standalone `reminders.php` page remains an implemented full-list page.
 - Assigned tasks create linked checklist items and, when due dates exist, reminders. New assignments can therefore appear in the combined tab and Assignments tab.
+
+## User Lifecycle Rules
+
+- Page guards return **404** (not 403) for unauthorized accounts. Every role that
+  lands on the dashboard must hold `dashboard.view`; the login flow falls back to
+  an accessible page (ultimately `profile.php`) so a successful login never 404s.
+  Do not remove `dashboard.view` from operational roles.
+- User removal is a **non-destructive archive**, never a hard delete. It marks the
+  account `removed`, sets `is_active = 0`, preserves the original identity in
+  `archived_email`/`archived_username`, and releases the live `email`/`username`
+  as id-tied tombstones so they can be reused by a new account.
+- The identity row is never deleted. History references users by immutable id, so
+  case history, audit logs, reporting, measurements, and ISO 9001 traceability
+  stay intact. A recreated account always gets a new id and never inherits history.
+- `emailExists`/`usernameExists` ignore `removed` rows; `listUsers` hides `removed`
+  by default. Removal is terminal (recreate, do not reactivate).
+- See `docs/USER_LIFECYCLE_REMEDIATION.md` and migration
+  `2026_06_30_user_removal_release.sql`.
 
 ## Case Ticket Rules
 
@@ -46,6 +92,15 @@ font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Ro
 - The progress timeline is implemented with Created, Assigned, In Progress, Waiting, and Resolved steps.
 - Keep the line thin and blue-to-cyan, limit animation to the filled/current portion, use smaller passed dots, and emphasize the current dot.
 - Resolved timelines stop animating.
+- Status transitions (drag & drop on the board, the In Progress/Stuck/On
+  Hold/Resolve footer buttons, and the kanban card quick-action menu) are open
+  to every `cases.view` holder — enforced by `case-status.php`/`case-reorder.php`
+  requiring only `cases.view`. `cases.manage` gates create/edit only (Edit
+  button, `case-create.php`, `case-update.php`); deletion is gated separately
+  by `tracs_user_can_delete_cases()`. Keep frontend gating (`footer.php`,
+  `tracs.js` `caseCardHtml`/`openCaseTicket`) matching this split — see
+  `config/migrations/2026_07_21_case_status_permission_revision.sql`, which
+  also grants `intern` `cases.view` so every role can reach `cases.php`.
 
 ## Shift Handover Rules
 
@@ -71,7 +126,10 @@ font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Ro
 ## Infrastructure Pulse
 
 - **Partially Implemented:** full page, dashboard mini widget, and TV Mode widget share `public/assets/infrastructure-pulse-data.js`.
-- Current telemetry and server-registry changes are mock/session-only. No backend ping worker, monitoring tables, Redis, SSE, or WebSocket feed is implemented.
+- The 9 built-in demo datacenters (`DCI, IDB, CY1, BCD, BTI, DR3, SG3, EGH, NDS`) are hardcoded mock data re-seeded on every page load; removing one persists via `infrastructure_hidden_seeds` (see `TRACS_INFRA_SEED_CODES` in `core/infrastructure_servers.php`). Ad-hoc "Demo Data" entries added manually through the Add Server form remain intentionally session-only.
+- Real (Network Ping / ICMP) targets are persisted in `infrastructure_servers`, added/edited/removed through `public/api/infrastructure-server-{create,delete}.php` (upsert-by-code; editing reuses the create endpoint). TCP/HTTP methods can be registered but have no live check implemented yet.
+- **Real ICMP monitoring is a continuous background job**, not tab-driven: `bin/tracs-infrastructure-monitor.php` (suggested cron: every minute; see `core/infrastructure_monitor.php`) checks every real ICMP target whose configured interval has elapsed via `core/infrastructure_ping.php` (shells out to system `ping` through `proc_open` with an argv array — no shell interpolation, strict host validation), and writes each result to `infrastructure_monitoring_results` (history) plus the cached `last_*` columns on `infrastructure_servers`. The frontend never triggers recurring checks itself — it polls `public/api/infrastructure-server-list.php` and `infrastructure-server-history.php` every 15s to display the latest persisted state and trend graphs, the same way a Grafana panel polls a datasource. It still fires one immediate check via `infrastructure-ping.php` right after a real server is added/edited, for instant feedback ahead of the next cron tick.
+- History retention: `tracs_infra_prune_history()` deletes samples older than 30 days on every worker run. No rollup/downsampling yet — raw per-check samples only.
 - `tv-mode.php` includes an Infrastructure Pulse widget; there is no separate Infrastructure-only TV route.
 - Do not document mock incidents as live infrastructure alerts.
 

@@ -4,6 +4,8 @@
  * Edit credentials below before deployment
  */
 
+ require_once __DIR__ . '/env.php';
+
  $db_host = $_ENV['DB_HOST'] ?? 'localhost';
  $db_user = $_ENV['DB_USER'] ?? 'root';
  $db_pass = $_ENV['DB_PASS'] ?? '';

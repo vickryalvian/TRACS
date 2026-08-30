@@ -1,0 +1,72 @@
+/*
+ * TRACS Tailwind semantic token template.
+ *
+ * Phase 3 scaffold only:
+ * - not imported by the current Vite entry
+ * - not loaded by any PHP page
+ * - references the existing TRACS CSS custom properties
+ */
+
+@theme {
+  --font-sans: var(--font);
+  --font-mono: var(--mono);
+
+  --color-tracs-page: var(--bg);
+  --color-tracs-page-subtle: var(--bg2);
+  --color-tracs-card: var(--s1);
+  --color-tracs-surface-2: var(--s2);
+  --color-tracs-surface-3: var(--s3);
+  --color-tracs-surface-4: var(--s4);
+  --color-tracs-surface-5: var(--s5);
+
+  --color-tracs-border: var(--bd1);
+  --color-tracs-border-muted: var(--bd2);
+  --color-tracs-border-strong: var(--bd3);
+  --color-tracs-border-emphasis: var(--bd4);
+
+  --color-tracs-primary: var(--tx1);
+  --color-tracs-secondary: var(--tx2);
+  --color-tracs-muted: var(--tx3);
+  --color-tracs-faint: var(--tx4);
+
+  --color-tracs-accent: var(--blue);
+  --color-tracs-accent-strong: var(--blue-dk);
+  --color-tracs-accent-soft: var(--blue-lt);
+  --color-tracs-accent-border: var(--blue-bd);
+
+  --color-tracs-success: var(--green);
+  --color-tracs-success-soft: var(--green-lt);
+  --color-tracs-success-border: var(--green-bd);
+  --color-tracs-warning: var(--amber);
+  --color-tracs-warning-soft: var(--amber-lt);
+  --color-tracs-warning-border: var(--amber-bd);
+  --color-tracs-danger: var(--red);
+  --color-tracs-danger-soft: var(--red-lt);
+  --color-tracs-danger-border: var(--red-bd);
+  --color-tracs-info: var(--cyan);
+  --color-tracs-info-soft: var(--cyan-lt);
+  --color-tracs-info-border: var(--cyan-bd);
+  --color-tracs-purple: var(--purple);
+  --color-tracs-purple-soft: var(--purple-lt);
+  --color-tracs-purple-border: var(--purple-bd);
+
+  --spacing-tracs-1: var(--space-1);
+  --spacing-tracs-2: var(--space-2);
+  --spacing-tracs-3: var(--space-3);
+  --spacing-tracs-4: var(--space-4);
+  --spacing-tracs-5: var(--space-5);
+  --spacing-tracs-6: var(--space-6);
+  --spacing-tracs-7: var(--space-7);
+  --spacing-tracs-8: var(--space-8);
+
+  --radius-tracs-sm: 4px;
+  --radius-tracs: var(--radius);
+  --radius-tracs-md: var(--r2);
+  --radius-tracs-lg: var(--radius-lg);
+  --radius-tracs-xl: var(--r4);
+
+  --shadow-tracs-card: var(--shadow);
+  --shadow-tracs-overlay: var(--shadow-lg);
+
+  --ease-tracs: var(--ease);
+}

@@ -1,0 +1,43 @@
+/*
+ * Shared Tailwind v4 entry template for future TRACS React modules.
+ *
+ * Safety:
+ * - Preflight is intentionally not imported.
+ * - Utilities use the `tr:` prefix.
+ * - This file is not connected to the current build or PHP asset loading.
+ */
+
+@import "tailwindcss/theme.css" layer(theme) prefix(tr);
+@import "./tokens.css";
+@import "tailwindcss/utilities.css" prefix(tr);
+
+@source "../**/*.{js,jsx,ts,tsx}";
+
+.tracs-react-root {
+  isolation: isolate;
+  color: var(--tx1);
+  font-family: var(--font);
+}
+
+.tracs-react-root :where(button, input, select, textarea) {
+  font: inherit;
+}
+
+.tracs-react-root :where(select, option) {
+  color-scheme: light;
+}
+
+[data-theme="dark"] .tracs-react-root :where(select, option) {
+  color-scheme: dark;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tracs-react-root *,
+  .tracs-react-root *::before,
+  .tracs-react-root *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}

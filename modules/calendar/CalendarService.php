@@ -499,7 +499,7 @@ final class CalendarService
                 'meta' => [
                     'registrar' => (string)($row['registrar'] ?? ''),
                     'auto_renew' => (bool)$row['auto_renew'],
-                    'url' => 'domains.php?domain_id=' . $row['id'],
+                    'url' => 'domain-transfer.php?domain_id=' . $row['id'],
                     'actions' => ['view_source'],
                 ],
             ]);

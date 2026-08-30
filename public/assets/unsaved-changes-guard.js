@@ -188,7 +188,10 @@
 
   function markSaved(root = null) {
     const controls = root
-      ? Array.from(root.querySelectorAll(editableSelector))
+      ? [
+          ...(root instanceof Element && root.matches(editableSelector) ? [root] : []),
+          ...Array.from(root.querySelectorAll?.(editableSelector) || [])
+        ]
       : Array.from(document.querySelectorAll(editableSelector));
     controls.forEach(control => {
       if (isIgnored(control)) return;
@@ -395,7 +398,7 @@
   function autoRegisterModals() {
     document.querySelectorAll('.modal-overlay, .dpc-modal, .infra-modal, .cf-modal').forEach(modal => {
       if (!modal.querySelector(editableSelector) || modal.matches('[data-unsaved-ignore]')) return;
-      const saveButton = modal.querySelector(
+      const saveButton = modal.matches('[data-unsaved-no-auto-save]') ? null : modal.querySelector(
         '[data-unsaved-save], button[type="submit"], input[type="submit"], [id$="SaveBtn"], .modal-foot .btn-primary, .dpc-modal-footer .btn-primary'
       );
       register({
@@ -422,11 +425,33 @@
 
   function autoRegisterEditablePage() {
     const page = document.body?.dataset.tracsPage || '';
+    // Only pages with genuine standalone editable content — fields that live
+    // outside any <form> and persist solely via an explicit, separate save
+    // action — belong here. A real <form method="post"> is already protected
+    // page-wide by autoRegisterForms() without needing this. Pages whose only
+    // "editable" controls are real-time-saved (checklist/reminder checkboxes,
+    // etc.) must NOT be in this list: this scope doesn't cause that class of
+    // bug by itself (dirty-tracking is global, not scope-gated — see the
+    // `data-unsaved-ignore` opt-out on those controls instead), but listing
+    // pages here without a real editable surface just adds noise. Audited
+    // 2026-07-02 against every editablePages page previously listed:
+    //   mom               — agenda topic/decision fields, plain divs (no <form>)
+    //   domain_price_crosscheck — price matrix grid (has its own dedicated
+    //                       register() too; also listed here per product ask)
+    //   domains           — #dtModal edit-transfer fields, plain div (no <form>)
+    //   finance           — #btModal edit-transfer fields, plain div (no <form>)
+    //   feedback          — inline quick-add feedback fields, no <form> wrapper
+    //   infrastructure-pulse — add-server form lacks a method attribute, so
+    //                       autoRegisterForms() treats it as GET and skips it
+    //   shifting-assignment — already self-manages via its own markSaved() calls
+    // Everything else audited (cases, shift-reports, activity, dashboard,
+    // checklist, reminders, user-management, profile, monitoring,
+    // intern-management) had zero standalone editable content: either no
+    // forms/modals at all, or all editing already flows through a real
+    // <form method="post"> that autoRegisterForms() covers independently.
     const editablePages = new Set([
-      'cases', 'case', 'shift-reports', 'shift_report', 'mom', 'checklist', 'reminders',
-      'finance', 'domains', 'activity', 'user-management', 'infrastructure-pulse',
-      'cancellation-feedback', 'feedback', 'settings', 'profile', 'domain_price_crosscheck',
-      'shifting-assignment', 'dashboard', 'intern-management', 'monitoring'
+      'mom', 'domain_price_crosscheck', 'domains', 'finance', 'feedback',
+      'infrastructure-pulse', 'shifting-assignment'
     ]);
     const root = document.querySelector('.main-inner');
     if (!root || !editablePages.has(page)) return;
@@ -445,9 +470,10 @@
   document.addEventListener('focusin', event => snapshot(event.target), true);
   document.addEventListener('input', event => syncControl(event.target), true);
   document.addEventListener('change', event => syncControl(event.target), true);
-  document.addEventListener('submit', event => {
+  function handleSubmit(event) {
     const form = event.target;
     if (!(form instanceof HTMLFormElement)) return;
+    if (event.defaultPrevented) return;
     if (bypassForms.has(form)) {
       bypassForms.delete(form);
       queueMicrotask(() => {
@@ -474,7 +500,7 @@
     queueMicrotask(() => {
       if (!event.defaultPrevented) allowNextUnload = true;
     });
-  }, true);
+  }
   document.addEventListener('tracs:save-success', event => markSaved(event.detail?.root || event.target), true);
 
   document.addEventListener('click', event => {
@@ -517,6 +543,7 @@
     autoRegisterForms();
     autoRegisterModals();
     autoRegisterEditablePage();
+    document.addEventListener('submit', handleSubmit);
   });
 
   global.TRACSUnsavedChanges = {

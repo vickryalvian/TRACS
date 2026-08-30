@@ -16,12 +16,14 @@ $_cnt = (int)($critical_count??0);
 $_can_um = false;
 $_can_monitoring = false;
 $_can_dpc = false;
+$_can_abuse_reports = false;
 $_can_shifts = false;
 $_can_finance = true;
 $_can_domains = true;
 $_can_checklist = true;
 $_is_super_admin = false;
 $_header_user = null;
+$_header_position = '';
 $_header_preferences = [];
 $_tracs_visual_theme_preference = '';
 if (isset($conn) && $conn instanceof mysqli && !empty($_SESSION['user_id'])) {
@@ -31,6 +33,7 @@ if (isset($conn) && $conn instanceof mysqli && !empty($_SESSION['user_id'])) {
   $_can_um = tracs_user_can($conn, 'users.view') || tracs_user_can($conn, 'divisions.view') || tracs_user_can($conn, 'roles.view');
   $_can_monitoring = tracs_user_can($conn, 'tasks.view_own') || tracs_user_can($conn, 'tasks.monitor');
   $_can_dpc = tracs_user_can($conn, 'domain_price.view');
+  $_can_abuse_reports = tracs_user_can($conn, 'abuse_reports.view');
   $_can_shifts = tracs_user_can($conn, 'shifts.view');
   $_can_finance = tracs_user_can($conn, 'finance.view');
   $_can_domains = tracs_user_can($conn, 'domains.view');
@@ -39,6 +42,7 @@ if (isset($conn) && $conn instanceof mysqli && !empty($_SESSION['user_id'])) {
   if ($_header_user) {
     $_av = tracs_user_initials($_header_user['display_name'] ?? '', $_header_user['email'] ?? ($_un ?: 'U'));
     $_avatar_url = tracs_user_avatar_url($_header_user);
+    $_header_position = trim((string)($_header_user['position'] ?? '')) ?: trim((string)($_header_user['role_name'] ?? '')) ?: tracs_role_fallback_meta((string)($_header_user['role_slug'] ?? ''))['name'];
   }
 }
 
@@ -55,6 +59,7 @@ $_th.=$_th; // double for infinite loop
 $_css_v = @filemtime(__DIR__.'/../assets/tracs.css') ?: time();
 $_date_range_css_v = @filemtime(__DIR__.'/../assets/tracs-date-range-picker.css') ?: time();
 $_spacing_css_v = @filemtime(__DIR__.'/../assets/tracs-spacing.css') ?: time();
+$_infra_configurator_css_v = @filemtime(__DIR__.'/../assets/infrastructure-configurator.css') ?: time();
 
 if (!function_exists('tracs_sidebar_active')) {
   function tracs_sidebar_active(?string $active_page, array $pages): bool {
@@ -72,7 +77,7 @@ if (!function_exists('tracs_sidebar_link')) {
     $class = $active ? ' active' : '';
     echo '<a href="' . $href . '" role="' . ($icon_class === 'icon-sm' ? 'menuitem' : 'link') . '" class="' . ($icon_class === 'icon-sm' ? trim($class) : 'nav-item' . $class) . '">';
     echo '<i data-lucide="' . $icon . '" class="' . htmlspecialchars($icon_class, ENT_QUOTES, 'UTF-8') . '"></i>';
-    echo $icon_class === 'icon-sm' ? '<span>' . $label . '</span>' : '<span class="nav-tip">' . $label . '</span>';
+    echo $icon_class === 'icon-sm' ? '<span>' . $label . '</span>' : '<span class="nav-label">' . $label . '</span>';
     echo '</a>';
   }
 }
@@ -86,6 +91,13 @@ $_task_monitoring_items = [
     'visible' => $_can_monitoring,
   ],
   [
+    'label' => 'Abuse Reports',
+    'href' => 'abuse-reports.php',
+    'icon' => 'shield-alert',
+    'active_page' => 'abuse-reports',
+    'visible' => $_can_abuse_reports,
+  ],
+  [
     'label' => 'Finance',
     'href' => 'finance.php',
     'icon' => 'circle-dollar-sign',
@@ -94,13 +106,13 @@ $_task_monitoring_items = [
   ],
   [
     'label' => 'Domain Transfer Log',
-    'href' => 'domains.php',
+    'href' => 'domain-transfer.php',
     'icon' => 'globe',
     'active_page' => 'domains',
     'visible' => $_can_domains,
   ],
   [
-    'label' => 'Domain Pricing Crosscheck',
+    'label' => 'Domain Pricing',
     'href' => 'domain-price-crosscheck.php',
     'icon' => 'trending-up',
     'active_page' => 'domain_price_crosscheck',
@@ -128,6 +140,7 @@ foreach ($_task_monitoring_items as $_task_monitoring_item) {
 }
 $_task_monitoring_active = tracs_sidebar_active($active_page ?? '', $_task_monitoring_pages);
 $_show_task_monitoring = !empty(array_filter($_task_monitoring_items, fn($item) => !array_key_exists('visible', $item) || $item['visible']));
+$_show_admin_group = $_can_um || in_array((string)($_header_user['role_slug'] ?? ''), ['super_admin','admin','supervisor'], true);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -147,6 +160,9 @@ $_show_task_monitoring = !empty(array_filter($_task_monitoring_items, fn($item) 
 <?php endif; ?>
 <link rel="icon" type="image/png" href="assets/images/task-monitoring-tab-icon.png">
 <link rel="manifest" href="manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <link rel="stylesheet" href="assets/tracs.css?v=<?=$_css_v?>">
 <link rel="stylesheet" href="assets/tracs-date-range-picker.css?v=<?=$_date_range_css_v?>">
@@ -156,8 +172,14 @@ $_show_task_monitoring = !empty(array_filter($_task_monitoring_items, fn($item) 
 <?php if(in_array(($active_page??''), ['dashboard','infrastructure-pulse'], true)): $_infra_css_v = @filemtime(__DIR__.'/../assets/infrastructure-pulse.css') ?: time(); ?>
 <link rel="stylesheet" href="assets/infrastructure-pulse.css?v=<?=$_infra_css_v?>">
 <?php endif; ?>
+<?php if(($active_page??'') === 'infrastructure-configurator'): ?>
+<link rel="stylesheet" href="assets/infrastructure-configurator.css?v=<?=$_infra_configurator_css_v?>">
+<?php endif; ?>
 <?php if(($active_page??'') === 'domain_price_crosscheck'): $_dpc_css_v = @filemtime(__DIR__.'/../assets/domain-price-crosscheck.css') ?: time(); ?>
 <link rel="stylesheet" href="assets/domain-price-crosscheck.css?v=<?=$_dpc_css_v?>">
+<?php endif; ?>
+<?php if(($active_page??'') === 'abuse-reports'): $_abuse_css_v = @filemtime(__DIR__.'/../assets/abuse-reports.css') ?: time(); ?>
+<link rel="stylesheet" href="assets/abuse-reports.css?v=<?=$_abuse_css_v?>">
 <?php endif; ?>
 <?php if(($active_page??'') === 'shifting-assignment'): $_shift_assignment_css_v = @filemtime(__DIR__.'/../assets/shifting-assignment.css') ?: time(); ?>
 <link rel="stylesheet" href="assets/shifting-assignment.css?v=<?=$_shift_assignment_css_v?>">
@@ -177,110 +199,208 @@ window.TRACS_BUILD_INFO = <?=json_encode($_tracs_build_info, JSON_UNESCAPED_SLAS
 
 <!-- TICKER -->
 <div class="ticker-bar">
-  <div class="ticker-live"><span class="ticker-dot"></span>LIVE</div>
-  <div class="ticker-track"><div class="ticker-scroll"><?=$_th?></div></div>
+  <div class="ticker-track"><div class="ticker-scroll" id="tickerScroll"><?=$_th?></div></div>
   <button class="ticker-btn" onclick="openModal('ticker')">
     <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/></svg>
     MANAGE
   </button>
 </div>
+<script>window.__TRACS_TICKER_ITEMS__ = <?=json_encode(array_map(fn($t)=>['text'=>(string)($t['text']??''),'class'=>(string)($t['class']??'normal')], $_ti))?>;</script>
 
 <div class="body-row">
 
 <!-- SIDEBAR -->
-<aside class="sidebar">
-  
+<aside class="sidebar" id="tracsSidebar">
+<div class="sidebar-flyout">
+
   <nav class="sidebar-nav">
-    <a href="index.php" class="nav-item <?=$active_page==='dashboard'?'active':''?>">
-      <i data-lucide="layout-dashboard" class="icon-md"></i>
-      <span class="nav-tip">Dashboard</span>
-      <?php if($_cnt>0):?><span class="nav-badge"><?=min($_cnt,99)?></span><?php endif;?>
-    </a>
-    <a href="cases.php" class="nav-item <?=$active_page==='cases'?'active':''?>">
-      <i data-lucide="briefcase" class="icon-md"></i>
-      <span class="nav-tip">Case Management</span>
-    </a>
-    <a href="reminders.php" class="nav-item <?=$active_page==='reminders'?'active':''?>">
-      <i data-lucide="bell" class="icon-md"></i>
-      <span class="nav-tip">Reminders</span>
-    </a>
-    <a href="calendar.php" class="nav-item <?=$active_page==='calendar'?'active':''?>">
-      <i data-lucide="calendar-range" class="icon-md"></i>
-      <span class="nav-tip">Calendar</span>
-    </a>
-    <a href="shift-reports.php" class="nav-item <?=$active_page==='shift-reports'?'active':''?>">
-      <i data-lucide="clipboard-list" class="icon-md"></i>
-      <span class="nav-tip">Shift Reports</span>
-    </a>
-    <?php if ($_show_task_monitoring): ?>
-    <details class="nav-menu-wrap" id="tasksMonitoringNav">
-      <summary class="nav-item <?=$_task_monitoring_active?'active':''?>" aria-label="Tasks & Monitoring menu">
-        <i data-lucide="kanban-square" class="icon-md"></i>
-        <span class="nav-tip">Tasks & Monitoring</span>
-      </summary>
-      <div class="nav-submenu" role="menu" aria-label="Tasks & Monitoring">
-        <?php foreach ($_task_monitoring_items as $_task_monitoring_item) tracs_sidebar_link($_task_monitoring_item, $active_page ?? '', 'icon-sm'); ?>
-      </div>
-    </details>
-    <?php endif; ?>
-    <a href="infrastructure-pulse.php" class="nav-item <?=$active_page==='infrastructure-pulse'?'active':''?>">
-      <i data-lucide="radar" class="icon-md"></i>
-      <span class="nav-tip">Infrastructure Pulse</span>
-    </a>
-    <div class="nav-div"></div>
-    <a href="mom.php" class="nav-item <?=$active_page==='mom'?'active':''?>">
-      <i data-lucide="calendar-days" class="icon-md"></i>
-      <span class="nav-tip">Meetings / MoM</span>
-    </a>
-    <a href="cancellation_feedback.php" class="nav-item <?=$active_page==='feedback'?'active':''?>">
-      <i data-lucide="message-square" class="icon-md"></i>
-      <span class="nav-tip">Feedback</span>
-    </a>
-    <button type="button" class="nav-item" onclick="openModal('ticker')" title="Ticker / Alerts">
-      <i data-lucide="megaphone" class="icon-md"></i>
-      <span class="nav-tip">Ticker / Alerts</span>
-    </button>
-    <div class="nav-div"></div>
-    <a href="activity.php" class="nav-item <?=$active_page==='activity'?'active':''?>">
-      <i data-lucide="activity" class="icon-md"></i>
-      <span class="nav-tip">Activity Log</span>
-    </a>
-    <?php if($_is_super_admin): ?>
-    <a href="server-health.php" class="nav-item <?=$active_page==='server-health'?'active':''?>">
-      <i data-lucide="server-cog" class="icon-md"></i>
-      <span class="nav-tip">Server Health & Logs</span>
-    </a>
-    <?php endif; ?>
-    <?php if(in_array((string)($_header_user['role_slug'] ?? ''), ['super_admin','admin','supervisor'], true)): ?>
-    <a href="tv-mode.php" target="_blank" rel="noopener noreferrer" class="nav-item <?=$active_page==='tv-mode'?'active':''?>">
-      <i data-lucide="monitor-up" class="icon-md"></i>
-      <span class="nav-tip">TV Mode</span>
-    </a>
-    <?php endif; ?>
-    <?php if($_can_um): ?>
-    <details class="nav-menu-wrap" id="userManagementNav">
-      <summary class="nav-item <?=in_array($active_page, ['user-management','intern-management'], true)?'active':''?>" aria-label="User Management menu">
-        <i data-lucide="users-round" class="icon-md"></i>
-        <span class="nav-tip">User Management</span>
-      </summary>
-      <div class="nav-submenu" role="menu" aria-label="User Management">
-        <a href="user-management.php" role="menuitem" class="<?=$active_page==='user-management'?'active':''?>">
-          <i data-lucide="users-round" class="icon-sm"></i>
-          <span>User Management</span>
+    <div class="nav-group nav-favorites" id="navFavorites" role="group" aria-label="Favorites" hidden>
+      <div class="nav-group-label"></div>
+      <div class="nav-favorites-list" id="navFavoritesList"></div>
+    </div>
+
+    <div class="nav-group" role="group" aria-label="Overview">
+      <div class="nav-group-label"></div>
+      <div class="nav-item-wrap" data-nav-key="dashboard">
+        <a href="index.php" class="nav-item <?=$active_page==='dashboard'?'active':''?>">
+          <span class="nav-icon">
+            <i data-lucide="layout-dashboard" class="icon-md"></i>
+            <?php if($_cnt>0):?><span class="nav-badge"><?=min($_cnt,99)?></span><?php endif;?>
+          </span>
+          <span class="nav-label">Dashboard</span>
         </a>
-        <a href="intern-management.php" role="menuitem" class="<?=$active_page==='intern-management'?'active':''?>">
-          <i data-lucide="graduation-cap" class="icon-sm"></i>
-          <span>Intern Management</span>
-        </a>
+        <button type="button" class="nav-pin" data-pin-toggle data-pin-key="dashboard" data-pin-label="Dashboard" data-pin-href="index.php" data-pin-icon="layout-dashboard" aria-label="Pin Dashboard to favorites" aria-pressed="false" title="Pin to favorites">
+          <i data-lucide="star" class="icon-xs"></i>
+        </button>
       </div>
-    </details>
+    </div>
+
+    <div class="nav-group" role="group" aria-label="Operations">
+      <div class="nav-group-label"></div>
+      <div class="nav-item-wrap" data-nav-key="cases">
+        <a href="cases.php" class="nav-item <?=$active_page==='cases'?'active':''?>">
+          <span class="nav-icon"><i data-lucide="briefcase" class="icon-md"></i></span>
+          <span class="nav-label">Case Management</span>
+        </a>
+        <button type="button" class="nav-pin" data-pin-toggle data-pin-key="cases" data-pin-label="Case Management" data-pin-href="cases.php" data-pin-icon="briefcase" aria-label="Pin Case Management to favorites" aria-pressed="false" title="Pin to favorites">
+          <i data-lucide="star" class="icon-xs"></i>
+        </button>
+      </div>
+      <div class="nav-item-wrap" data-nav-key="calendar">
+        <a href="calendar.php" class="nav-item <?=$active_page==='calendar'?'active':''?>">
+          <span class="nav-icon"><i data-lucide="calendar-range" class="icon-md"></i></span>
+          <span class="nav-label">Calendar</span>
+        </a>
+        <button type="button" class="nav-pin" data-pin-toggle data-pin-key="calendar" data-pin-label="Calendar" data-pin-href="calendar.php" data-pin-icon="calendar-range" aria-label="Pin Calendar to favorites" aria-pressed="false" title="Pin to favorites">
+          <i data-lucide="star" class="icon-xs"></i>
+        </button>
+      </div>
+      <div class="nav-item-wrap" data-nav-key="shift-reports">
+        <a href="shift-reports.php" class="nav-item <?=$active_page==='shift-reports'?'active':''?>">
+          <span class="nav-icon"><i data-lucide="clipboard-list" class="icon-md"></i></span>
+          <span class="nav-label">Shift Reports</span>
+        </a>
+        <button type="button" class="nav-pin" data-pin-toggle data-pin-key="shift-reports" data-pin-label="Shift Reports" data-pin-href="shift-reports.php" data-pin-icon="clipboard-list" aria-label="Pin Shift Reports to favorites" aria-pressed="false" title="Pin to favorites">
+          <i data-lucide="star" class="icon-xs"></i>
+        </button>
+      </div>
+      <?php if ($_show_task_monitoring): ?>
+      <details class="nav-menu-wrap" id="tasksMonitoringNav">
+        <summary class="nav-item <?=$_task_monitoring_active?'active':''?>" aria-label="Tasks & Monitoring menu">
+          <span class="nav-icon"><i data-lucide="kanban-square" class="icon-md"></i></span>
+          <span class="nav-label">Tasks & Monitoring</span>
+          <i data-lucide="chevron-right" class="icon-xs nav-chevron"></i>
+        </summary>
+        <div class="nav-submenu-track">
+          <div class="nav-submenu" role="menu" aria-label="Tasks & Monitoring">
+            <?php foreach ($_task_monitoring_items as $_task_monitoring_item) tracs_sidebar_link($_task_monitoring_item, $active_page ?? '', 'icon-sm'); ?>
+          </div>
+        </div>
+      </details>
+      <?php endif; ?>
+      <div class="nav-item-wrap" data-nav-key="infra-pulse">
+        <a href="infrastructure-pulse.php" class="nav-item <?=$active_page==='infrastructure-pulse'?'active':''?>">
+          <span class="nav-icon"><i data-lucide="radar" class="icon-md"></i></span>
+          <span class="nav-label">Infrastructure Pulse</span>
+        </a>
+        <button type="button" class="nav-pin" data-pin-toggle data-pin-key="infra-pulse" data-pin-label="Infrastructure Pulse" data-pin-href="infrastructure-pulse.php" data-pin-icon="radar" aria-label="Pin Infrastructure Pulse to favorites" aria-pressed="false" title="Pin to favorites">
+          <i data-lucide="star" class="icon-xs"></i>
+        </button>
+      </div>
+      <div class="nav-item-wrap" data-nav-key="infra-configurator">
+        <a href="infrastructure-configurator.php" class="nav-item <?=$active_page==='infrastructure-configurator'?'active':''?>">
+          <span class="nav-icon"><i data-lucide="server-cog" class="icon-md"></i></span>
+          <span class="nav-label">Infrastructure Configurator</span>
+        </a>
+        <button type="button" class="nav-pin" data-pin-toggle data-pin-key="infra-configurator" data-pin-label="Infrastructure Configurator" data-pin-href="infrastructure-configurator.php" data-pin-icon="server-cog" aria-label="Pin Infrastructure Configurator to favorites" aria-pressed="false" title="Pin to favorites">
+          <i data-lucide="star" class="icon-xs"></i>
+        </button>
+      </div>
+      <div class="nav-item-wrap" data-nav-key="activity">
+        <a href="activity.php" class="nav-item <?=$active_page==='activity'?'active':''?>">
+          <span class="nav-icon"><i data-lucide="activity" class="icon-md"></i></span>
+          <span class="nav-label">Activity Log</span>
+        </a>
+        <button type="button" class="nav-pin" data-pin-toggle data-pin-key="activity" data-pin-label="Activity Log" data-pin-href="activity.php" data-pin-icon="activity" aria-label="Pin Activity Log to favorites" aria-pressed="false" title="Pin to favorites">
+          <i data-lucide="star" class="icon-xs"></i>
+        </button>
+      </div>
+    </div>
+
+    <div class="nav-group" role="group" aria-label="Communication">
+      <div class="nav-group-label"></div>
+      <div class="nav-item-wrap" data-nav-key="reminders">
+        <a href="reminders.php" class="nav-item <?=$active_page==='reminders'?'active':''?>">
+          <span class="nav-icon"><i data-lucide="bell" class="icon-md"></i></span>
+          <span class="nav-label">Reminders</span>
+        </a>
+        <button type="button" class="nav-pin" data-pin-toggle data-pin-key="reminders" data-pin-label="Reminders" data-pin-href="reminders.php" data-pin-icon="bell" aria-label="Pin Reminders to favorites" aria-pressed="false" title="Pin to favorites">
+          <i data-lucide="star" class="icon-xs"></i>
+        </button>
+      </div>
+      <div class="nav-item-wrap" data-nav-key="mom">
+        <a href="mom.php" class="nav-item <?=$active_page==='mom'?'active':''?>">
+          <span class="nav-icon"><i data-lucide="calendar-days" class="icon-md"></i></span>
+          <span class="nav-label">Meetings / MoM</span>
+        </a>
+        <button type="button" class="nav-pin" data-pin-toggle data-pin-key="mom" data-pin-label="Meetings / MoM" data-pin-href="mom.php" data-pin-icon="calendar-days" aria-label="Pin Meetings / MoM to favorites" aria-pressed="false" title="Pin to favorites">
+          <i data-lucide="star" class="icon-xs"></i>
+        </button>
+      </div>
+      <div class="nav-item-wrap" data-nav-key="feedback">
+        <a href="cancellation_feedback.php" class="nav-item <?=$active_page==='feedback'?'active':''?>">
+          <span class="nav-icon"><i data-lucide="message-square" class="icon-md"></i></span>
+          <span class="nav-label">Feedback</span>
+        </a>
+        <button type="button" class="nav-pin" data-pin-toggle data-pin-key="feedback" data-pin-label="Feedback" data-pin-href="cancellation_feedback.php" data-pin-icon="message-square" aria-label="Pin Feedback to favorites" aria-pressed="false" title="Pin to favorites">
+          <i data-lucide="star" class="icon-xs"></i>
+        </button>
+      </div>
+      <button type="button" class="nav-item nav-item-button" onclick="openModal('ticker')" title="Ticker / Alerts">
+        <span class="nav-icon"><i data-lucide="megaphone" class="icon-md"></i></span>
+        <span class="nav-label">Ticker / Alerts</span>
+      </button>
+    </div>
+
+    <?php if ($_show_admin_group): ?>
+    <div class="nav-group" role="group" aria-label="Admin">
+      <div class="nav-group-label"></div>
+      <?php if($_is_super_admin): ?>
+      <div class="nav-item-wrap" data-nav-key="server-health">
+        <a href="server-health.php" class="nav-item <?=$active_page==='server-health'?'active':''?>">
+          <span class="nav-icon"><i data-lucide="server-cog" class="icon-md"></i></span>
+          <span class="nav-label">Server Health & Logs</span>
+        </a>
+        <button type="button" class="nav-pin" data-pin-toggle data-pin-key="server-health" data-pin-label="Server Health & Logs" data-pin-href="server-health.php" data-pin-icon="server-cog" aria-label="Pin Server Health & Logs to favorites" aria-pressed="false" title="Pin to favorites">
+          <i data-lucide="star" class="icon-xs"></i>
+        </button>
+      </div>
+      <?php endif; ?>
+      <?php if(in_array((string)($_header_user['role_slug'] ?? ''), ['super_admin','admin','supervisor'], true)): ?>
+      <div class="nav-item-wrap" data-nav-key="tv-mode">
+        <a href="tv-mode.php" target="_blank" rel="noopener noreferrer" class="nav-item <?=$active_page==='tv-mode'?'active':''?>">
+          <span class="nav-icon"><i data-lucide="monitor-up" class="icon-md"></i></span>
+          <span class="nav-label">TV Mode</span>
+        </a>
+        <button type="button" class="nav-pin" data-pin-toggle data-pin-key="tv-mode" data-pin-label="TV Mode" data-pin-href="tv-mode.php" data-pin-icon="monitor-up" aria-label="Pin TV Mode to favorites" aria-pressed="false" title="Pin to favorites">
+          <i data-lucide="star" class="icon-xs"></i>
+        </button>
+      </div>
+      <?php endif; ?>
+      <?php if($_can_um): ?>
+      <details class="nav-menu-wrap" id="userManagementNav">
+        <summary class="nav-item <?=in_array($active_page, ['user-management','intern-management'], true)?'active':''?>" aria-label="User Management menu">
+          <span class="nav-icon"><i data-lucide="users-round" class="icon-md"></i></span>
+          <span class="nav-label">User Management</span>
+          <i data-lucide="chevron-right" class="icon-xs nav-chevron"></i>
+        </summary>
+        <div class="nav-submenu-track">
+          <div class="nav-submenu" role="menu" aria-label="User Management">
+            <a href="user-management.php" role="menuitem" class="<?=$active_page==='user-management'?'active':''?>">
+              <i data-lucide="users-round" class="icon-sm"></i>
+              <span>User Management</span>
+            </a>
+            <a href="intern-management.php" role="menuitem" class="<?=$active_page==='intern-management'?'active':''?>">
+              <i data-lucide="graduation-cap" class="icon-sm"></i>
+              <span>Intern Management</span>
+            </a>
+          </div>
+        </div>
+      </details>
+      <?php endif; ?>
+    </div>
     <?php endif; ?>
   </nav>
   <div class="sidebar-bottom">
     <details class="user-menu-wrap" id="userMenuWrap">
-      <summary class="user-avatar tracs-avatar" style="position:relative;<?=!empty($_header_user['avatar_initials_color'])?'--um-avatar-bg:'.htmlspecialchars((string)$_header_user['avatar_initials_color'], ENT_QUOTES, 'UTF-8'):''?>" aria-label="User menu" data-avatar-user-id="<?=htmlspecialchars((string)($_header_user['id'] ?? ''), ENT_QUOTES, 'UTF-8')?>" data-avatar-initials="<?=htmlspecialchars($_av, ENT_QUOTES, 'UTF-8')?>">
-        <?php if($_avatar_url !== ''): ?><img src="<?=htmlspecialchars($_avatar_url, ENT_QUOTES, 'UTF-8')?>" alt="" loading="lazy" decoding="async"><?php else: ?><span><?=$_av?></span><?php endif; ?>
-        <span class="nav-tip"><?=htmlspecialchars($user_email??'')?></span>
+      <summary class="user-menu-row" aria-label="User menu">
+        <span class="user-avatar tracs-avatar" style="<?=!empty($_header_user['avatar_initials_color'])?'--um-avatar-bg:'.htmlspecialchars((string)$_header_user['avatar_initials_color'], ENT_QUOTES, 'UTF-8'):''?>" data-avatar-user-id="<?=htmlspecialchars((string)($_header_user['id'] ?? ''), ENT_QUOTES, 'UTF-8')?>" data-avatar-initials="<?=htmlspecialchars($_av, ENT_QUOTES, 'UTF-8')?>">
+          <?php if($_avatar_url !== ''): ?><img src="<?=htmlspecialchars($_avatar_url, ENT_QUOTES, 'UTF-8')?>" alt="" loading="lazy" decoding="async"><?php else: ?><span><?=$_av?></span><?php endif; ?>
+        </span>
+        <span class="nav-label user-menu-info">
+          <span class="user-menu-name"><?=htmlspecialchars($_header_user['display_name'] ?? ($_SESSION['user_name'] ?? $user_email ?? 'User'))?></span>
+          <span class="user-menu-position"><?=htmlspecialchars($_header_position)?></span>
+        </span>
       </summary>
       <div class="user-menu" role="menu" aria-label="User account menu">
         <div class="user-menu-head">
@@ -290,19 +410,8 @@ window.TRACS_BUILD_INFO = <?=json_encode($_tracs_build_info, JSON_UNESCAPED_SLAS
         <a href="profile.php?section=profile" role="menuitem"><i data-lucide="user" class="icon-sm"></i>Profile / Account</a>
         <a href="profile.php?section=preferences" role="menuitem"><i data-lucide="settings" class="icon-sm"></i>Settings</a>
         <a href="profile.php?section=security" role="menuitem"><i data-lucide="lock-keyhole" class="icon-sm"></i>Change Password</a>
-        <form action="/auth/logout.php" method="post" class="user-menu-logout">
-          <?=csrf_input()?>
-          <button type="submit" role="menuitem" class="danger"><i data-lucide="log-out" class="icon-sm"></i>Logout</button>
-        </form>
-      </div>
-    </details>
-    <div class="theme-menu-wrap" id="themeMenuWrap">
-      <button class="theme-toggle" id="themeToggle" type="button" title="Theme" aria-label="Theme" aria-haspopup="menu" aria-expanded="false">
-        <i data-lucide="sun" class="icon-md ic-sun"></i>
-        <i data-lucide="moon" class="icon-md ic-moon"></i>
-        <span class="nav-tip" style="white-space:nowrap" id="themeTip">Theme</span>
-      </button>
-      <div class="theme-menu" id="themeMenu" role="menu" aria-label="Theme preference">
+        <div class="user-menu-divider"></div>
+        <div class="user-menu-section-label">Theme</div>
         <button type="button" class="theme-option" role="menuitemradio" aria-checked="false" data-theme-choice="light">
           <i data-lucide="sun" class="icon-sm"></i>
           <span>Light Mode</span>
@@ -318,7 +427,14 @@ window.TRACS_BUILD_INFO = <?=json_encode($_tracs_build_info, JSON_UNESCAPED_SLAS
           <span>System Default</span>
           <i data-lucide="check" class="icon-sm theme-option-check"></i>
         </button>
+        <div class="user-menu-divider"></div>
+        <form action="/auth/logout.php" method="post" class="user-menu-logout">
+          <?=csrf_input()?>
+          <button type="submit" role="menuitem" class="danger"><i data-lucide="log-out" class="icon-sm"></i>Logout</button>
+        </form>
       </div>
-    </div>
+    </details>
   </div>
+
+</div><!-- /sidebar-flyout -->
 </aside>

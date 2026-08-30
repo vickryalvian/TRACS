@@ -8,8 +8,9 @@ if (!$due)   fail('Due date required');
 $priority = in_array($body['priority']??'',['low','medium','high','critical']) ? $body['priority'] : 'medium';
 $desc     = $body['description'] ?? '';
 $due_fmt  = date('Y-m-d H:i:s', strtotime($due));
-$stmt = $conn->prepare("UPDATE tracs_reminders SET title=?,description=?,due_date=?,priority=?,updated_at=NOW() WHERE id=? AND user_id=?");
-$stmt->bind_param('ssssii',$title,$desc,$due_fmt,$priority,$id,$uid);
+// Reminders are fully public: any authenticated user may update any reminder.
+$stmt = $conn->prepare("UPDATE tracs_reminders SET title=?,description=?,due_date=?,priority=?,updated_at=NOW() WHERE id=?");
+$stmt->bind_param('ssssi',$title,$desc,$due_fmt,$priority,$id);
 if (!$stmt->execute()) fail('Database error');
 if ($stmt->affected_rows===0) fail('Not found',404);
 $stmt->close();

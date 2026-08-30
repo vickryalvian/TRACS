@@ -75,6 +75,7 @@ function export_require_permissions(array $permissions): void {
 
 $script = basename((string)(parse_url($_SERVER['SCRIPT_NAME'] ?? '', PHP_URL_PATH) ?: ''));
 $exportPermissionMap = [
+    'export-abuse-reports.php' => ['reports.export', 'abuse_reports.view'],
     'export-activity.php' => ['reports.export', 'users.view_activity'],
     'export-cases.php' => ['reports.export', 'cases.view'],
     'export-domain-price-crosscheck.php' => ['reports.export', 'domain_price.view'],

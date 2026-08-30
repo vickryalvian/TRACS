@@ -3,6 +3,11 @@ FROM php:8.2-apache
 # Install mysqli for TRACS' MySQL/MariaDB connection layer.
 RUN docker-php-ext-install mysqli
 
+# iputils-ping backs the Infrastructure Pulse real ICMP check (core/infrastructure_ping.php).
+# Matches /usr/bin/ping cap_net_raw=ep already present on the production VPS.
+RUN apt-get update && apt-get install -y --no-install-recommends iputils-ping \
+    && rm -rf /var/lib/apt/lists/*
+
 # Make Docker/Apache environment variables available through PHP $_ENV.
 RUN { \
     echo 'variables_order=EGPCS'; \

@@ -21,6 +21,7 @@ $RC=new ReminderController($conn,$uid);
 $CC=new CaseController($conn,$uid);
 $TC=new AlertTickerController($conn,$uid);
 $mom_installed=$MC->isInstalled();
+$mom_can_delete=tracs_user_can_delete_moms($conn,$uid);
 
 // Get MOM ID from URL, or start new. Invalid/direct-forbidden IDs are generic 404s.
 $mom_id = 0;
@@ -59,17 +60,14 @@ $weekly_suggestions=$mom_installed ? $MC->getWeeklySuggestions() : [];
 // Fetch all MOM meetings for list
 $all_moms=$mom_installed ? array_map([$MC,'formatMOM'],$MC->getMOMs()?:[]) : [];
 
-function mom_recent_history(array $mom): bool {
+function mom_is_history(array $mom): bool {
   $status = $mom['status'] ?? '';
-  if(!in_array($status, ['completed','cancelled'], true)) return false;
-  $checked_at = $mom['completed_at'] ?? $mom['cancelled_at'] ?? $mom['updated_at'] ?? null;
-  if(empty($checked_at)) return false;
-  return strtotime((string)$checked_at) >= strtotime('-24 hours');
+  return in_array($status, ['completed','cancelled'], true);
 }
 
 $upcoming_moms=array_values(array_filter($all_moms,fn($m)=>($m['status']??'')==='upcoming'));
 $ongoing_moms=array_values(array_filter($all_moms,fn($m)=>($m['status']??'')==='ongoing'));
-$history_moms=array_values(array_filter($all_moms,fn($m)=>mom_recent_history($m)));
+$history_moms=array_values(array_filter($all_moms,fn($m)=>mom_is_history($m)));
 $total_moms=count($upcoming_moms)+count($ongoing_moms)+count($history_moms);
 usort($ongoing_moms, fn($a,$b)=>strtotime($b['started_at']??$b['meeting_at']??$b['created_at']??'now')<=>strtotime($a['started_at']??$a['meeting_at']??$a['created_at']??'now'));
 usort($upcoming_moms, fn($a,$b)=>strtotime($a['meeting_at']??$a['created_at']??'now')<=>strtotime($b['meeting_at']??$b['created_at']??'now'));
@@ -121,15 +119,15 @@ include 'includes/header.php';
       </div>
       <div class="mom-header-actions">
         <?php if(!empty($mom_details['meeting_url'])): ?>
-        <a class="btn btn-ghost btn-icon" href="<?=esc($mom_details['meeting_url'])?>" target="_blank" rel="noopener noreferrer" title="Open Meeting URL"><i data-lucide="video" class="icon-sm"></i></a>
+        <a class="btn btn-ghost btn-icon" href="<?=esc($mom_details['meeting_url'])?>" target="_blank" rel="noopener noreferrer" title="Open Meeting URL" aria-label="Open meeting URL"><i data-lucide="video" class="icon-sm"></i></a>
         <?php endif; ?>
-        <button class="btn btn-ghost btn-icon" data-edit-mom-id="<?=$mom_id?>" data-objective="<?=esc($mom_details['objective']??'')?>" data-meeting-url="<?=esc($mom_details['meeting_url']??'')?>" data-participants="<?=esc($mom_details['participants']??'')?>" onclick="editMOMHeader(<?=$mom_id?>, '<?=esc(safe_dt_local($mom_details['meeting_at']??null))?>')" title="Edit Meeting"><i data-lucide="edit-2" class="icon-sm"></i></button>
+        <button class="btn btn-ghost btn-icon" data-edit-mom-id="<?=$mom_id?>" data-objective="<?=esc($mom_details['objective']??'')?>" data-meeting-url="<?=esc($mom_details['meeting_url']??'')?>" data-participants="<?=esc($mom_details['participants']??'')?>" onclick="editMOMHeader(<?=$mom_id?>, '<?=esc(safe_dt_local($mom_details['meeting_at']??null))?>')" title="Edit Meeting" aria-label="Edit meeting"><i data-lucide="edit-2" class="icon-sm"></i></button>
         <?php if(($mom_details['status']??'')==='upcoming'): ?>
-        <button class="btn btn-ghost btn-icon" onclick="cancelMOM(<?=$mom_id?>)" title="Cancel Meeting"><i data-lucide="ban" class="icon-sm"></i></button>
+        <button class="btn btn-ghost btn-icon" onclick="cancelMOM(<?=$mom_id?>)" title="Cancel Meeting" aria-label="Cancel meeting"><i data-lucide="ban" class="icon-sm"></i></button>
         <?php elseif(($mom_details['status']??'')==='ongoing'): ?>
         <button class="btn btn-primary btn-sm" onclick="closeMOM(<?=$mom_id?>)"><i data-lucide="check-circle-2" class="icon-sm"></i>Complete</button>
         <?php endif; ?>
-        <a href="mom.php" class="btn btn-ghost btn-icon" title="Back to List"><i data-lucide="arrow-left" class="icon-sm"></i></a>
+        <a href="mom.php" class="btn btn-ghost btn-icon" title="Back to List" aria-label="Back to meeting list"><i data-lucide="arrow-left" class="icon-sm"></i></a>
       </div>
     </div>
 
@@ -145,6 +143,7 @@ include 'includes/header.php';
     </div>
     <?php endif; ?>
 
+    <div class="mom-group-label">Overview</div>
     <!-- Objective Section -->
     <div class="mom-section">
       <div class="section-head">
@@ -156,6 +155,7 @@ include 'includes/header.php';
       </div>
     </div>
 
+    <div class="mom-group-label">Discussion</div>
     <div class="mom-section-row mom-agenda-discussion-row">
     <!-- Agenda Section -->
     <div class="mom-section">
@@ -174,14 +174,14 @@ include 'includes/header.php';
           $aidone=($aist==='completed');
         ?>
           <div class="agenda-item agenda-item-<?=$aist?>" data-agenda-id="<?=intval($ai['id']??0)?>">
-            <input type="checkbox" class="agenda-check" <?=$aidone?'checked':''?> onchange="toggleAgendaItem(<?=intval($ai['id']??0)?>,this.checked)">
+            <input type="checkbox" class="agenda-check" data-unsaved-ignore <?=$aidone?'checked':''?> onchange="toggleAgendaItem(<?=intval($ai['id']??0)?>,this.checked)">
             <div class="agenda-content">
               <div class="agenda-topic"><?=esc($ai['topic']??'')?></div>
               <?php if($ai['notes']??null): ?>
                 <div class="agenda-notes"><?=esc($ai['notes'])?></div>
               <?php endif; ?>
             </div>
-            <button class="btn btn-ghost btn-icon btn-sm mom-item-delete" onclick="deleteAgendaItem(<?=intval($ai['id']??0)?>)" title="Delete"><i data-lucide="x" class="icon-xs"></i></button>
+            <button class="btn btn-ghost btn-icon btn-sm mom-item-delete" onclick="deleteAgendaItem(<?=intval($ai['id']??0)?>)" title="Delete" aria-label="Delete agenda item"><i data-lucide="x" class="icon-xs"></i></button>
           </div>
         <?php endforeach; ?>
       </div>
@@ -214,7 +214,7 @@ include 'includes/header.php';
               <span class="note-type"><?=ucfirst($ntype)?></span>
               <span class="note-time"><?=safe_dt($n['created_at']??null,'H:i')?></span>
               <?=tracs_creator_meta($n, $n['created_at'] ?? null, false)?>
-              <button class="btn btn-ghost btn-icon btn-xs mom-item-delete" onclick="deleteNote(<?=$nid?>)" title="Delete"><i data-lucide="x" class="icon-xs"></i></button>
+              <button class="btn btn-ghost btn-icon btn-xs mom-item-delete" onclick="deleteNote(<?=$nid?>)" title="Delete" aria-label="Delete discussion note"><i data-lucide="x" class="icon-xs"></i></button>
             </div>
             <div class="note-text" onmouseup="handleTextSelection(this.parentElement.parentElement)"><?=nl2br(esc($n['content']??''))?></div>
           </div>
@@ -223,6 +223,7 @@ include 'includes/header.php';
     </div>
     </div>
 
+    <div class="mom-group-label">Outcomes</div>
     <!-- Decisions Section -->
     <div class="mom-section">
       <div class="section-head">
@@ -244,7 +245,7 @@ include 'includes/header.php';
           <div class="decision-card">
             <div class="decision-head">
               <strong><?=esc($d['decision']??'Decision')?></strong>
-              <button class="btn btn-ghost btn-icon btn-xs mom-item-delete" onclick="deleteDecision(<?=$did?>)" title="Delete"><i data-lucide="x" class="icon-xs"></i></button>
+              <button class="btn btn-ghost btn-icon btn-xs mom-item-delete" onclick="deleteDecision(<?=$did?>)" title="Delete" aria-label="Delete decision"><i data-lucide="x" class="icon-xs"></i></button>
             </div>
             <?php if($d['rationale']??null): ?>
               <div class="decision-rationale">
@@ -293,7 +294,7 @@ include 'includes/header.php';
           $adue=$a['due_date']??null;
         ?>
           <div class="action-item action-item-<?=$aprio?> action-item-<?=$astatus?>" data-aid="<?=$aid?>">
-            <input type="checkbox" class="action-check" <?=$adone?'checked':''?> onchange="completeAction(<?=$aid?>,this.checked)">
+            <input type="checkbox" class="action-check" data-unsaved-ignore <?=$adone?'checked':''?> onchange="completeAction(<?=$aid?>,this.checked)">
             <div class="action-content">
               <div class="action-title"><?=esc($a['title']??'Untitled')?></div>
               <?php if($a['description']??null): ?>
@@ -307,10 +308,10 @@ include 'includes/header.php';
               </div>
             </div>
             <div class="action-btns">
-              <button class="btn btn-ghost btn-icon btn-sm" onclick="createReminderFromAction(<?=$aid?>)" title="Create Reminder"><i data-lucide="bell" class="icon-sm"></i></button>
-              <button class="btn btn-ghost btn-icon btn-sm" onclick="createCaseFromAction(<?=$aid?>)" title="Create Case"><i data-lucide="briefcase" class="icon-sm"></i></button>
-              <button class="btn btn-ghost btn-icon btn-sm" onclick="editActionItem(<?=$aid?>)" title="Edit"><i data-lucide="edit-2" class="icon-sm"></i></button>
-              <button class="btn btn-ghost btn-icon btn-sm mom-item-delete" onclick="deleteActionItem(<?=$aid?>)" title="Delete"><i data-lucide="trash-2" class="icon-sm"></i></button>
+              <button class="btn btn-ghost btn-icon btn-sm" onclick="createReminderFromAction(<?=$aid?>)" title="Create Reminder" aria-label="Create reminder from action"><i data-lucide="bell" class="icon-sm"></i></button>
+              <button class="btn btn-ghost btn-icon btn-sm" onclick="createCaseFromAction(<?=$aid?>)" title="Create Case" aria-label="Create case from action"><i data-lucide="briefcase" class="icon-sm"></i></button>
+              <button class="btn btn-ghost btn-icon btn-sm" onclick="editActionItem(<?=$aid?>)" title="Edit" aria-label="Edit action item"><i data-lucide="edit-2" class="icon-sm"></i></button>
+              <button class="btn btn-ghost btn-icon btn-sm mom-item-delete" onclick="deleteActionItem(<?=$aid?>)" title="Delete" aria-label="Delete action item"><i data-lucide="trash-2" class="icon-sm"></i></button>
             </div>
           </div>
         <?php endforeach; ?>
@@ -326,7 +327,7 @@ include 'includes/header.php';
     <div class="mom-card" data-sidebar-edit="participants">
       <div class="card-head">
         <span class="card-title"><i data-lucide="users" class="icon-sm"></i>Participants</span>
-        <button class="btn btn-ghost btn-icon btn-sm" onclick="toggleMOMSidebarEdit('participants')" title="Edit Participants"><i data-lucide="edit-2" class="icon-sm"></i></button>
+        <button class="btn btn-ghost btn-icon btn-sm" onclick="toggleMOMSidebarEdit('participants')" title="Edit Participants" aria-label="Edit participants"><i data-lucide="edit-2" class="icon-sm"></i></button>
       </div>
       <div class="card-body">
         <div class="participant-list" id="momParticipantTags">
@@ -340,6 +341,36 @@ include 'includes/header.php';
         </div>
       </div>
     </div>
+
+    <?php if(($mom_details['status']??'')==='completed'): ?>
+    <div class="mom-card mom-screenshots-card" data-sidebar-edit="screenshots" data-mom-id="<?=$mom_id?>">
+      <div class="card-head">
+        <span class="card-title"><i data-lucide="image" class="icon-sm"></i>Screenshots</span>
+        <button class="btn btn-ghost btn-icon btn-sm" onclick="toggleMOMSidebarEdit('screenshots')" title="Edit Screenshots" aria-label="Edit screenshots"><i data-lucide="edit-2" class="icon-sm"></i></button>
+      </div>
+      <div class="card-body">
+        <div class="mom-sidebar-edit mom-shot-editbar">
+          <label class="btn btn-ghost btn-sm" title="Click, drop, or paste an image">
+            <i data-lucide="image-plus" class="icon-sm"></i>Add
+            <input type="file" accept="image/*" multiple style="display:none" data-unsaved-ignore onchange="uploadMOMScreenshot(<?=$mom_id?>, this)">
+          </label>
+          <button class="btn btn-primary btn-sm" onclick="saveMOMSidebarScreenshots(<?=$mom_id?>)">Save</button>
+        </div>
+        <div class="mom-shot-list">
+        <?php if(empty($screenshots)): ?>
+          <p class="empty-text">No screenshots uploaded</p>
+        <?php else: foreach($screenshots as $shot): ?>
+          <div class="mom-shot-item" data-shot-id="<?=intval($shot['id']??0)?>">
+            <button class="mom-shot-link" type="button" data-mom-screenshot-src="/api/mom-screenshot.php?id=<?=esc((string)($shot['id']??0))?>" onclick="openMOMScreenshotLightbox(this)" title="Open screenshot">
+              <img class="mom-shot-thumb" src="/api/mom-screenshot.php?id=<?=esc((string)($shot['id']??0))?>" alt="MOM screenshot">
+            </button>
+            <button class="btn btn-danger btn-icon btn-xs mom-shot-remove mom-sidebar-edit" onclick="markMOMScreenshotForRemoval(this)" title="Delete Screenshot" aria-label="Delete screenshot"><i data-lucide="trash-2" class="icon-xs"></i></button>
+          </div>
+        <?php endforeach; endif; ?>
+        </div>
+      </div>
+    </div>
+    <?php endif; ?>
 
     <!-- Related Reminders -->
     <div class="mom-card">
@@ -360,17 +391,17 @@ include 'includes/header.php';
               <div class="reminder-title"><?=esc($r['title']??'')?></div>
               <div class="reminder-due"><?=safe_dt($r['due_date']??null,'d M, H:i')?></div>
             </div>
-            <button class="btn btn-ghost btn-icon btn-xs" onclick="openEditReminder(<?=intval($r['id']??0)?>)" title="Edit"><i data-lucide="edit-2" class="icon-xs"></i></button>
+            <button class="btn btn-ghost btn-icon btn-xs" onclick="openEditReminder(<?=intval($r['id']??0)?>)" title="Edit" aria-label="Edit reminder"><i data-lucide="edit-2" class="icon-xs"></i></button>
           </div>
         <?php endforeach; endif; ?>
       </div>
     </div>
 
     <!-- Related Cases -->
-    <div class="mom-card" data-sidebar-edit="cases">
+    <div class="mom-card" data-sidebar-edit="cases" data-mom-id="<?=$mom_id?>">
       <div class="card-head">
         <span class="card-title"><i data-lucide="briefcase" class="icon-sm"></i>Linked Cases</span>
-        <button class="btn btn-ghost btn-icon btn-sm" onclick="toggleMOMSidebarEdit('cases')" title="Edit Linked Cases"><i data-lucide="edit-2" class="icon-sm"></i></button>
+        <button class="btn btn-ghost btn-icon btn-sm" onclick="toggleMOMSidebarEdit('cases')" title="Edit Linked Cases" aria-label="Edit linked cases"><i data-lucide="edit-2" class="icon-sm"></i></button>
       </div>
       <div class="card-body mom-cases-list">
         <div class="mom-inline-form mom-sidebar-inline mom-sidebar-edit">
@@ -404,8 +435,8 @@ include 'includes/header.php';
             </div>
             <?php endif; ?>
             <div class="case-actions">
-              <button class="btn btn-danger btn-icon btn-xs mom-sidebar-edit" onclick="markMOMCaseForRemoval(this)" title="Remove Link"><i data-lucide="x" class="icon-xs"></i></button>
-              <a href="cases.php?action=edit&id=<?=intval($c['id']??0)?>" class="btn btn-ghost btn-icon btn-xs" title="View"><i data-lucide="external-link" class="icon-xs"></i></a>
+              <button class="btn btn-danger btn-icon btn-xs mom-sidebar-edit" onclick="markMOMCaseForRemoval(this)" title="Remove Link" aria-label="Remove linked case"><i data-lucide="x" class="icon-xs"></i></button>
+              <a href="cases.php?action=edit&id=<?=intval($c['id']??0)?>" class="btn btn-ghost btn-icon btn-xs" title="View" aria-label="View case"><i data-lucide="external-link" class="icon-xs"></i></a>
             </div>
           </div>
         <?php endforeach; endif; ?>
@@ -418,7 +449,7 @@ include 'includes/header.php';
         <span class="card-title"><i data-lucide="zap" class="icon-sm"></i>Actions</span>
       </div>
       <div class="card-body">
-        <?php 
+        <?php
           $total_actions=count($actions);
           $done_actions=count(array_filter($actions??[],fn($a)=>($a['status']??'')==='completed'));
           $pct_done=$total_actions>0?round($done_actions/$total_actions*100):0;
@@ -427,10 +458,10 @@ include 'includes/header.php';
           <div class="progress-fill" style="width:<?=$pct_done?>%"></div>
         </div>
         <div class="progress-text"><?=$done_actions?>/<?=$total_actions?> completed</div>
-        
+
         <?php if(!empty($actions)): ?>
           <div class="action-quick-list">
-            <?php foreach(array_slice($actions,0,3) as $a): 
+            <?php foreach(array_slice($actions,0,3) as $a):
               $astatus=$a['status']??'pending';
               $adone=($astatus==='completed');
             ?>
@@ -445,36 +476,6 @@ include 'includes/header.php';
         <?php endif; ?>
       </div>
     </div>
-
-    <?php if(($mom_details['status']??'')==='completed'): ?>
-    <div class="mom-card mom-screenshots-card" data-sidebar-edit="screenshots">
-      <div class="card-head">
-        <span class="card-title"><i data-lucide="image" class="icon-sm"></i>Screenshots</span>
-        <button class="btn btn-ghost btn-icon btn-sm" onclick="toggleMOMSidebarEdit('screenshots')" title="Edit Screenshots"><i data-lucide="edit-2" class="icon-sm"></i></button>
-      </div>
-      <div class="card-body">
-        <div class="mom-sidebar-edit mom-shot-editbar">
-          <label class="btn btn-ghost btn-sm">
-            <i data-lucide="image-plus" class="icon-sm"></i>Add
-            <input type="file" accept="image/*" style="display:none" onchange="uploadMOMScreenshot(<?=$mom_id?>, this)">
-          </label>
-          <button class="btn btn-primary btn-sm" onclick="saveMOMSidebarScreenshots(<?=$mom_id?>)">Save</button>
-        </div>
-        <div class="mom-shot-list">
-        <?php if(empty($screenshots)): ?>
-          <p class="empty-text">No screenshots uploaded</p>
-        <?php else: foreach($screenshots as $shot): ?>
-          <div class="mom-shot-item" data-shot-id="<?=intval($shot['id']??0)?>">
-            <button class="mom-shot-link" type="button" data-mom-screenshot-src="/api/mom-screenshot.php?id=<?=esc((string)($shot['id']??0))?>" onclick="openMOMScreenshotLightbox(this)" title="Open screenshot">
-              <img class="mom-shot-thumb" src="/api/mom-screenshot.php?id=<?=esc((string)($shot['id']??0))?>" alt="MOM screenshot">
-            </button>
-            <button class="btn btn-danger btn-icon btn-xs mom-shot-remove mom-sidebar-edit" onclick="markMOMScreenshotForRemoval(this)" title="Delete Screenshot"><i data-lucide="trash-2" class="icon-xs"></i></button>
-          </div>
-        <?php endforeach; endif; ?>
-        </div>
-      </div>
-    </div>
-    <?php endif; ?>
 
     <!-- Operational Insights -->
     <div class="mom-card">
@@ -497,6 +498,36 @@ include 'includes/header.php';
       </div>
     </div>
 
+    <!-- Meeting Timeline -->
+    <div class="mom-card">
+      <div class="card-head">
+        <span class="card-title"><i data-lucide="history" class="icon-sm"></i>Timeline</span>
+      </div>
+      <div class="card-body">
+        <?php
+          $mstat=$mom_details['status']??'upcoming';
+          $tsteps=[
+            ['label'=>'Created','time'=>$mom_details['created_at']??null,'done'=>true],
+            ['label'=>'Started','time'=>$mom_details['started_at']??null,'done'=>!empty($mom_details['started_at'])],
+          ];
+          if($mstat==='cancelled'){
+            $tsteps[]=['label'=>'Cancelled','time'=>$mom_details['cancelled_at']??null,'done'=>true];
+          }else{
+            $tsteps[]=['label'=>'Completed','time'=>$mom_details['completed_at']??null,'done'=>!empty($mom_details['completed_at'])];
+          }
+        ?>
+        <div class="mom-timeline">
+          <?php foreach($tsteps as $ts): ?>
+          <div class="mom-timeline-step<?=$ts['done']?' is-done':''?>">
+            <span class="mom-timeline-dot"></span>
+            <span class="mom-timeline-label"><?=esc($ts['label'])?></span>
+            <span class="mom-timeline-time"><?=$ts['time']?safe_dt($ts['time'],'d M, H:i'):'—'?></span>
+          </div>
+          <?php endforeach; ?>
+        </div>
+      </div>
+    </div>
+
   </aside><!-- /mom-sidebar -->
 
 </div><!-- /mom-workspace -->
@@ -507,19 +538,11 @@ include 'includes/header.php';
      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
 
 <div class="topbar">
-  <div><div class="page-title">Minutes of Meeting</div><div class="page-sub"><?=$total_moms?> total · <?=count($upcoming_moms)?> upcoming · <?=count($ongoing_moms)?> ongoing</div></div>
-</div>
-
-<div class="stat-strip">
-  <div class="stat-card blue"><div class="stat-glow"></div><div class="stat-num"><?=$total_moms?></div><div class="stat-label">Total Meetings</div></div>
-  <div class="stat-card cyan"><div class="stat-glow"></div><div class="stat-num"><?=count($upcoming_moms)?></div><div class="stat-label">Upcoming</div></div>
-  <div class="stat-card green"><div class="stat-glow"></div><div class="stat-num"><?=count($ongoing_moms)?></div><div class="stat-label">Ongoing</div></div>
-  <div class="stat-card <?php $w=count(array_filter($all_moms,fn($m)=>($m['type']??'')==='weekly'));echo $w>0?'purple':'green'?>" ><div class="stat-glow"></div><div class="stat-num"><?=count($history_moms)?></div><div class="stat-label">History</div></div>
-  <div class="stat-card amber"><div class="stat-glow"></div><div class="stat-num"><?=count(array_filter($all_moms,fn($m)=>($m['type']??'')==='urgent'))?></div><div class="stat-label">Urgent</div></div>
+  <div><div class="page-title">Minutes of Meeting</div><div class="page-sub" id="momTopbarSub"><?=$total_moms?> total · <?=count($upcoming_moms)?> upcoming · <?=count($ongoing_moms)?> ongoing</div></div>
 </div>
 
 <?php
-function render_mom_table($items, $MC, $mode='upcoming') {
+function render_mom_table($items, $MC, $mode='upcoming', $canDelete=false) {
   if(empty($items)) {
     echo '<div class="empty"><div class="empty-ic"><i data-lucide="clipboard-list"></i></div><div class="empty-t">No meetings here</div><div class="empty-s">Operational meetings will appear automatically by lifecycle status.</div></div>';
     return;
@@ -540,11 +563,11 @@ function render_mom_table($items, $MC, $mode='upcoming') {
     return compact('participants', 'agenda', 'notes', 'decisions', 'actions', 'cases', 'screenshots', 'objective', 'summary', 'meeting_url');
   };
 
-  $render_preview = function($mid, $preview) use ($mode) {
+  $render_preview = function($mid, $preview) use ($mode, $canDelete) {
     if(!$preview) return;
 ?>
     <tr class="mom-preview-row mom-preview-surface hidden" id="momPreview<?=$mid?>" data-mom-preview-row data-preview-for="<?=$mid?>">
-      <td colspan="<?= ($mode === 'history') ? 6 : 8 ?>">
+      <td colspan="6">
         <div class="mom-preview-inner">
         <div class="mom-preview-panel">
           <div class="mom-preview-block mom-preview-summary">
@@ -575,16 +598,25 @@ function render_mom_table($items, $MC, $mode='upcoming') {
             <div class="mom-preview-empty">-</div>
             <?php endif; ?>
           </div>
-          <div class="mom-preview-block mom-preview-discussion">
+          <div class="mom-preview-block mom-preview-wide mom-preview-discussion">
             <div class="mom-preview-label">Discussion</div>
-            <div class="mom-preview-list">
+            <div class="mom-preview-notes">
               <?php if(empty($preview['notes'])): ?>
               <div class="mom-preview-empty">-</div>
               <?php else: ?>
-              <?php foreach(array_slice($preview['notes'], 0, 4) as $note): ?>
-              <div class="mom-preview-item">
+              <?php foreach(array_slice($preview['notes'], 0, 4) as $note):
+                $ncontent = (string)($note['content'] ?? '');
+                $nlong = strlen($ncontent) > 220;
+                $nid = 'momPreviewNote' . $mid . '_' . (int)($note['id'] ?? mt_rand());
+              ?>
+              <div class="mom-preview-note">
                 <span class="mom-preview-pill"><?=esc(ucfirst($note['note_type'] ?? 'Discussion'))?></span>
-                <span><?=esc($note['content'] ?? '')?></span>
+                <div class="mom-preview-note-body">
+                  <div class="mom-preview-note-text<?=$nlong?' is-clamped':''?>" id="<?=$nid?>"><?=nl2br(esc($ncontent))?></div>
+                  <?php if($nlong): ?>
+                  <button type="button" class="mom-preview-note-toggle" onclick="toggleMOMPreviewNote('<?=$nid?>', this)">Show more</button>
+                  <?php endif; ?>
+                </div>
               </div>
               <?php endforeach; ?>
               <?php endif; ?>
@@ -655,6 +687,11 @@ function render_mom_table($items, $MC, $mode='upcoming') {
             </div>
             <?php endif; ?>
           </div>
+          <?php if($canDelete): ?>
+          <div class="mom-preview-block mom-preview-wide mom-preview-footer">
+            <button type="button" class="btn btn-danger btn-sm mom-preview-delete-btn" onclick="deleteMOM(<?=$mid?>, this)"><i data-lucide="trash-2" class="icon-sm"></i>Delete Meeting</button>
+          </div>
+          <?php endif; ?>
         </div><!-- /mom-preview-panel -->
         </div><!-- /mom-preview-inner -->
       </td>
@@ -694,7 +731,6 @@ function render_mom_table($items, $MC, $mode='upcoming') {
         <a href="?mom_id=<?=$mid?>" class="btn btn-ghost btn-sm mom-schedule-open">View</a>
         <?php endif; ?>
         <a href="?mom_id=<?=$mid?>" class="btn btn-ghost btn-icon" title="View MOM" aria-label="View MOM"><i data-lucide="external-link" class="icon-sm"></i></a>
-        <?php if($mstat!=='completed'): ?><button class="btn btn-ghost btn-icon mom-schedule-delete" onclick="deleteMOM(<?=$mid?>)" title="Delete"><i data-lucide="trash-2" class="icon-sm"></i></button><?php endif; ?>
       </div>
     </div>
     <?php endforeach; ?>
@@ -742,7 +778,7 @@ function render_mom_table($items, $MC, $mode='upcoming') {
 	          $mparts_short=strlen($mparts)>30?substr($mparts,0,27).'…':$mparts;
 	          $msearch=esc(strtolower(trim($mid.' '.($m['title']??'').' '.$mtype.' '.$mstat.' '.$mparts.' '.($m['objective']??''))));
 	        ?>
-	          <tr data-mid="<?=$mid?>" data-meeting-at="<?=esc($mlocal)?>" <?=$mode==='history'?'data-mom-history-row data-mom-search="'.$msearch.'"':''?>>
+	          <tr data-mid="<?=$mid?>" data-mom-type="<?=esc($mtype)?>" data-meeting-at="<?=esc($mlocal)?>" <?=$mode==='history'?'data-mom-history-row data-mom-search="'.$msearch.'"':''?>>
             <?php if($mode !== 'history'): ?><td class="tracs-rownum"><?=$mid?></td><?php endif; ?>
             <td class="mom-table-title-cell">
               <div class="mom-table-title" title="<?=$mtitle?>"><?=$mtitle?></div>
@@ -769,7 +805,6 @@ function render_mom_table($items, $MC, $mode='upcoming') {
                 <summary class="btn btn-ghost btn-icon" title="Actions" aria-label="Row actions"><i data-lucide="edit-2" class="icon-sm"></i></summary>
                 <div class="row-action-popover">
                   <a class="btn btn-ghost btn-sm" href="?mom_id=<?=$mid?>">Open MOM</a>
-                  <button class="btn btn-danger btn-sm" type="button" onclick="deleteMOM(<?=$mid?>)">Delete</button>
                 </div>
               </details>
               <?php endif; ?>
@@ -789,7 +824,7 @@ function render_mom_table($items, $MC, $mode='upcoming') {
 		      <div class="mom-history-title">
 		        <span class="panel-title">Meeting History</span>
 		      </div>
-		      <span class="panel-meta mom-history-count"><?=count($history_moms)?> completed/cancelled</span>
+		      <span class="panel-meta mom-history-count" id="momHistoryCount"><?=count($history_moms)?> completed/cancelled</span>
 		      <div class="search-wrap mom-history-search">
 		        <i data-lucide="search"></i>
 		        <input class="search-input" type="search" placeholder="Search meeting title, participant, decision, or action" oninput="filterMOMHistory(this.value);document.getElementById('momExportQ').value=this.value">
@@ -813,9 +848,9 @@ function render_mom_table($items, $MC, $mode='upcoming') {
 		      </details>
 		      <button class="btn btn-primary toolbar-add-btn" onclick="openNewMOM()"><i data-lucide="plus-circle" class="icon-sm"></i>Add New Meeting</button>
 		    </div>
-	    <?php render_mom_table($history_moms, $MC, 'history'); ?>
+	    <?php render_mom_table($history_moms, $MC, 'history', $mom_can_delete); ?>
 	  </div>
-	
+
 	  <div class="mom-side-stack">
 	    <div class="panel mom-queue-panel">
 	      <div class="panel-head">
@@ -824,7 +859,18 @@ function render_mom_table($items, $MC, $mode='upcoming') {
 	      </div>
 	      <?php render_mom_table($queue_moms, $MC, 'queue'); ?>
 	    </div>
-	
+
+	    <div class="tm-cluster mom-kpi-strip">
+	      <div class="tm-cluster-head">Meetings</div>
+	      <div class="tm-cluster-body">
+	        <div class="tm-kpi"><span>Total</span><strong id="momKpiTotal"><?=$total_moms?></strong></div>
+	        <div class="tm-kpi"><span>Upcoming</span><strong><?=count($upcoming_moms)?></strong></div>
+	        <div class="tm-kpi"><span>Ongoing</span><strong><?=count($ongoing_moms)?></strong></div>
+	        <div class="tm-kpi"><span>History</span><strong id="momKpiHistory"><?=count($history_moms)?></strong></div>
+	        <div class="tm-kpi"><span>Urgent</span><strong id="momKpiUrgent"><?=count(array_filter($all_moms,fn($m)=>($m['type']??'')==='urgent'))?></strong></div>
+	      </div>
+	    </div>
+
 	    <?php if($mom_id===0 && count($weekly_suggestions)>0): ?>
 	    <div class="panel">
 	      <div class="panel-head"><span class="panel-title">Suggested for Weekly Meeting</span><span class="panel-meta"><?=count($weekly_suggestions)?> items</span></div>
