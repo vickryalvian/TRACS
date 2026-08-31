@@ -597,7 +597,8 @@
 .abuse-status-chip,
 .abuse-clock-badge,
 .abuse-assignee,
-.abuse-advance-btn {
+.abuse-advance-btn,
+.abuse-card-delete {
   display: inline-flex;
   align-items: center;
   min-width: 0;
@@ -706,6 +707,25 @@
 .abuse-advance-btn:hover {
   border-color: color-mix(in srgb, var(--accent) 58%, var(--bd1));
   background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.abuse-card-delete {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: var(--r1);
+  color: var(--tx3);
+  background: transparent;
+  cursor: pointer;
+}
+
+.abuse-card-delete:hover,
+.abuse-card-delete:focus-visible {
+  color: var(--red);
+  border-color: color-mix(in srgb, var(--red) 30%, var(--bd1));
+  background: color-mix(in srgb, var(--red) 8%, transparent);
 }
 
 .abuse-empty-column {
@@ -933,7 +953,8 @@
   gap: 6px;
 }
 
-.abuse-list-edit-toggle {
+.abuse-list-edit-toggle,
+.abuse-list-delete-toggle {
   width: 30px;
   height: 30px;
   display: inline-grid;
@@ -947,10 +968,19 @@
 }
 
 .abuse-list-edit-toggle:hover,
-.abuse-list-edit-toggle[aria-expanded="true"] {
+.abuse-list-edit-toggle[aria-expanded="true"],
+.abuse-list-delete-toggle:hover,
+.abuse-list-delete-toggle:focus-visible {
   color: var(--tx1);
   border-color: var(--bd2);
   background: var(--s3);
+}
+
+.abuse-list-delete-toggle:hover,
+.abuse-list-delete-toggle:focus-visible {
+  color: var(--red);
+  border-color: color-mix(in srgb, var(--red) 30%, var(--bd1));
+  background: color-mix(in srgb, var(--red) 8%, transparent);
 }
 
 .abuse-list-edit-row td {

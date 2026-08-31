@@ -329,6 +329,15 @@
       </button>`;
   }
 
+  function renderDeleteButton(report, className = 'abuse-delete-item') {
+    if (!state.canDelete) return '';
+    const ref = report.report_number || `#${report.id}`;
+    return `
+      <button type="button" class="${esc(className)}" data-abuse-delete="${report.id}" title="Delete ${esc(ref)}" aria-label="Delete ${esc(ref)}">
+        <i data-lucide="trash-2" class="icon-sm"></i>
+      </button>`;
+  }
+
   function renderUrgencyBadge(report) {
     if (!isUrgent(report)) return '';
     return `<span class="abuse-clock-badge"><i data-lucide="clock-3" class="icon-sm"></i>${esc(urgencyText(report))}</span>`;
@@ -367,6 +376,7 @@
           ${tags ? `<div class="abuse-card-tags">${tags}</div>` : ''}
           <div class="abuse-card-footer">
             <span class="abuse-card-footer-meta">${Number(report.evidence_count || 0)} evidence · ${esc(eventLabel(report.last_activity_type || 'received'))}</span>
+            ${renderDeleteButton(report, 'abuse-card-delete')}
             ${renderAdvanceButton(report)}
           </div>
         </div>
@@ -478,7 +488,7 @@
             ? renderListSelect(report, 'reporter', 'Reporter', report.reporter || 'Unknown reporter', reporterOptions(String(report.reporter || '').trim()), report.reporter ? '' : 'is-muted')
             : `<span class="${report.reporter ? '' : 'abuse-list-muted'}">${esc(report.reporter || 'Unknown reporter')}</span>`}</td>
           <td>${Number(report.evidence_count || 0)}</td>
-          <td><div class="abuse-list-actions">${state.canManage ? `<button type="button" class="abuse-list-edit-toggle" data-abuse-list-edit="${report.id}" aria-expanded="false" title="Edit report details" aria-label="Edit report details"><i data-lucide="pencil" class="icon-sm"></i></button>` : ''}</div></td>
+          <td><div class="abuse-list-actions">${state.canManage ? `<button type="button" class="abuse-list-edit-toggle" data-abuse-list-edit="${report.id}" aria-expanded="false" title="Edit report details" aria-label="Edit report details"><i data-lucide="pencil" class="icon-sm"></i></button>` : ''}${renderDeleteButton(report, 'abuse-list-delete-toggle')}</div></td>
         </tr>${state.canManage ? renderListEditor(report) : ''}`;
     }).join('') : '<tr><td colspan="8"><div class="abuse-empty-column">No reports match the current filters</div></td></tr>';
     $$('[data-abuse-sort]', root).forEach(button => {
@@ -983,11 +993,13 @@
     }
   }
 
-  async function deleteReport() {
-    const id = toId($('#abuseReportId')?.value);
+  async function deleteReport(id = 0, trigger = null) {
+    id = toId(id) || toId($('#abuseReportId')?.value);
     if (!id || !state.canDelete) return;
-    const ref = state.detail?.report_number || `#${id}`;
-    const dirty = window.TRACSUnsavedChanges?.isDirty($('#abuseDetailModal'));
+    const report = state.reports.find(item => item.id === id) || (state.detail?.id === id ? state.detail : null);
+    const ref = report?.report_number || `#${id}`;
+    const deletingOpenDetail = state.detail?.id === id || toId($('#abuseReportId')?.value) === id;
+    const dirty = deletingOpenDetail && window.TRACSUnsavedChanges?.isDirty($('#abuseDetailModal'));
     const confirmed = await window.tracsConfirm?.({
       type: 'warning',
       title: 'Delete abuse report',
@@ -996,15 +1008,17 @@
       destructive: true,
     });
     if (!confirmed) return;
-    const button = $('#abuseDeleteRecord');
+    const button = trigger || $('#abuseDeleteRecord');
     button?.setAttribute('disabled', '');
     try {
       await jsonPost(apiUrls.delete, { id });
       state.reports = state.reports.filter(report => report.id !== id);
-      state.detail = null;
-      state.selectedId = 0;
-      markDetailSaved($('#abuseDetailModal'));
-      setDetailVisible(false);
+      if (deletingOpenDetail) {
+        state.detail = null;
+        state.selectedId = 0;
+        markDetailSaved($('#abuseDetailModal'));
+        setDetailVisible(false);
+      }
       renderBoard();
       notify(`${ref} deleted.`, 'success');
     } catch (error) {
@@ -1298,6 +1312,14 @@
       showOptionalField(addField.dataset.abuseAddField);
       return;
     }
+    const deleteItem = event.target.closest('[data-abuse-delete]');
+    if (deleteItem) {
+      event.preventDefault();
+      event.stopPropagation();
+      cancelScheduledPreview();
+      deleteReport(toId(deleteItem.dataset.abuseDelete), deleteItem);
+      return;
+    }
     const listEdit = event.target.closest('[data-abuse-list-edit]');
     if (listEdit) {
       toggleListEditor(toId(listEdit.dataset.abuseListEdit));
@@ -1405,7 +1427,7 @@
       return;
     }
     if (event.target.closest('#abuseDeleteRecord')) {
-      deleteReport();
+      deleteReport(0, event.target.closest('#abuseDeleteRecord'));
     }
   });
 

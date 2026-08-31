@@ -80,6 +80,10 @@ abuse_flow_assert(
 );
 abuse_flow_assert(
     str_contains($page, 'id="abuseDeleteRecord"')
+        && str_contains($script, 'data-abuse-delete="${report.id}"')
+        && str_contains($script, "deleteReport(toId(deleteItem.dataset.abuseDelete), deleteItem)")
+        && str_contains($style, '.abuse-card-delete')
+        && str_contains($style, '.abuse-list-delete-toggle')
         && str_contains($bootstrap, "'abuse-report-delete.php' => ['POST']")
         && str_contains($endpoint, 'tracs_user_can_delete_abuse_reports')
         && str_contains($access, 'return tracs_is_supervisor_or_above($conn, $userId);')
