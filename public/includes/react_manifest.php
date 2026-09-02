@@ -12,6 +12,7 @@ function tracs_react_manifest_assets(
     $entries = [
         'shiftAssignment' => 'src/modules/shift-assignment/main.jsx',
         'clients' => 'src/modules/clients/main.jsx',
+        'branchNetwork' => 'src/modules/branch-network/main.jsx',
     ];
     $entryKey = $entries[$entryName] ?? '';
     $manifestPath ??= __DIR__ . '/../assets/react-dist/.vite/manifest.json';

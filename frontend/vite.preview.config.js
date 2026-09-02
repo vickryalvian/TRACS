@@ -19,6 +19,7 @@ export default defineConfig({
       input: {
         shiftAssignment: fromFrontendRoot('./src/modules/shift-assignment/main.jsx'),
         clients: fromFrontendRoot('./src/modules/clients/main.jsx'),
+        branchNetwork: fromFrontendRoot('./src/modules/branch-network/main.jsx'),
       },
     },
   },
