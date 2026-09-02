@@ -17,8 +17,8 @@ $_can_um = false;
 $_can_monitoring = false;
 $_can_dpc = false;
 $_can_abuse_reports = false;
-$_can_shifts = false;
 $_can_clients = false;
+$_can_shifts = false;
 $_can_finance = true;
 $_can_domains = true;
 $_can_checklist = true;
@@ -35,8 +35,8 @@ if (isset($conn) && $conn instanceof mysqli && !empty($_SESSION['user_id'])) {
   $_can_monitoring = tracs_user_can($conn, 'tasks.view_own') || tracs_user_can($conn, 'tasks.monitor');
   $_can_dpc = tracs_user_can($conn, 'domain_price.view');
   $_can_abuse_reports = tracs_user_can($conn, 'abuse_reports.view');
-  $_can_shifts = tracs_user_can($conn, 'shifts.view');
   $_can_clients = tracs_user_can($conn, 'clients.view');
+  $_can_shifts = tracs_user_can($conn, 'shifts.view');
   $_can_finance = tracs_user_can($conn, 'finance.view');
   $_can_domains = tracs_user_can($conn, 'domains.view');
   $_can_checklist = tracs_user_can($conn, 'checklist.view');
@@ -174,7 +174,7 @@ $_show_admin_group = $_can_um || in_array((string)($_header_user['role_slug'] ??
 <?php if(in_array(($active_page??''), ['dashboard','infrastructure-pulse'], true)): $_infra_css_v = @filemtime(__DIR__.'/../assets/infrastructure-pulse.css') ?: time(); ?>
 <link rel="stylesheet" href="assets/infrastructure-pulse.css?v=<?=$_infra_css_v?>">
 <?php endif; ?>
-<?php if(($active_page??'') === 'infrastructure-configurator'): ?>
+<?php if(($active_page??'') === 'configurator'): ?>
 <link rel="stylesheet" href="assets/infrastructure-configurator.css?v=<?=$_infra_configurator_css_v?>">
 <?php endif; ?>
 <?php if(($active_page??'') === 'domain_price_crosscheck'): $_dpc_css_v = @filemtime(__DIR__.'/../assets/domain-price-crosscheck.css') ?: time(); ?>
@@ -300,12 +300,12 @@ window.TRACS_BUILD_INFO = <?=json_encode($_tracs_build_info, JSON_UNESCAPED_SLAS
           <i data-lucide="star" class="icon-xs"></i>
         </button>
       </div>
-      <div class="nav-item-wrap" data-nav-key="infra-configurator">
-        <a href="infrastructure-configurator.php" class="nav-item <?=$active_page==='infrastructure-configurator'?'active':''?>">
+      <div class="nav-item-wrap" data-nav-key="configurator">
+        <a href="configurator.php" class="nav-item <?=$active_page==='configurator'?'active':''?>">
           <span class="nav-icon"><i data-lucide="server-cog" class="icon-md"></i></span>
-          <span class="nav-label">Infrastructure Configurator</span>
+          <span class="nav-label">Configurator</span>
         </a>
-        <button type="button" class="nav-pin" data-pin-toggle data-pin-key="infra-configurator" data-pin-label="Infrastructure Configurator" data-pin-href="infrastructure-configurator.php" data-pin-icon="server-cog" aria-label="Pin Infrastructure Configurator to favorites" aria-pressed="false" title="Pin to favorites">
+        <button type="button" class="nav-pin" data-pin-toggle data-pin-key="configurator" data-pin-label="Configurator" data-pin-href="configurator.php" data-pin-icon="server-cog" aria-label="Pin Configurator to favorites" aria-pressed="false" title="Pin to favorites">
           <i data-lucide="star" class="icon-xs"></i>
         </button>
       </div>

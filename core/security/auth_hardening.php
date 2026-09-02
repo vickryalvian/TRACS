@@ -575,7 +575,7 @@ function tracs_two_factor_otpauth_uri(array $user, string $secret): string {
 
 function tracs_auth_allowed_landing(string $landing): string {
     $landing = ltrim($landing, '/');
-    $allowed = ['index.php', 'cases.php', 'clients.php', 'client-detail.php', 'reminders.php', 'checklist.php', 'shift-reports.php', 'mom.php', 'activity.php', 'tasks.php', 'monitoring.php', 'domain-transfer.php', 'finance.php', 'infrastructure-configurator.php'];
+    $allowed = ['index.php', 'cases.php', 'clients.php', 'client-detail.php', 'reminders.php', 'checklist.php', 'shift-reports.php', 'mom.php', 'activity.php', 'tasks.php', 'monitoring.php', 'domain-transfer.php', 'finance.php', 'configurator.php'];
     return in_array($landing, $allowed, true) ? $landing : 'index.php';
 }
 
@@ -613,7 +613,7 @@ function tracs_auth_landing_permission(string $landing): string {
         'monitoring.php'      => 'tasks.view_own',
         'domain-transfer.php' => 'domains.view',
         'finance.php'         => 'finance.view',
-        'infrastructure-configurator.php' => 'dashboard.view',
+        'configurator.php' => 'dashboard.view',
     ][$landing] ?? 'dashboard.view';
 }
 

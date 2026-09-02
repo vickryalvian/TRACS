@@ -14,6 +14,22 @@
   font-size: 11px;
 }
 
+.clients-stat-strip {
+  overflow: hidden;
+}
+
+.client-stat-cell {
+  position: relative;
+}
+
+.clients-money-start {
+  border-inline-start: 0;
+}
+
+.clients-more-filters {
+  min-width: 0;
+}
+
 .client-row {
   color: var(--tx1);
   transition: background-color 120ms var(--ease);
@@ -43,5 +59,11 @@
 
   .clients-react-shell :where(input, select, textarea) {
     font-size: 16px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .clients-money-start {
+    border-inline-start: 1px solid var(--bd1);
   }
 }

@@ -1,34 +1,34 @@
 {
-  "_Card-BeH-KnkM.js": {
-    "file": "assets/Card-BeH-KnkM.js",
+  "_Card-BapgUEHk.js": {
+    "file": "assets/Card-BapgUEHk.js",
     "name": "Card",
     "css": [
-      "assets/Card-CKoa4D5B.css"
+      "assets/Card-mx__IpGc.css"
     ]
   },
-  "_Card-CKoa4D5B.css": {
-    "file": "assets/Card-CKoa4D5B.css",
-    "src": "_Card-CKoa4D5B.css"
+  "_Card-mx__IpGc.css": {
+    "file": "assets/Card-mx__IpGc.css",
+    "src": "_Card-mx__IpGc.css"
   },
   "src/modules/clients/main.jsx": {
-    "file": "assets/clients-D_72ktLZ.js",
+    "file": "assets/clients-B9LDD8Us.js",
     "name": "clients",
     "src": "src/modules/clients/main.jsx",
     "isEntry": true,
     "imports": [
-      "_Card-BeH-KnkM.js"
+      "_Card-BapgUEHk.js"
     ],
     "css": [
-      "assets/clients-BMMaas6V.css"
+      "assets/clients-CuvUFCgm.css"
     ]
   },
   "src/modules/shift-assignment/main.jsx": {
-    "file": "assets/shiftAssignment-BAC6qICw.js",
+    "file": "assets/shiftAssignment-CDGgpWEv.js",
     "name": "shiftAssignment",
     "src": "src/modules/shift-assignment/main.jsx",
     "isEntry": true,
     "imports": [
-      "_Card-BeH-KnkM.js"
+      "_Card-BapgUEHk.js"
     ],
     "css": [
       "assets/shiftAssignment-CZzW7jaW.css"

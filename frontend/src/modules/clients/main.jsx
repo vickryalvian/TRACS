@@ -292,6 +292,76 @@ function Rows({ rows = [], empty, render }) {
   return <div className="clients-table-scroll tr:overflow-x-auto"><table className="tr:w-full tr:min-w-[680px] tr:text-left tr:text-sm"><tbody>{rows.map((row) => <tr key={row.id} className="tr:border-b tr:border-tracs-border last:tr:border-0">{render(row)}</tr>)}</tbody></table></div>;
 }
 
+function StatStrip({ summary }) {
+  const mainStats = [
+    ['Action Required', summary.action_required || 0],
+    ['Invoice This Week', summary.invoice_this_week || 0],
+    ['Renewal <= 30 Days', summary.renewal_soon || 0],
+    ['Paid So Far', money(summary.total_paid_amount)],
+    ['Outstanding', money(summary.outstanding_amount)],
+    ['Est. Monthly Recurring', money(summary.mrr_amount)],
+  ];
+  return (
+    <Card className="clients-stat-strip tr:p-0">
+      <div className="tr:grid tr:grid-cols-2 tr:md:grid-cols-3 tr:lg:grid-cols-6">
+        {mainStats.map(([title, value], index) => (
+          <div key={title} className={`client-stat-cell tr:min-w-0 tr:p-tracs-3 ${index === 3 ? 'clients-money-start' : ''}`}>
+            <div className="tr:text-base tr:font-semibold tr:leading-tight">{value}</div>
+            <div className="tr:mt-1 tr:text-[11px] tr:leading-snug tr:text-tracs-muted">{title}</div>
+          </div>
+        ))}
+      </div>
+      <div className="tr:border-t tr:border-tracs-border tr:px-tracs-3 tr:py-2 tr:text-xs tr:text-tracs-muted">
+        Waiting payment: {summary.waiting_payment || 0} · Tax invoice pending: {summary.tax_invoice_pending || 0}
+      </div>
+    </Card>
+  );
+}
+
+function FilterBar({ filters, setFilters, context }) {
+  const [open, setOpen] = useState(false);
+  const canViewAll = Boolean(context.allowed_actions.view_all);
+  const ownerValue = filters.scope === 'mine' ? 'mine' : filters.owner_user_id ? `owner:${filters.owner_user_id}` : 'all';
+
+  function setOwner(value) {
+    if (value === 'mine') {
+      setFilters({ ...filters, scope: 'mine', owner_user_id: '' });
+      return;
+    }
+    if (value === 'all') {
+      setFilters({ ...filters, scope: 'all', owner_user_id: '' });
+      return;
+    }
+    setFilters({ ...filters, scope: 'all', owner_user_id: value.replace('owner:', '') });
+  }
+
+  return (
+    <Card className="tr:relative tr:p-tracs-3">
+      <div className="tr:grid tr:grid-cols-1 tr:gap-tracs-2 tr:lg:grid-cols-[minmax(220px,1fr)_170px_170px_auto]">
+        <Input placeholder="Search client, code, PIC" value={filters.q} onChange={(e) => setFilters({ ...filters, q: e.target.value })} />
+        <Select value={filters.service_type} onChange={(e) => setFilters({ ...filters, service_type: e.target.value })}><option value="">Any service</option>{serviceTypes.map((type) => <option key={type} value={type}>{type}</option>)}</Select>
+        <Select value={filters.renewal_window} onChange={(e) => setFilters({ ...filters, renewal_window: e.target.value })}><option value="">Any renewal</option><option value="7">Renewal &lt;= 7 days</option><option value="30">Renewal &lt;= 30 days</option><option value="90">Renewal &lt;= 90 days</option></Select>
+        <div className="tr:flex tr:gap-tracs-2">
+          <Button className="tr:flex-1 tr:px-tracs-3 lg:tr:min-w-32" onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-controls="client-more-filters">{icon('sliders-horizontal')}More Filters</Button>
+          <Button className="tr:w-10 tr:px-0" aria-label="Reset filters" title="Reset filters" size="compact" onClick={() => { setFilters({ ...emptyFilters }); setOpen(false); }}>{icon('rotate-ccw')}<span className="tr:sr-only">Reset filters</span></Button>
+        </div>
+      </div>
+      {open && (
+        <div id="client-more-filters" className="clients-more-filters tr:mt-tracs-3 tr:grid tr:grid-cols-1 tr:gap-tracs-2 tr:border-t tr:border-tracs-border tr:pt-tracs-3 tr:md:grid-cols-2 tr:xl:grid-cols-4">
+          <Select disabled={!canViewAll} value={ownerValue} onChange={(e) => setOwner(e.target.value)}>
+            <option value="mine">My Clients</option>
+            {canViewAll && <option value="all">All Owners</option>}
+            {canViewAll && context.users.map((u) => <option key={u.id} value={`owner:${u.id}`}>{u.name}</option>)}
+          </Select>
+          <Select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}><option value="">Any client status</option><option value="active">Active</option><option value="monitoring">Monitoring</option><option value="inactive">Inactive</option></Select>
+          <Select value={filters.service_status} onChange={(e) => setFilters({ ...filters, service_status: e.target.value })}><option value="">Any service status</option>{serviceStatuses.map((status) => <option key={status} value={status}>{label(status)}</option>)}</Select>
+          <Select value={filters.attention} onChange={(e) => setFilters({ ...filters, attention: e.target.value })}><option value="">Any attention</option><option value="attention">Needs attention</option><option value="critical">Critical</option><option value="warning">Warning</option><option value="due">Due</option><option value="watch">Watch</option></Select>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function ClientsApp() {
   const context = useContextData();
   const [filters, setFilters] = useState({ ...emptyFilters });
@@ -332,8 +402,8 @@ function ClientsApp() {
       </div>
       {context.loading || clients.loading ? <Card>Loading client portfolio...</Card> : context.error || clients.error ? <Card className="tr:border-tracs-danger-border tr:text-tracs-danger">{context.error || clients.error}</Card> : !context.data?.schema_ready ? <Card>Run <code>config/migrations/2026_09_01_client_portfolio_mvp.sql</code>, then reload Clients.</Card> : (
         <>
-          <div className="tr:grid tr:grid-cols-2 tr:gap-tracs-3 tr:lg:grid-cols-4 tr:xl:grid-cols-8">{[['Action Required', summary.action_required], ['Invoice This Week', summary.invoice_this_week], ['Waiting Payment', summary.waiting_payment], ['Tax Invoice Pending', summary.tax_invoice_pending], ['Renewal <= 30 Days', summary.renewal_soon], ['Paid So Far', money(summary.total_paid_amount)], ['Outstanding', money(summary.outstanding_amount)], ['Est. Monthly Recurring', money(summary.mrr_amount)]].map(([k, v]) => <Card key={k} className="tr:p-tracs-3"><div className="tr:text-lg tr:font-semibold">{v || 0}</div><div className="tr:mt-1 tr:text-xs tr:text-tracs-muted">{k}</div></Card>)}</div>
-          <Card className="tr:p-tracs-3"><div className="tr:grid tr:grid-cols-1 tr:gap-tracs-2 tr:lg:grid-cols-[minmax(180px,1fr)_145px_145px_145px_145px_145px_145px_145px_120px]"><Input placeholder="Search client, code, PIC, email" value={filters.q} onChange={(e) => setFilters({ ...filters, q: e.target.value })} /><Select value={filters.scope} onChange={(e) => setFilters({ ...filters, scope: e.target.value, owner_user_id: e.target.value === 'mine' ? '' : filters.owner_user_id })}><option value="mine">My Clients</option>{context.data.allowed_actions.view_all && <option value="all">All Clients</option>}</Select>{context.data.allowed_actions.view_all && <Select value={filters.owner_user_id} onChange={(e) => setFilters({ ...filters, scope: 'all', owner_user_id: e.target.value })}><option value="">Any owner</option>{context.data.users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</Select>}<Select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}><option value="">Any client status</option><option value="active">Active</option><option value="monitoring">Monitoring</option><option value="inactive">Inactive</option></Select><Select value={filters.service_type} onChange={(e) => setFilters({ ...filters, service_type: e.target.value })}><option value="">Any service</option>{serviceTypes.map((type) => <option key={type} value={type}>{type}</option>)}</Select><Select value={filters.service_status} onChange={(e) => setFilters({ ...filters, service_status: e.target.value })}><option value="">Any service status</option>{serviceStatuses.map((status) => <option key={status} value={status}>{label(status)}</option>)}</Select><Select value={filters.renewal_window} onChange={(e) => setFilters({ ...filters, renewal_window: e.target.value })}><option value="">Any renewal</option><option value="7">Renewal &lt;= 7 days</option><option value="30">Renewal &lt;= 30 days</option><option value="90">Renewal &lt;= 90 days</option></Select><Select value={filters.attention} onChange={(e) => setFilters({ ...filters, attention: e.target.value })}><option value="">Any attention</option><option value="attention">Needs attention</option><option value="critical">Critical</option><option value="warning">Warning</option><option value="due">Due</option><option value="watch">Watch</option></Select><Button onClick={() => setFilters({ ...emptyFilters })}>{icon('rotate-ccw')}Reset</Button></div></Card>
+          <StatStrip summary={summary} />
+          <FilterBar filters={filters} setFilters={setFilters} context={context.data} />
           <div className="tr:grid tr:grid-cols-1 tr:gap-tracs-4 tr:xl:grid-cols-[390px_minmax(0,1fr)]">
             <div className="tr:flex tr:flex-col tr:gap-tracs-4">
               <Card className="tr:p-0"><div className="tr:border-b tr:border-tracs-border tr:p-tracs-3 tr:text-sm tr:font-semibold">Needs Attention</div><div className="tr:flex tr:flex-col">{clients.data.attention?.length ? clients.data.attention.map((c) => <button key={c.id} className="client-row tr:border-b tr:border-tracs-border tr:p-tracs-3 tr:text-left last:tr:border-0" onClick={() => loadDetail(c.id)}><div className="tr:flex tr:items-center tr:justify-between tr:gap-2"><strong>{c.company_name}</strong><Badge tone={c.attention_level}>{c.attention_reason}</Badge></div><div className="tr:mt-1 tr:text-xs tr:text-tracs-muted">{c.next_action} · {c.next_action_due_at ? date(c.next_action_due_at) : 'No date'}</div></button>) : <div className="tr:p-tracs-4 tr:text-sm tr:text-tracs-muted">No client needs immediate attention.</div>}</div></Card>
