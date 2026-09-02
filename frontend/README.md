@@ -1,8 +1,8 @@
 # TRACS Frontend Foundation
 
-This package is the isolated Phase 4 foundation for future TRACS React modules.
-It is not loaded by current PHP pages and does not replace the existing
-Calendar pilot build.
+This package is the isolated foundation for TRACS React modules. PHP pages load
+approved entries through an allowlisted Vite manifest while PHP remains the
+authentication, permission, and API authority.
 
 ## Local validation
 
@@ -30,10 +30,9 @@ npm run test:contracts
   dependency.
 - `src/styles/tracs-tailwind.css` imports Tailwind theme and utilities without
   Preflight and uses the `tr:` prefix.
-- Current PHP pages do not load this package.
-- Future approved module entries will be added as named Vite inputs.
-- Future production assets are planned for `public/assets/react-dist/` and must
-  be loaded through an allowlisted PHP manifest helper.
+- Approved module entries are named Vite inputs.
+- Production candidate assets write to `public/assets/react-dist/` and must be
+  loaded through the allowlisted PHP manifest helper.
 - PHP remains authoritative for authentication, permissions, CSRF validation,
   request validation, business rules, audit logs, and database access.
 
@@ -51,9 +50,22 @@ Phase 8 adds the named `shiftAssignment` Vite entry under
 - `GET /api/v1/shift-assignment/context.php`
 - `GET /api/v1/shift-assignment/assignments.php`
 
-No PHP page or navigation item loads this entry yet. Local Vite output alone
-does not provide an authenticated TRACS session, so authenticated browser
-preview remains deferred until an approved PHP pilot mount is added.
+The authenticated preview mount is `public/shift-assignment-react-preview.php`.
+Local Vite output alone does not provide an authenticated TRACS session.
+
+## Client Portfolio entry
+
+The named `clients` Vite entry under `src/modules/clients/` is mounted by
+`public/clients.php` and `public/client-detail.php`. It consumes:
+
+- `GET /api/v1/client-portfolio/context.php`
+- `GET|POST /api/v1/client-portfolio/clients.php`
+- `GET|PATCH /api/v1/client-portfolio/client.php`
+- `POST /api/v1/client-portfolio/actions.php`
+
+The Clients API already returns spend-ready fields for future graphs and
+reports: `lifetime_billed_amount`, `total_paid_amount`, `outstanding_amount`,
+and estimated `mrr_amount`.
 
 ## Authenticated preview build
 
@@ -63,10 +75,9 @@ Phase 9 adds a dedicated build:
 npm run build:preview
 ```
 
-It writes only the `shiftAssignment` entry and manifest to
-`public/assets/react-dist/`. The unlinked authenticated preview page resolves
-that manifest at `/shift-assignment-react-preview.php`. The regular
-`npm run build` output remains isolated under ignored `frontend/dist/`.
+It writes the approved React entries and manifest to
+`public/assets/react-dist/`. The regular `npm run build` output remains
+isolated under ignored `frontend/dist/`.
 
 Validate the Phase 12 production-candidate budget after building:
 
@@ -74,5 +85,5 @@ Validate the Phase 12 production-candidate budget after building:
 npm run test:preview-bundle
 ```
 
-The check requires exactly one `shiftAssignment` entry and caps uncompressed
-preview output at 300 KB JavaScript and 50 KB CSS.
+The check requires the approved entry list and caps each uncompressed entry at
+300 KB JavaScript and 50 KB CSS.

@@ -17,6 +17,7 @@ Status labels in this file are deliberate: `Completed`, `In Progress`, `Partiall
 - [x] Mandatory 2FA, login throttling, CAPTCHA escalation, session hardening, and permission-aware routes.
 - [x] Fixed post-login 404: re-granted `dashboard.view` to operational roles and added a permission-aware landing fallback so a successful login never dead-ends in a 404 (`docs/USER_LIFECYCLE_REMEDIATION.md`).
 - [x] Safe user removal: archive + email/username release so removed users disappear, history stays intact, and the same email/username can be reused (`2026_06_30_user_removal_release.sql`).
+- [x] Client Portfolio MVP: React/Vite Clients route, owner-scoped client tracking, services, billing, follow-ups, reminder linkage, attention calculation, activity timeline, and `clients.*` permissions.
 
 ## In Progress
 

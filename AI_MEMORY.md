@@ -143,9 +143,18 @@ font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Ro
 
 ## Navigation And Settings
 
-- Top-level navigation includes Dashboard, Case Management, Reminders, Shift Reports, Infrastructure Pulse, Meetings/MoM, Feedback, Ticker/Alerts, Activity Log, role-gated TV Mode, and role-gated User Management.
+- Top-level navigation includes Dashboard, Case Management, Clients, Reminders, Shift Reports, Infrastructure Pulse, Meetings/MoM, Feedback, Ticker/Alerts, Activity Log, role-gated TV Mode, and role-gated User Management.
 - `Tasks & Monitoring` contains Case / Task Monitoring, Finance, Domain Transfer Log, Domain Pricing Crosscheck, and Checklist according to permissions.
 - Settings, profile, and password changes are accessed through the avatar/profile menu.
+
+## Client Portfolio
+
+- **Implemented — MVP:** `public/clients.php` and `public/client-detail.php` use a React 19/Vite island loaded through the PHP shell and shared `public/assets/react-dist` manifest.
+- PHP APIs under `public/api/v1/client-portfolio/` enforce full authentication, CSRF for mutations, `clients.view`/`clients.manage` permissions, and owner scope unless `clients.view_all` is granted.
+- Data tables are `tracs_clients`, `tracs_client_contacts`, `tracs_client_services`, `tracs_client_service_addons`, `tracs_client_service_renewal_history`, `tracs_client_billing_records`, `tracs_client_followups`, and `tracs_client_activity_logs`.
+- Spend/reporting fields are computed from billing and recurring service/addon rows: `lifetime_billed_amount`, `total_paid_amount`, `outstanding_amount`, and estimated `mrr_amount`.
+- Follow-ups with due dates create linked `tracs_reminders` records and call the existing reminder notification helper. Do not build a separate client reminder engine.
+- Keep this module operational-first: client attention, next action, billing/payment/tax invoice state, renewals, and activity. Do not expand it into sales pipeline CRM behavior without a separate decision.
 
 ## Notifications
 

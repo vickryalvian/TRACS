@@ -8,19 +8,26 @@ const manifestPath = fileURLToPath(
 );
 const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
 const entries = Object.values(manifest).filter((entry) => entry.isEntry);
+const entriesByName = Object.fromEntries(entries.map((entry) => [entry.name, entry]));
 
-assert.equal(entries.length, 1, 'Preview build must contain exactly one entry.');
-assert.equal(entries[0].name, 'shiftAssignment');
-assert.equal(entries[0].src, 'src/modules/shift-assignment/main.jsx');
-
-const script = await stat(`${publicRoot}${entries[0].file}`);
-assert.ok(script.size <= 300_000, `Preview JavaScript exceeded 300 KB: ${script.size}`);
-
-const cssFiles = entries[0].css ?? [];
-assert.equal(cssFiles.length, 1, 'Preview build must contain one isolated CSS entry.');
-const css = await stat(`${publicRoot}${cssFiles[0]}`);
-assert.ok(css.size <= 50_000, `Preview CSS exceeded 50 KB: ${css.size}`);
-
-console.log(
-  `TRACS preview bundle contract passed (${script.size} B JS, ${css.size} B CSS).`,
+assert.deepEqual(
+  Object.keys(entriesByName).sort(),
+  ['clients', 'shiftAssignment'],
+  'Preview build must contain the approved React entries.',
 );
+assert.equal(entriesByName.shiftAssignment.src, 'src/modules/shift-assignment/main.jsx');
+assert.equal(entriesByName.clients.src, 'src/modules/clients/main.jsx');
+
+for (const entry of entries) {
+  const script = await stat(`${publicRoot}${entry.file}`);
+  assert.ok(script.size <= 300_000, `${entry.name} JavaScript exceeded 300 KB: ${script.size}`);
+
+  const cssFiles = entry.css ?? [];
+  assert.ok(cssFiles.length >= 1, `${entry.name} preview build must contain CSS.`);
+  for (const cssFile of cssFiles) {
+    const css = await stat(`${publicRoot}${cssFile}`);
+    assert.ok(css.size <= 50_000, `${entry.name} CSS exceeded 50 KB: ${css.size}`);
+  }
+}
+
+console.log(`TRACS preview bundle contract passed (${entries.length} entries).`);

@@ -15,6 +15,7 @@ Current implementation highlights:
 - In-app/browser notification center with scheduler worker.
 - Infrastructure Pulse full page, dashboard widget, and TV widget using shared mock data.
 - Domain Price Crosscheck uses canonical route `domain-price-crosscheck.php` and a compact tabbed operational layout.
+- Client Portfolio MVP uses `clients.php` / `client-detail.php` with a React/Vite island, v1 PHP APIs, owner-scoped access, billing/follow-up attention calculation, reminder linkage, and client activity logs.
 - Settings are in the avatar/profile menu.
 
 ## Do Not Revert
@@ -72,6 +73,7 @@ Current implementation highlights:
 - Stored types cover case creation, reminder creation/due timing, task assignment, meeting timing, and shift handover.
 - Browser permission is optional; in-app notification behavior remains available.
 - Production cron should run `bin/tracs-notification-worker.php` every minute.
+- Client Portfolio follow-ups with due dates create linked `tracs_reminders` records, so reminder scheduling and notifications continue through the existing reminder flow.
 
 ### Infrastructure Pulse
 

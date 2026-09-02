@@ -95,6 +95,14 @@ Files: `modules/case/*`, `public/cases.php`, `public/api/case-*.php`, and the sh
 - Resolve is the right-side primary footer action. Close remains in the header. Edit/Delete are under the icon-only More trigger.
 - Case attachments accept JPEG, PNG, and WebP up to 5 MB, are re-encoded with GD, receive thumbnails, and are served through `case-attachment.php`.
 
+## Client Portfolio
+
+**Implemented — MVP.** Files: `modules/client-portfolio/*`, `public/clients.php`, `public/client-detail.php`, `public/api/v1/client-portfolio/*`, and `frontend/src/modules/clients/main.jsx`.
+
+The Clients route is an authenticated PHP shell that loads a Vite-built React 19 island from `public/assets/react-dist/`. PHP remains the authority for session, CSRF, permissions, object ownership, and data mutation. The module tracks client profiles, primary contacts, owner scope, services, service addons, billing records, invoice/payment/tax-invoice state, operational follow-ups, renewal history, and a client activity timeline.
+
+Server-side attention calculation ranks overdue unpaid billing, tax-invoice pending work, service/addon renewals within 30 days, invoices due this week, and waiting payments. Follow-ups with due dates create linked `tracs_reminders` records so they can appear in the existing Reminder and notification flow. Client spend graphs and reports should use the Clients API fields `lifetime_billed_amount`, `total_paid_amount`, `outstanding_amount`, and estimated `mrr_amount`.
+
 ## Task Monitoring
 
 The dashboard widget and the full assignment page are related but separate surfaces.
@@ -183,6 +191,7 @@ See `docs/DOMAIN_PRICE_CROSSCHECK.md` and `docs/DOMAIN_PRICE_CROSSCHECK_ARCHITEC
 | --- | --- |
 | Auth/users | `tracs_users` (incl. `status` with `removed`, `archived_email`, `archived_username`, `removed_at`, `removed_by`), `tracs_login_attempts`, `tracs_auth_events`, `tracs_roles`, `tracs_permissions`, `tracs_role_permissions`, `tracs_divisions`, `user_intern_profiles` |
 | Cases | `tracs_cases`, `case_attachments` |
+| Client Portfolio | `tracs_clients`, `tracs_client_contacts`, `tracs_client_services`, `tracs_client_service_addons`, `tracs_client_service_renewal_history`, `tracs_client_billing_records`, `tracs_client_followups`, `tracs_client_activity_logs` |
 | Checklist/reminders/tasks | `tracs_side_tasks`, `tracs_side_task_logs`, `tracs_reminders`, `tracs_tasks`, `tracs_task_assignments`, `tracs_task_logs`, `tracs_task_reviews`, `tracs_task_reminders` |
 | Shift | `tracs_shift_reports`, `tracs_shift_activities`, `shift_report_attachments` |
 | MoM | `tracs_moms` and `tracs_mom_*` tables |

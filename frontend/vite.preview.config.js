@@ -18,6 +18,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         shiftAssignment: fromFrontendRoot('./src/modules/shift-assignment/main.jsx'),
+        clients: fromFrontendRoot('./src/modules/clients/main.jsx'),
       },
     },
   },

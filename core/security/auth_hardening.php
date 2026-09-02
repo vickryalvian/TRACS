@@ -575,7 +575,7 @@ function tracs_two_factor_otpauth_uri(array $user, string $secret): string {
 
 function tracs_auth_allowed_landing(string $landing): string {
     $landing = ltrim($landing, '/');
-    $allowed = ['index.php', 'cases.php', 'reminders.php', 'checklist.php', 'shift-reports.php', 'mom.php', 'activity.php', 'tasks.php', 'monitoring.php', 'domain-transfer.php', 'finance.php', 'infrastructure-configurator.php'];
+    $allowed = ['index.php', 'cases.php', 'clients.php', 'client-detail.php', 'reminders.php', 'checklist.php', 'shift-reports.php', 'mom.php', 'activity.php', 'tasks.php', 'monitoring.php', 'domain-transfer.php', 'finance.php', 'infrastructure-configurator.php'];
     return in_array($landing, $allowed, true) ? $landing : 'index.php';
 }
 
@@ -602,6 +602,8 @@ function tracs_auth_landing_permission(string $landing): string {
     return [
         'index.php'           => 'dashboard.view',
         'cases.php'           => 'cases.view',
+        'clients.php'         => 'clients.view',
+        'client-detail.php'   => 'clients.view',
         'reminders.php'       => 'reminders.view',
         'checklist.php'       => 'checklist.view',
         'shift-reports.php'   => 'reports.view',
@@ -627,7 +629,7 @@ function tracs_auth_resolve_safe_landing(mysqli $conn, int $userId, string $land
     }
     $landing = tracs_auth_allowed_landing($landing);
     $candidates = array_merge([$landing], [
-        'index.php', 'cases.php', 'reminders.php', 'checklist.php',
+        'index.php', 'cases.php', 'clients.php', 'reminders.php', 'checklist.php',
     ]);
     foreach ($candidates as $candidate) {
         if (tracs_user_can($conn, tracs_auth_landing_permission($candidate), $userId)) {

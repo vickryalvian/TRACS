@@ -1,0 +1,47 @@
+.clients-react-shell {
+  min-width: 0;
+}
+
+.clients-react-shell :where(td) {
+  padding: 10px 12px;
+  vertical-align: top;
+}
+
+.clients-react-shell :where(td small) {
+  display: block;
+  margin-top: 3px;
+  color: var(--tx3);
+  font-size: 11px;
+}
+
+.client-row {
+  color: var(--tx1);
+  transition: background-color 120ms var(--ease);
+}
+
+.client-row,
+.service-card,
+.addon-chip {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.client-row:hover,
+.client-row.is-selected {
+  background: var(--blue-lt);
+}
+
+.clients-table-scroll {
+  scrollbar-color: var(--bd3) var(--s2);
+  scrollbar-width: thin;
+}
+
+@media (max-width: 640px) {
+  .clients-react-shell {
+    font-size: 14px;
+  }
+
+  .clients-react-shell :where(input, select, textarea) {
+    font-size: 16px;
+  }
+}

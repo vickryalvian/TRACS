@@ -9,6 +9,7 @@ TRACS is a compact operational control panel for support, legal, CS, and monitor
 | Dashboard | Restored five-item stat strip, Cases, Task Monitoring, Shift Handover, Currency Converter, Infrastructure Pulse summary, ticker, and Attention Center. |
 | Cases | CRUD, `in_progress` status, filters/search/export, shared ticket detail, progress timeline, Resolve action, and image attachments. |
 | Abuse Reports | Board/list triage, compact preview, full tabbed record, inline table updates, bulk intake, SLA/action-required states, notes, evidence, relationships, and audit timeline. |
+| Clients | **Implemented — MVP:** React/Vite Client Portfolio island for owned/all client tracking, attention summary, services, addons, renewals, spend totals, billing, payment/tax-invoice status, follow-ups, reminder linkage, and client activity. |
 | Reminders | Full reminder page plus Reminder List inside the dashboard `Checklist and Reminder` tab. |
 | Task Monitoring | Dashboard tabs are `Checklist and Reminder`, `Assignments`, and `Activity`; full assignment/review workflow is at `monitoring.php`. |
 | Shift Reports | Active/On Hold/Resolved handover context, dashboard shift reminder, activity snapshots, exports, and image attachments. |
@@ -139,6 +140,7 @@ Current active schema includes core `tracs_` tables plus legacy names still used
 
 - `tracs_users`, `tracs_login_attempts`, `tracs_auth_events`, `tracs_roles`, `tracs_permissions`, `tracs_role_permissions`, `tracs_divisions`, `user_intern_profiles`
 - `tracs_cases`, `case_attachments`, `tracs_reminders`, `tracs_side_tasks`, `tracs_side_task_logs`
+- `tracs_clients`, `tracs_client_contacts`, `tracs_client_services`, `tracs_client_service_addons`, `tracs_client_service_renewal_history`, `tracs_client_billing_records`, `tracs_client_followups`, `tracs_client_activity_logs`
 - `tracs_tasks`, `tracs_task_assignments`, `tracs_task_logs`, `tracs_task_reviews`, `tracs_task_reminders`
 - `tracs_shift_reports`, `tracs_shift_activities`, `shift_report_attachments`
 - `shift_assignment_types`, `shift_templates`, `shift_assignments`, `shift_monthly_templates`, `shift_monthly_template_items`, `shift_workload_settings`, `shift_coverage_rules`, `shift_warnings`
