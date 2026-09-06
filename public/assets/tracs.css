@@ -1285,6 +1285,9 @@ input, select, textarea { font-family: inherit }
   transition: opacity 190ms ease-out;
   pointer-events: none;
 }
+.dashboard-stat-strip .stat-glow {
+  display: none;
+}
 .stat-glow::after {
   content: "";
   position: absolute;
