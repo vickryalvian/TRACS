@@ -97,7 +97,6 @@ window.TRACS_BUILD_INFO = <?=json_encode($tracs_build_info, JSON_UNESCAPED_SLASH
         <?php if($show_help): ?><div class="login-help"><?=htmlspecialchars($login_help, ENT_QUOTES, 'UTF-8')?></div><?php endif; ?>
       </form>
     </div>
-    <div class="login-foot"><div class="status-online"><span class="status-dot"></span>TRACS System Online</div></div>
   </div>
 </div>
 <?php $_js_v = @filemtime(__DIR__ . '/assets/tracs.js') ?: time(); ?>
