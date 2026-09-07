@@ -20,6 +20,7 @@ try {
     $actorName = \tracs_current_user_display($conn);
 
     $id = match ($action) {
+        'save_contact' => $controller->saveContact($clientId, $input, $actorName),
         'add_service' => $controller->addService($clientId, $input, $actorName),
         'add_addon' => $controller->addAddon($clientId, $input, $actorName),
         'renew_service' => $controller->renewService($clientId, $input, $actorName),

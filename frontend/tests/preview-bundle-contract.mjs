@@ -12,11 +12,12 @@ const entriesByName = Object.fromEntries(entries.map((entry) => [entry.name, ent
 
 assert.deepEqual(
   Object.keys(entriesByName).sort(),
-  ['clients', 'shiftAssignment'],
+  ['branchNetwork', 'clients', 'shiftAssignment'],
   'Preview build must contain the approved React entries.',
 );
 assert.equal(entriesByName.shiftAssignment.src, 'src/modules/shift-assignment/main.jsx');
 assert.equal(entriesByName.clients.src, 'src/modules/clients/main.jsx');
+assert.equal(entriesByName.branchNetwork.src, 'src/modules/branch-network/main.jsx');
 
 for (const entry of entries) {
   const script = await stat(`${publicRoot}${entry.file}`);

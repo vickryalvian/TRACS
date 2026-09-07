@@ -51,19 +51,40 @@ final class ClientPortfolioController
 
     public function create(array $input, string $actorName): int
     {
-        return $this->model->createClient($input, $this->actorId, $actorName);
+        $this->conn->begin_transaction();
+        try {
+            $id = $this->model->createClient($input, $this->actorId, $actorName);
+            $this->conn->commit();
+            return $id;
+        } catch (Throwable $error) {
+            $this->conn->rollback();
+            throw $error;
+        }
     }
 
     public function update(int $id, array $input, string $actorName): void
     {
         $this->assertCanAccess($id);
-        $this->model->updateClient($id, $input, $this->actorId, $actorName);
+        $this->conn->begin_transaction();
+        try {
+            $this->model->updateClient($id, $input, $this->actorId, $actorName);
+            $this->conn->commit();
+        } catch (Throwable $error) {
+            $this->conn->rollback();
+            throw $error;
+        }
     }
 
     public function addService(int $id, array $input, string $actorName): int
     {
         $this->assertCanAccess($id);
         return $this->model->addService($id, $input, $this->actorId, $actorName);
+    }
+
+    public function saveContact(int $id, array $input, string $actorName): int
+    {
+        $this->assertCanAccess($id);
+        return $this->model->saveContact($id, $input, $this->actorId, $actorName);
     }
 
     public function addBilling(int $id, array $input, string $actorName): int

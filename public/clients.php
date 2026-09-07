@@ -18,7 +18,7 @@ $uid = (int)($_SESSION['user_id'] ?? 0);
 $user_email = $_SESSION['user_email'] ?? 'operator@tracs.local';
 $ticker_items = (new AlertTickerController($conn, $uid))->formatAlertsForTicker();
 $critical_count = 0;
-$page_title = 'Clients';
+$page_title = basename((string)($_SERVER['SCRIPT_NAME'] ?? '')) === 'client-detail.php' ? 'Client Details' : 'Clients';
 $active_page = 'clients';
 
 $reactAssets = tracs_react_manifest_assets('clients');
@@ -43,8 +43,8 @@ include __DIR__ . '/includes/header.php';
       <section class="panel">
         <div class="empty">
           <div class="empty-ic"><i data-lucide="package-open"></i></div>
-          <div class="empty-t">Client Portfolio assets are not built yet</div>
-          <div class="empty-s">Run <code>cd frontend &amp;&amp; npm run build:preview</code>, then reload this page.</div>
+          <div class="empty-t">Clients is temporarily unavailable</div>
+          <div class="empty-s">Reload this page. If the problem continues, contact your administrator.</div>
         </div>
       </section>
     <?php endif; ?>

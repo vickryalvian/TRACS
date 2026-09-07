@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import '../../styles/tracs-tailwind.css';
 import './styles.css';
@@ -7,7 +7,20 @@ import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 
 const api = createApiClient();
-const emptyFilters = { scope: 'mine', q: '', owner_user_id: '', status: '', billing_status: '', attention: '', service_type: '', service_status: '', renewal_window: '' };
+const emptyFilters = { scope: 'mine', q: '', owner_user_id: '', status: '', billing_status: '', attention: '', service_type: '', service_status: '', renewal_window: '', pic: '', tax_status: '', renewal_from: '', renewal_to: '', signal: '', sort: 'attention_rank', direction: 'asc', page: '1' };
+const detailTabs = ['overview', 'services', 'billing', 'renewals', 'followups', 'activity'];
+
+function readFilters() {
+  const params = new URLSearchParams(window.location.search);
+  return Object.fromEntries(Object.entries(emptyFilters).map(([key, value]) => [key, params.get(key) ?? value]));
+}
+
+function clientUrl(id, tab = 'overview') {
+  const params = new URLSearchParams(window.location.search);
+  params.delete('id'); params.delete('tab');
+  if (id) { params.set('id', id); params.set('tab', tab); }
+  return `${id ? 'client-detail.php' : 'clients.php'}${params.size ? `?${params}` : ''}`;
+}
 const serviceTypes = ['Dedicated Server', 'Colocation', 'VPS', 'IP Transit', 'Cloud', 'Domain', 'SSL', 'Other'];
 const serviceStatuses = ['active', 'monitoring', 'pending_renewal', 'suspended', 'terminated', 'inactive'];
 const billingCycles = ['monthly', 'quarterly', 'semiannual', 'annual', 'one_time', 'custom'];
@@ -75,24 +88,29 @@ function Badge({ children, tone }) {
   return <span className={`tr:inline-flex tr:items-center tr:rounded-tracs-sm tr:border tr:px-2 tr:py-0.5 tr:text-[11px] tr:font-semibold ${badgeClass(tone)}`}>{children}</span>;
 }
 
-function useClients(filters) {
+function useClients(filters, enabled = true) {
   const [state, setState] = useState({ loading: true, error: '', data: { clients: [], summary: {}, attention: [] } });
   const query = useMemo(() => {
     const params = new URLSearchParams();
     Object.entries(filters).forEach(([key, value]) => value && params.set(key, value));
     return params.toString();
   }, [filters]);
-  async function load() {
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    if (!enabled) return;
+    const controller = new AbortController();
     setState((s) => ({ ...s, loading: true, error: '' }));
-    try {
-      const res = await api.request(`/api/v1/client-portfolio/clients.php${query ? `?${query}` : ''}`);
-      setState({ loading: false, error: '', data: res.data });
-    } catch (error) {
-      setState((s) => ({ ...s, loading: false, error: error.message }));
-    }
-  }
-  useEffect(() => { load(); }, [query]);
-  return { ...state, refresh: load };
+    const timer = setTimeout(async () => {
+      try {
+        const res = await api.request(`/api/v1/client-portfolio/clients.php?${query}`, { signal: controller.signal });
+        if (!controller.signal.aborted) setState({ loading: false, error: '', data: res.data });
+      } catch (error) {
+        if (!controller.signal.aborted) setState((s) => ({ ...s, loading: false, error: error.message }));
+      }
+    }, 200);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [query, revision, enabled]);
+  return { ...state, refresh: () => setRevision((value) => value + 1) };
 }
 
 function useContextData() {
@@ -147,7 +165,7 @@ function FormPanel({ context, selected, onSaved, onCancel }) {
     try {
       const path = selected ? `/api/v1/client-portfolio/client.php?id=${selected.id}` : '/api/v1/client-portfolio/clients.php';
       const res = await api.request(path, { method: selected ? 'PATCH' : 'POST', body: form });
-      onSaved(res.data);
+      onSaved(res.data, event.nativeEvent.submitter?.value === 'services');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -158,13 +176,13 @@ function FormPanel({ context, selected, onSaved, onCancel }) {
     <Card className="tr:p-tracs-4">
       <form className="tr:flex tr:flex-col tr:gap-tracs-3" onSubmit={submit}>
         <div className="tr:flex tr:items-start tr:justify-between tr:gap-tracs-3">
-          <div><h2 className="tr:text-sm tr:font-semibold">Client Information</h2><p className="tr:mt-1 tr:text-xs tr:text-tracs-muted">Profile, primary PIC, owner, and operational notes.</p></div>
-          <Button variant="quiet" size="compact" onClick={onCancel}>{icon('x')}Close</Button>
+          <div><h2 id="client-form-title" className="tr:text-sm tr:font-semibold">{selected ? 'Edit Client' : 'Add Client'}</h2><p className="tr:mt-1 tr:text-xs tr:text-tracs-muted">{selected ? 'Company information and primary PIC.' : 'Start with the company and primary PIC. Add services after saving.'}</p></div>
+          <Button variant="quiet" size="compact" disabled={saving} onClick={onCancel}>{icon('x')}Close</Button>
         </div>
         {error && <div className="tr:rounded-tracs tr:border tr:border-tracs-danger-border tr:bg-tracs-danger-soft tr:p-3 tr:text-xs tr:text-tracs-danger">{error}</div>}
         <div className="tr:grid tr:grid-cols-1 tr:gap-tracs-3 tr:md:grid-cols-2">
           <Field label="Company"><Input required value={form.company_name} onChange={(e) => set('company_name', e.target.value)} /></Field>
-          <Field label="Client Code"><Input value={form.client_code || ''} onChange={(e) => set('client_code', e.target.value)} /></Field>
+          <Field label="Client Code"><Input maxLength={40} placeholder="Assigned on save if blank" value={form.client_code || ''} onChange={(e) => set('client_code', e.target.value)} /></Field>
           <Field label="Status"><Select value={form.status} onChange={(e) => set('status', e.target.value)}><option value="active">Active</option><option value="monitoring">Monitoring</option><option value="inactive">Inactive</option></Select></Field>
           <Field label="Owner"><Select disabled={!canPickOwner} value={form.owner_user_id} onChange={(e) => set('owner_user_id', e.target.value)}>{canPickOwner ? context.users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>) : <option value={context?.user?.id}>{context?.user?.name}</option>}</Select></Field>
           <Field label="PIC Name"><Input value={form.contact_name} onChange={(e) => set('contact_name', e.target.value)} /></Field>
@@ -173,14 +191,14 @@ function FormPanel({ context, selected, onSaved, onCancel }) {
           <Field label="PIC Role"><Input value={form.contact_role} onChange={(e) => set('contact_role', e.target.value)} /></Field>
         </div>
         <Field label="Operational Notes"><Textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} /></Field>
-        <div className="tr:flex tr:justify-end tr:gap-tracs-2"><Button variant="secondary" onClick={onCancel}>Cancel</Button><Button variant="primary" disabled={saving} type="submit">{saving ? 'Saving...' : 'Save Client'}</Button></div>
+        <div className="tr:flex tr:flex-wrap tr:justify-end tr:gap-tracs-2"><Button variant="secondary" disabled={saving} onClick={onCancel}>Cancel</Button><Button disabled={saving} type="submit">{saving ? 'Saving...' : selected ? 'Save Client' : 'Save & Finish Later'}</Button>{!selected && <Button variant="primary" disabled={saving} type="submit" value="services">Save & Add Services</Button>}</div>
       </form>
     </Card>
   );
 }
 
-function QuickActionForm({ selected, context, onSaved }) {
-  const [kind, setKind] = useState('followup');
+function QuickActionForm({ selected, context, onSaved, initialKind = 'followup' }) {
+  const [kind, setKind] = useState(initialKind);
   const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -217,29 +235,42 @@ function QuickActionForm({ selected, context, onSaved }) {
 }
 
 function Detail({ selected, context, onEdit, onSaved }) {
-  const [tab, setTab] = useState('overview');
+  const [tab, setTab] = useState(() => {
+    const value = new URLSearchParams(window.location.search).get('tab');
+    return detailTabs.includes(value) ? value : 'overview';
+  });
+  const [error, setError] = useState('');
+  useEffect(() => {
+    const sync = () => { const value = new URLSearchParams(window.location.search).get('tab'); setTab(detailTabs.includes(value) ? value : 'overview'); };
+    window.addEventListener('popstate', sync);
+    return () => window.removeEventListener('popstate', sync);
+  }, []);
   if (!selected) return <Card className="tr:p-tracs-6"><div className="tr:text-sm tr:text-tracs-secondary">Select a client to inspect operational status.</div></Card>;
-  const tabs = ['overview', 'services', 'billing', 'followups', 'activity'];
+  function chooseTab(value) { setTab(value); window.history.pushState({}, '', clientUrl(selected.id, value)); }
   return (
     <div className="tr:flex tr:flex-col tr:gap-tracs-4">
+      <a className="clients-link" href={clientUrl()}>Back to Clients</a>
       <Card className="tr:p-0">
         <div className="tr:flex tr:flex-col tr:gap-tracs-3 tr:border-b tr:border-tracs-border tr:bg-tracs-surface-2 tr:p-tracs-4 tr:lg:flex-row tr:lg:items-start tr:lg:justify-between">
-          <div><h1 className="tr:text-lg tr:font-semibold">{selected.company_name}</h1><p className="tr:mt-1 tr:text-xs tr:text-tracs-muted">{label(selected.status)} · {selected.service_count} Services · {selected.owner_name}</p></div>
+          <div><h1 className="tr:text-lg tr:font-semibold">{selected.company_name}</h1><p className="tr:mt-1 tr:text-xs tr:text-tracs-muted">{selected.client_code || 'No code'} · {label(selected.status)} · {selected.service_count} Services · {selected.owner_name}</p></div>
           <div className="tr:flex tr:flex-wrap tr:gap-tracs-2"><Badge tone={selected.attention_level}>{selected.attention_reason}</Badge>{context?.allowed_actions?.manage && <Button size="compact" onClick={onEdit}>{icon('pencil')}Edit</Button>}</div>
         </div>
         <div className="tr:grid tr:grid-cols-2 tr:gap-px tr:bg-tracs-border tr:lg:grid-cols-6">
           {[['Active Services', selected.service_count], ['Addons', selected.addon_count], ['Monthly Recurring', money(selected.mrr_amount)], ['Paid So Far', money(selected.total_paid_amount)], ['Outstanding', money(selected.outstanding_amount)], ['Renewal', date(selected.nearest_renewal_date)]].map(([k, v]) => <div key={k} className="tr:bg-tracs-card tr:p-tracs-3"><div className="tr:text-[11px] tr:text-tracs-muted">{k}</div><div className="tr:mt-1 tr:text-sm tr:font-semibold">{v}</div></div>)}
         </div>
-        <div className="tr:flex tr:flex-wrap tr:border-b tr:border-tracs-border tr:px-tracs-3">{tabs.map((t) => <button key={t} className={`tr:border-b-2 tr:px-3 tr:py-3 tr:text-xs tr:font-semibold ${tab === t ? 'tr:border-tracs-accent tr:text-tracs-accent' : 'tr:border-transparent tr:text-tracs-secondary'}`} onClick={() => setTab(t)}>{label(t)}</button>)}</div>
+        <nav aria-label="Client sections" className="tr:flex tr:flex-wrap tr:border-b tr:border-tracs-border tr:px-tracs-3">{detailTabs.map((t) => <button key={t} aria-current={tab === t ? 'page' : undefined} className={`tr:border-b-2 tr:px-3 tr:py-3 tr:text-xs tr:font-semibold ${tab === t ? 'tr:border-tracs-accent tr:text-tracs-accent' : 'tr:border-transparent tr:text-tracs-secondary'}`} onClick={() => chooseTab(t)}>{label(t)}</button>)}</nav>
         <div className="tr:p-tracs-4">
+          {error && <p role="alert">{error}</p>}
           {tab === 'overview' && <div className="tr:grid tr:grid-cols-1 tr:gap-tracs-3 tr:md:grid-cols-2"><Info title="Primary Contact" lines={[selected.contacts?.[0]?.name, selected.contacts?.[0]?.email, selected.contacts?.[0]?.phone].filter(Boolean)} /><Info title="Operational Notes" lines={[selected.notes || 'No notes yet.']} /><Info title="Next Action" lines={[selected.next_action, selected.next_action_due_at ? date(selected.next_action_due_at) : selected.attention_reason]} /><Info title="Spend Snapshot" lines={[`Paid so far: ${money(selected.total_paid_amount)}`, `Billed total: ${money(selected.lifetime_billed_amount)}`, `Outstanding: ${money(selected.outstanding_amount)}`, `Estimated monthly recurring: ${money(selected.mrr_amount)}`]} /></div>}
           {tab === 'services' && <ServiceCards services={selected.services} />}
-          {tab === 'billing' && <Rows rows={selected.billing} empty="No billing records yet." render={(b) => <><td>{b.invoice_number || '-'}<small>{b.service_name || 'General billing'}</small></td><td>{date(b.invoice_date)}</td><td>{date(b.due_date)}</td><td>{money(b.amount)}</td><td><Badge tone={b.payment_status}>{label(b.payment_status)}</Badge></td><td>{b.tax_invoice_required === '1' || b.tax_invoice_required === 1 ? (b.tax_invoice_sent_at ? 'Sent' : 'Pending') : '-'}</td></>} />}
-          {tab === 'followups' && <Rows rows={selected.followups} empty="No follow-ups yet." render={(f) => <><td>{f.title}<small>{label(f.action_type)} · {f.assignee_name || '-'}</small></td><td>{date(f.due_at)}</td><td><Badge tone={f.priority}>{label(f.priority)}</Badge></td><td><Badge tone={f.status === 'completed' ? 'active' : 'watch'}>{label(f.status)}</Badge></td><td>{f.status !== 'completed' && context?.allowed_actions?.manage ? <Button size="compact" onClick={async () => { const res = await api.request('/api/v1/client-portfolio/actions.php', { method: 'POST', body: { action: 'complete_followup', followup_id: f.id } }); onSaved(res.data); }}>Done</Button> : '-'}</td></>} />}
+          {tab === 'overview' && <Contacts selected={selected} context={context} onSaved={onSaved} />}
+          {tab === 'renewals' && <Rows headers={['Service', 'Renewal', 'Time remaining', 'Status']} rows={(selected.services || []).filter((s) => !['inactive', 'terminated'].includes(s.status)).sort((a, b) => (a.renewal_date || '9999').localeCompare(b.renewal_date || '9999'))} empty="No active services to renew." render={(s) => <><td>{s.service_name}</td><td>{date(s.renewal_date)}</td><td><Badge tone={renewalTone(s.renewal_date, s.status)}>{renewalLabel(s.renewal_date)}</Badge></td><td>{label(s.status)}</td></>} />}
+          {tab === 'billing' && <Billing selected={selected} />}
+          {tab === 'followups' && <Rows headers={['Follow-up', 'Due date', 'Priority', 'Status', 'Action']} rows={selected.followups} empty="No follow-ups yet." render={(f) => <><td>{f.title}<small>{label(f.action_type)} · {f.assignee_name || '-'}</small></td><td>{date(f.due_at)}</td><td><Badge tone={f.priority}>{label(f.priority)}</Badge></td><td><Badge tone={f.status === 'completed' ? 'active' : 'watch'}>{label(f.status)}</Badge></td><td>{f.status !== 'completed' && context?.allowed_actions?.manage ? <Button size="compact" onClick={async () => { try { setError(''); const res = await api.request('/api/v1/client-portfolio/actions.php', { method: 'POST', body: { action: 'complete_followup', followup_id: f.id } }); onSaved(res.data); } catch (err) { setError(err.message); } }}>Done</Button> : '-'}</td></>} />}
           {tab === 'activity' && <div className="tr:flex tr:flex-col tr:gap-tracs-2">{selected.activity?.length ? selected.activity.map((a) => <div key={a.id} className="tr:rounded-tracs tr:border tr:border-tracs-border tr:p-tracs-3"><div className="tr:text-sm tr:font-medium">{a.summary}</div><div className="tr:mt-1 tr:text-xs tr:text-tracs-muted">{a.actor_name || 'System'} · {date(a.created_at)}</div></div>) : <div className="tr:text-sm tr:text-tracs-muted">No activity yet.</div>}</div>}
         </div>
       </Card>
-      <QuickActionForm selected={selected} context={context} onSaved={onSaved} />
+      {['services', 'billing', 'renewals', 'followups'].includes(tab) && <QuickActionForm key={tab} initialKind={{ services: 'service', billing: 'billing', renewals: 'renewal', followups: 'followup' }[tab]} selected={selected} context={context} onSaved={onSaved} />}
     </div>
   );
 }
@@ -287,134 +318,183 @@ function ServiceCards({ services = [] }) {
   );
 }
 
-function Rows({ rows = [], empty, render }) {
+function Rows({ rows = [], headers = [], empty, render }) {
+  const [page, setPage] = useState(1);
+  const lastPage = Math.max(1, Math.ceil(rows.length / 25));
+  const current = Math.min(page, lastPage);
   if (!rows.length) return <div className="tr:rounded-tracs tr:border tr:border-dashed tr:border-tracs-border tr:p-tracs-4 tr:text-sm tr:text-tracs-muted">{empty}</div>;
-  return <div className="clients-table-scroll tr:overflow-x-auto"><table className="tr:w-full tr:min-w-[680px] tr:text-left tr:text-sm"><tbody>{rows.map((row) => <tr key={row.id} className="tr:border-b tr:border-tracs-border last:tr:border-0">{render(row)}</tr>)}</tbody></table></div>;
+  return <><div className="clients-table-scroll tr:overflow-x-auto" tabIndex={0}><table className="tr:w-full tr:min-w-[680px] tr:text-left tr:text-sm">{headers.length > 0 && <thead><tr>{headers.map((title) => <th key={title} scope="col">{title}</th>)}</tr></thead>}<tbody>{rows.slice((current - 1) * 25, current * 25).map((row) => <tr key={row.id} className="tr:border-b tr:border-tracs-border last:tr:border-0">{render(row)}</tr>)}</tbody></table></div>{lastPage > 1 && <div className="clients-pagination"><Button disabled={current === 1} onClick={() => setPage(current - 1)}>Previous</Button><span>Page {current} of {lastPage}</span><Button disabled={current === lastPage} onClick={() => setPage(current + 1)}>Next</Button></div>}</>;
 }
 
-function StatStrip({ summary }) {
-  const mainStats = [
-    ['Action Required', summary.action_required || 0],
-    ['Invoice This Week', summary.invoice_this_week || 0],
-    ['Renewal <= 30 Days', summary.renewal_soon || 0],
-    ['Paid So Far', money(summary.total_paid_amount)],
-    ['Outstanding', money(summary.outstanding_amount)],
-    ['Est. Monthly Recurring', money(summary.mrr_amount)],
+function Drawer({ children, onClose, titleId }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const dialog = ref.current;
+    const previous = document.activeElement;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    dialog.showModal();
+    return () => { dialog.close(); document.body.style.overflow = overflow; previous?.focus(); };
+  }, []);
+  return <dialog ref={ref} className="clients-drawer tracs-react-root clients-react-shell" aria-labelledby={titleId} onCancel={(event) => {
+    event.preventDefault();
+    if (!ref.current.querySelector('button[type="submit"]:disabled')) onClose();
+  }}>{children}</dialog>;
+}
+
+function Contacts({ selected, context, onSaved }) {
+  const [editing, setEditing] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  function set(key, value) { setEditing((current) => ({ ...current, [key]: value })); }
+  async function save(event) {
+    event.preventDefault(); setSaving(true); setError('');
+    try {
+      const res = await api.request('/api/v1/client-portfolio/actions.php', { method: 'POST', body: { ...editing, action: 'save_contact', client_id: selected.id, contact_id: editing.id } });
+      onSaved(res.data); setEditing(null);
+    } catch (err) { setError(err.message); } finally { setSaving(false); }
+  }
+  return <section className="tr:mt-tracs-4">
+    <div className="clients-section-heading"><h2>PICs</h2>{context.allowed_actions.manage && <Button onClick={() => { setEditing({ name: '', email: '', phone: '', role_title: '', is_primary: false }); setError(''); }}>Add PIC</Button>}</div>
+    <Rows headers={['Name', 'Email', 'Phone', 'Role', 'Actions']} rows={selected.contacts} empty="No PICs added yet." render={(contact) => <><td>{contact.name}{Number(contact.is_primary) === 1 && <small>Primary PIC</small>}</td><td>{contact.email || '-'}</td><td>{contact.phone || '-'}</td><td>{contact.role_title || '-'}</td><td>{context.allowed_actions.manage && <Button size="compact" onClick={() => { setEditing({ ...contact, is_primary: Number(contact.is_primary) === 1 }); setError(''); }}>Edit PIC</Button>}</td></>} />
+    {editing && <Drawer onClose={() => setEditing(null)} titleId="pic-form-title"><form className="clients-contact-form" onSubmit={save}>
+      <div className="clients-section-heading"><h2 id="pic-form-title">{editing.id ? 'Edit PIC' : 'Add PIC'}</h2><Button disabled={saving} onClick={() => setEditing(null)}>Close</Button></div>
+      {error && <p role="alert">{error}</p>}
+      <Field label="Name"><Input required maxLength={150} value={editing.name} onChange={(e) => set('name', e.target.value)} /></Field>
+      <Field label="Email"><Input type="email" maxLength={190} value={editing.email || ''} onChange={(e) => set('email', e.target.value)} /></Field>
+      <Field label="Phone"><Input maxLength={80} value={editing.phone || ''} onChange={(e) => set('phone', e.target.value)} /></Field>
+      <Field label="Role"><Input maxLength={120} placeholder="Billing, Operations, Legal…" value={editing.role_title || ''} onChange={(e) => set('role_title', e.target.value)} /></Field>
+      <label><input type="checkbox" checked={editing.is_primary} onChange={(e) => set('is_primary', e.target.checked)} /> Primary PIC</label>
+      <Button variant="primary" type="submit" disabled={saving}>{saving ? 'Saving...' : 'Save PIC'}</Button>
+    </form></Drawer>}
+  </section>;
+}
+
+function Billing({ selected }) {
+  const [payment, setPayment] = useState('');
+  const [tax, setTax] = useState('');
+  const rows = (selected.billing || []).filter((row) => (!payment || row.payment_status === payment) && (!tax || (Number(row.tax_invoice_required) === 1 && (tax === 'sent' ? Boolean(row.tax_invoice_sent_at) : !row.tax_invoice_sent_at))));
+  return <div className="tr:flex tr:flex-col tr:gap-tracs-3">
+    <div className="tr:flex tr:flex-wrap tr:gap-tracs-2"><Field label="Payment status"><Select value={payment} onChange={(e) => setPayment(e.target.value)}><option value="">All payments</option>{['waiting', 'paid', 'overdue'].map((v) => <option key={v} value={v}>{label(v)}</option>)}</Select></Field><Field label="Tax invoice"><Select value={tax} onChange={(e) => setTax(e.target.value)}><option value="">All tax invoices</option><option value="pending">Pending</option><option value="sent">Sent</option></Select></Field></div>
+    <Rows key={payment + tax} headers={['Invoice / service', 'Invoice date', 'Due date', 'Amount', 'Invoice status', 'Payment', 'Tax invoice']} rows={rows} empty={selected.billing?.length ? 'No invoices match these filters.' : 'No billing records yet.'} render={(b) => <><td>{b.invoice_number || '-'}<small>{b.service_name || 'General billing'}</small></td><td>{date(b.invoice_date)}</td><td>{date(b.due_date)}</td><td>{money(b.amount)}</td><td>{label(b.invoice_status)}</td><td><Badge tone={b.payment_status}>{label(b.payment_status)}</Badge></td><td>{Number(b.tax_invoice_required) === 1 ? (b.tax_invoice_sent_at ? 'Sent' : 'Pending') : '-'}</td></>} />
+  </div>;
+}
+
+function StatStrip({ summary, filters, setFilters }) {
+  const signals = [
+    ['Action Required', summary.action_required || 0, { attention: 'attention', signal: '' }, filters.attention === 'attention'],
+    ['Invoice This Week', summary.invoice_this_week || 0, { attention: '', signal: 'invoice' }, filters.signal === 'invoice'],
+    ['Services Renewing ≤30 Days', summary.renewal_soon || 0, { attention: '', signal: 'renewal' }, filters.signal === 'renewal'],
   ];
-  return (
-    <Card className="clients-stat-strip tr:p-0">
-      <div className="tr:grid tr:grid-cols-2 tr:md:grid-cols-3 tr:lg:grid-cols-6">
-        {mainStats.map(([title, value], index) => (
-          <div key={title} className={`client-stat-cell tr:min-w-0 tr:p-tracs-3 ${index === 3 ? 'clients-money-start' : ''}`}>
-            <div className="tr:text-base tr:font-semibold tr:leading-tight">{value}</div>
-            <div className="tr:mt-1 tr:text-[11px] tr:leading-snug tr:text-tracs-muted">{title}</div>
-          </div>
-        ))}
-      </div>
-      <div className="tr:border-t tr:border-tracs-border tr:px-tracs-3 tr:py-2 tr:text-xs tr:text-tracs-muted">
-        Waiting payment: {summary.waiting_payment || 0} · Tax invoice pending: {summary.tax_invoice_pending || 0}
-      </div>
-    </Card>
-  );
+  return <Card className="clients-stat-strip tr:p-0">
+    <div className="clients-stat-groups">
+      <section><h2>Attention signals</h2><div className="clients-stat-grid">{signals.map(([title, value, filter, active]) => <button key={title} className="client-stat-cell" aria-pressed={active} onClick={() => setFilters({ ...filters, ...filter, page: '1' })}><strong>{value}</strong><span>{title}</span></button>)}</div></section>
+      <section><h2>Financial snapshot</h2><div className="clients-stat-grid">{[['Paid So Far', summary.total_paid_amount], ['Outstanding', summary.outstanding_amount], ['Est. Monthly Recurring', summary.mrr_amount]].map(([title, value]) => <div key={title} className="client-stat-cell"><strong>{money(value ?? 0)}</strong><span>{title}</span></div>)}</div></section>
+    </div>
+    <p className="clients-stat-note">Current filters · Waiting payment: {summary.waiting_payment || 0} · Tax invoice pending: {summary.tax_invoice_pending || 0}</p>
+  </Card>;
 }
 
 function FilterBar({ filters, setFilters, context }) {
   const [open, setOpen] = useState(false);
   const canViewAll = Boolean(context.allowed_actions.view_all);
   const ownerValue = filters.scope === 'mine' ? 'mine' : filters.owner_user_id ? `owner:${filters.owner_user_id}` : 'all';
+  function set(key, value) { setFilters({ ...filters, [key]: value, page: '1' }); }
+  function setOwner(value) { setFilters({ ...filters, scope: value === 'mine' ? 'mine' : 'all', owner_user_id: value.startsWith('owner:') ? value.slice(6) : '', page: '1' }); }
+  const active = Object.entries(filters).filter(([key, value]) => value && value !== emptyFilters[key] && !['sort', 'direction', 'page', 'owner_user_id'].includes(key));
+  const titles = { q: 'Search', scope: 'Owner scope', status: 'Status', service_type: 'Service', service_status: 'Service status', renewal_window: 'Renewal days', billing_status: 'Payment', tax_status: 'Tax invoice', pic: 'PIC', renewal_from: 'Renewal from', renewal_to: 'Renewal to', attention: 'Attention', signal: 'Signal' };
+  return <Card className="tr:p-tracs-3">
+    <div className="clients-primary-filters">
+      <Field label="Search"><Input placeholder="Client, code, or PIC" value={filters.q} onChange={(e) => set('q', e.target.value)} /></Field>
+      <Field label="Status"><Select value={filters.status} onChange={(e) => set('status', e.target.value)}><option value="">Any status</option>{['active', 'monitoring', 'inactive'].map((v) => <option key={v} value={v}>{label(v)}</option>)}</Select></Field>
+      <Field label="Owner"><Select disabled={!canViewAll} value={ownerValue} onChange={(e) => setOwner(e.target.value)}><option value="mine">My Clients</option>{canViewAll && <option value="all">All Owners</option>}{canViewAll && context.users.map((u) => <option key={u.id} value={`owner:${u.id}`}>{u.name}</option>)}</Select></Field>
+      <Field label="Renewal window"><Select value={filters.renewal_window} onChange={(e) => set('renewal_window', e.target.value)}><option value="">Any renewal</option>{[7, 30, 90].map((days) => <option key={days} value={days}>Within {days} days</option>)}</Select></Field>
+      <Button onClick={() => setOpen(!open)} aria-expanded={open} aria-controls="client-more-filters">More Filters</Button>
+      <Button onClick={() => { setFilters({ ...emptyFilters }); setOpen(false); }}>Clear filters</Button>
+    </div>
+    {open && <div id="client-more-filters" className="clients-more-filters">
+      <Field label="Service type"><Select value={filters.service_type} onChange={(e) => set('service_type', e.target.value)}><option value="">Any service</option>{serviceTypes.map((v) => <option key={v}>{v}</option>)}</Select></Field>
+      <Field label="Service status"><Select value={filters.service_status} onChange={(e) => set('service_status', e.target.value)}><option value="">Any service status</option>{serviceStatuses.map((v) => <option key={v} value={v}>{label(v)}</option>)}</Select></Field>
+      <Field label="PIC"><Input value={filters.pic} onChange={(e) => set('pic', e.target.value)} /></Field>
+      <Field label="Payment state"><Select value={filters.billing_status} onChange={(e) => set('billing_status', e.target.value)}><option value="">Any payment</option>{['waiting', 'paid', 'overdue'].map((v) => <option key={v} value={v}>{label(v)}</option>)}</Select></Field>
+      <Field label="Tax invoice status"><Select value={filters.tax_status} onChange={(e) => set('tax_status', e.target.value)}><option value="">Any tax invoice</option><option value="pending">Pending</option><option value="sent">Sent</option></Select></Field>
+      <Field label="Attention"><Select value={filters.attention} onChange={(e) => set('attention', e.target.value)}><option value="">Any attention</option>{['attention', 'critical', 'warning', 'due', 'watch'].map((v) => <option key={v} value={v}>{v === 'attention' ? 'Needs attention' : label(v)}</option>)}</Select></Field>
+      <Field label="Renewal from"><Input type="date" max={filters.renewal_to || undefined} value={filters.renewal_from} onChange={(e) => set('renewal_from', e.target.value)} /></Field>
+      <Field label="Renewal to"><Input type="date" min={filters.renewal_from || undefined} value={filters.renewal_to} onChange={(e) => set('renewal_to', e.target.value)} /></Field>
+    </div>}
+    {(active.length > 0 || filters.owner_user_id) && <div className="clients-active-filters" aria-label="Active filters">{active.map(([key, value]) => <Button key={key} size="compact" aria-label={`Remove ${titles[key]} filter`} onClick={() => key === 'scope' ? setOwner('mine') : set(key, emptyFilters[key])}>{titles[key]}: {label(value)} {icon('x')}</Button>)}{filters.owner_user_id && <Button size="compact" onClick={() => setOwner('all')}>Owner: {context.users.find((u) => String(u.id) === filters.owner_user_id)?.name || filters.owner_user_id} {icon('x')}</Button>}</div>}
+  </Card>;
+}
 
-  function setOwner(value) {
-    if (value === 'mine') {
-      setFilters({ ...filters, scope: 'mine', owner_user_id: '' });
-      return;
-    }
-    if (value === 'all') {
-      setFilters({ ...filters, scope: 'all', owner_user_id: '' });
-      return;
-    }
-    setFilters({ ...filters, scope: 'all', owner_user_id: value.replace('owner:', '') });
-  }
-
-  return (
-    <Card className="tr:relative tr:p-tracs-3">
-      <div className="tr:grid tr:grid-cols-1 tr:gap-tracs-2 tr:lg:grid-cols-[minmax(220px,1fr)_170px_170px_auto]">
-        <Input placeholder="Search client, code, PIC" value={filters.q} onChange={(e) => setFilters({ ...filters, q: e.target.value })} />
-        <Select value={filters.service_type} onChange={(e) => setFilters({ ...filters, service_type: e.target.value })}><option value="">Any service</option>{serviceTypes.map((type) => <option key={type} value={type}>{type}</option>)}</Select>
-        <Select value={filters.renewal_window} onChange={(e) => setFilters({ ...filters, renewal_window: e.target.value })}><option value="">Any renewal</option><option value="7">Renewal &lt;= 7 days</option><option value="30">Renewal &lt;= 30 days</option><option value="90">Renewal &lt;= 90 days</option></Select>
-        <div className="tr:flex tr:gap-tracs-2">
-          <Button className="tr:flex-1 tr:px-tracs-3 lg:tr:min-w-32" onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-controls="client-more-filters">{icon('sliders-horizontal')}More Filters</Button>
-          <Button className="tr:w-10 tr:px-0" aria-label="Reset filters" title="Reset filters" size="compact" onClick={() => { setFilters({ ...emptyFilters }); setOpen(false); }}>{icon('rotate-ccw')}<span className="tr:sr-only">Reset filters</span></Button>
-        </div>
-      </div>
-      {open && (
-        <div id="client-more-filters" className="clients-more-filters tr:mt-tracs-3 tr:grid tr:grid-cols-1 tr:gap-tracs-2 tr:border-t tr:border-tracs-border tr:pt-tracs-3 tr:md:grid-cols-2 tr:xl:grid-cols-4">
-          <Select disabled={!canViewAll} value={ownerValue} onChange={(e) => setOwner(e.target.value)}>
-            <option value="mine">My Clients</option>
-            {canViewAll && <option value="all">All Owners</option>}
-            {canViewAll && context.users.map((u) => <option key={u.id} value={`owner:${u.id}`}>{u.name}</option>)}
-          </Select>
-          <Select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}><option value="">Any client status</option><option value="active">Active</option><option value="monitoring">Monitoring</option><option value="inactive">Inactive</option></Select>
-          <Select value={filters.service_status} onChange={(e) => setFilters({ ...filters, service_status: e.target.value })}><option value="">Any service status</option>{serviceStatuses.map((status) => <option key={status} value={status}>{label(status)}</option>)}</Select>
-          <Select value={filters.attention} onChange={(e) => setFilters({ ...filters, attention: e.target.value })}><option value="">Any attention</option><option value="attention">Needs attention</option><option value="critical">Critical</option><option value="warning">Warning</option><option value="due">Due</option><option value="watch">Watch</option></Select>
-        </div>
-      )}
-    </Card>
-  );
+function ClientTable({ data, filters, setFilters, loading, canManage, onAdd, highlighted }) {
+  const columns = [['company_name', 'Company'], ['client_code', 'Code'], ['owner_name', 'Owner'], ['status', 'Status'], ['primary_contact_name', 'Primary PIC'], ['nearest_renewal_date', 'Next Renewal'], ['outstanding_amount', 'Outstanding (Rp)'], ['attention_rank', 'Attention']];
+  const total = data.total ?? 0;
+  const page = data.page ?? 1;
+  const pages = Math.max(1, Math.ceil(total / (data.page_size || 25)));
+  function sort(key) { setFilters({ ...filters, sort: key, direction: filters.sort === key && filters.direction === 'asc' ? 'desc' : 'asc', page: '1' }); }
+  return <Card className="tr:p-0" aria-busy={loading}>
+    <div className="clients-section-heading"><h2>{total} {total === 1 ? 'Client' : 'Clients'}</h2><span role="status">{loading ? 'Updating clients…' : `Page ${page} of ${pages}`}</span></div>
+    {data.clients?.length ? <div className="clients-table-scroll" tabIndex={0} aria-label="Client roster"><table className="clients-roster"><caption className="tr:sr-only">Client roster. Select a company to view its details.</caption><thead><tr>{columns.map(([key, title]) => <th key={key} scope="col" aria-sort={filters.sort === key ? (filters.direction === 'desc' ? 'descending' : 'ascending') : 'none'}><button onClick={() => sort(key)}>{title}{filters.sort === key && icon(filters.direction === 'asc' ? 'chevron-up' : 'chevron-down')}</button></th>)}</tr></thead><tbody>{data.clients.map((c) => <tr key={c.id} className={String(highlighted) === String(c.id) ? 'is-selected' : ''} onClick={(event) => { if (!event.target.closest('a,button') && !window.getSelection()?.toString()) window.location.assign(clientUrl(c.id)); }}><td><a className="clients-link" href={clientUrl(c.id)}>{c.company_name}</a><small>{c.service_count} services</small></td><td>{c.client_code || '-'}</td><td>{c.owner_name}</td><td><Badge tone={c.status}>{label(c.status)}</Badge></td><td>{c.primary_contact_name || 'No PIC'}</td><td>{date(c.nearest_renewal_date)}</td><td className="clients-money">{money(c.outstanding_amount)}</td><td>{c.attention_level !== 'normal' ? <Badge tone={c.attention_level}>{c.attention_reason}</Badge> : '-'}</td></tr>)}</tbody></table></div> : !loading && <div className="clients-empty"><h3>{data.available_total === 0 ? 'No clients tracked yet' : 'No clients match your filters'}</h3><p>{data.available_total === 0 ? 'Add your first client, then set up their services and billing.' : 'Try another search or clear the filters to see your clients.'}</p>{data.available_total === 0 ? canManage && <Button variant="primary" onClick={onAdd}>Add Client</Button> : <Button onClick={() => setFilters({ ...emptyFilters, ...(filters.scope === 'mine' ? { scope: 'all' } : {}) })}>Clear filters</Button>}</div>}
+    {pages > 1 && <div className="clients-pagination"><Button disabled={loading || page === 1} onClick={() => setFilters({ ...filters, page: String(page - 1) })}>Previous</Button><span>{(page - 1) * 25 + 1}–{Math.min(page * 25, total)} of {total}</span><Button disabled={loading || page >= pages} onClick={() => setFilters({ ...filters, page: String(page + 1) })}>Next</Button></div>}
+  </Card>;
 }
 
 function ClientsApp() {
   const context = useContextData();
-  const [filters, setFilters] = useState({ ...emptyFilters });
-  const clients = useClients(filters);
+  const [filters, setFilters] = useState(readFilters);
+  const isDetail = window.location.pathname.endsWith('/client-detail.php') || new URLSearchParams(window.location.search).has('id');
+  const clients = useClients(filters, !isDetail && Boolean(context.data?.schema_ready));
   const [selected, setSelected] = useState(null);
+  const [detailError, setDetailError] = useState('');
   const [editing, setEditing] = useState(false);
   const [creating, setCreating] = useState(false);
-  const selectedIdFromUrl = new URLSearchParams(window.location.search).get('id');
+  const [highlighted, setHighlighted] = useState('');
+  const [notice, setNotice] = useState('');
+  const selectedId = new URLSearchParams(window.location.search).get('id');
 
   useEffect(() => { window.lucide?.createIcons(); });
   useEffect(() => {
-    const first = clients.data.clients?.find((c) => String(c.id) === String(selectedIdFromUrl)) || clients.data.clients?.[0] || null;
-    if (!selected && first) loadDetail(first.id);
-  }, [clients.data.clients]);
+    const sync = () => setFilters(readFilters());
+    window.addEventListener('popstate', sync);
+    return () => window.removeEventListener('popstate', sync);
+  }, []);
+  useEffect(() => {
+    if (isDetail) return;
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => { if (value && value !== emptyFilters[key]) params.set(key, value); });
+    window.history.replaceState({}, '', `clients.php${params.size ? `?${params}` : ''}`);
+  }, [filters, isDetail]);
+  useEffect(() => {
+    if (!isDetail || !context.data?.schema_ready) return;
+    const controller = new AbortController();
+    setDetailError('');
+    if (!/^[1-9]\d*$/.test(selectedId || '')) { setDetailError('Client not found. Return to Clients to choose a record.'); return; }
+    api.request(`/api/v1/client-portfolio/client.php?id=${selectedId}`, { signal: controller.signal })
+      .then((res) => { if (!controller.signal.aborted) setSelected(res.data); })
+      .catch((err) => { if (!controller.signal.aborted) setDetailError(err.message); });
+    return () => controller.abort();
+  }, [isDetail, selectedId, context.data?.schema_ready]);
 
-  async function loadDetail(id) {
-    const res = await api.request(`/api/v1/client-portfolio/client.php?id=${id}`);
-    setSelected(res.data);
-    setEditing(false);
-    setCreating(false);
-    window.history.replaceState({}, '', id ? `client-detail.php?id=${id}` : 'clients.php');
+  function afterSaved(client, services = false) {
+    setEditing(false); setCreating(false);
+    if (services) { window.location.assign(clientUrl(client.id, 'services')); return; }
+    if (isDetail) { setSelected(client); setNotice('Client saved.'); }
+    else { setHighlighted(client.id); setNotice(`${client.company_name} saved.`); clients.refresh(); }
   }
-
-  async function afterSaved(client) {
-    setSelected(client);
-    setEditing(false);
-    setCreating(false);
-    clients.refresh();
-  }
-
-  const summary = clients.data.summary || {};
   const canManage = Boolean(context.data?.allowed_actions?.manage);
-  return (
-    <main className="tracs-react-root clients-react-shell tr:flex tr:flex-col tr:gap-tracs-4">
-      <div className="tr:flex tr:flex-col tr:gap-tracs-3 tr:lg:flex-row tr:lg:items-end tr:lg:justify-between">
-        <div><h1 className="tr:text-xl tr:font-semibold">Clients</h1><p className="tr:mt-1 tr:text-sm tr:text-tracs-muted">Owned portfolios, billing signals, invoice follow-ups, and renewal attention.</p></div>
-        {canManage && <Button variant="primary" onClick={() => { setCreating(true); setEditing(false); }}>{icon('plus-circle')}Add Client</Button>}
-      </div>
-      {context.loading || clients.loading ? <Card>Loading client portfolio...</Card> : context.error || clients.error ? <Card className="tr:border-tracs-danger-border tr:text-tracs-danger">{context.error || clients.error}</Card> : !context.data?.schema_ready ? <Card>Run <code>config/migrations/2026_09_01_client_portfolio_mvp.sql</code>, then reload Clients.</Card> : (
-        <>
-          <StatStrip summary={summary} />
-          <FilterBar filters={filters} setFilters={setFilters} context={context.data} />
-          <div className="tr:grid tr:grid-cols-1 tr:gap-tracs-4 tr:xl:grid-cols-[390px_minmax(0,1fr)]">
-            <div className="tr:flex tr:flex-col tr:gap-tracs-4">
-              <Card className="tr:p-0"><div className="tr:border-b tr:border-tracs-border tr:p-tracs-3 tr:text-sm tr:font-semibold">Needs Attention</div><div className="tr:flex tr:flex-col">{clients.data.attention?.length ? clients.data.attention.map((c) => <button key={c.id} className="client-row tr:border-b tr:border-tracs-border tr:p-tracs-3 tr:text-left last:tr:border-0" onClick={() => loadDetail(c.id)}><div className="tr:flex tr:items-center tr:justify-between tr:gap-2"><strong>{c.company_name}</strong><Badge tone={c.attention_level}>{c.attention_reason}</Badge></div><div className="tr:mt-1 tr:text-xs tr:text-tracs-muted">{c.next_action} · {c.next_action_due_at ? date(c.next_action_due_at) : 'No date'}</div></button>) : <div className="tr:p-tracs-4 tr:text-sm tr:text-tracs-muted">No client needs immediate attention.</div>}</div></Card>
-              <Card className="tr:p-0"><div className="tr:border-b tr:border-tracs-border tr:p-tracs-3 tr:text-sm tr:font-semibold">{clients.data.clients?.length || 0} Clients</div><div className="tr:flex tr:flex-col">{clients.data.clients?.length ? clients.data.clients.map((c) => <button key={c.id} className={`client-row tr:border-b tr:border-tracs-border tr:p-tracs-3 tr:text-left last:tr:border-0 ${selected?.id === c.id ? 'is-selected' : ''}`} onClick={() => loadDetail(c.id)}><div className="tr:flex tr:items-center tr:justify-between tr:gap-2"><strong>{c.company_name}</strong><Badge tone={c.status}>{label(c.status)}</Badge></div><div className="tr:mt-1 tr:text-xs tr:text-tracs-muted">{c.service_count} services · {c.addon_count} addons · {c.primary_contact_name || 'No PIC'}</div><div className="tr:mt-2 tr:grid tr:grid-cols-1 tr:gap-1 tr:text-xs tr:md:grid-cols-2"><span>Paid {money(c.total_paid_amount)}</span><span>Outstanding {money(c.outstanding_amount)}</span><span>MRR {money(c.mrr_amount)}</span><span>{c.next_action}</span></div></button>) : <div className="tr:p-tracs-6 tr:text-sm tr:text-tracs-muted">No clients tracked yet. Add a client to start tracking services, billing schedules, invoice follow-ups, and tax invoice reminders.</div>}</div></Card>
-            </div>
-            {creating ? <FormPanel context={context.data} onSaved={afterSaved} onCancel={() => setCreating(false)} /> : editing ? <FormPanel context={context.data} selected={selected} onSaved={afterSaved} onCancel={() => setEditing(false)} /> : <Detail selected={selected} context={context.data} onEdit={() => setEditing(true)} onSaved={afterSaved} />}
-          </div>
-        </>
-      )}
-    </main>
-  );
+  const ready = !context.loading && !context.error && context.data?.schema_ready;
+  return <div className="tracs-react-root clients-react-shell tr:flex tr:flex-col tr:gap-tracs-4">
+    {!isDetail && <div className="clients-page-heading"><div><h1 className="tr:text-xl tr:font-semibold">Clients</h1><p className="tr:mt-1 tr:text-sm tr:text-tracs-muted">Find clients, review billing, and follow up on renewals.</p></div>{canManage && ready && <Button variant="primary" onClick={() => setCreating(true)}>{icon('plus-circle')}Add Client</Button>}</div>}
+    {notice && <div role="status">{notice}{highlighted && <a className="clients-link tr:ml-2" href={clientUrl(highlighted)}>Go to client</a>}</div>}
+    {context.loading ? <Card>Loading client portfolio…</Card> : context.error ? <Card><p role="alert">{context.error}</p><Button onClick={() => window.location.reload()}>Retry</Button></Card> : !context.data?.schema_ready ? <Card>Client Portfolio setup is incomplete. Contact your administrator.</Card> : isDetail ? detailError ? <Card><p role="alert">{detailError}</p><a className="clients-link" href={clientUrl()}>Back to Clients</a><Button onClick={() => window.location.reload()}>Retry</Button></Card> : selected ? <Detail selected={selected} context={context.data} onEdit={() => setEditing(true)} onSaved={afterSaved} /> : <Card>Loading client details…</Card> : <>
+      <StatStrip summary={clients.data.summary || {}} filters={filters} setFilters={setFilters} />
+      <Card className="tr:p-0"><div className="clients-section-heading"><h2>Needs Attention</h2><Button size="compact" onClick={() => setFilters({ ...filters, attention: 'attention', signal: '', page: '1' })}>View all ({clients.data.summary?.action_required || 0})</Button></div><div className="clients-attention-strip">{clients.data.attention?.length ? clients.data.attention.map((c) => <a className="client-row" href={clientUrl(c.id, c.next_action === 'Review renewal' ? 'renewals' : 'billing')} key={c.id}><strong>{c.company_name}</strong><span>{c.attention_reason}</span><small>{c.next_action_due_at ? date(c.next_action_due_at) : 'No due date'} · {c.next_action}</small></a>) : <p className="tr:p-tracs-3 tr:text-sm tr:text-tracs-muted">{clients.loading ? 'Checking attention signals…' : 'No clients need attention in this view.'}</p>}</div></Card>
+      <FilterBar filters={filters} setFilters={setFilters} context={context.data} />
+      {clients.error && <Card><p role="alert">{clients.error}</p><Button onClick={clients.refresh}>Retry</Button></Card>}
+      <ClientTable data={clients.data} filters={filters} setFilters={setFilters} loading={clients.loading} canManage={canManage} onAdd={() => setCreating(true)} highlighted={highlighted} />
+    </>}
+    {(creating || editing) && ready && <Drawer onClose={() => { setCreating(false); setEditing(false); }} titleId="client-form-title"><FormPanel context={context.data} selected={editing ? selected : null} onSaved={afterSaved} onCancel={() => { setCreating(false); setEditing(false); }} /></Drawer>}
+  </div>;
 }
 
 const root = document.getElementById('tracs-clients-root');

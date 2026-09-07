@@ -38,6 +38,14 @@ try {
         'service_type' => $_GET['service_type'] ?? '',
         'service_status' => $_GET['service_status'] ?? '',
         'renewal_window' => $_GET['renewal_window'] ?? '',
+        'renewal_from' => $_GET['renewal_from'] ?? '',
+        'renewal_to' => $_GET['renewal_to'] ?? '',
+        'pic' => $_GET['pic'] ?? '',
+        'tax_status' => $_GET['tax_status'] ?? '',
+        'signal' => $_GET['signal'] ?? '',
+        'sort' => $_GET['sort'] ?? 'attention_rank',
+        'direction' => $_GET['direction'] ?? 'asc',
+        'page' => $_GET['page'] ?? 1,
     ]);
     \TRACS\Api\json_success($data, 'Clients loaded.', ['request_id' => $context['request_id']]);
 } catch (InvalidArgumentException $error) {

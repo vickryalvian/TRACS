@@ -53,7 +53,7 @@ final class ClientPortfolioModel
             $params[] = (string)$filters['status'];
         }
         if (!empty($filters['q'])) {
-            $where[] = "(c.company_name LIKE ? OR c.client_code LIKE ? OR pc.name LIKE ? OR pc.email LIKE ?)";
+            $where[] = "(c.company_name LIKE ? OR c.client_code LIKE ? OR EXISTS (SELECT 1 FROM tracs_client_contacts qc WHERE qc.client_id=c.id AND (qc.name LIKE ? OR qc.email LIKE ?)))";
             $needle = '%' . (string)$filters['q'] . '%';
             $types .= 'ssss';
             array_push($params, $needle, $needle, $needle, $needle);
@@ -67,6 +67,34 @@ final class ClientPortfolioModel
             $where[] = "EXISTS (SELECT 1 FROM tracs_client_services fs WHERE fs.client_id = c.id AND fs.status = ?)";
             $types .= 's';
             $params[] = (string)$filters['service_status'];
+        }
+        if (!empty($filters['pic'])) {
+            $where[] = "EXISTS (SELECT 1 FROM tracs_client_contacts fc WHERE fc.client_id=c.id AND (fc.name LIKE ? OR fc.email LIKE ?))";
+            $types .= 'ss';
+            array_push($params, '%' . $filters['pic'] . '%', '%' . $filters['pic'] . '%');
+        }
+        if (in_array($filters['billing_status'] ?? '', ['paid', 'waiting', 'overdue'], true)) {
+            $where[] = "EXISTS (SELECT 1 FROM tracs_client_billing_records fb WHERE fb.client_id=c.id AND fb.invoice_status <> 'cancelled' AND fb.payment_status=?)";
+            $types .= 's';
+            $params[] = $filters['billing_status'];
+        }
+        if (in_array($filters['tax_status'] ?? '', ['pending', 'sent'], true)) {
+            $sent = $filters['tax_status'] === 'sent' ? 'IS NOT NULL' : 'IS NULL';
+            $where[] = "EXISTS (SELECT 1 FROM tracs_client_billing_records fb WHERE fb.client_id=c.id AND fb.invoice_status <> 'cancelled' AND fb.tax_invoice_required=1 AND fb.payment_status='paid' AND fb.tax_invoice_sent_at {$sent})";
+        }
+        $renewalConditions = [];
+        $renewalParams = [];
+        foreach (['renewal_from' => '>=', 'renewal_to' => '<='] as $key => $operator) {
+            if (!empty($filters[$key])) {
+                $renewalConditions[] = "fs.renewal_date {$operator} ?";
+                $renewalParams[] = $this->nullableDate($filters[$key]);
+            }
+        }
+        if (count($renewalParams) === 2 && $renewalParams[0] > $renewalParams[1]) throw new InvalidArgumentException('Renewal end must be on or after the start date.');
+        if ($renewalConditions) {
+            $where[] = "EXISTS (SELECT 1 FROM tracs_client_services fs WHERE fs.client_id=c.id AND fs.status NOT IN ('inactive','terminated') AND " . implode(' AND ', $renewalConditions) . ')';
+            $types .= str_repeat('s', count($renewalParams));
+            array_push($params, ...$renewalParams);
         }
         if (!empty($filters['renewal_window'])) {
             $days = $this->renewalWindowDays($filters['renewal_window']);
@@ -96,6 +124,7 @@ final class ClientPortfolioModel
                    pc.email AS primary_contact_email,
                    pc.phone AS primary_contact_phone,
                    COALESCE(svc.service_count, 0) AS service_count,
+                   COALESCE(svc.renewal_soon_count, 0) AS renewal_soon_count,
                    COALESCE(addons.addon_count, 0) AS addon_count,
                    svc.service_types,
                    CASE
@@ -118,6 +147,7 @@ final class ClientPortfolioModel
             LEFT JOIN (
                 SELECT s.client_id,
                        COUNT(CASE WHEN s.status NOT IN ('inactive','terminated') THEN s.id END) AS service_count,
+                       COUNT(CASE WHEN s.status NOT IN ('inactive','terminated') AND s.renewal_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY) THEN s.id END) AS renewal_soon_count,
                        GROUP_CONCAT(DISTINCT s.service_type ORDER BY s.service_type SEPARATOR ', ') AS service_types,
                        MIN(CASE WHEN s.status NOT IN ('inactive','terminated') THEN s.renewal_date END) AS nearest_renewal_date,
                        SUM(CASE WHEN s.status NOT IN ('inactive','terminated') THEN
@@ -160,6 +190,7 @@ final class ClientPortfolioModel
                        SUM(CASE WHEN invoice_status <> 'cancelled' AND payment_status = 'paid' THEN COALESCE(amount, 0) ELSE 0 END) AS total_paid_amount,
                        SUM(CASE WHEN invoice_status <> 'cancelled' AND payment_status IN ('waiting','overdue') THEN COALESCE(amount, 0) ELSE 0 END) AS outstanding_amount
                 FROM tracs_client_billing_records
+                WHERE invoice_status <> 'cancelled'
                 GROUP BY client_id
             ) bill ON bill.client_id = c.id
             {$whereSql}
@@ -168,8 +199,10 @@ final class ClientPortfolioModel
         $rows = $this->preparedRows($sql, $types, $params);
         $clients = array_map(fn(array $row): array => $this->decorateClient($row), $rows);
 
-        if (!empty($filters['billing_status'])) {
-            $clients = array_values(array_filter($clients, fn(array $c): bool => (string)$c['billing_status'] === (string)$filters['billing_status']));
+        if (($filters['signal'] ?? '') === 'invoice') {
+            $clients = array_values(array_filter($clients, fn(array $c): bool => (int)$c['invoice_this_week_count'] > 0));
+        } elseif (($filters['signal'] ?? '') === 'renewal') {
+            $clients = array_values(array_filter($clients, fn(array $c): bool => (int)$c['renewal_soon_count'] > 0));
         }
         if (!empty($filters['attention'])) {
             $attention = (string)$filters['attention'];
@@ -177,10 +210,32 @@ final class ClientPortfolioModel
         }
 
         usort($clients, fn(array $a, array $b): int => [$a['attention_rank'], $a['days_until_action'] ?? 9999, $a['company_name']] <=> [$b['attention_rank'], $b['days_until_action'] ?? 9999, $b['company_name']]);
+        $summary = $this->summary($clients);
+        $attention = array_values(array_filter($clients, fn(array $c): bool => $c['attention_level'] !== 'normal'));
+        $sort = (string)($filters['sort'] ?? 'attention_rank');
+        if (in_array($sort, ['company_name','client_code','owner_name','status','primary_contact_name','nearest_renewal_date','outstanding_amount','attention_rank'], true)) {
+            $direction = ($filters['direction'] ?? '') === 'desc' ? -1 : 1;
+            usort($clients, static function (array $a, array $b) use ($sort, $direction): int {
+                $left = $a[$sort] ?? null;
+                $right = $b[$sort] ?? null;
+                if ($left === null || $right === null) return ($left === null) <=> ($right === null);
+                $order = in_array($sort, ['outstanding_amount', 'attention_rank'], true) ? $left <=> $right : strnatcasecmp((string)$left, (string)$right);
+                return ($order ?: ((int)$a['id'] <=> (int)$b['id'])) * $direction;
+            });
+        }
+        $total = count($clients);
+        $page = max(1, min((int)($filters['page'] ?? 1), max(1, (int)ceil($total / 25))));
+        $available = $canViewAll
+            ? $this->one('SELECT COUNT(*) AS total FROM tracs_clients', '', [])
+            : $this->one('SELECT COUNT(*) AS total FROM tracs_clients WHERE owner_user_id=?', 'i', [$actorId]);
         return [
-            'clients' => $clients,
-            'summary' => $this->summary($clients),
-            'attention' => array_slice(array_values(array_filter($clients, fn(array $c): bool => $c['attention_level'] !== 'normal')), 0, 8),
+            'clients' => array_slice($clients, ($page - 1) * 25, 25),
+            'total' => $total,
+            'available_total' => (int)($available['total'] ?? 0),
+            'page' => $page,
+            'page_size' => 25,
+            'summary' => $summary,
+            'attention' => array_slice($attention, 0, 5),
         ];
     }
 
@@ -208,7 +263,7 @@ final class ClientPortfolioModel
         $name = $this->text($input['company_name'] ?? '', 190);
         if ($name === '') throw new InvalidArgumentException('Company name is required.');
         $owner = max(1, (int)($input['owner_user_id'] ?? $actorId));
-        $code = $this->nullableText($input['client_code'] ?? null, 40);
+        $code = $this->nullableText($input['client_code'] ?? null, 40) ?? 'CL-' . strtoupper(bin2hex(random_bytes(5)));
         $status = $this->enum($input['status'] ?? 'active', ['active','monitoring','inactive'], 'active');
         $notes = $this->nullableText($input['notes'] ?? null, 2000);
         $stmt = $this->db->prepare("INSERT INTO tracs_clients (client_code, company_name, owner_user_id, status, notes, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())");
@@ -295,7 +350,8 @@ final class ClientPortfolioModel
         if (!$service) throw new InvalidArgumentException('Choose a valid service to renew.');
         $newDate = $this->nullableDate($input['new_renewal_date'] ?? $input['renewal_date'] ?? null);
         if ($newDate === null) throw new InvalidArgumentException('New renewal date is required.');
-        $newPrice = array_key_exists('new_price', $input) || array_key_exists('price', $input) ? $this->nullableMoney($input['new_price'] ?? $input['price'] ?? null) : ($service['price'] !== null ? (float)$service['price'] : null);
+        $priceInput = $input['new_price'] ?? $input['price'] ?? null;
+        $newPrice = $priceInput !== null && trim((string)$priceInput) !== '' ? $this->nullableMoney($priceInput) : ($service['price'] !== null ? (float)$service['price'] : null);
         $note = $this->nullableText($input['note'] ?? null, 2000);
         $stmt = $this->db->prepare("UPDATE tracs_client_services SET renewal_date=?, price=?, status='active', updated_at=NOW() WHERE id=? AND client_id=?");
         if (!$stmt) throw new RuntimeException('Unable to renew service.');
@@ -378,6 +434,7 @@ final class ClientPortfolioModel
     {
         $row = $this->one("SELECT * FROM tracs_client_followups WHERE id=? LIMIT 1", 'i', [$followupId]);
         if (!$row) throw new RuntimeException('Follow-up not found.');
+        if (!$this->getClient((int)$row['client_id'], $actorId, tracs_user_can($this->db, 'clients.view_all', $actorId))) throw new RuntimeException('Client not found.');
         $stmt = $this->db->prepare("UPDATE tracs_client_followups SET status='completed', completed_at=NOW(), updated_at=NOW() WHERE id=?");
         if (!$stmt) throw new RuntimeException('Unable to complete follow-up.');
         $stmt->bind_param('i', $followupId);
@@ -509,7 +566,7 @@ final class ClientPortfolioModel
             $summary['invoice_this_week'] += (int)$client['invoice_this_week_count'];
             $summary['waiting_payment'] += (int)$client['waiting_payment_count'];
             $summary['tax_invoice_pending'] += (int)$client['tax_pending_count'];
-            if ($client['attention_reason'] === 'Renewal within 30 days') $summary['renewal_soon']++;
+            $summary['renewal_soon'] += (int)($client['renewal_soon_count'] ?? 0);
             $summary['total_paid_amount'] += (float)($client['total_paid_amount'] ?? 0);
             $summary['outstanding_amount'] += (float)($client['outstanding_amount'] ?? 0);
             $summary['mrr_amount'] += (float)($client['mrr_amount'] ?? 0);
@@ -529,12 +586,54 @@ final class ClientPortfolioModel
         $email = $this->nullableText($input['contact_email'] ?? null, 190);
         $phone = $this->nullableText($input['contact_phone'] ?? null, 80);
         $role = $this->nullableText($input['contact_role'] ?? null, 120);
-        $this->db->query("UPDATE tracs_client_contacts SET is_primary=0 WHERE client_id=" . (int)$clientId);
-        $stmt = $this->db->prepare("INSERT INTO tracs_client_contacts (client_id, name, email, phone, role_title, is_primary, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, NOW(), NOW())");
-        if (!$stmt) return;
-        $stmt->bind_param('issss', $clientId, $name, $email, $phone, $role);
-        $stmt->execute();
+        if ($email !== null && !filter_var($email, FILTER_VALIDATE_EMAIL)) throw new InvalidArgumentException('PIC email is invalid.');
+        $current = $this->one('SELECT id FROM tracs_client_contacts WHERE client_id=? AND is_primary=1 LIMIT 1', 'i', [$clientId]);
+        if ($current) {
+            $stmt = $this->db->prepare('UPDATE tracs_client_contacts SET name=?, email=?, phone=?, role_title=?, updated_at=NOW() WHERE id=? AND client_id=?');
+            $stmt->bind_param('ssssii', $name, $email, $phone, $role, $current['id'], $clientId);
+        } else {
+            $stmt = $this->db->prepare("INSERT INTO tracs_client_contacts (client_id, name, email, phone, role_title, is_primary, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, NOW(), NOW())");
+            $stmt->bind_param('issss', $clientId, $name, $email, $phone, $role);
+        }
+        if (!$stmt->execute()) throw new RuntimeException('Unable to save primary PIC.');
         $stmt->close();
+    }
+
+    public function saveContact(int $clientId, array $input, int $actorId, string $actorName): int
+    {
+        $id = (int)($input['contact_id'] ?? 0);
+        $name = $this->text($input['name'] ?? '', 150);
+        if ($name === '') throw new InvalidArgumentException('PIC name is required.');
+        $email = $this->nullableText($input['email'] ?? null, 190);
+        if ($email !== null && !filter_var($email, FILTER_VALIDATE_EMAIL)) throw new InvalidArgumentException('PIC email is invalid.');
+        $phone = $this->nullableText($input['phone'] ?? null, 80);
+        $role = $this->nullableText($input['role_title'] ?? null, 120);
+        $primary = !empty($input['is_primary']) ? 1 : 0;
+        $this->db->begin_transaction();
+        try {
+            $this->one('SELECT id FROM tracs_clients WHERE id=? FOR UPDATE', 'i', [$clientId]);
+            $current = $id ? $this->one('SELECT * FROM tracs_client_contacts WHERE id=? AND client_id=?', 'ii', [$id, $clientId]) : null;
+            if ($id && !$current) throw new InvalidArgumentException('PIC not found.');
+            $existingPrimary = $this->one('SELECT id FROM tracs_client_contacts WHERE client_id=? AND is_primary=1 LIMIT 1', 'i', [$clientId]);
+            if (!$existingPrimary || (int)($current['is_primary'] ?? 0) === 1) $primary = 1;
+            if ($primary) $this->db->query('UPDATE tracs_client_contacts SET is_primary=0 WHERE client_id=' . $clientId);
+            if ($id) {
+                $stmt = $this->db->prepare('UPDATE tracs_client_contacts SET name=?, email=?, phone=?, role_title=?, is_primary=?, updated_at=NOW() WHERE id=? AND client_id=?');
+                $stmt->bind_param('ssssiii', $name, $email, $phone, $role, $primary, $id, $clientId);
+            } else {
+                $stmt = $this->db->prepare('INSERT INTO tracs_client_contacts (client_id,name,email,phone,role_title,is_primary,created_at,updated_at) VALUES (?,?,?,?,?,?,NOW(),NOW())');
+                $stmt->bind_param('issssi', $clientId, $name, $email, $phone, $role, $primary);
+            }
+            if (!$stmt->execute()) throw new RuntimeException('Unable to save PIC.');
+            $id = $id ?: (int)$stmt->insert_id;
+            $stmt->close();
+            $this->log($clientId, $actorId, $actorName, 'client.contact_saved', 'PIC saved: ' . $name);
+            $this->db->commit();
+            return $id;
+        } catch (Throwable $error) {
+            $this->db->rollback();
+            throw $error;
+        }
     }
 
     private function log(int $clientId, int $actorId, string $actorName, string $event, string $summary): void
