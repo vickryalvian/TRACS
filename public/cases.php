@@ -230,7 +230,41 @@ include 'includes/header.php';
   </div>
   <div class="table-wrap">
     <table class="tracs-table">
-      <thead><tr><th>#</th><th>Title</th><th>Status</th><th>Priority</th><th>Next Check</th><th>Time Until</th><th>Actions</th></tr></thead>
+      <thead>
+        <tr>
+          <th>
+            <button type="button" class="table-sort-button" data-case-table-sort="case_number" aria-label="Sort by case number">
+              <span>Number</span><i data-lucide="chevrons-up-down" class="icon-xs table-sort-icon" aria-hidden="true"></i>
+            </button>
+          </th>
+          <th>
+            <button type="button" class="table-sort-button" data-case-table-sort="title" aria-label="Sort by title">
+              <span>Title</span><i data-lucide="chevrons-up-down" class="icon-xs table-sort-icon" aria-hidden="true"></i>
+            </button>
+          </th>
+          <th>
+            <button type="button" class="table-sort-button" data-case-table-sort="status" aria-label="Sort by status">
+              <span>Status</span><i data-lucide="chevrons-up-down" class="icon-xs table-sort-icon" aria-hidden="true"></i>
+            </button>
+          </th>
+          <th>
+            <button type="button" class="table-sort-button" data-case-table-sort="priority" aria-label="Sort by priority">
+              <span>Priority</span><i data-lucide="chevrons-up-down" class="icon-xs table-sort-icon" aria-hidden="true"></i>
+            </button>
+          </th>
+          <th>
+            <button type="button" class="table-sort-button" data-case-table-sort="next_check" aria-label="Sort by next check">
+              <span>Next Check</span><i data-lucide="chevrons-up-down" class="icon-xs table-sort-icon" aria-hidden="true"></i>
+            </button>
+          </th>
+          <th>
+            <button type="button" class="table-sort-button" data-case-table-sort="time_until" aria-label="Sort by time until">
+              <span>Time Until</span><i data-lucide="chevrons-up-down" class="icon-xs table-sort-icon" aria-hidden="true"></i>
+            </button>
+          </th>
+          <th>Actions</th>
+        </tr>
+      </thead>
       <tbody id="caseTableBody"></tbody>
     </table>
   </div>

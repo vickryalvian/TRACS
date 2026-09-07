@@ -8385,6 +8385,47 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
 }
 .tracs-table th:first-child { padding-left: 14px; border-radius: var(--r) 0 0 0 }
 .tracs-table th:last-child  { border-radius: 0 var(--r) 0 0 }
+.tracs-table th .table-sort-button,
+.abuse-list-table th .table-sort-button {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+.tracs-table th .table-sort-button:hover,
+.tracs-table th .table-sort-button:focus-visible,
+.tracs-table th .table-sort-button.is-active,
+.abuse-list-table th .table-sort-button:hover,
+.abuse-list-table th .table-sort-button:focus-visible,
+.abuse-list-table th .table-sort-button.is-active {
+  color: var(--tx1);
+}
+.tracs-table th .table-sort-button:focus-visible,
+.abuse-list-table th .table-sort-button:focus-visible {
+  outline: 2px solid var(--blue-bd);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.table-sort-icon {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
+  margin-left: auto;
+  color: var(--tx4);
+}
+.table-sort-button.is-active .table-sort-icon {
+  color: var(--blue);
+}
 .tracs-table td {
   padding: 10px 10px;
   border-bottom: 1px solid color-mix(in srgb, var(--bd1) 62%, transparent);

@@ -782,29 +782,10 @@
   text-align: center;
 }
 
-.abuse-list-table th button {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0;
-  border: 0;
+.abuse-list-table th .table-sort-button {
   color: var(--tx3);
-  background: transparent;
-  font: inherit;
   font-size: 10.5px;
   font-weight: 800;
-  cursor: pointer;
-}
-
-.abuse-list-table th button::after {
-  content: "";
-  color: var(--tx4);
-  font-size: 9px;
-}
-
-.abuse-list-table th button.is-active::after {
-  content: attr(data-sort-dir);
-  text-transform: uppercase;
 }
 
 .abuse-list-row {

@@ -177,13 +177,13 @@ include 'includes/header.php';
       <table class="abuse-list-table">
         <thead>
           <tr>
-            <th><button type="button" data-abuse-sort="priority">Priority</button></th>
-            <th><button type="button" data-abuse-sort="report">Report</button></th>
-            <th><button type="button" data-abuse-sort="status">Status</button></th>
-            <th><button type="button" data-abuse-sort="age">Age</button></th>
-            <th><button type="button" data-abuse-sort="assignee">Assignee</button></th>
-            <th><button type="button" data-abuse-sort="reporter">Reporter</button></th>
-            <th>Evidence</th>
+            <th><button type="button" class="table-sort-button" data-abuse-sort="priority" aria-label="Sort by priority"><span>Priority</span><i data-lucide="chevrons-up-down" class="icon-xs table-sort-icon" aria-hidden="true"></i></button></th>
+            <th><button type="button" class="table-sort-button" data-abuse-sort="report" aria-label="Sort by report"><span>Report</span><i data-lucide="chevrons-up-down" class="icon-xs table-sort-icon" aria-hidden="true"></i></button></th>
+            <th><button type="button" class="table-sort-button" data-abuse-sort="status" aria-label="Sort by status"><span>Status</span><i data-lucide="chevrons-up-down" class="icon-xs table-sort-icon" aria-hidden="true"></i></button></th>
+            <th><button type="button" class="table-sort-button" data-abuse-sort="age" aria-label="Sort by age"><span>Age</span><i data-lucide="chevrons-up-down" class="icon-xs table-sort-icon" aria-hidden="true"></i></button></th>
+            <th><button type="button" class="table-sort-button" data-abuse-sort="assignee" aria-label="Sort by assignee"><span>Assignee</span><i data-lucide="chevrons-up-down" class="icon-xs table-sort-icon" aria-hidden="true"></i></button></th>
+            <th><button type="button" class="table-sort-button" data-abuse-sort="reporter" aria-label="Sort by reporter"><span>Reporter</span><i data-lucide="chevrons-up-down" class="icon-xs table-sort-icon" aria-hidden="true"></i></button></th>
+            <th><button type="button" class="table-sort-button" data-abuse-sort="evidence" aria-label="Sort by evidence"><span>Evidence</span><i data-lucide="chevrons-up-down" class="icon-xs table-sort-icon" aria-hidden="true"></i></button></th>
             <th>Actions</th>
           </tr>
         </thead>

@@ -2559,12 +2559,16 @@ const CASE_FILTER_LABELS = {
   overdue:'Overdue'
 };
 const CASE_SORT_MODES = new Set(['operational','priority','overdue','next_check','created','updated','case_number']);
+const CASE_VIEW_STORAGE_KEY = 'tracs:cases:view';
+const CASE_TABLE_SORT_STORAGE_KEY = 'tracs:cases:table-sort';
+const CASE_TABLE_SORT_MODES = new Set(['case_number','title','status','priority','next_check','time_until']);
 const caseBoardState = {
   rawCases: [],
   filteredCases: [],
   filter: 'all',
   query: '',
   sort: 'updated',
+  tableSort: { field: 'case_number', dir: 'desc' },
   boardOrder: 'updated',   // Workflow-board per-column ordering (see CASE_BOARD_ORDER_MODES)
   draggedId: 0,
   initialized: false
@@ -3102,6 +3106,57 @@ function sortCases(caseList,sortMode='updated'){
     return caseCompareOperational(a,b);
   });
 }
+function caseTableSortValue(caseItem,field){
+  const status=String(caseItem?.status||'pending').toLowerCase();
+  if(field==='case_number')return Number(caseItem?.id)||0;
+  if(field==='title')return caseItem?.title||'';
+  if(field==='status')return caseStatusMeta(status)[1]||status;
+  if(field==='priority')return {critical:0,high:1,medium:2,low:3}[String(caseItem?.priority||'low').toLowerCase()]??4;
+  if(field==='next_check')return caseTimestamp(caseItem?.next_check_at,Number.MAX_SAFE_INTEGER);
+  if(field==='time_until')return caseIsOverdue(caseItem)?0:caseTimestamp(caseItem?.next_check_at,Number.MAX_SAFE_INTEGER);
+  return '';
+}
+function caseCompareTableRows(a,b){
+  const field=CASE_TABLE_SORT_MODES.has(caseBoardState.tableSort.field)?caseBoardState.tableSort.field:'case_number';
+  const dir=caseBoardState.tableSort.dir==='asc'?'asc':'desc';
+  const valueA=caseTableSortValue(a,field);
+  const valueB=caseTableSortValue(b,field);
+  const diff=typeof valueA==='number' && typeof valueB==='number'
+    ? valueA-valueB
+    : String(valueA).localeCompare(String(valueB),undefined,{numeric:true,sensitivity:'base'});
+  return (dir==='asc'?diff:-diff) || Number(b?.id||0)-Number(a?.id||0);
+}
+function caseDefaultTableSortDir(field){
+  return field==='case_number'?'desc':'asc';
+}
+function readCaseTableSortPreference(){
+  try{
+    const saved=JSON.parse(localStorage.getItem(CASE_TABLE_SORT_STORAGE_KEY)||'{}');
+    if(CASE_TABLE_SORT_MODES.has(saved.field)){
+      caseBoardState.tableSort={
+        field:saved.field,
+        dir:saved.dir==='asc'?'asc':'desc'
+      };
+    }
+  }catch(e){}
+}
+function writeCaseTableSortPreference(){
+  try{localStorage.setItem(CASE_TABLE_SORT_STORAGE_KEY,JSON.stringify(caseBoardState.tableSort));}catch(e){}
+}
+function syncCaseTableSortHeaders(){
+  document.querySelectorAll('[data-case-table-sort]').forEach(button=>{
+    const field=button.dataset.caseTableSort;
+    const active=field===caseBoardState.tableSort.field;
+    const dir=caseBoardState.tableSort.dir==='asc'?'asc':'desc';
+    const label=button.textContent.trim();
+    const th=button.closest('th');
+    const icon=button.querySelector('[data-lucide]');
+    button.classList.toggle('is-active',active);
+    button.setAttribute('aria-label',active?`Sort by ${label}, ${dir==='asc'?'ascending':'descending'}`:`Sort by ${label}`);
+    if(th)th.setAttribute('aria-sort',active?(dir==='asc'?'ascending':'descending'):'none');
+    if(icon)icon.setAttribute('data-lucide',active?(dir==='asc'?'chevron-up':'chevron-down'):'chevrons-up-down');
+  });
+}
 function groupCasesByWorkflow(caseList){
   const groups=Object.fromEntries(Object.keys(CASE_BOARD_COLUMN_META).map(key=>[key,[]]));
   caseList.forEach(caseItem=>groups[getWorkflowColumn(caseItem)].push(caseItem));
@@ -3346,7 +3401,9 @@ function renderTable(filteredCases=caseBoardState.filteredCases){
   const body=document.getElementById('caseTableBody');
   const empty=document.getElementById('caseTableEmpty');
   const wrap=body?.closest('.table-wrap');
-  if(body)body.innerHTML=filteredCases.map(caseTableRowHtml).join('');
+  const rows=[...filteredCases].sort(caseCompareTableRows);
+  if(body)body.innerHTML=rows.map(caseTableRowHtml).join('');
+  syncCaseTableSortHeaders();
   if(wrap)wrap.hidden=filteredCases.length===0;
   if(empty){
     empty.hidden=filteredCases.length>0;
@@ -3529,7 +3586,7 @@ function setCaseWorkspaceView(view,remember=true){
     button.setAttribute('aria-pressed',active?'true':'false');
   });
   if(remember){
-    try{localStorage.setItem('tracs:cases:view',selected);}catch(e){}
+    try{localStorage.setItem(CASE_VIEW_STORAGE_KEY,selected);}catch(e){}
   }
 }
 async function caseRefreshFromServer(){
@@ -3592,6 +3649,7 @@ function initCaseBoard(){
   caseBoardState.filter=CASE_FILTER_LABELS[workspace.dataset.caseFilter]?workspace.dataset.caseFilter:'all';
   caseBoardState.query=workspace.dataset.caseQuery||'';
   caseBoardState.sort=CASE_SORT_MODES.has(workspace.dataset.caseSort)?workspace.dataset.caseSort:'updated';
+  readCaseTableSortPreference();
   caseBoardState.initialized=true;
 
   const search=document.getElementById('caseSearchInput');
@@ -3621,9 +3679,20 @@ function initCaseBoard(){
   });
   document.getElementById('caseClearFilters')?.addEventListener('click',clearCaseFilters);
   document.querySelectorAll('[data-case-clear-filters]').forEach(button=>button.addEventListener('click',clearCaseFilters));
+  document.querySelectorAll('[data-case-table-sort]').forEach(button=>button.addEventListener('click',()=>{
+    const field=CASE_TABLE_SORT_MODES.has(button.dataset.caseTableSort)?button.dataset.caseTableSort:'case_number';
+    caseBoardState.tableSort={
+      field,
+      dir:caseBoardState.tableSort.field===field
+        ? (caseBoardState.tableSort.dir==='asc'?'desc':'asc')
+        : caseDefaultTableSortDir(field)
+    };
+    writeCaseTableSortPreference();
+    renderCaseWorkspace({preserveScroll:false,syncUrl:false});
+  }));
 
   let preferred='board';
-  try{preferred=localStorage.getItem('tracs:cases:view')||'board';}catch(e){}
+  try{preferred=localStorage.getItem(CASE_VIEW_STORAGE_KEY)||'board';}catch(e){}
   setCaseWorkspaceView(preferred,false);
   document.querySelectorAll('[data-case-view]').forEach(button=>button.addEventListener('click',()=>setCaseWorkspaceView(button.dataset.caseView)));
   document.addEventListener('click',event=>{

@@ -47,6 +47,9 @@
     low: 'Low',
   };
   const priorityRank = { critical: 0, high: 1, medium: 2, low: 3 };
+  const viewStorageKey = 'tracs:abuse-reports:view';
+  const sortStorageKey = 'tracs:abuse-reports:list-sort';
+  const listSortFields = new Set(['priority', 'report', 'status', 'age', 'assignee', 'reporter', 'evidence']);
   const apiUrls = {
     create: '/api/abuse-report-create.php',
     delete: '/api/abuse-report-delete.php',
@@ -88,6 +91,18 @@
     previewTimer: 0,
     inlineSaving: new Set(),
   };
+
+  try {
+    const savedView = localStorage.getItem(viewStorageKey);
+    if (savedView === 'board' || savedView === 'list') state.view = savedView;
+    const savedSort = JSON.parse(localStorage.getItem(sortStorageKey) || '{}');
+    if (listSortFields.has(savedSort.field)) {
+      state.sort = {
+        field: savedSort.field,
+        dir: savedSort.dir === 'asc' ? 'asc' : 'desc',
+      };
+    }
+  } catch (_) {}
 
   const notify = (message, type = 'info') => {
     if (typeof window.showToast === 'function') {
@@ -392,6 +407,7 @@
     if (field === 'status') return report.workflow_label || report.status_label || report.status || '';
     if (field === 'assignee') return report.assigned_staff || '';
     if (field === 'reporter') return report.reporter || '';
+    if (field === 'evidence') return Number(report.evidence_count || 0);
     return [report.report_number, report.title, report.affected_domain, report.affected_ip].filter(Boolean).join(' ');
   }
 
@@ -402,6 +418,28 @@
       ? valueA - valueB
       : String(valueA).localeCompare(String(valueB));
     return (state.sort.dir === 'asc' ? diff : -diff) || sortReports(a, b);
+  }
+
+  function persistView() {
+    try { localStorage.setItem(viewStorageKey, state.view); } catch (_) {}
+  }
+
+  function persistListSort() {
+    try { localStorage.setItem(sortStorageKey, JSON.stringify(state.sort)); } catch (_) {}
+  }
+
+  function syncListSortHeaders() {
+    $$('[data-abuse-sort]', root).forEach(button => {
+      const active = button.dataset.abuseSort === state.sort.field;
+      const dir = state.sort.dir === 'asc' ? 'asc' : 'desc';
+      const label = button.textContent.trim();
+      const icon = $('[data-lucide]', button);
+      const th = button.closest('th');
+      button.classList.toggle('is-active', active);
+      button.setAttribute('aria-label', active ? `Sort by ${label}, ${dir === 'asc' ? 'ascending' : 'descending'}` : `Sort by ${label}`);
+      if (th) th.setAttribute('aria-sort', active ? (dir === 'asc' ? 'ascending' : 'descending') : 'none');
+      if (icon) icon.setAttribute('data-lucide', active ? (dir === 'asc' ? 'chevron-up' : 'chevron-down') : 'chevrons-up-down');
+    });
   }
 
   const selectOptions = (options, selected) => Object.entries(options)
@@ -491,11 +529,7 @@
           <td><div class="abuse-list-actions">${state.canManage ? `<button type="button" class="abuse-list-edit-toggle" data-abuse-list-edit="${report.id}" aria-expanded="false" title="Edit report details" aria-label="Edit report details"><i data-lucide="pencil" class="icon-sm"></i></button>` : ''}${renderDeleteButton(report, 'abuse-list-delete-toggle')}</div></td>
         </tr>${state.canManage ? renderListEditor(report) : ''}`;
     }).join('') : '<tr><td colspan="8"><div class="abuse-empty-column">No reports match the current filters</div></td></tr>';
-    $$('[data-abuse-sort]', root).forEach(button => {
-      const active = button.dataset.abuseSort === state.sort.field;
-      button.classList.toggle('is-active', active);
-      button.dataset.sortDir = active ? state.sort.dir : '';
-    });
+    syncListSortHeaders();
   }
 
   async function updateListFields(id, patch, source) {
@@ -1289,16 +1323,18 @@
     const view = event.target.closest('[data-abuse-view]');
     if (view) {
       state.view = view.dataset.abuseView === 'list' ? 'list' : 'board';
+      persistView();
       renderBoard();
       return;
     }
     const sort = event.target.closest('[data-abuse-sort]');
     if (sort) {
-      const field = sort.dataset.abuseSort || 'priority';
+      const field = listSortFields.has(sort.dataset.abuseSort) ? sort.dataset.abuseSort : 'priority';
       state.sort = {
         field,
         dir: state.sort.field === field && state.sort.dir === 'asc' ? 'desc' : 'asc',
       };
+      persistListSort();
       renderBoard();
       return;
     }
