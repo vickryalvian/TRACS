@@ -500,6 +500,7 @@
       const stageText = stageAge(report) || report.open_age || '-';
       return `
         <tr class="abuse-list-row ${urgent ? 'is-overdue' : ''}" data-abuse-row data-abuse-id="${report.id}">
+          <td><span class="abuse-list-age"><strong>${esc(stageText)}</strong><small>stage</small></span></td>
           <td>${state.canManage
             ? renderListSelect(report, 'priority', 'Priority', priorityLabels[report.priority] || report.priority, selectOptions(priorityLabels, report.priority), `is-priority is-${esc(report.priority)}`)
             : `<span class="abuse-list-priority is-${esc(report.priority)}">${esc(priorityLabels[report.priority] || report.priority)}</span>`}</td>
@@ -518,7 +519,6 @@
               ${renderUrgencyBadge(report)}
             </div>
           </td>
-          <td><span class="abuse-list-age"><strong>${esc(stageText)}</strong><small>stage</small></span></td>
           <td>${state.canManage
             ? renderListSelect(report, 'assigned_user_id', 'Assignee', report.assigned_staff || 'Unassigned', assigneeOptions(report.assigned_user_id), report.assigned_staff ? '' : 'is-muted')
             : report.assigned_staff ? renderAssignee(report) : '<span class="abuse-list-muted">Unassigned</span>'}</td>
