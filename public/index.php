@@ -249,7 +249,7 @@ $due_today_case_count = count(array_filter($cases, fn($c)=>!empty($c['next_check
 
 $stat_cards = [
   [
-    'color' => 'red',
+    'color' => $critical_cases > 0 ? 'red' : 'neutral',
     'icon' => 'shield-alert',
     'value' => $critical_cases,
     'label' => 'Critical',
@@ -261,7 +261,7 @@ $stat_cards = [
     ),
   ],
   [
-    'color' => 'purple',
+    'color' => $stuck_cases > 0 ? 'amber' : 'neutral',
     'icon' => 'octagon-alert',
     'value' => $stuck_cases,
     'label' => 'Stuck',
@@ -273,7 +273,7 @@ $stat_cards = [
     ),
   ],
   [
-    'color' => 'amber',
+    'color' => $overdue_case_count > 0 ? 'amber' : 'neutral',
     'icon' => 'clock-3',
     'value' => $overdue_case_count,
     'label' => 'Overdue',
@@ -285,7 +285,7 @@ $stat_cards = [
     ),
   ],
   [
-    'color' => 'cyan',
+    'color' => $due_today_case_count > 0 ? 'amber' : 'neutral',
     'icon' => 'calendar-clock',
     'value' => $due_today_case_count,
     'label' => 'Due Today',
@@ -297,7 +297,7 @@ $stat_cards = [
     ),
   ],
   [
-    'color' => 'green',
+    'color' => (int)$pct > 0 ? 'green' : 'neutral',
     'icon' => 'list-checks',
     'value' => $pct.'%',
     'label' => 'Tasks Done',

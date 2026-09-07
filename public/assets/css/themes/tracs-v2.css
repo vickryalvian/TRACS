@@ -540,8 +540,17 @@ html[data-visual-theme="tracs-v2"] .panel-counter.is-low {
 }
 
 html[data-visual-theme="tracs-v2"] .b-stuck,
-html[data-visual-theme="tracs-v2"] .b-priority,
 html[data-visual-theme="tracs-v2"] .shift-priority.stuck {
+  background: var(--amber-lt);
+  border-color: var(--amber-bd);
+  color: var(--amber);
+}
+
+html[data-visual-theme="tracs-v2"] .b-stuck .badge-dot {
+  background: var(--amber);
+}
+
+html[data-visual-theme="tracs-v2"] .b-priority {
   background: var(--purple-lt);
   border-color: var(--purple-bd);
   color: var(--purple);
@@ -636,10 +645,7 @@ html[data-visual-theme="tracs-v2"] .login-shell {
 }
 
 html[data-visual-theme="tracs-v2"] .login-grid {
-  opacity: .24;
-  background-image:
-    linear-gradient(var(--bd1) 1px, transparent 1px),
-    linear-gradient(90deg, var(--bd1) 1px, transparent 1px);
+  display: none;
 }
 
 html[data-visual-theme="tracs-v2"] .login-card {

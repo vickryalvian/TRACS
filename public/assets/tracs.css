@@ -1172,9 +1172,7 @@ input, select, textarea { font-family: inherit }
   grid-template-rows: auto 1fr auto;
   min-width: 0;
   min-height: 98px;
-  background:
-    radial-gradient(circle at 22px 20px, color-mix(in srgb, var(--stat-accent) 9%, transparent), transparent 42%),
-    linear-gradient(180deg, color-mix(in srgb, var(--s1) 94%, white 6%), var(--s1));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--s1) 96%, white 4%), var(--s1));
   border: 0;
   border-radius: var(--radius-xl);
   padding: 11px;
@@ -1265,9 +1263,7 @@ input, select, textarea { font-family: inherit }
   .dashboard-stat-strip.is-scanning .stat-card::after { animation: none; display: none }
 }
 [data-theme="dark"] .stat-card {
-  background:
-    radial-gradient(circle at 22px 20px, color-mix(in srgb, var(--stat-accent) 12%, transparent), transparent 44%),
-    linear-gradient(180deg, color-mix(in srgb, var(--s1) 92%, white 4%), var(--s1));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--s1) 92%, white 4%), var(--s1));
 }
 .stat-card.red    { --stat-accent: var(--red) }
 .stat-card.amber  { --stat-accent: var(--amber) }
@@ -1275,6 +1271,7 @@ input, select, textarea { font-family: inherit }
 .stat-card.blue   { --stat-accent: var(--blue) }
 .stat-card.green  { --stat-accent: var(--green) }
 .stat-card.cyan   { --stat-accent: var(--cyan) }
+.stat-card.neutral { --stat-accent: var(--tx3) }
 .stat-glow {
   position: absolute;
   inset: 0;
@@ -1342,6 +1339,17 @@ input, select, textarea { font-family: inherit }
   border-radius: var(--r2);
   background: color-mix(in srgb, var(--stat-accent) 5%, var(--s2));
   color: color-mix(in srgb, var(--stat-accent) 72%, var(--tx3));
+}
+.dashboard-stat-strip .stat-card.red .stat-num { color: var(--red) }
+.dashboard-stat-strip .stat-card.amber .stat-num { color: var(--amber) }
+.dashboard-stat-strip .stat-card.green .stat-num { color: var(--green) }
+.dashboard-stat-strip .stat-card.blue .stat-num { color: var(--blue) }
+.dashboard-stat-strip .stat-card.cyan .stat-num { color: var(--blue) }
+.dashboard-stat-strip .stat-card.purple .stat-num { color: var(--amber) }
+.dashboard-stat-strip .stat-card.neutral .stat-icon {
+  border-color: var(--bd1);
+  background: var(--s2);
+  color: var(--tx3);
 }
 .stat-icon svg {
   width: 15px;
@@ -3136,8 +3144,8 @@ input, select, textarea { font-family: inherit }
 .b-in_progress .badge-dot { background: var(--cyan); animation: bpulse 2s ease infinite }
 .b-warning  { background: var(--amber-lt);  color: var(--amber);  border: 1px solid var(--amber-bd) }
 .b-warning .badge-dot { background: var(--amber) }
-.b-stuck    { background: var(--purple-lt); color: var(--purple); border: 1px solid var(--purple-bd) }
-.b-stuck .badge-dot { background: var(--purple) }
+.b-stuck    { background: var(--amber-lt); color: var(--amber); border: 1px solid var(--amber-bd) }
+.b-stuck .badge-dot { background: var(--amber) }
 .b-done     { background: rgba(60,65,80,.12); color: var(--tx3); border: 1px solid var(--bd2) }
 .b-done .badge-dot { background: var(--tx3) }
 .b-resolved { background: rgba(34,197,94,.10); color: #3f8f5b; border: 1px solid rgba(34,197,94,.20) }
@@ -5904,7 +5912,7 @@ input[type="checkbox"]:not([data-native-checkbox]):disabled,
 }
 .column-attention .case-column-icon { color: var(--red); background: var(--red-lt); }
 .column-in_progress .case-column-icon { color: var(--cyan); background: var(--cyan-lt); }
-.column-waiting .case-column-icon { color: var(--purple); background: var(--purple-lt); }
+.column-waiting .case-column-icon { color: var(--amber); background: var(--amber-lt); }
 .column-on_hold .case-column-icon { color: var(--amber); background: var(--amber-lt); }
 .column-resolved .case-column-icon { color: var(--green); background: var(--green-lt); }
 .case-column-heading > div {
@@ -7663,7 +7671,7 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
 
 /* ── Login ── */
 .login-shell { min-height:100vh;overflow:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);position:relative; padding: 24px 16px;}
-.login-grid  { position:absolute;inset:0;background-image:linear-gradient(var(--bd1) 1px,transparent 1px),linear-gradient(90deg,var(--bd1) 1px,transparent 1px);background-size:40px 40px;opacity:.35;mask-image:radial-gradient(ellipse at center,black 20%,transparent 72%) }
+.login-grid  { display:none }
 .login-card  { position:relative;z-index:1;width:440px;max-width: 92vw; background:var(--s1);border:0;border-radius:var(--r4);overflow:hidden;box-shadow:none;transition:box-shadow var(--dur) var(--ease), transform var(--dur) var(--ease) }
 .login-card:hover { box-shadow:0 16px 42px rgba(15,23,42,.12) }
 [data-theme="dark"] .login-card:hover { box-shadow:0 18px 46px rgba(0,0,0,.34) }
