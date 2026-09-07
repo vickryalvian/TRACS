@@ -1431,6 +1431,7 @@ window.TRACSDropdowns = TRACSDropdowns;
 const TRACS_POPUP_DETAILS_SELECTOR = [
   '.report-export-menu',
   '.row-action-menu',
+  '.abuse-more-filters',
   '.tm-more-filters'
 ].join(',');
 const TRACS_CUSTOM_POPUP_SELECTOR = '.notif-bell-btn';
@@ -1509,6 +1510,7 @@ document.addEventListener('click', e => {
   }
 
   if (clickedPopupSummary) {
+    window.tracsCloseDateRangePickers?.();
     setTimeout(() => {
       if (clickedPopupSummary.open) tracsCloseIconPopups(clickedPopupSummary);
     }, 0);

@@ -102,6 +102,12 @@
     return 'custom';
   }
 
+  function closeDateRangePickers(except = null) {
+    document.querySelectorAll('[data-tracs-date-range]').forEach(node => {
+      if (node !== except) node._tracsDateRangePicker?.close({ cancel: true, restoreFocus: false });
+    });
+  }
+
   class TRACSDateRangePicker {
     constructor(element, options = {}) {
       if (!(element instanceof Element)) throw new TypeError('TRACSDateRangePicker requires a root element.');
@@ -209,9 +215,8 @@
     }
 
     open() {
-      document.querySelectorAll('[data-tracs-date-range]').forEach(node => {
-        if (node !== this.root) node._tracsDateRangePicker?.close({ cancel: true, restoreFocus: false });
-      });
+      closeDateRangePickers(this.root);
+      window.tracsCloseIconPopups?.(this.root.closest('details[open]'));
       this.lastFocused = document.activeElement;
       this.ensurePopup();
       this.renderPresets();
@@ -582,6 +587,7 @@
     presetRange,
   });
   window.initTRACSDateRangePickers = initDateRangePickers;
+  window.tracsCloseDateRangePickers = closeDateRangePickers;
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => initDateRangePickers(), { once: true });
