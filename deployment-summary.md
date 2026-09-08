@@ -4,6 +4,22 @@ Status: Deployed successfully (remediated)
 Completed: 2026-07-15 19:13 WIB
 Domain: https://tracs.vickry.id
 
+## Deployed — Dobby Telegram Persona and Sound Cues (2026-09-08)
+
+Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `codex/dobby-event-awareness`, commit `18df0e5`.
+13 files deployed via scoped tar upload and per-file overwrite, preserving production drift outside the Dobby notification/audio change set. Backed up to `/opt/tracs/backups/dobby-telegram-sound-20260908-211407/` before overwrite. No database migration. `php8.3-fpm` reloaded to clear opcache.
+
+### Changes Deployed
+- Added `core/dobby_notifications.php` with Dobby-formatted Telegram notifications for monitor down/warning/recovery, deployment, rollback, and generic system events. Missing Telegram credentials are a safe no-op; send failures are logged and do not break monitoring or deploy flows.
+- Wired Infrastructure Pulse and manual infrastructure ping checks to send Telegram only on real status transitions, including recovery, while suppressing repeated same-state alerts.
+- Added Dobby deployment/rollback event notifications to `bin/tracs-dobby-deploy-event.php` using the existing outbox flow and dedupe keys.
+- Added `/assets/audio/dobby-interaction.mp3` and a guarded `window.DobbySound` frontend service for the Dobby open interaction and completed-task sound cue, with autoplay-safe failure handling and completion dedupe.
+- Updated the Dobby egg into an accessible button and documented the notification/audio behavior in `docs/dobby-event-awareness.md`, `AI_MEMORY.md`, `HANDOFF.md`, and `TASKS.md`.
+
+### Verification
+- Production syntax/tests passed: `php -l core/dobby_notifications.php`, `php -l core/infrastructure_monitor.php`, `php -l public/api/infrastructure-ping.php`, `php -l bin/tracs-dobby-deploy-event.php`, `php tests/dobby-notifications.php`, and `node --check public/assets/tracs.js`.
+- Live checks: `https://tracs.vickry.id/` → `302`, `/login.php` → `200`, `/assets/audio/dobby-interaction.mp3` → `200 audio/mpeg`, `/assets/tracs.js` → `200`, and `/assets/tracs.css` → `200`.
+
 ## Deployed — Manage Announcements Modal Fixes (2026-07-24)
 
 Status: **Deployed to production** (`103.82.93.75`, `/opt/tracs`, `https://tracs.vickry.id`). Branch `feat/dashboard-quick-tools-widgets`, commit `707186f`.
