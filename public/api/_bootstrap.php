@@ -216,7 +216,7 @@ if (isset($apiMethodMap[$script]) && !in_array($requestMethod, $apiMethodMap[$sc
 $apiPermissionMap = [
     'api_mom.php' => ['moms.manage'],
     'abuse-report-create.php' => ['abuse_reports.manage'],
-    'abuse-report-delete.php' => ['abuse_reports.view'],
+    'abuse-report-delete.php' => ['abuse_reports.delete'],
     'abuse-report-evidence.php' => ['abuse_reports.view'],
     'abuse-report-evidence-upload.php' => ['abuse_reports.manage'],
     'abuse-report-get.php' => ['abuse_reports.view'],

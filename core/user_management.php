@@ -157,6 +157,7 @@ function tracs_permission_catalog(): array {
         'Abuse Reports' => [
             'abuse_reports.view' => 'View abuse reports',
             'abuse_reports.manage' => 'Create, update, and move abuse reports',
+            'abuse_reports.delete' => 'Delete abuse reports',
         ],
         'Clients' => [
             'clients.view' => 'View owned client portfolio records',
@@ -254,6 +255,7 @@ function tracs_default_role_permissions(string $roleSlug): array {
             'cases.manage',
             'abuse_reports.view',
             'abuse_reports.manage',
+            'abuse_reports.delete',
             'clients.view',
             'clients.manage',
             'clients.view_all',

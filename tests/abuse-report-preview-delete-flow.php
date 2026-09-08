@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../core/user_management.php';
+
 function abuse_flow_assert(bool $condition, string $message): void
 {
     if (!$condition) {
@@ -18,6 +20,22 @@ $model = file_get_contents(__DIR__ . '/../modules/abuse-report/model.php');
 $access = file_get_contents(__DIR__ . '/../core/access_control.php');
 $userManagement = file_get_contents(__DIR__ . '/../core/user_management.php');
 $permissionMigration = file_get_contents(__DIR__ . '/../config/migrations/2026_08_21_abuse_reports_all_roles.sql');
+$deleteMigration = file_get_contents(__DIR__ . '/../config/migrations/2026_09_08_abuse_report_delete_permission.sql');
+
+abuse_flow_assert(
+    (tracs_permission_catalog()['Abuse Reports']['abuse_reports.delete'] ?? '') === 'Delete abuse reports'
+        && $deleteMigration !== false
+        && str_contains($deleteMigration, "('abuse_reports.delete', 'Abuse Reports', 'Delete abuse reports')")
+        && str_contains($deleteMigration, "WHERE r.slug IN ('super_admin', 'admin', 'supervisor')"),
+    'Delete permission must be registered for assignment and preserve existing deletion access on upgrade.'
+);
+foreach (['super_admin', 'admin', 'supervisor', 'agent', 'intern', 'viewer'] as $role) {
+    abuse_flow_assert(
+        in_array('abuse_reports.delete', tracs_default_role_permissions($role), true)
+            === in_array($role, ['super_admin', 'admin', 'supervisor'], true),
+        "Unexpected default abuse report delete permission for {$role}."
+    );
+}
 
 abuse_flow_assert(!in_array(false, [$page, $script, $style, $bootstrap, $endpoint, $model, $access, $userManagement, $permissionMigration], true), 'Unable to read abuse report sources.');
 abuse_flow_assert(
@@ -86,10 +104,11 @@ abuse_flow_assert(
         && str_contains($style, '.abuse-list-delete-toggle')
         && str_contains($bootstrap, "'abuse-report-delete.php' => ['POST']")
         && str_contains($endpoint, 'tracs_user_can_delete_abuse_reports')
-        && str_contains($access, 'return tracs_is_supervisor_or_above($conn, $userId);')
+        && preg_match('/function tracs_user_can_delete_abuse_reports\([^)]*\): bool\s*\{\s*return tracs_user_can\(\$conn, \'abuse_reports.delete\', \$userId\);\s*\}/', $access) === 1
+        && str_contains($bootstrap, "'abuse-report-delete.php' => ['abuse_reports.delete']")
         && str_contains($model, "'tracs_abuse_report_events', 'tracs_abuse_report_notes', 'tracs_abuse_report_evidence', 'tracs_abuse_reports'")
         && str_contains($endpoint, 'abuse_report_evidence_delete_file($file)'),
-    'Delete must be role-gated and remove report children plus stored evidence.'
+    'Delete must require its assignable permission and remove report children plus stored evidence.'
 );
 abuse_flow_assert(
     preg_match("/'viewer'\\s*=>.*?'abuse_reports\\.view'.*?'abuse_reports\\.manage'/s", $userManagement) === 1
@@ -99,7 +118,7 @@ abuse_flow_assert(
         && str_contains($permissionMigration, "'abuse_reports.manage'")
         && str_contains($permissionMigration, 'JOIN `tracs_permissions` p')
         && !str_contains($permissionMigration, 'WHERE r.slug'),
-    'Abuse Reports view/update permissions must be granted to every role while delete stays role-gated.'
+    'Abuse Reports view/update permissions must remain available to every role.'
 );
 
 echo "TRACS abuse report preview/delete flow checks passed.\n";

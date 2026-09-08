@@ -30,6 +30,11 @@ For existing installations:
 
 Current migrations:
 
+- `2026_09_08_abuse_report_delete_permission.sql` — adds the assignable
+  `abuse_reports.delete` permission and preserves supervisor/admin deletion access.
+  Apply once when deploying the matching PHP changes; permissions can then be
+  granted or revoked through the existing role permission drawer.
+
 - `2026_05_16_add_creator_tracking.sql`
 - `2026_05_16_add_operational_metadata.sql`
 - `2026_05_16_add_theme_preferences.sql`

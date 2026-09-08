@@ -90,7 +90,7 @@ function tracs_user_can_delete_cases(mysqli $conn, ?int $userId = null): bool {
 }
 
 function tracs_user_can_delete_abuse_reports(mysqli $conn, ?int $userId = null): bool {
-    return tracs_is_supervisor_or_above($conn, $userId);
+    return tracs_user_can($conn, 'abuse_reports.delete', $userId);
 }
 
 /**
