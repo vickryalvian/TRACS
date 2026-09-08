@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../core/creator_tracking.php';
 require_once __DIR__ . '/../../core/user_management.php';
 require_once __DIR__ . '/../../core/notifications.php';
+require_once __DIR__ . '/../../core/dobby_events.php';
 
 final class ClientPortfolioModel
 {
@@ -555,6 +556,7 @@ final class ClientPortfolioModel
                 $stmt->close();
             }
         }
+        tracs_dobby_enqueue_client_activity($this->db, $clientId, $actorId, $actorName, $event, $summary);
     }
 
     private function addonsForServices(array $serviceIds): array

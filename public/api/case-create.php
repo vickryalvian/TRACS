@@ -1,6 +1,7 @@
 <?php require '_bootstrap.php';
 require_once __DIR__ . '/case-attachment-lib.php';
 require_once __DIR__ . '/../../core/notifications.php';
+require_once __DIR__ . '/../../core/dobby_events.php';
 tracs_ensure_creator_columns($conn, 'tracs_cases', 'user_id');
 tracs_ensure_case_status_values($conn);
 
@@ -44,4 +45,5 @@ try {
 logAct($conn,$uid,'created','Cases',"Created case: {$title}",$id);
 tickerEvent($conn, $uid, "New case added: {$title}", 'info', 'cases', $id);
 tracs_notify_case_created($conn, (int)$id, $uid, $title, $uid);
+tracs_dobby_enqueue_case_event($conn, 'case.created', (int)$id, $uid, $creator_name, $title);
 ok(['id'=>$id, 'attachments'=>count($storedUploads)],'Case created');

@@ -1,4 +1,5 @@
 <?php require '_bootstrap.php';
+require_once __DIR__ . '/../../core/dobby_events.php';
 tracs_ensure_case_status_values($conn);
 
 $id = (int)($body['id'] ?? 0);
@@ -27,4 +28,5 @@ if (($row['status'] ?? '') !== 'completed') {
     logAct($conn, $uid, 'status_changed', 'Cases', "Case status changed from {$row['status']} to completed via resolve_action: {$row['title']}", $id);
 }
 tickerEvent($conn, $uid, "Case #{$id} resolved: {$row['title']}", 'success', 'cases', $id);
+tracs_dobby_enqueue_case_event($conn, 'case.resolved', $id, $uid, $creator_name, (string)$row['title']);
 ok(['id' => $id, 'status' => 'completed'], 'Case resolved');

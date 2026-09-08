@@ -68,6 +68,7 @@ MYSQL_CONNECTION_READY="false"
 
 PUBLIC_ROOT=""
 SOURCE_COMMIT=""
+DOBBY_DEPLOYMENT_ID="${DOBBY_DEPLOYMENT_ID:-deploy-$(date '+%Y%m%d-%H%M%S')-$$}"
 
 readonly -a PRESERVED_PATHS=(
     ".env"
@@ -197,6 +198,32 @@ run_privileged() {
     fi
 }
 
+emit_dobby_event() {
+    local type="$1"
+    local stage="${2:-$1}"
+    local summary="${3:-$stage}"
+    local helper="${REPO_DIR}/bin/tracs-dobby-deploy-event.php"
+
+    if is_true "$DRY_RUN"; then
+        log_info "Dry-run: would enqueue DOBBY event ${type}."
+        return 0
+    fi
+    if [[ ! -f "$helper" ]]; then
+        log_warn "DOBBY deployment event helper is unavailable; continuing."
+        return 0
+    fi
+    if ! php "$helper" \
+        --type="$type" \
+        --correlation="$DOBBY_DEPLOYMENT_ID" \
+        --stage="$stage" \
+        --summary="$summary" \
+        --environment="production" \
+        --host="$(hostname -f 2>/dev/null || hostname)" \
+        --commit="${SOURCE_COMMIT:-}"; then
+        log_warn "DOBBY deployment event enqueue failed; continuing."
+    fi
+}
+
 cleanup() {
     if [[ -n "$TEMP_DIR" && -d "$TEMP_DIR" ]]; then
         rm -rf -- "$TEMP_DIR"
@@ -207,6 +234,9 @@ on_error() {
     local line="$1"
     local status="$2"
     log_error "Deployment stopped at line ${line} with status ${status}."
+    if [[ "$MODE" == "deploy" ]]; then
+        emit_dobby_event "deployment.failed" "failed" "Deployment stopped at line ${line}."
+    fi
     if [[ -n "$CURRENT_BACKUP_ID" && "$CURRENT_BACKUP_HAS_WEBROOT" == "true" ]]; then
         log_error "Application rollback command: $0 rollback ${CURRENT_BACKUP_ID}"
     fi
@@ -1119,17 +1149,28 @@ run_deploy() {
     log_info "Deployment target: ${WEB_ROOT} (Nginx root: ${PUBLIC_ROOT})."
     confirm "Deploy ${APP_NAME} commit ${SOURCE_COMMIT:0:12} to ${WEB_ROOT}?"
 
+    emit_dobby_event "deployment.started" "started" "TRACS deployment started."
+    emit_dobby_event "deployment.backup.started" "backup" "TRACS deployment backup started."
     create_backup
+    emit_dobby_event "deployment.backup.completed" "backup complete" "TRACS deployment backup completed."
+    if is_true "$RUN_MIGRATION"; then
+        emit_dobby_event "deployment.migration.started" "migration" "TRACS deployment migration started."
+    fi
     run_migration
+    if is_true "$RUN_MIGRATION"; then
+        emit_dobby_event "deployment.migration.completed" "migration complete" "TRACS deployment migration completed."
+    fi
     sync_application
     ensure_runtime_paths
     set_permissions
     write_deployment_metadata
     security_scan
     reload_services
+    emit_dobby_event "deployment.healthcheck.started" "health check" "TRACS deployment health check started."
     health_check
     apply_retention
 
+    emit_dobby_event "deployment.completed" "complete" "TRACS deployment completed."
     log_success "${APP_NAME} deployment completed."
     log_info "Backup ID: ${CURRENT_BACKUP_ID}"
     if [[ "$CURRENT_BACKUP_HAS_WEBROOT" == "true" ]]; then
@@ -1219,7 +1260,9 @@ run_rollback() {
     check_services_and_nginx
     ensure_deployment_directories
     check_backup_capacity
+    emit_dobby_event "rollback.started" "rollback" "TRACS rollback started."
     restore_application_backup
+    emit_dobby_event "rollback.completed" "rollback complete" "TRACS rollback completed."
 }
 
 main() {
