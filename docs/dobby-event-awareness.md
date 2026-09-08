@@ -30,7 +30,7 @@ Only successful application actions enqueue events. User request handlers enqueu
 Set these outside Git:
 
 ```bash
-DOBBY_INGEST_URL=http://127.0.0.1:8787/api/events/ingest
+DOBBY_INGEST_URL=https://dobby.vickry.id/api/events/ingest
 DOBBY_INGEST_SECRET=...
 ```
 
@@ -39,6 +39,8 @@ Then run:
 ```bash
 php bin/tracs-dobby-event-worker.php
 ```
+
+Production uses `tracs-dobby-event-worker.timer` to run the worker every minute from `/opt/tracs`.
 
 The worker signs `timestamp.body` with HMAC SHA-256 and sends `X-Dobby-Timestamp` and `X-Dobby-Signature`. Failed delivery increments attempts and schedules exponential retry.
 
