@@ -328,17 +328,28 @@ function Rows({ rows = [], headers = [], empty, render }) {
 
 function Drawer({ children, onClose, titleId }) {
   const ref = useRef(null);
+  const previousRef = useRef(null);
+  function canClose() {
+    return !ref.current?.querySelector('button[type="submit"]:disabled');
+  }
+  function requestClose() {
+    onClose();
+    setTimeout(() => previousRef.current?.focus(), 0);
+  }
   useEffect(() => {
     const dialog = ref.current;
     const previous = document.activeElement;
+    previousRef.current = previous;
     const overflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     dialog.showModal();
     return () => { dialog.close(); document.body.style.overflow = overflow; previous?.focus(); };
   }, []);
-  return <dialog ref={ref} className="clients-drawer tracs-react-root clients-react-shell" aria-labelledby={titleId} onCancel={(event) => {
+  return <dialog ref={ref} className="clients-drawer tracs-react-root clients-react-shell" aria-labelledby={titleId} onClick={(event) => {
+    if (event.target === event.currentTarget && canClose()) requestClose();
+  }} onCancel={(event) => {
     event.preventDefault();
-    if (!ref.current.querySelector('button[type="submit"]:disabled')) onClose();
+    if (canClose()) requestClose();
   }}>{children}</dialog>;
 }
 
@@ -386,13 +397,13 @@ function StatStrip({ summary, filters, setFilters }) {
     ['Invoice This Week', summary.invoice_this_week || 0, { attention: '', signal: 'invoice' }, filters.signal === 'invoice'],
     ['Services Renewing ≤30 Days', summary.renewal_soon || 0, { attention: '', signal: 'renewal' }, filters.signal === 'renewal'],
   ];
-  return <Card className="clients-stat-strip tr:p-0">
+  return <div className="clients-stat-strip">
     <div className="clients-stat-groups">
       <section><h2>Attention signals</h2><div className="clients-stat-grid">{signals.map(([title, value, filter, active]) => <button key={title} className="client-stat-cell" aria-pressed={active} onClick={() => setFilters({ ...filters, ...filter, page: '1' })}><strong>{value}</strong><span>{title}</span></button>)}</div></section>
       <section><h2>Financial snapshot</h2><div className="clients-stat-grid">{[['Paid So Far', summary.total_paid_amount], ['Outstanding', summary.outstanding_amount], ['Est. Monthly Recurring', summary.mrr_amount]].map(([title, value]) => <div key={title} className="client-stat-cell"><strong>{money(value ?? 0)}</strong><span>{title}</span></div>)}</div></section>
     </div>
     <p className="clients-stat-note">Current filters · Waiting payment: {summary.waiting_payment || 0} · Tax invoice pending: {summary.tax_invoice_pending || 0}</p>
-  </Card>;
+  </div>;
 }
 
 function FilterBar({ filters, setFilters, context }) {
@@ -403,7 +414,7 @@ function FilterBar({ filters, setFilters, context }) {
   function setOwner(value) { setFilters({ ...filters, scope: value === 'mine' ? 'mine' : 'all', owner_user_id: value.startsWith('owner:') ? value.slice(6) : '', page: '1' }); }
   const active = Object.entries(filters).filter(([key, value]) => value && value !== emptyFilters[key] && !['sort', 'direction', 'page', 'owner_user_id'].includes(key));
   const titles = { q: 'Search', scope: 'Owner scope', status: 'Status', service_type: 'Service', service_status: 'Service status', renewal_window: 'Renewal days', billing_status: 'Payment', tax_status: 'Tax invoice', pic: 'PIC', renewal_from: 'Renewal from', renewal_to: 'Renewal to', attention: 'Attention', signal: 'Signal' };
-  return <Card className="tr:p-tracs-3">
+  return <div className="clients-filter-row">
     <div className="clients-primary-filters">
       <Field label="Search"><Input placeholder="Client, code, or PIC" value={filters.q} onChange={(e) => set('q', e.target.value)} /></Field>
       <Field label="Status"><Select value={filters.status} onChange={(e) => set('status', e.target.value)}><option value="">Any status</option>{['active', 'monitoring', 'inactive'].map((v) => <option key={v} value={v}>{label(v)}</option>)}</Select></Field>
@@ -423,7 +434,21 @@ function FilterBar({ filters, setFilters, context }) {
       <Field label="Renewal to"><Input type="date" min={filters.renewal_from || undefined} value={filters.renewal_to} onChange={(e) => set('renewal_to', e.target.value)} /></Field>
     </div>}
     {(active.length > 0 || filters.owner_user_id) && <div className="clients-active-filters" aria-label="Active filters">{active.map(([key, value]) => <Button key={key} size="compact" aria-label={`Remove ${titles[key]} filter`} onClick={() => key === 'scope' ? setOwner('mine') : set(key, emptyFilters[key])}>{titles[key]}: {label(value)} {icon('x')}</Button>)}{filters.owner_user_id && <Button size="compact" onClick={() => setOwner('all')}>Owner: {context.users.find((u) => String(u.id) === filters.owner_user_id)?.name || filters.owner_user_id} {icon('x')}</Button>}</div>}
-  </Card>;
+  </div>;
+}
+
+function AttentionStrip({ clients, filters, setFilters }) {
+  const count = clients.data.summary?.action_required || 0;
+  const attention = clients.data.attention || [];
+  return <section className={`clients-attention-area ${attention.length ? '' : 'is-empty'}`} aria-label="Needs attention">
+    <div className="clients-attention-heading">
+      <h2>Needs Attention</h2>
+      {count > 0 && <Button size="compact" onClick={() => setFilters({ ...filters, attention: 'attention', signal: '', page: '1' })}>View all ({count})</Button>}
+    </div>
+    <div className="clients-attention-strip">
+      {attention.length ? attention.map((c) => <a className="client-row" href={clientUrl(c.id, c.next_action === 'Review renewal' ? 'renewals' : 'billing')} key={c.id}><strong>{c.company_name}</strong><span>{c.attention_reason}</span><small>{c.next_action_due_at ? date(c.next_action_due_at) : 'No due date'} · {c.next_action}</small></a>) : <p>{clients.loading ? 'Checking attention signals…' : 'No clients need attention in this view.'}</p>}
+    </div>
+  </section>;
 }
 
 function ClientTable({ data, filters, setFilters, loading, canManage, onAdd, highlighted }) {
@@ -487,9 +512,11 @@ function ClientsApp() {
     {!isDetail && <div className="clients-page-heading"><div><h1 className="tr:text-xl tr:font-semibold">Clients</h1><p className="tr:mt-1 tr:text-sm tr:text-tracs-muted">Find clients, review billing, and follow up on renewals.</p></div>{canManage && ready && <Button variant="primary" onClick={() => setCreating(true)}>{icon('plus-circle')}Add Client</Button>}</div>}
     {notice && <div role="status">{notice}{highlighted && <a className="clients-link tr:ml-2" href={clientUrl(highlighted)}>Go to client</a>}</div>}
     {context.loading ? <Card>Loading client portfolio…</Card> : context.error ? <Card><p role="alert">{context.error}</p><Button onClick={() => window.location.reload()}>Retry</Button></Card> : !context.data?.schema_ready ? <Card>Client Portfolio setup is incomplete. Contact your administrator.</Card> : isDetail ? detailError ? <Card><p role="alert">{detailError}</p><a className="clients-link" href={clientUrl()}>Back to Clients</a><Button onClick={() => window.location.reload()}>Retry</Button></Card> : selected ? <Detail selected={selected} context={context.data} onEdit={() => setEditing(true)} onSaved={afterSaved} /> : <Card>Loading client details…</Card> : <>
-      <StatStrip summary={clients.data.summary || {}} filters={filters} setFilters={setFilters} />
-      <Card className="tr:p-0"><div className="clients-section-heading"><h2>Needs Attention</h2><Button size="compact" onClick={() => setFilters({ ...filters, attention: 'attention', signal: '', page: '1' })}>View all ({clients.data.summary?.action_required || 0})</Button></div><div className="clients-attention-strip">{clients.data.attention?.length ? clients.data.attention.map((c) => <a className="client-row" href={clientUrl(c.id, c.next_action === 'Review renewal' ? 'renewals' : 'billing')} key={c.id}><strong>{c.company_name}</strong><span>{c.attention_reason}</span><small>{c.next_action_due_at ? date(c.next_action_due_at) : 'No due date'} · {c.next_action}</small></a>) : <p className="tr:p-tracs-3 tr:text-sm tr:text-tracs-muted">{clients.loading ? 'Checking attention signals…' : 'No clients need attention in this view.'}</p>}</div></Card>
-      <FilterBar filters={filters} setFilters={setFilters} context={context.data} />
+      <section className="clients-toolbar" aria-label="Client controls">
+        <StatStrip summary={clients.data.summary || {}} filters={filters} setFilters={setFilters} />
+        <FilterBar filters={filters} setFilters={setFilters} context={context.data} />
+      </section>
+      <AttentionStrip clients={clients} filters={filters} setFilters={setFilters} />
       {clients.error && <Card><p role="alert">{clients.error}</p><Button onClick={clients.refresh}>Retry</Button></Card>}
       <ClientTable data={clients.data} filters={filters} setFilters={setFilters} loading={clients.loading} canManage={canManage} onAdd={() => setCreating(true)} highlighted={highlighted} />
     </>}

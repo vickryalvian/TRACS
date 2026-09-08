@@ -102,6 +102,12 @@ try {
   await drawer.waitFor({ state: 'hidden' });
   assert.equal(await page.getByRole('button', { name: 'Add Client', exact: true }).evaluate((element) => element === document.activeElement), true);
   await page.getByRole('button', { name: 'Add Client', exact: true }).click();
+  await drawer.waitFor();
+  await page.mouse.click(120, 120);
+  await drawer.waitFor({ state: 'hidden' });
+  assert.equal(await page.getByRole('button', { name: 'Add Client', exact: true }).evaluate((element) => element === document.activeElement), true, 'Backdrop close did not restore Add Client focus');
+  await page.getByRole('button', { name: 'Add Client', exact: true }).click();
+  await drawer.waitFor();
   await drawer.getByLabel('Company', { exact: true }).fill('New Client');
   await drawer.getByRole('button', { name: 'Save & Add Services' }).click();
   await page.getByLabel('Service Name', { exact: true }).waitFor();

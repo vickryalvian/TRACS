@@ -27,7 +27,7 @@
     ]
   },
   "src/modules/clients/main.jsx": {
-    "file": "assets/clients-BU5aQdt2.js",
+    "file": "assets/clients-BDKXhARa.js",
     "name": "clients",
     "src": "src/modules/clients/main.jsx",
     "isEntry": true,
@@ -36,7 +36,7 @@
       "_apiClient-CYP8AMeK.js"
     ],
     "css": [
-      "assets/clients-D-9biLFm.css"
+      "assets/clients-Dni5wfHa.css"
     ]
   },
   "src/modules/shift-assignment/main.jsx": {
