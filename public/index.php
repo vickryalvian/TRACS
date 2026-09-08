@@ -1899,11 +1899,11 @@ include 'includes/header.php';
     </div><!-- /col-productivity -->
 
     <!-- Dobby easter egg — fills the blank space below the utility row -->
-    <div class="dobby-egg" aria-hidden="true" title="Dobby says hi">
+    <button type="button" class="dobby-egg" data-dobby-open="dashboard" title="Dobby says hi" aria-label="Open Dobby">
       <span class="dobby-egg-cat"><i data-lucide="cat" class="icon-xs"></i></span>
       <span class="dobby-egg-text">Dobby is working on something more<span class="dobby-egg-dots"><span>.</span><span>.</span><span>.</span></span></span>
       <span class="dobby-egg-paw"><i data-lucide="footprints" class="icon-xs"></i></span>
-    </div>
+    </button>
 
     </div><!-- /dashboard-workspace -->
 

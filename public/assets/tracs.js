@@ -115,6 +115,69 @@ const tracsInlineToastDocks=new WeakMap();
 let tracsLoginToastDockNode=null;
 const tracsToastDefaults={success:3500,info:4000,warning:7000,error:9000};
 const tracsModalOverlaySelector='.modal-overlay, .dpc-modal, .infra-modal, .cf-modal, .tracs-dialog-overlay';
+
+const DobbySound=(()=>{
+  const sounds={open:'/assets/audio/dobby-interaction.mp3',complete:'/assets/audio/dobby-interaction.mp3'};
+  const played=new Set();
+  let audio=null;
+  let unlocked=false;
+  let bound=false;
+  let lastOpenAt=0;
+  function getAudio(){
+    if(!audio){
+      audio=new Audio(sounds.open);
+      audio.preload='auto';
+    }
+    return audio;
+  }
+  function enabled(){
+    try{return localStorage.getItem('tracs:dobby-sound')!=='off';}catch(e){return true;}
+  }
+  function unlock(){
+    unlocked=true;
+    try{getAudio().load();}catch(e){}
+  }
+  async function play(kind='open',options={}){
+    if(!enabled())return false;
+    const eventId=String(options.eventId || options.taskId || kind);
+    const key=`${kind}:${eventId}`;
+    if(kind === 'complete' && played.has(key))return false;
+    if(kind === 'open' && Date.now()-lastOpenAt<1200)return false;
+    if(kind === 'open')lastOpenAt=Date.now();
+    if(kind === 'complete')played.add(key);
+    try{
+      const node=getAudio();
+      const src=sounds[kind] || sounds.open;
+      if(!node.src.endsWith(src))node.src=src;
+      node.pause();
+      node.currentTime=0;
+      await node.play();
+      unlocked=true;
+      return true;
+    }catch(e){
+      return false;
+    }
+  }
+  function bind(){
+    if(bound)return;
+    bound=true;
+    document.addEventListener('pointerdown',event=>{
+      if(event.target.closest('[data-dobby-open]'))unlock();
+    },{passive:true});
+    document.addEventListener('click',event=>{
+      const open=event.target.closest('[data-dobby-open]');
+      if(open)play('open',{eventId:open.dataset.dobbyOpen || 'dashboard'});
+    });
+    document.addEventListener('dobby:task-completed',event=>{
+      const detail=event.detail || {};
+      const status=String(detail.status || 'completed');
+      if(['completed','success','succeeded'].includes(status))play('complete',{eventId:detail.taskId || detail.id || detail.eventId || JSON.stringify(detail)});
+    });
+    document.addEventListener('dobby:task-failed',()=>{});
+  }
+  return {bind,play,unlock,isUnlocked:()=>unlocked};
+})();
+window.DobbySound=DobbySound;
 function tracsNoticeType(type){
   return ['success','error','warning','info'].includes(type) ? type : 'info';
 }
@@ -5166,8 +5229,9 @@ const TRACSNotifications = (() => {
 
 window.TRACSNotifications = TRACSNotifications;
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => TRACSNotifications.start());
+  document.addEventListener('DOMContentLoaded', () => { DobbySound.bind(); TRACSNotifications.start(); });
 } else {
+  DobbySound.bind();
   TRACSNotifications.start();
 }
 

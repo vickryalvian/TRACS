@@ -156,13 +156,20 @@ font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Ro
 - Follow-ups with due dates create linked `tracs_reminders` records and call the existing reminder notification helper. Do not build a separate client reminder engine.
 - Keep this module operational-first: client attention, next action, billing/payment/tax invoice state, renewals, and activity. Do not expand it into sales pipeline CRM behavior without a separate decision.
 
+## Dobby Telegram persona
+
+- Implemented: `core/dobby_notifications.php` formats Dobby as the Telegram narrator for operational events and sends via existing environment credentials (`DOBBY_TELEGRAM_*`, `TRACS_TELEGRAM_*`, or `TELEGRAM_*`). Do not create a second bot process when extending this.
+- Infrastructure Pulse real-server monitoring sends Telegram only on status transitions and recovery, not on every interval.
+- Deployment/rollback Dobby Telegram messages flow through `bin/tracs-dobby-deploy-event.php`, beside the existing DOBBY outbox enqueue.
+- Dobby UI sound is `public/assets/audio/dobby-interaction.mp3`; `window.DobbySound` owns playback, dedupe and autoplay failure handling.
+
 ## Notifications
 
 - Implemented notification types include new case, reminder creation/due timing, task assignment, meeting timing, and shift-handover reminder.
 - The Attention Center polls every 60 seconds. Browser notifications use the Notification API plus `public/tracs-sw.js` after user permission.
 - The scheduler is `bin/tracs-notification-worker.php`; production should run it from cron.
 - Critical shared request errors can remain visible until manually dismissed.
-- Infrastructure alerts are **Planned** until a real monitoring backend creates them.
+- Infrastructure Telegram alerts are implemented for real Infrastructure Pulse status transitions. Browser/in-app infrastructure alert correlation remains separate from the existing notification center.
 
 ## Security And Runtime Invariants
 

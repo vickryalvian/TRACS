@@ -12,11 +12,11 @@ Current implementation highlights:
 - Dashboard Task Monitoring tabs: Checklist and Reminder, Assignments, Activity.
 - Task assignments sync into checklist and optional reminders.
 - Shift reports support Active, On Hold, Resolved, and image attachments.
-- In-app/browser notification center with scheduler worker.
+- In-app/browser notification center with scheduler worker and Dobby Telegram persona for monitoring/deployment events.
 - Infrastructure Pulse full page, dashboard widget, and TV widget using shared mock data.
 - Domain Price Crosscheck uses canonical route `domain-price-crosscheck.php` and a compact tabbed operational layout.
 - Client Portfolio MVP uses `clients.php` / `client-detail.php` with a React/Vite island, v1 PHP APIs, owner-scoped access, billing/follow-up attention calculation, reminder linkage, and client activity logs.
-- Settings are in the avatar/profile menu.
+- Settings are in the avatar/profile menu. Dobby sound currently uses the dashboard Dobby interaction and reusable JS service; no profile preference UI was added.
 
 ## Do Not Revert
 
@@ -68,6 +68,13 @@ Current implementation highlights:
 - Dashboard reminder starts 30 minutes before shift change.
 - Stored notification creation is in the final 15 minutes and depends on the worker or dashboard execution.
 
+### Dobby Telegram and sound
+
+- `core/dobby_notifications.php` formats Dobby Telegram messages and sends them through the configured Telegram bot token/chat ID. Missing Telegram config is a safe no-op.
+- Infrastructure Pulse real-server checks call Dobby only on status transitions, including recovery, so repeated failed intervals do not spam Telegram.
+- `bin/tracs-dobby-deploy-event.php` now sends Dobby Telegram messages for deployment/rollback milestones while still enqueuing DOBBY outbox events.
+- `public/assets/audio/dobby-interaction.mp3` is the current Dobby sound. `window.DobbySound` handles open/complete playback, dedupe and autoplay failures.
+
 ### Notifications
 
 - Stored types cover case creation, reminder creation/due timing, task assignment, meeting timing, and shift handover.
@@ -101,7 +108,7 @@ Current implementation highlights:
 1. Test dashboard, cases, Task Monitoring, shift reports, notifications, and Domain Price as Admin and Agent.
 2. Test Intern access to own tasks and restricted modules.
 3. Test case ticket open/resolve/edit permissions from both dashboard and case page.
-4. Run the notification worker manually, then verify cron, dedupe, browser permission denial, and click-through routes.
+4. Run the notification worker manually, then verify cron, Dobby Telegram config, transition dedupe, browser permission denial, and click-through routes.
 5. Test TV Mode in macOS browser, fullscreen, 1920x1080, a smaller viewport, and dark mode.
 6. Confirm Infrastructure Pulse clearly says mock/session-only.
 7. Test Domain Price tabs, matrix save/recalculate, audit trail, extension/source management, and legacy redirect.

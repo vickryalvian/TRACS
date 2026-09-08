@@ -10,6 +10,7 @@
 
 require_once __DIR__ . '/infrastructure_ping.php';
 require_once __DIR__ . '/infrastructure_servers.php';
+require_once __DIR__ . '/dobby_notifications.php';
 
 function tracs_infra_monitor_log(mysqli $conn, string $line): void {
     // Cron output is captured by shell redirection per bin/tracs-infrastructure-monitor.php's
@@ -63,6 +64,7 @@ function tracs_infra_monitor_run(mysqli $conn): array {
                 (int)($server['packet_count'] ?? 4),
                 (int)($server['timeout_seconds'] ?? 5)
             );
+            $previousStatus = isset($server['last_status']) ? (string)$server['last_status'] : null;
             tracs_infra_server_record_check(
                 $conn,
                 $code,
@@ -71,6 +73,7 @@ function tracs_infra_monitor_run(mysqli $conn): array {
                 $result['packet_loss_percent'] !== null ? (float)$result['packet_loss_percent'] : null,
                 (string)$result['checked_at']
             );
+            tracs_dobby_notify_monitoring_transition($conn, $server, $previousStatus, $result);
             $checked++;
             tracs_infra_monitor_log($conn, sprintf(
                 '[%s] checked %s (%s) -> %s%s',

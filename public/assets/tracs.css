@@ -25,8 +25,8 @@
   /* ── Text ── */
   --tx1: #242a33;
   --tx2: #535d6b;
-  --tx3: #7f8896;
-  --tx4: #aeb5bf;
+  --tx3: #69737e;
+  --tx4: #6b7480;
 
   /* ── Brand — adjusted for light bg readability ── */
   --blue:      #2563eb;
@@ -346,6 +346,11 @@
   border-color: var(--bd2);
   color: var(--tx1);
   outline: none;
+}
+.theme-option:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px var(--blue-lt);
 }
 .theme-option svg {
   width: 14px;
@@ -1654,6 +1659,9 @@ input, select, textarea { font-family: inherit }
   gap: 10px;
   min-height: 44px;
   padding: 10px 14px;
+  border: 0;
+  background: transparent;
+  width: 100%;
   font-size: 12px;
   color: var(--tx4);
   font-family: var(--mono);
@@ -1661,7 +1669,8 @@ input, select, textarea { font-family: inherit }
   opacity: .55;
   transition: opacity var(--dur);
 }
-.dobby-egg:hover { opacity: 1 }
+.dobby-egg:hover,
+.dobby-egg:focus-visible { opacity: 1 }
 .dobby-egg-cat {
   display: inline-flex;
   animation: dobby-bob 2.4s ease-in-out infinite;
@@ -4292,6 +4301,9 @@ input[type="checkbox"]:not([data-native-checkbox]):disabled,
 .tracs-select-empty {
   padding: 10px;
   text-align: center;
+  border: 0;
+  background: transparent;
+  width: 100%;
   font-size: 12px;
   color: var(--tx4);
 }

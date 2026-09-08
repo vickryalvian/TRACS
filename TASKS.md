@@ -10,7 +10,7 @@ Status labels in this file are deliberate: `Completed`, `In Progress`, `Partiall
 - [x] Shared case ticket detail from dashboard and case page.
 - [x] Case `in_progress` status, Resolve action, timeline, and image attachments.
 - [x] Shift Active/On Hold/Resolved status model and shift image attachments.
-- [x] Notification tables, dedupe/logging, in-app center, browser permission flow, and service worker click handling.
+- [x] Notification tables, dedupe/logging, in-app center, browser permission flow, service worker click handling, and Dobby Telegram persona for monitoring/deployment events.
 - [x] Canonical Domain Price route `domain-price-crosscheck.php` with legacy 308 redirect.
 - [x] Domain Price overview, matrix, intelligence, ccTLD, adjustment, action bucket, notes, audit, source, and extension surfaces.
 - [x] Settings moved to avatar/profile menu.
@@ -18,11 +18,12 @@ Status labels in this file are deliberate: `Completed`, `In Progress`, `Partiall
 - [x] Fixed post-login 404: re-granted `dashboard.view` to operational roles and added a permission-aware landing fallback so a successful login never dead-ends in a 404 (`docs/USER_LIFECYCLE_REMEDIATION.md`).
 - [x] Safe user removal: archive + email/username release so removed users disappear, history stays intact, and the same email/username can be reused (`2026_06_30_user_removal_release.sql`).
 - [x] Client Portfolio MVP: React/Vite Clients route, owner-scoped client tracking, services, billing, follow-ups, reminder linkage, attention calculation, activity timeline, and `clients.*` permissions.
+- [x] Dobby interaction sound asset and reusable frontend sound service.
 
 ## In Progress
 
 - [ ] Validate current documentation against every post-May 27 migration after deployment testing.
-- [ ] Verify notification scheduler under a real one-minute cron and inspect dedupe/log volume.
+- [ ] Verify notification scheduler and Dobby Telegram delivery under real cron/deployment configuration and inspect dedupe/log volume.
 - [ ] Confirm clean install from `config/install.sql`.
 - [ ] Confirm chronological migrations against a copy of an older database.
 - [ ] Stabilize Task Monitoring nested scroll behavior and compact row sizing at all breakpoints.
@@ -89,7 +90,7 @@ Status labels in this file are deliberate: `Completed`, `In Progress`, `Partiall
 - [ ] Calendar/timeline view for reminders, cases, MoM, and task due dates.
 - [ ] PDF/print evidence reports.
 - [ ] KPI/SLA/achievement tracking and management-review exports.
-- [ ] Optional email/WhatsApp delivery.
+- [ ] Optional email/WhatsApp delivery and a persisted Dobby sound preference if the profile preference model is extended.
 - [ ] Self-hosted frontend assets for offline/privacy-sensitive deployments.
 
 ## Legacy

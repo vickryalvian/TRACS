@@ -8,6 +8,7 @@ if (PHP_SAPI !== 'cli') {
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../core/dobby_events.php';
+require_once __DIR__ . '/../core/dobby_notifications.php';
 
 $args = getopt('', ['type:', 'correlation:', 'stage::', 'summary::', 'environment::', 'host::', 'commit::']);
 $type = tracs_dobby_text($args['type'] ?? '', 120);
@@ -23,7 +24,7 @@ $commit = tracs_dobby_text($args['commit'] ?? '', 64);
 $summary = tracs_dobby_text($args['summary'] ?? $stage, 255);
 $correlation = tracs_dobby_text($args['correlation'] ?? '', 120);
 
-tracs_dobby_event_enqueue($conn, [
+$event = [
     'source' => 'tracs.deployment',
     'type' => $type,
     'category' => 'deployment',
@@ -41,6 +42,19 @@ tracs_dobby_event_enqueue($conn, [
     ],
     'occurredAt' => date(DATE_ATOM),
     'correlationId' => $correlation !== '' ? $correlation : null,
+];
+
+tracs_dobby_event_enqueue($conn, $event);
+tracs_dobby_notify([
+    'event' => $type,
+    'severity' => $event['severity'],
+    'source' => 'TRACS Deployment',
+    'title' => $summary,
+    'message' => $summary,
+    'timestamp' => $event['occurredAt'],
+    'environment' => $environment,
+    'metadata' => $event['metadata'] + ['branch' => getenv('BRANCH') ?: null],
+    'deduplicationKey' => 'deployment:' . ($correlation !== '' ? $correlation : date('YmdHi')) . ':' . $type,
 ]);
 
 exit(0);

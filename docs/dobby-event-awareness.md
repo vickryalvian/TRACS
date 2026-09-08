@@ -47,3 +47,30 @@ The worker signs `timestamp.body` with HMAC SHA-256 and sends `X-Dobby-Timestamp
 ## Privacy
 
 Events include short summaries and minimized metadata. They must not include credentials, session cookies, CSRF tokens, raw form payloads, uploaded file content or full logs. Billing events are classified with `privacy: restricted`.
+
+
+## Telegram notification persona
+
+Dobby also acts as the Telegram narrator for important TRACS operational events. This reuses the configured Telegram bot credentials; it does not create a second bot. Configure one of these token/chat pairs outside Git:
+
+```bash
+DOBBY_TELEGRAM_BOT_TOKEN=...
+DOBBY_TELEGRAM_CHAT_ID=...
+# or the existing TRACS/Telegram names if production already uses them:
+TRACS_TELEGRAM_BOT_TOKEN=...
+TRACS_TELEGRAM_CHAT_ID=...
+TELEGRAM_BOT_TOKEN=...
+TELEGRAM_CHAT_ID=...
+```
+
+The shared formatter/transport lives in `core/dobby_notifications.php`. It currently sends:
+
+- Infrastructure Pulse real-server unhealthy transitions (`monitor.down` / `monitor.warning`).
+- Infrastructure Pulse recovery transitions (`monitor.recovered`).
+- Deployment and rollback milestones from `bin/tracs-dobby-deploy-event.php`.
+
+Monitoring notifications are transition-based: repeated checks with the same unhealthy status do not resend a Telegram message. Telegram failures are logged and never fail the original monitoring pass, manual ping, deployment or rollback.
+
+## Dobby UI sound
+
+The uploaded interaction sound is stored at `public/assets/audio/dobby-interaction.mp3`. `public/assets/tracs.js` exposes `window.DobbySound.play("open")` and `window.DobbySound.play("complete", { eventId })`. The dashboard Dobby element is the current user-gesture activation point, and `dobby:task-completed` is supported for future real Dobby task state events. Failed audio playback is ignored so browser autoplay rules cannot break navigation or task completion.
