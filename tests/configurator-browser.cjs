@@ -87,6 +87,31 @@ const phpCalculate = (input) => JSON.parse(execFileSync('php', ['-r', 'require "
     await page.screenshot({ path: '/tmp/tracs-configurator-mobile.png', fullPage: true });
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     await page.locator('[data-tab="master"]').click();
+    await page.locator('[data-filter-service]').selectOption('Dedicated Server');
+    await page.locator('[data-filter-category]').selectOption('Storage');
+    await page.locator('[data-filter-status]').selectOption('active');
+    await page.locator('[data-master-sort]').selectOption('price_desc');
+    const filtered = await page.locator('[data-master-body] tr').allTextContents();
+    assert.equal(filtered.length, 17);
+    assert(filtered.every((text) => text.includes('Storage') && text.includes('Dedicated Server')));
+    assert.match(filtered[0], /12\.100\.000/);
+    await page.locator('[data-clear-filters]').click();
+    await page.locator('[data-new-item]').click();
+    assert.equal(await page.locator('#sales-item-title').textContent(), 'New Master Item');
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 704 });
+      await page.screenshot({ path: `/tmp/tracs-master-modal-${width}.png` });
+      const bounds = await page.locator('[data-item-dialog]').boundingBox();
+      assert(bounds.x >= 0 && bounds.y >= 0 && bounds.x + bounds.width <= width && bounds.y + bounds.height <= 704);
+      const saveBounds = await page.locator('[data-item-form] [type="submit"]').boundingBox();
+      assert(saveBounds.y + saveBounds.height <= 704);
+    }
+    await page.locator('[data-item-form] [name="name"]').fill('UI test item');
+    await page.locator('[data-item-form] [name="category"]').fill('Setup');
+    await page.locator('[data-item-form] [name="price"]').fill('1000');
+    await page.locator('[data-item-form] [type="submit"]').click();
+    await page.waitForFunction(() => !document.querySelector('dialog').open);
+    assert(catalog.items.some((item) => item.name === 'UI test item'));
     await page.locator('[data-master-search]').fill('128 GB');
     await page.locator('[data-edit]').first().click();
     await page.locator('[data-item-form] [name="price"]').fill('1850000');

@@ -41,21 +41,35 @@ tracs_deny_direct_script_access(__FILE__);
     <label class="sales-field">Search Master Data<input class="form-input" type="search" data-master-search></label><button type="button" class="btn primary" data-new-item>New Item</button>
     <form data-tax-form class="sales-tax-form"><label class="sales-field">PPN (%)<input class="form-input" name="tax" type="number" min="0" max="100" step="0.0001" required></label><button type="submit" class="btn">Save PPN</button></form>
    </div>
+   <div class="sales-master-filters">
+    <label class="sales-field">Service<select class="form-select" data-filter-service><option value="">All services</option></select></label>
+    <label class="sales-field">Category<select class="form-select" data-filter-category><option value="">All categories</option></select></label>
+    <label class="sales-field">Status<select class="form-select" data-filter-status><option value="">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
+    <label class="sales-field">Sort By<select class="form-select" data-master-sort><option value="order">Configured order</option><option value="name">Name: A to Z</option><option value="price_asc">Price: low to high</option><option value="price_desc">Price: high to low</option></select></label>
+    <button type="button" class="btn" data-clear-filters>Clear Filters</button>
+   </div>
+   <p class="sales-master-count" data-master-count role="status"></p>
    <div class="sales-table-scroll"><table class="sales-master-table"><thead><tr><th>Service / Category</th><th>Item</th><th>Price</th><th>Billing</th><th>Status</th><th>Order</th><th><span class="sales-sr-only">Actions</span></th></tr></thead><tbody data-master-body></tbody></table></div>
    <dialog class="sales-dialog" data-item-dialog aria-labelledby="sales-item-title">
     <form data-item-form>
-     <h2 id="sales-item-title">Master Item</h2><input type="hidden" name="id"><input type="hidden" name="revision">
-     <label class="sales-field">Service Type<input class="form-input" name="service_type" maxlength="100" required></label>
-     <label class="sales-field">Category<input class="form-input" name="category" maxlength="100" required></label>
+     <div class="sales-dialog-head"><h2 id="sales-item-title">New Master Item</h2><button type="button" class="btn" data-close-item aria-label="Close item editor" title="Close"><i data-lucide="x" class="icon-sm"></i></button></div>
+     <div class="sales-dialog-body">
+     <input type="hidden" name="id"><input type="hidden" name="revision">
+     <div class="sales-dialog-grid">
+     <label class="sales-field">Service Type<input class="form-input" name="service_type" list="sales-service-options" maxlength="100" required></label>
+     <label class="sales-field">Category<input class="form-input" name="category" list="sales-category-options" maxlength="100" required></label>
+     </div>
+     <datalist id="sales-service-options"></datalist><datalist id="sales-category-options"></datalist>
      <label class="sales-field">Item Name<input class="form-input" name="name" maxlength="500" required></label>
      <label class="sales-field">Specification<textarea class="form-input" name="description" maxlength="10000" rows="2"></textarea></label>
-     <div class="sales-toolbar">
+     <div class="sales-dialog-grid">
       <label class="sales-field">Price (Rp)<input class="form-input" name="price" type="number" min="0" max="1000000000000" step="any" required></label>
       <label class="sales-field">Billing Period<select class="form-select" name="billing_period"><option value="monthly">Monthly</option><option value="annual">Annual</option><option value="one_time">One-Time</option></select></label>
       <label class="sales-field">Sort Order<input class="form-input" name="sort_order" type="number" min="-1000000" max="1000000" step="1" required></label>
      </div>
-     <label><input type="checkbox" name="active"> Active</label><label><input type="checkbox" name="unit_quantity"> Per-unit quantity</label>
-     <p data-item-error role="alert"></p><div class="sales-dialog-actions"><button type="button" class="btn" data-cancel>Cancel</button><button type="submit" class="btn primary">Save Item</button></div>
+     <div class="sales-dialog-checks"><label><input type="checkbox" name="active"> Active</label><label><input type="checkbox" name="unit_quantity"> Per-unit quantity</label></div>
+     </div>
+     <div class="sales-dialog-footer"><p data-item-error role="alert"></p><div class="sales-dialog-actions"><button type="button" class="btn" data-cancel>Cancel</button><button type="submit" class="btn primary">Save Item</button></div></div>
     </form>
    </dialog>
   </section>

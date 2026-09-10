@@ -48,6 +48,11 @@ The editor uses existing `settings.manage`; all calculator users still require
 statements and validation protect writes. Revision checks reject stale edits.
 Deactivation replaces destructive deletion. The editor supports adding items,
 changing service/category/name/specification/price/billing/order, and activation.
+Master Data supports combined search, service, category and active-status filters,
+with configured-order, name and numeric price sorting and a matching-item count.
+The responsive item dialog keeps its header/actions visible around a scrollable
+form. Service/category suggestions use existing master values while allowing new
+values. New items inherit the current service/category filters.
 
 ## Pricing and Calculations
 

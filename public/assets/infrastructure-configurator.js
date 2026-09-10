@@ -132,7 +132,18 @@
     const body = $('[data-master-body]');
     if (!body) return;
     const search = $('[data-master-search]').value.toLowerCase();
-    const items = catalog.items.filter((item) => `${item.service_type} ${item.category} ${item.name}`.toLowerCase().includes(search));
+    const serviceFilter = $('[data-filter-service]');
+    const categoryFilter = $('[data-filter-category]');
+    fill(serviceFilter, [['', 'All services'], ...[...new Set(catalog.items.map((item) => item.service_type))].sort().map((value) => [value, value])], serviceFilter.value);
+    fill(categoryFilter, [['', 'All categories'], ...[...new Set(catalog.items.filter((item) => !serviceFilter.value || item.service_type === serviceFilter.value).map((item) => item.category))].sort().map((value) => [value, value])], categoryFilter.value);
+    const state = $('[data-filter-status]').value;
+    const items = catalog.items.filter((item) => `${item.service_type} ${item.category} ${item.name}`.toLowerCase().includes(search)
+      && (!serviceFilter.value || item.service_type === serviceFilter.value)
+      && (!categoryFilter.value || item.category === categoryFilter.value)
+      && (!state || item.active === (state === 'active')));
+    const sort = $('[data-master-sort]').value;
+    items.sort((a, b) => (sort === 'name' ? a.name.localeCompare(b.name) : sort === 'price_asc' ? a.price - b.price : sort === 'price_desc' ? b.price - a.price : a.sort_order - b.sort_order) || a.id - b.id);
+    $('[data-master-count]').textContent = `${items.length} of ${catalog.items.length} items`;
     body.innerHTML = items.map((item) => `<tr><td>${esc(item.service_type)}<br>${esc(item.category)}</td><td>${esc(item.name)}</td><td>${esc(money(item.price))}</td><td>${labels[item.billing_period]}</td><td>${item.active ? 'Active' : 'Inactive'}</td><td>${item.sort_order}</td><td><button type="button" class="btn" data-edit="${item.id}" title="Edit item" aria-label="Edit ${esc(item.name)}"><i data-lucide="pencil" class="icon-sm"></i></button></td></tr>`).join('') || '<tr><td colspan="7">No matching items.</td></tr>';
     icons();
   }
@@ -230,26 +241,43 @@
     });
   });
   $('[data-master-search]')?.addEventListener('input', () => { if (catalog) renderMaster(); });
+  root.querySelectorAll('[data-filter-service], [data-filter-category], [data-filter-status], [data-master-sort]').forEach((field) => field.addEventListener('change', () => { if (catalog) renderMaster(); }));
+  $('[data-clear-filters]')?.addEventListener('click', () => {
+    $('[data-master-search]').value = '';
+    root.querySelectorAll('[data-filter-service], [data-filter-category], [data-filter-status]').forEach((field) => { field.value = ''; });
+    $('[data-master-sort]').value = 'order';
+    if (catalog) renderMaster();
+  });
   const form = $('[data-item-form]');
   const dialog = $('[data-item-dialog]');
   function edit(item = {}) {
     if (!catalog) return;
     form.reset();
-    const values = { id: 0, revision: 0, sort_order: 0, active: true, unit_quantity: false, service_type: service.value, billing_period: 'monthly', ...item };
+    const values = { id: 0, revision: 0, sort_order: 0, active: true, unit_quantity: false, service_type: $('[data-filter-service]').value || service.value, category: $('[data-filter-category]').value, billing_period: 'monthly', ...item };
     for (const [key, value] of Object.entries(values)) {
       const field = form.elements.namedItem(key);
       if (!field) continue;
       if (field.type === 'checkbox') field.checked = Boolean(value); else field.value = value ?? '';
     }
     $('[data-item-error]').textContent = '';
+    $('#sales-item-title').textContent = item.id ? 'Edit Master Item' : 'New Master Item';
+    $('#sales-service-options').replaceChildren(...[...new Set(catalog.items.map((entry) => entry.service_type))].sort().map((value) => new Option(value, value)));
+    updateCategorySuggestions();
     dialog.showModal();
+    form.elements.name.focus();
   }
+  function updateCategorySuggestions() {
+    if (!catalog || !form) return;
+    $('#sales-category-options').replaceChildren(...[...new Set(catalog.items.filter((item) => item.service_type === form.elements.service_type.value).map((item) => item.category))].sort().map((value) => new Option(value, value)));
+  }
+  form?.elements.service_type.addEventListener('input', updateCategorySuggestions);
   $('[data-new-item]')?.addEventListener('click', () => edit());
   $('[data-master-body]')?.addEventListener('click', (event) => {
     const button = event.target.closest('[data-edit]');
     if (button) edit(catalog.items.find((item) => item.id === Number(button.dataset.edit)));
   });
   $('[data-cancel]')?.addEventListener('click', () => dialog.close());
+  $('[data-close-item]')?.addEventListener('click', () => dialog.close());
   form?.addEventListener('submit', async (event) => {
     event.preventDefault();
     const button = form.querySelector('[type="submit"]'); button.disabled = true;
