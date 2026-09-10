@@ -62,8 +62,8 @@
       const item = selected(line);
       const options = available().filter((option) => option.category === line.category);
       return `<div class="sales-line" data-line="${index}">
-        <label class="sales-field">Category<select class="form-select" data-category>${cats.map((category) => `<option ${category === line.category ? 'selected' : ''}>${esc(category)}</option>`).join('')}</select></label>
-        <label class="sales-field">Item<select class="form-select" data-item><option value="0">Select ${esc(line.category)}</option>${options.map((option) => `<option value="${option.id}" ${option.id === line.id ? 'selected' : ''}>${esc(option.name)}</option>`).join('')}</select></label>
+        <label class="sales-field"><span class="${index ? 'sales-sr-only' : 'sales-column-label'}">Category</span><select class="form-select" data-category>${cats.map((category) => `<option ${category === line.category ? 'selected' : ''}>${esc(category)}</option>`).join('')}</select></label>
+        <label class="sales-field"><span class="${index ? 'sales-sr-only' : 'sales-column-label'}">Item</span><select class="form-select" data-item><option value="0">Select ${esc(line.category)}</option>${options.map((option) => `<option value="${option.id}" ${option.id === line.id ? 'selected' : ''}>${esc(option.name)}</option>`).join('')}</select></label>
         <output class="sales-price">${item ? esc(money(item.price * line.quantity)) : '-'}</output>
         <button type="button" class="btn sales-remove" data-remove aria-label="Remove item ${index + 1}" title="Remove item"><i data-lucide="trash-2" class="icon-sm"></i></button>
         ${item?.unit_quantity ? `<label class="sales-field sales-quantity">Units<input class="form-input" data-quantity type="number" min="1" max="100000" step="1" value="${line.quantity}" required></label>` : ''}

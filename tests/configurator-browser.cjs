@@ -34,6 +34,7 @@ const phpCalculate = (input) => JSON.parse(execFileSync('php', ['-r', 'require "
       return route.fulfill({ json: { success: true, data: result } });
     });
     await page.goto('http://localhost:8080/configurator.php');
+    await page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; animation: none !important; }' });
     await page.locator('[data-item]').first().waitFor();
     const set = async (index, ref) => page.locator('[data-item]').nth(index).selectOption(String(find(ref).id));
     for (const [index, category] of ['CPU', 'RAM', 'Storage'].entries()) {
@@ -43,6 +44,18 @@ const phpCalculate = (input) => JSON.parse(execFileSync('php', ['-r', 'require "
     }
     await set(0, 'B3:C3'); await set(1, 'B8:C8'); await set(2, 'B15:C15');
     await page.locator('[data-add]').click(); await set(3, 'B12:C12');
+    assert.equal(await page.locator('.sales-column-label').count(), 2);
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate((value) => document.documentElement.setAttribute('data-theme', value), theme);
+      const colors = await page.locator('[data-refresh]').evaluate((button) => {
+        const style = getComputedStyle(button);
+        return { color: style.color, background: style.backgroundColor };
+      });
+      assert.notEqual(colors.color, colors.background);
+      if (theme === 'dark') assert.notEqual(colors.color, 'rgb(0, 0, 0)');
+      await page.screenshot({ path: `/tmp/tracs-configurator-${theme}.png`, fullPage: true });
+    }
+    await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'light'));
     await page.waitForFunction(() => document.querySelector('[data-calculation-status]').textContent === '');
     assert.match(await page.locator('[data-total="grand_total"]').textContent(), /11\.766\.000/);
     await page.screenshot({ path: '/tmp/tracs-configurator-desktop.png', fullPage: true });
