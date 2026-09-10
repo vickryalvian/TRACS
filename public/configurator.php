@@ -6,6 +6,7 @@ require_once __DIR__ . '/auth/auth_check.php';
 require_once __DIR__ . '/../core/access_control.php';
 tracs_require_page_permission($conn, 'dashboard.view');
 require_once __DIR__ . '/../modules/infrastructure-configurator/controller.php';
+require_once __DIR__ . '/../modules/infrastructure-configurator/templates.php';
 require_once __DIR__ . '/includes/page_helpers.php';
 
 $can_manage = tracs_user_can($conn, 'settings.manage');
@@ -14,11 +15,12 @@ header('Cache-Control: no-store');
 if ($action !== '') {
     header('Content-Type: application/json; charset=utf-8');
     try {
-        if (!in_array($action, ['catalog', 'calculate', 'save_item', 'save_tax'], true)) {
+        if (!in_array($action, ['catalog', 'calculate', 'save_item', 'save_tax', 'templates', 'save_template'], true)) {
             http_response_code(404);
             throw new InvalidArgumentException('Unknown action.');
         }
-        if (($action !== 'catalog' && $_SERVER['REQUEST_METHOD'] !== 'POST') || ($action === 'catalog' && $_SERVER['REQUEST_METHOD'] !== 'GET')) {
+        $readOnly = in_array($action, ['catalog', 'templates'], true);
+        if ((!$readOnly && $_SERVER['REQUEST_METHOD'] !== 'POST') || ($readOnly && $_SERVER['REQUEST_METHOD'] !== 'GET')) {
             http_response_code(405);
             throw new InvalidArgumentException('Method not allowed.');
         }
@@ -26,9 +28,15 @@ if ($action !== '') {
             http_response_code(403);
             throw new InvalidArgumentException('Master Data access is required.');
         }
-        if ($action !== 'catalog') verify_csrf();
-        $input = $action === 'catalog' ? [] : json_decode(file_get_contents('php://input'), true, 32, JSON_THROW_ON_ERROR);
+        if (!$readOnly) verify_csrf();
+        $input = $readOnly ? [] : json_decode(file_get_contents('php://input'), true, 32, JSON_THROW_ON_ERROR);
         if (!is_array($input)) throw new InvalidArgumentException('Invalid request.');
+        if (in_array($action, ['templates', 'save_template'], true)) {
+            $owner = (int)$_SESSION['user_id'];
+            $result = $action === 'templates' ? tracs_configurator_templates($conn, $owner) : tracs_configurator_save_template($conn, $owner, $input);
+            echo json_encode(['success' => true, 'data' => $result], JSON_THROW_ON_ERROR);
+            exit;
+        }
         if ($action === 'save_item') tracs_configurator_save_item($conn, $input);
         if ($action === 'save_tax') {
             $rate = $input['tax_rate'] ?? null;

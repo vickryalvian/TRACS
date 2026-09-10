@@ -6,6 +6,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const root = path.resolve(__dirname, '..');
 const seed = JSON.parse(fs.readFileSync(path.join(root, 'config/seeds/configurator-items.json')));
 let catalog = { items: seed.items.map((item, index) => ({ ...item, id: index + 1, revision: 1 })), tax_rate: seed.tax_rate, tax_revision: 1 };
+const savedTemplates = [];
 catalog.items.push({ ...catalog.items[0], id: 1000, name: 'Inactive CPU fixture', active: false });
 const view = execFileSync('php', ['-r', '$can_manage=true; include "modules/infrastructure-configurator/view.php";'], { cwd: root, encoding: 'utf8' });
 const html = `<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="test"><link rel="stylesheet" href="/assets/tracs.css"><link rel="stylesheet" href="/assets/infrastructure-configurator.css"><style>body{overflow:auto;height:auto;min-height:100vh}.main{width:100%;min-height:100vh}.main-inner{max-width:1360px;margin:auto;padding:24px}</style></head><body>${view}<script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.js"></script></body></html>`;
@@ -23,6 +24,12 @@ const phpCalculate = (input) => JSON.parse(execFileSync('php', ['-r', 'require "
       if (!action) return route.fulfill({ contentType: 'text/html', body: html });
       if (failCatalog && action === 'catalog') return route.fulfill({ status: 503, json: { success: false, message: 'Master Data is unavailable.' } });
       let result = catalog;
+      if (action === 'templates') result = savedTemplates;
+      if (action === 'save_template') {
+        const input = route.request().postDataJSON();
+        savedTemplates.push({ id: savedTemplates.length + 1, ...input });
+        result = savedTemplates;
+      }
       if (action === 'calculate') result = phpCalculate(route.request().postDataJSON());
       if (action === 'save_item') {
         const data = route.request().postDataJSON();
@@ -70,6 +77,16 @@ const phpCalculate = (input) => JSON.parse(execFileSync('php', ['-r', 'require "
     await page.waitForFunction(() => !document.querySelector('[data-refresh]').disabled);
     assert.equal(await page.locator('[data-custom-name]').inputValue(), 'Custom support');
     assert.equal(catalog.items.length, masterCount);
+    await page.locator('[data-template-name]').fill('Sales test');
+    await page.locator('[data-save-template]').click();
+    await page.waitForFunction(() => document.querySelector('[data-template-status]').textContent.includes('Template saved'));
+    assert.equal(savedTemplates[0].configuration.lines.at(-1).name, 'Custom support');
+    await page.locator('[data-lines] > div').last().locator('[data-remove]').click();
+    await page.locator('[data-template-select]').selectOption('1');
+    page.once('dialog', (dialog) => dialog.accept());
+    await page.locator('[data-load-template]').click();
+    await page.waitForFunction(() => document.querySelector('[data-template-status]').textContent.includes('Loaded:'));
+    assert.equal(await page.locator('[data-custom-name]').inputValue(), 'Custom support');
     await page.locator('[data-lines] > div').last().locator('[data-remove]').click();
     assert.match(await page.locator('[data-total="subtotal_per_node"]').textContent(), /10\.600\.000/);
     assert.equal(await page.locator('.sales-column-label').count(), 2);
@@ -157,6 +174,7 @@ const phpCalculate = (input) => JSON.parse(execFileSync('php', ['-r', 'require "
     await page.locator('[data-item]').first().waitFor();
     await page.reload();
     await page.locator('[data-item]').first().waitFor();
+    await page.waitForFunction(() => document.querySelector('[data-template-select]').options.length === 2);
     await set(0, 'B3:C3');
     assert.match(await page.locator('.sales-price').first().textContent(), /3\.800\.000/);
     assert.deepEqual(errors, []);

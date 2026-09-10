@@ -21,6 +21,8 @@
   let sequence = 0;
   let timer;
   let loading = false;
+  let templates = [];
+  let templateBusy = false;
   const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const activeItems = () => (catalog?.items || []).filter((item) => item.active);
   const available = () => activeItems().filter((item) => item.service_type === service.value && item.billing_period === period.value);
@@ -311,5 +313,56 @@
     catch (error) { status.textContent = error.message; }
     finally { button.disabled = false; }
   });
+  function renderTemplates() {
+    const select = $('[data-template-select]');
+    fill(select, [['', templates.length ? 'Select a template' : 'No saved templates'], ...templates.map((item) => [String(item.id), item.name])], select.value);
+    $('[data-load-template]').disabled = !select.value || templateBusy;
+  }
+  async function loadTemplates() {
+    try { templates = await request('templates'); renderTemplates(); }
+    catch (error) { $('[data-template-status]').textContent = 'Templates unavailable. ' + error.message; }
+  }
+  $('[data-template-select]').addEventListener('change', renderTemplates);
+  $('[data-save-template]').addEventListener('click', async () => {
+    if (templateBusy) return;
+    const message = $('[data-template-status]');
+    if (!catalog || loading) { message.textContent = 'Load Master Data before saving a template.'; return; }
+    const name = $('[data-template-name]').value.trim();
+    if (!name) { message.textContent = 'Enter a template name.'; $('[data-template-name]').focus(); return; }
+    if (lines.some((line) => line.id && !selected(line))) { message.textContent = 'Replace unavailable items before saving.'; return; }
+    templateBusy = true; $('[data-save-template]').disabled = true;
+    try {
+      const configuration = { service_type: service.value, billing_period: period.value, nodes: Number(nodes.value), margin_mode: marginMode.value, margin_value: marginValue.value, lines: lines.filter((line) => selected(line)) };
+      templates = await request('save_template', { name, configuration });
+      renderTemplates(); message.textContent = `Template saved: ${name}`;
+    } catch (error) { message.textContent = error.message; }
+    finally { templateBusy = false; $('[data-save-template]').disabled = false; renderTemplates(); }
+  });
+  $('[data-load-template]').addEventListener('click', async () => {
+    if (templateBusy) return;
+    const template = templates.find((item) => String(item.id) === $('[data-template-select]').value);
+    if (!template) return;
+    if (lines.some((line) => line.id || line.custom) && !window.confirm('Replace the current calculation with this template?')) return;
+    templateBusy = true; $('[data-load-template]').disabled = true;
+    const message = $('[data-template-status]');
+    try {
+      const data = await request('catalog');
+      const config = template.configuration;
+      if (!data.items.some((item) => item.active && item.service_type === config.service_type && item.billing_period === config.billing_period)) throw new Error('The template service or billing period is no longer available.');
+      useCatalog(data);
+      service.value = config.service_type; setPeriods(config.billing_period);
+      nodes.value = config.nodes;
+      marginMode.value = config.margin_mode || 'percentage';
+      marginValue.max = marginMode.value === 'amount' ? '1000000000000' : '1000';
+      marginValue.value = config.margin_value ?? 30;
+      $('[data-margin-value-label]').textContent = marginMode.value === 'amount' ? 'Margin (Rp, total)' : 'Margin (%)';
+      lines = JSON.parse(JSON.stringify(config.lines));
+      $('[data-template-name]').value = template.name;
+      renderLines(); calculate();
+      message.textContent = `Loaded: ${template.name}. Current Master Data prices and PPN apply.`;
+    } catch (error) { message.textContent = error.message; }
+    finally { templateBusy = false; renderTemplates(); }
+  });
   refresh();
+  loadTemplates();
 }());

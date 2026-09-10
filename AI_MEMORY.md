@@ -48,6 +48,10 @@ Sales can override each selected unit price without changing Master Data and
 reset it to the master price. Default margin is 30% cost-plus before PPN, editable
 as a percentage or one fixed Rupiah amount for all nodes. These are temporary
 configuration values; reload resets them. See the overhaul report for formulas.
+Users can explicitly save these values as private named calculation templates in
+`tracs_configurator_templates`. Loading restores the configuration but uses current
+master prices for rows without overrides and current PPN. Apply the separate
+`2026_09_10_configurator_templates.sql` migration when deploying this feature.
 `settings.manage` controls item/tax editing; calculator access remains
 `dashboard.view`. The additive migration and idempotent importer are explicit CLI
 operations. Existing imports preserve administrator edits. Never re-enable the

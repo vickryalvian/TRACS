@@ -4,6 +4,23 @@ Implemented on `codex/infrastructure-sales-configurator-overhaul`.
 
 ## Current Workflow
 
+### Saved Templates
+
+Users can save named templates and load them later from My Templates. Templates
+are private to the authenticated owner, stored in `tracs_configurator_templates`.
+They preserve service, billing period, nodes, margin, item IDs, explicit price
+overrides and custom items. Loading re-fetches current Master Data prices and PPN;
+unavailable selections block totals until replaced. Blank/unselected master rows
+are excluded when saving. Duplicate names are rejected rather than overwritten.
+Loading asks before replacing an existing calculation. No rename/delete UI yet.
+
+Apply `config/migrations/2026_09_10_configurator_templates.sql` before deployment.
+This additive migration was applied to local Docker MySQL only. The authenticated
+route supports `templates` (GET, owner-only) and `save_template` (POST + CSRF,
+validated calculation). `tests/configurator-templates.php` checks database round
+trip, custom/override values, owner isolation and duplicate protection in a rolled
+back transaction. Browser checks cover saving/loading and listing after reload.
+
 Select service and billing period, select category-specific items, add/remove rows,
 enter nodes, and read subtotal, PPN, and grand total. Dedicated Server starts with
 empty CPU, RAM, and Storage rows. More Storage rows can be added without limit
@@ -185,7 +202,7 @@ Confirm the noted DS setup classification and VPS NVMe wording conflict with
 Sales before production adoption. The workbook's truncated F21 sum is deliberately
 corrected to include every selected row, as required by the new workflow.
 
-Quotes are not persisted or exported. Billing-period switches reset rows. There
+Named templates are persisted; quote exports are not implemented. Billing-period switches reset rows. There
 is no combined first-invoice or deposit calculator, automatic pricing sync, or
 recommendation engine. Authenticated browser checks with real role accounts and
 production deployment are still required before release.

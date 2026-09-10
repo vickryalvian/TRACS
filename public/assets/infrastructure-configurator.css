@@ -64,6 +64,8 @@
 .sales-master-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
 .sales-master-filters .sales-field { flex: 1 1 145px; }
 .sales-master-count { color: var(--tx2); font-size: 12px; margin: 14px 0; }
+.sales-template-toolbar { margin-bottom: 12px; }
+[data-template-status]:empty { display: none; }
 .sales-dialog .sales-toolbar { margin: 0; }
 .sales-dialog-actions { display: flex; justify-content: end; gap: 8px; }
 .sales-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }

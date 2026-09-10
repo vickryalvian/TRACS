@@ -12,6 +12,13 @@ tracs_deny_direct_script_access(__FILE__);
   <p class="sales-status" data-status role="status">Loading Master Data...</p>
   <noscript><p class="empty">JavaScript is required to use the calculator.</p></noscript>
   <section id="sales-calculator" role="tabpanel" aria-labelledby="calculator-tab">
+   <div class="sales-toolbar sales-template-toolbar">
+    <label class="sales-field">My Templates<select class="form-select" data-template-select disabled><option value="">No templates</option></select></label>
+    <button type="button" class="btn" data-load-template disabled><i data-lucide="folder-open" class="icon-sm"></i>Load</button>
+    <label class="sales-field">Template Name<input class="form-input" data-template-name maxlength="150"></label>
+    <button type="button" class="btn" data-save-template><i data-lucide="save" class="icon-sm"></i>Save Template</button>
+   </div>
+   <p data-template-status role="status" class="sales-master-count"></p>
    <div class="sales-toolbar">
     <label class="sales-field">Service<select class="form-select" data-service disabled></select></label>
     <label class="sales-field">Billing Period<select class="form-select" data-period disabled></select></label>
