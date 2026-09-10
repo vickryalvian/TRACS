@@ -1,0 +1,100 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const { execFileSync } = require('node:child_process');
+const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const root = path.resolve(__dirname, '..');
+const seed = JSON.parse(fs.readFileSync(path.join(root, 'config/seeds/configurator-items.json')));
+let catalog = { items: seed.items.map((item, index) => ({ ...item, id: index + 1, revision: 1 })), tax_rate: seed.tax_rate, tax_revision: 1 };
+catalog.items.push({ ...catalog.items[0], id: 1000, name: 'Inactive CPU fixture', active: false });
+const view = execFileSync('php', ['-r', '$can_manage=true; include "modules/infrastructure-configurator/view.php";'], { cwd: root, encoding: 'utf8' });
+const html = `<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="test"><link rel="stylesheet" href="/assets/tracs.css"><link rel="stylesheet" href="/assets/infrastructure-configurator.css"><style>body{overflow:auto;height:auto;min-height:100vh}.main{width:100%;min-height:100vh}.main-inner{max-width:1360px;margin:auto;padding:24px}</style></head><body>${view}<script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.js"></script></body></html>`;
+const find = (ref) => catalog.items.find((item) => item.service_type === 'Dedicated Server' && item.source_reference === ref);
+const phpCalculate = (input) => JSON.parse(execFileSync('php', ['-r', 'require "modules/infrastructure-configurator/master.php"; $v=json_decode(stream_get_contents(STDIN),true); echo json_encode(tracs_configurator_calculate($v[0],$v[1]));'], { cwd: root, input: JSON.stringify([catalog, input]), encoding: 'utf8' }));
+(async () => {
+  const browser = await chromium.launch({ headless: true, channel: 'chrome' });
+  try {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+    const errors = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    let failCatalog = false;
+    await page.route('**/configurator.php*', async (route) => {
+      const action = new URL(route.request().url()).searchParams.get('action');
+      if (!action) return route.fulfill({ contentType: 'text/html', body: html });
+      if (failCatalog && action === 'catalog') return route.fulfill({ status: 503, json: { success: false, message: 'Master Data is unavailable.' } });
+      let result = catalog;
+      if (action === 'calculate') result = phpCalculate(route.request().postDataJSON());
+      if (action === 'save_item') {
+        const data = route.request().postDataJSON();
+        const index = catalog.items.findIndex((item) => item.id === Number(data.id));
+        const item = { ...data, id: Number(data.id) || 1001, price: Number(data.price), sort_order: Number(data.sort_order), revision: Number(data.revision) + 1 };
+        if (index >= 0) catalog.items[index] = { ...catalog.items[index], ...item }; else catalog.items.push(item);
+      }
+      if (action === 'save_tax') { catalog.tax_rate = route.request().postDataJSON().tax_rate; catalog.tax_revision++; }
+      return route.fulfill({ json: { success: true, data: result } });
+    });
+    await page.goto('http://localhost:8080/configurator.php');
+    await page.locator('[data-item]').first().waitFor();
+    const set = async (index, ref) => page.locator('[data-item]').nth(index).selectOption(String(find(ref).id));
+    for (const [index, category] of ['CPU', 'RAM', 'Storage'].entries()) {
+      const optionIds = await page.locator('[data-item]').nth(index).locator('option').evaluateAll((options) => options.map((option) => Number(option.value)).filter(Boolean));
+      assert(optionIds.every((id) => catalog.items.find((item) => item.id === id).category === category));
+      assert(!optionIds.includes(1000));
+    }
+    await set(0, 'B3:C3'); await set(1, 'B8:C8'); await set(2, 'B15:C15');
+    await page.locator('[data-add]').click(); await set(3, 'B12:C12');
+    await page.waitForFunction(() => document.querySelector('[data-calculation-status]').textContent === '');
+    assert.match(await page.locator('[data-total="grand_total"]').textContent(), /11\.766\.000/);
+    await page.screenshot({ path: '/tmp/tracs-configurator-desktop.png', fullPage: true });
+    await page.locator('[data-nodes]').fill('2');
+    assert.match(await page.locator('[data-total="grand_total"]').textContent(), /23\.532\.000/);
+    await page.locator('[data-remove]').nth(3).click();
+    assert.match(await page.locator('[data-total="subtotal_per_node"]').textContent(), /9\.100\.000/);
+    await set(0, 'B2:C2');
+    assert.match(await page.locator('[data-total="subtotal_per_node"]').textContent(), /8\.100\.000/);
+    await page.locator('[data-nodes]').fill('0');
+    assert.equal(await page.locator('[data-total="grand_total"]').textContent(), '-');
+    await page.locator('[data-nodes]').fill('1');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ path: '/tmp/tracs-configurator-mobile.png', fullPage: true });
+    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    await page.locator('[data-tab="master"]').click();
+    await page.locator('[data-master-search]').fill('128 GB');
+    await page.locator('[data-edit]').first().click();
+    await page.locator('[data-item-form] [name="price"]').fill('1850000');
+    await page.locator('[data-item-form] [type="submit"]').click();
+    await page.waitForFunction(() => !document.querySelector('dialog').open);
+    assert.equal(find('B8:C8').price, 1850000);
+    await page.locator('[data-tab="calculator"]').click();
+    assert.match(await page.locator('[data-total="subtotal_per_node"]').textContent(), /8\.150\.000/);
+    await page.locator('[data-service]').selectOption('VPS');
+    await page.locator('[data-item]').first().selectOption(String(catalog.items.find((item) => item.service_type === 'VPS' && item.category === 'CPU').id));
+    await page.locator('[data-quantity]').fill('8');
+    assert.match(await page.locator('[data-total="grand_total"]').textContent(), /444\.000/);
+    await page.locator('[data-period]').selectOption('one_time');
+    assert.equal(await page.locator('[data-category]').first().inputValue(), 'Setup');
+    assert.equal(await page.locator('[data-total="grand_total"]').textContent(), 'Rp\u00a00');
+    await page.locator('[data-service]').selectOption('Dedicated Server');
+    await set(0, 'B3:C3');
+    catalog.items.find((item) => item.id === find('B3:C3').id).price = 3800000;
+    await page.locator('[data-nodes]').fill('2');
+    await page.waitForFunction(() => document.querySelector('[data-calculation-status]').textContent.includes('Master prices changed'));
+    assert.equal(await page.locator('[data-total="grand_total"]').textContent(), '-');
+    await page.locator('[data-refresh]').click();
+    await page.waitForFunction(() => document.querySelector('[data-total="grand_total"]').textContent.includes('8.436.000'));
+    failCatalog = true;
+    await page.locator('[data-refresh]').click();
+    await page.waitForFunction(() => document.querySelector('[data-status]').textContent.includes('unavailable'));
+    assert.equal(await page.locator('[data-total="grand_total"]').textContent(), '-');
+    failCatalog = false;
+    await page.locator('[data-refresh]').click();
+    await page.locator('[data-item]').first().waitFor();
+    await page.reload();
+    await page.locator('[data-item]').first().waitFor();
+    await set(0, 'B3:C3');
+    assert.match(await page.locator('.sales-price').first().textContent(), /3\.800\.000/);
+    assert.deepEqual(errors, []);
+    console.log('Browser calculator, filtering, add/remove/change, quantities, Master Data editor, stale prices, errors/retry, reload, and mobile overflow checks passed.');
+    console.log('Screenshots: /tmp/tracs-configurator-desktop.png and /tmp/tracs-configurator-mobile.png. API is intercepted; calculation uses the real PHP helper.');
+  } finally { await browser.close(); }
+})().catch((error) => { console.error(error); process.exitCode = 1; });

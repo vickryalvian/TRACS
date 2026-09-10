@@ -1,5 +1,8 @@
 # Configurator Implementation Note
 
+> Historical beta implementation. Superseded by [CONFIGURATOR_OVERHAUL.md](CONFIGURATOR_OVERHAUL.md).
+> Static reference prices, RAID helpers, and recommendations below are retained only as inactive legacy code. The active controller uses database Master Data.
+
 ## Existing TRACS Patterns Reused
 
 - Route shell: top-level PHP page in `public/*.php`.

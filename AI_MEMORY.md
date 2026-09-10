@@ -37,6 +37,22 @@ tree. To avoid divergent or lost work:
 
 ## Current Direction
 
+### Sales Configurator (September 2026)
+
+`configurator.php` now uses database Master Data and category-filtered repeatable
+items. See `docs/CONFIGURATOR_OVERHAUL.md` and the sheet extraction/verification
+reports. The source is the actual `Hitungan Sales.xlsx`; 99 reviewed items cover
+Dedicated Server, VPS, Network and Hosting Custom. Separate billing periods and
+database-configured PPN prevent annual/setup prices being treated as monthly.
+`settings.manage` controls item/tax editing; calculator access remains
+`dashboard.view`. The additive migration and idempotent importer are explicit CLI
+operations. Existing imports preserve administrator edits. Never re-enable the
+inactive static rate cards, RAID calculations or recommendation helpers in the
+active workflow. Standalone colocation and other ambiguous workbook models are
+documented as deferred, not implemented.
+
+### Interface Direction
+
 - Keep the interface clean, compact, operational-first, and low-noise.
 - The dashboard uses the restored five-item stat strip. Do not restore the rejected grouped dashboard stat-card experiment.
 - Keep widget gaps, internal padding, row heights, and column balance consistent.
