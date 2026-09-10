@@ -4,6 +4,15 @@ Implemented on `codex/infrastructure-sales-configurator-overhaul`.
 
 ## Current Workflow
 
+The calculator uses compact horizontal rows with a narrow category selector and
+dominant item selector. Unit prices are formatted read-only values; the pencil
+opens an inline draft with Apply/Cancel (Enter/Escape). Drafts do not affect totals
+until applied. Overridden master prices show a muted Custom price marker and a
+conditional reset action. Custom-item prices remain editable through the pencil.
+Margin uses a compact inline unit selector, intermediate totals are muted, and
+Grand Total has its own visual separation. Refresh is an icon with a tooltip;
+template controls are collapsed by default. Subtotals render only in the summary.
+
 ### Saved Templates
 
 Users can save named templates and load them later from My Templates. Templates

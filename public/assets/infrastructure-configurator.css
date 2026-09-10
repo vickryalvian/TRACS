@@ -65,10 +65,36 @@
 .sales-master-filters .sales-field { flex: 1 1 145px; }
 .sales-master-count { color: var(--tx2); font-size: 12px; margin: 14px 0; }
 .sales-template-toolbar { margin-bottom: 12px; }
+.sales-templates { margin-bottom: 20px; color: var(--tx2); }
+.sales-templates summary { cursor: pointer; font-size: 12px; width: fit-content; padding: 4px 0; }
+.sales-templates[open] summary { margin-bottom: 12px; }
 [data-template-status]:empty { display: none; }
 .sales-dialog .sales-toolbar { margin: 0; }
 .sales-dialog-actions { display: flex; justify-content: end; gap: 8px; }
 .sales-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.infra-configurator-page .topbar { margin-bottom: 16px; justify-content: space-between; }
+.sales-tabs { margin-bottom: 4px; }
+.infra-configurator-page .sales-tabs .btn { border-color: transparent; background: transparent; color: var(--tx2); }
+.infra-configurator-page .sales-tabs [aria-selected="true"] { border-bottom-color: var(--blue); color: var(--tx1); }
+.sales-service-toolbar > .sales-field:last-child { flex: 0 1 180px; }
+.sales-service-toolbar { margin-bottom: 24px; }
+.sales-builder h2 { margin-bottom: 24px; }
+.sales-line { grid-template-columns: 120px minmax(0, 1fr) 190px 32px; padding: 16px 0; }
+.sales-line:last-child { border-bottom: 0; }
+.sales-price-cell { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; min-height: 32px; gap: 4px; }
+.sales-line:first-child .sales-price-cell { margin-top: 21px; }
+.sales-price-cell .sales-price { grid-column: auto; padding: 0; font-size: 13px; text-align: right; }
+.sales-price-note { grid-column: 1 / -1; text-align: right; color: var(--tx2); font-size: 11px; }
+.infra-configurator-page .sales-price-cell .btn, .infra-configurator-page .sales-remove, .infra-configurator-page .sales-refresh { border: 0; background: transparent; padding: 6px; width: 28px; min-height: 28px; }
+.infra-configurator-page .sales-price-cell .btn:hover, .infra-configurator-page .sales-remove:hover, .infra-configurator-page .sales-refresh:hover { background: var(--s3); }
+.sales-line .sales-remove { border-left: 1px solid var(--bd1); border-radius: 0; margin-left: 4px; }
+.sales-margin-controls { grid-template-columns: minmax(0, 1fr) 66px; align-items: end; gap: 4px; margin-top: 12px; }
+.sales-totals dl { margin-top: 24px; }
+.sales-totals dl > div { padding: 5px 0; color: var(--tx2); }
+.sales-totals dd { font-size: 13px; font-weight: 500; }
+.sales-totals dl > .sales-grand-total { margin-top: 16px; padding-top: 24px; color: var(--tx1); }
+.sales-grand-total dd { font-size: 20px; font-weight: 700; }
+.infra-configurator-page .sales-builder > .btn { border-color: transparent; background: transparent; margin-top: 16px; }
 @media (max-width: 1100px) {
  .sales-workspace { grid-template-columns: minmax(0, 1fr); }
  .sales-totals { border-left: 0; border-top: 1px solid var(--bd1); padding: 20px 0 0; }
@@ -77,6 +103,8 @@
  .sales-dialog-grid { grid-template-columns: minmax(0, 1fr); }
  .sales-dialog-body { padding: 16px; }
  .sales-line { grid-template-columns: minmax(0, 1fr) 36px; }
+ .sales-line:first-child .sales-price-cell { margin-top: 0; }
+ .sales-service-toolbar > .sales-field:last-child { flex-basis: 140px; }
  .sales-line > .sales-field { grid-column: 1; }
  .sales-line .sales-price { grid-column: 1; text-align: left; padding: 0; }
  .sales-price-cell { grid-column: 1; }

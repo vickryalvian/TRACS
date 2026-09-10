@@ -18,6 +18,7 @@
   const round = (value) => Math.round((value + Number.EPSILON) * 100) / 100;
   let catalog = null;
   let lines = [];
+  const priceDrafts = new WeakMap();
   let sequence = 0;
   let timer;
   let loading = false;
@@ -69,13 +70,12 @@
     $('[data-lines]').innerHTML = lines.map((line, index) => {
       const item = selected(line);
       const options = available().filter((option) => option.category === line.category);
+      const editing = priceDrafts.has(line);
       return `<div class="sales-line" data-line="${index}">
         <label class="sales-field"><span class="${index ? 'sales-sr-only' : 'sales-column-label'}">Category</span>${line.custom ? `<input class="form-input" data-custom-category value="${esc(line.category)}" maxlength="100" required>` : `<select class="form-select" data-category>${cats.map((category) => `<option ${category === line.category ? 'selected' : ''}>${esc(category)}</option>`).join('')}</select>`}</label>
         <label class="sales-field"><span class="${index ? 'sales-sr-only' : 'sales-column-label'}">Item</span>${line.custom ? `<input class="form-input" data-custom-name value="${esc(line.name)}" maxlength="500" placeholder="Custom item name" required>` : `<select class="form-select" data-item><option value="0">Select ${esc(line.category)}</option>${options.map((option) => `<option value="${option.id}" ${option.id === line.id ? 'selected' : ''}>${esc(option.name)}</option>`).join('')}</select>`}</label>
         <div class="sales-price-cell ${line.custom ? 'is-custom' : ''}">
-          <label class="sales-field"><span class="${index ? 'sales-sr-only' : ''}">Unit Price (Rp)</span><input class="form-input" data-price type="number" min="0" max="1000000000000" step="any" value="${item ? esc(unitPrice(line)) : ''}" ${item ? 'required' : 'disabled'} aria-label="Unit price for item ${index + 1}"></label>
-          ${line.custom ? '' : `<button type="button" class="btn sales-price-reset" data-reset-price title="Restore Master Data price" aria-label="Restore Master Data price for item ${index + 1}" ${line.override_price == null ? 'disabled' : ''}><i data-lucide="rotate-ccw" class="icon-sm"></i></button>`}
-          <output class="sales-price">${item ? esc(money(unitPrice(line) * line.quantity)) : '-'}</output>
+          ${editing ? `<input class="form-input" data-price type="number" min="0" max="1000000000000" step="any" value="${esc(priceDrafts.get(line))}" required aria-label="Unit price for item ${index + 1}"><button type="button" class="btn" data-apply-price title="Apply price" aria-label="Apply price"><i data-lucide="check" class="icon-sm"></i></button><button type="button" class="btn" data-cancel-price title="Cancel price edit" aria-label="Cancel price edit"><i data-lucide="x" class="icon-sm"></i></button>` : `<output class="sales-price">${item && unitPrice(line) !== '' ? esc(money(Number(unitPrice(line)))) : '-'}</output>${item ? (!line.custom && line.override_price != null ? `<button type="button" class="btn" data-reset-price title="Restore Master Data price" aria-label="Restore Master Data price for item ${index + 1}"><i data-lucide="rotate-ccw" class="icon-sm"></i></button>` : `<button type="button" class="btn" data-edit-price title="Edit price" aria-label="Edit price for item ${index + 1}"><i data-lucide="pencil" class="icon-sm"></i></button>`) : ''}${line.override_price != null && line.override_price !== '' ? '<small class="sales-price-note">Custom price</small>' : ''}`}
         </div>
         <button type="button" class="btn sales-remove" data-remove aria-label="Remove item ${index + 1}" title="Remove item"><i data-lucide="trash-2" class="icon-sm"></i></button>
         ${item?.unit_quantity ? `<label class="sales-field sales-quantity">Units<input class="form-input" data-quantity type="number" min="1" max="100000" step="1" value="${line.quantity}" required></label>` : ''}
@@ -185,6 +185,7 @@
     const row = event.target.closest('[data-line]');
     if (!row) return;
     const line = lines[Number(row.dataset.line)];
+    if (event.target.matches('[data-category], [data-item]')) priceDrafts.delete(line);
     if (event.target.matches('[data-category]')) { line.category = event.target.value; line.id = 0; line.quantity = 1; delete line.override_price; }
     if (event.target.matches('[data-item]')) { line.id = Number(event.target.value); line.quantity = 1; delete line.override_price; }
     if (!event.target.matches('[data-quantity], [data-price], [data-custom-name], [data-custom-category]')) {
@@ -202,19 +203,39 @@
       calculate(); return;
     }
     if (event.target.matches('[data-price]')) {
-      line.override_price = event.target.value;
-      const reset = row.querySelector('[data-reset-price]');
-      if (reset) reset.disabled = false;
+      priceDrafts.set(line, event.target.value); return;
     } else line.quantity = Number(event.target.value);
-    row.querySelector('.sales-price').textContent = event.target.checkValidity() ? money(Number(unitPrice(line)) * line.quantity) : '-';
     calculate();
   });
+  $('[data-lines]').addEventListener('keydown', (event) => {
+    if (!event.target.matches('[data-price]') || !['Enter', 'Escape'].includes(event.key)) return;
+    event.preventDefault();
+    event.target.closest('[data-line]').querySelector(event.key === 'Enter' ? '[data-apply-price]' : '[data-cancel-price]').click();
+  });
   $('[data-lines]').addEventListener('click', (event) => {
+    const action = event.target.closest('[data-edit-price], [data-apply-price], [data-cancel-price]');
+    if (action) {
+      const row = action.closest('[data-line]');
+      const index = Number(row.dataset.line);
+      const line = lines[index];
+      if (action.matches('[data-edit-price]')) priceDrafts.set(line, unitPrice(line));
+      else {
+        if (action.matches('[data-apply-price]')) {
+          const input = row.querySelector('[data-price]');
+          if (!input.reportValidity()) return;
+          if (!line.custom && Number(input.value) === selected(line).price) delete line.override_price;
+          else line.override_price = input.value;
+        }
+        priceDrafts.delete(line);
+      }
+      renderLines(); calculate();
+      $(`[data-line="${index}"] [data-price], [data-line="${index}"] [data-edit-price], [data-line="${index}"] [data-reset-price]`)?.focus(); return;
+    }
     const reset = event.target.closest('[data-reset-price]');
     if (reset) {
       const index = Number(reset.closest('[data-line]').dataset.line);
       delete lines[index].override_price;
-      renderLines(); calculate(); $(`[data-line="${index}"] [data-price]`)?.focus(); return;
+      renderLines(); calculate(); $(`[data-line="${index}"] [data-edit-price]`)?.focus(); return;
     }
     const button = event.target.closest('[data-remove]');
     if (!button) return;

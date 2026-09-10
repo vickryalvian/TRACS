@@ -4,7 +4,7 @@ tracs_deny_direct_script_access(__FILE__);
 ?>
 <main class="main">
  <div class="main-inner infra-configurator-page" data-sales-configurator data-unsaved-ignore>
-  <div class="topbar"><div class="topbar-left"><div class="page-title">Sales Configurator</div></div><button class="btn" type="button" data-refresh><i data-lucide="refresh-cw" class="icon-sm"></i>Refresh Prices</button></div>
+  <div class="topbar"><div class="topbar-left"><div class="page-title">Sales Configurator</div></div><button class="btn sales-refresh" type="button" data-refresh title="Refresh prices" aria-label="Refresh prices"><i data-lucide="refresh-cw" class="icon-sm"></i></button></div>
   <div class="sales-tabs" role="tablist" aria-label="Configurator views">
    <button class="btn" type="button" role="tab" aria-selected="true" aria-controls="sales-calculator" id="calculator-tab" data-tab="calculator">Calculator</button>
    <?php if ($can_manage): ?><button class="btn" type="button" role="tab" aria-selected="false" aria-controls="sales-master" id="master-tab" data-tab="master" tabindex="-1">Master Data</button><?php endif; ?>
@@ -12,6 +12,7 @@ tracs_deny_direct_script_access(__FILE__);
   <p class="sales-status" data-status role="status">Loading Master Data...</p>
   <noscript><p class="empty">JavaScript is required to use the calculator.</p></noscript>
   <section id="sales-calculator" role="tabpanel" aria-labelledby="calculator-tab">
+   <details class="sales-templates"><summary>Templates</summary>
    <div class="sales-toolbar sales-template-toolbar">
     <label class="sales-field">My Templates<select class="form-select" data-template-select disabled><option value="">No templates</option></select></label>
     <button type="button" class="btn" data-load-template disabled><i data-lucide="folder-open" class="icon-sm"></i>Load</button>
@@ -19,7 +20,8 @@ tracs_deny_direct_script_access(__FILE__);
     <button type="button" class="btn" data-save-template><i data-lucide="save" class="icon-sm"></i>Save Template</button>
    </div>
    <p data-template-status role="status" class="sales-master-count"></p>
-   <div class="sales-toolbar">
+   </details>
+   <div class="sales-toolbar sales-service-toolbar">
     <label class="sales-field">Service<select class="form-select" data-service disabled></select></label>
     <label class="sales-field">Billing Period<select class="form-select" data-period disabled></select></label>
    </div>
@@ -28,8 +30,8 @@ tracs_deny_direct_script_access(__FILE__);
     <aside class="sales-totals" aria-label="Calculation totals">
      <label class="sales-field">Quantity / Nodes<input class="form-input" data-nodes type="number" min="1" max="10000" step="1" value="1" required></label>
      <div class="sales-margin-controls">
-      <label class="sales-field">Margin<select class="form-select" data-margin-mode><option value="percentage">Percentage (%)</option><option value="amount">Amount (Rp)</option></select></label>
       <label class="sales-field"><span data-margin-value-label>Margin (%)</span><input class="form-input" data-margin-value type="number" min="0" max="1000" step="any" value="30" required></label>
+      <label class="sales-field"><span class="sales-sr-only">Margin mode</span><select class="form-select" data-margin-mode aria-label="Margin mode"><option value="percentage">%</option><option value="amount">Rp</option></select></label>
      </div>
      <dl>
       <div><dt>Subtotal / Node</dt><dd data-total="subtotal_per_node">-</dd></div>
