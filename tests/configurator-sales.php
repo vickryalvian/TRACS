@@ -22,6 +22,14 @@ $line = function (string $reference) use ($catalog): array {
 };
 $input = ['service_type' => 'Dedicated Server', 'billing_period' => 'monthly', 'nodes' => 1, 'lines' => [$line('B3:C3'), $line('B8:C8'), $line('B15:C15'), $line('B12:C12')]];
 $default = tracs_configurator_calculate($catalog, $input);
+$custom = $input;
+$custom['lines'][] = ['custom' => true, 'name' => 'Custom support', 'category' => 'Custom', 'override_price' => 100000, 'quantity' => 2];
+sales_expect(tracs_configurator_calculate($catalog, $custom)['subtotal_per_node'] === 10800000.0, 'Custom item amount failed.');
+$custom['lines'][4]['name'] = '';
+sales_reject(fn() => tracs_configurator_calculate($catalog, $custom));
+$custom['lines'][4]['name'] = 'Custom support';
+$custom['lines'][4]['override_price'] = -1;
+sales_reject(fn() => tracs_configurator_calculate($catalog, $custom));
 sales_expect($default['margin'] === 3180000.0 && $default['grand_total'] === 15295800.0, 'Default 30 percent margin failed.');
 $input['margin_mode'] = 'percentage'; $input['margin_value'] = 0;
 $fixed = $input; $fixed['margin_mode'] = 'amount'; $fixed['margin_value'] = 1000000;

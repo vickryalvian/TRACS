@@ -59,6 +59,19 @@ const phpCalculate = (input) => JSON.parse(execFileSync('php', ['-r', 'require "
     assert.equal(await page.locator('[data-price]').first().inputValue(), '3000000');
     await page.locator('[data-reset-price]').first().click();
     assert.equal(await page.locator('[data-price]').first().inputValue(), '3700000');
+    const masterCount = catalog.items.length;
+    await page.locator('[data-add-custom]').click();
+    await page.locator('[data-custom-name]').fill('Custom support');
+    await page.locator('[data-lines] > div').last().locator('[data-price]').fill('100000');
+    await page.locator('[data-lines] > div').last().locator('[data-quantity]').fill('2');
+    await page.waitForFunction(() => document.querySelector('[data-calculation-status]').textContent === '');
+    assert.match(await page.locator('[data-total="subtotal_per_node"]').textContent(), /10\.800\.000/);
+    await page.locator('[data-refresh]').click();
+    await page.waitForFunction(() => !document.querySelector('[data-refresh]').disabled);
+    assert.equal(await page.locator('[data-custom-name]').inputValue(), 'Custom support');
+    assert.equal(catalog.items.length, masterCount);
+    await page.locator('[data-lines] > div').last().locator('[data-remove]').click();
+    assert.match(await page.locator('[data-total="subtotal_per_node"]').textContent(), /10\.600\.000/);
     assert.equal(await page.locator('.sales-column-label').count(), 2);
     for (const theme of ['light', 'dark']) {
       await page.evaluate((value) => document.documentElement.setAttribute('data-theme', value), theme);

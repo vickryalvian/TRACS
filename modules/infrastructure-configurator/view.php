@@ -17,7 +17,7 @@ tracs_deny_direct_script_access(__FILE__);
     <label class="sales-field">Billing Period<select class="form-select" data-period disabled></select></label>
    </div>
    <div class="sales-workspace">
-    <section class="sales-builder" aria-label="Configuration items"><h2 data-configuration-title>Configuration</h2><div data-lines></div><button type="button" class="btn" data-add disabled><i data-lucide="plus" class="icon-sm"></i>Add Item</button></section>
+    <section class="sales-builder" aria-label="Configuration items"><h2 data-configuration-title>Configuration</h2><div data-lines></div><button type="button" class="btn" data-add disabled><i data-lucide="plus" class="icon-sm"></i>Add Item</button> <button type="button" class="btn" data-add-custom disabled><i data-lucide="square-pen" class="icon-sm"></i>Add Custom Item</button></section>
     <aside class="sales-totals" aria-label="Calculation totals">
      <label class="sales-field">Quantity / Nodes<input class="form-input" data-nodes type="number" min="1" max="10000" step="1" value="1" required></label>
      <div class="sales-margin-controls">

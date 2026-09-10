@@ -66,11 +66,20 @@ function tracs_configurator_calculate(array $catalog, array $input): array {
     $period = $input['billing_period'] ?? '';
     $service = $input['service_type'] ?? '';
     $indexed = array_column($catalog['items'], null, 'id');
+    if (!array_filter($catalog['items'], fn($item) => $item['active'] && $item['service_type'] === $service && $item['billing_period'] === $period)) throw new InvalidArgumentException('Choose an available service and billing period.');
     $subtotal = 0.0;
     foreach ($lines as $line) {
         if (!is_array($line)) throw new InvalidArgumentException('Invalid line item.');
         $id = filter_var($line['id'] ?? null, FILTER_VALIDATE_INT);
-        $item = $id === false ? null : ($indexed[$id] ?? null);
+        if (($line['custom'] ?? false) === true) {
+            $item = tracs_configurator_validate_item([
+                'name' => $line['name'] ?? '', 'category' => $line['category'] ?? '',
+                'service_type' => $service, 'billing_period' => $period,
+                'price' => $line['override_price'] ?? '', 'active' => true, 'unit_quantity' => true,
+            ]);
+        } else {
+            $item = $id === false ? null : ($indexed[$id] ?? null);
+        }
         if (!$item || !$item['active'] || $item['service_type'] !== $service || $item['billing_period'] !== $period || $item['category'] !== ($line['category'] ?? '')) throw new InvalidArgumentException('An item is no longer available. Refresh prices and select it again.');
         $quantity = filter_var($line['quantity'] ?? 1, FILTER_VALIDATE_INT);
         if ($quantity === false || $quantity < 1 || $quantity > 100000 || (!$item['unit_quantity'] && $quantity !== 1)) throw new InvalidArgumentException('Invalid item quantity.');

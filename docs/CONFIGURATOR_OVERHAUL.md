@@ -12,6 +12,11 @@ VPS and Hosting Custom also support the workbook's per-core/per-GB quantities.
 Monthly, annual, and one-time selections are separate configurations, never added
 together as though all charges recur monthly. Switching service/period starts a
 fresh configuration; refreshing prices retains the current selection where possible.
+Add Custom Item adds a configuration-only row with editable name, category,
+unit price and units. It follows the selected service/billing period and participates
+in node multiplication, margin and PPN. It survives price refresh, but not page
+reload or service changes, and never writes to Master Data. Server validation
+requires a nonblank name/category and a valid nonnegative price.
 
 ## Inspection and Scope
 

@@ -21,6 +21,7 @@
 .sales-price-cell { display: grid; grid-template-columns: minmax(0, 1fr) 30px; align-items: end; gap: 6px; }
 .sales-price-cell .sales-price { grid-column: 1 / -1; padding: 0; font-size: 11px; }
 .sales-price-cell .sales-price-reset { padding: 5px; width: 30px; }
+.sales-price-cell.is-custom .sales-field { grid-column: 1 / -1; }
 .sales-line:first-child > .sales-remove { margin-top: 21px; }
 .sales-margin-controls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; margin-top: 16px; }
 .sales-line:first-child { padding-top: 0; }

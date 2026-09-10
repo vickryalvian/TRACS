@@ -25,7 +25,7 @@
   const activeItems = () => (catalog?.items || []).filter((item) => item.active);
   const available = () => activeItems().filter((item) => item.service_type === service.value && item.billing_period === period.value);
   const categories = () => [...new Set(available().map((item) => item.category))];
-  const selected = (line) => available().find((item) => item.id === line.id && item.category === line.category);
+  const selected = (line) => line.custom ? { name: line.name, price: 0, unit_quantity: true } : available().find((item) => item.id === line.id && item.category === line.category);
   const unitPrice = (line) => line.override_price ?? selected(line)?.price ?? 0;
   const icons = () => window.lucide?.createIcons();
 
@@ -63,15 +63,16 @@
     const cats = categories();
     $('[data-configuration-title]').textContent = service.value ? `Custom ${service.value}` : 'Configuration';
     $('[data-add]').disabled = loading || !cats.length || lines.length >= 100;
+    $('[data-add-custom]').disabled = loading || !cats.length || lines.length >= 100;
     $('[data-lines]').innerHTML = lines.map((line, index) => {
       const item = selected(line);
       const options = available().filter((option) => option.category === line.category);
       return `<div class="sales-line" data-line="${index}">
-        <label class="sales-field"><span class="${index ? 'sales-sr-only' : 'sales-column-label'}">Category</span><select class="form-select" data-category>${cats.map((category) => `<option ${category === line.category ? 'selected' : ''}>${esc(category)}</option>`).join('')}</select></label>
-        <label class="sales-field"><span class="${index ? 'sales-sr-only' : 'sales-column-label'}">Item</span><select class="form-select" data-item><option value="0">Select ${esc(line.category)}</option>${options.map((option) => `<option value="${option.id}" ${option.id === line.id ? 'selected' : ''}>${esc(option.name)}</option>`).join('')}</select></label>
-        <div class="sales-price-cell">
+        <label class="sales-field"><span class="${index ? 'sales-sr-only' : 'sales-column-label'}">Category</span>${line.custom ? `<input class="form-input" data-custom-category value="${esc(line.category)}" maxlength="100" required>` : `<select class="form-select" data-category>${cats.map((category) => `<option ${category === line.category ? 'selected' : ''}>${esc(category)}</option>`).join('')}</select>`}</label>
+        <label class="sales-field"><span class="${index ? 'sales-sr-only' : 'sales-column-label'}">Item</span>${line.custom ? `<input class="form-input" data-custom-name value="${esc(line.name)}" maxlength="500" placeholder="Custom item name" required>` : `<select class="form-select" data-item><option value="0">Select ${esc(line.category)}</option>${options.map((option) => `<option value="${option.id}" ${option.id === line.id ? 'selected' : ''}>${esc(option.name)}</option>`).join('')}</select>`}</label>
+        <div class="sales-price-cell ${line.custom ? 'is-custom' : ''}">
           <label class="sales-field"><span class="${index ? 'sales-sr-only' : ''}">Unit Price (Rp)</span><input class="form-input" data-price type="number" min="0" max="1000000000000" step="any" value="${item ? esc(unitPrice(line)) : ''}" ${item ? 'required' : 'disabled'} aria-label="Unit price for item ${index + 1}"></label>
-          <button type="button" class="btn sales-price-reset" data-reset-price title="Restore Master Data price" aria-label="Restore Master Data price for item ${index + 1}" ${line.override_price == null ? 'disabled' : ''}><i data-lucide="rotate-ccw" class="icon-sm"></i></button>
+          ${line.custom ? '' : `<button type="button" class="btn sales-price-reset" data-reset-price title="Restore Master Data price" aria-label="Restore Master Data price for item ${index + 1}" ${line.override_price == null ? 'disabled' : ''}><i data-lucide="rotate-ccw" class="icon-sm"></i></button>`}
           <output class="sales-price">${item ? esc(money(unitPrice(line) * line.quantity)) : '-'}</output>
         </div>
         <button type="button" class="btn sales-remove" data-remove aria-label="Remove item ${index + 1}" title="Remove item"><i data-lucide="trash-2" class="icon-sm"></i></button>
@@ -98,6 +99,9 @@
       display(null); calculationStatus.textContent = 'An item is no longer available. Select a replacement.'; return;
     }
     const chosen = lines.filter((line) => selected(line));
+    if (chosen.some((line) => line.custom && (!line.name.trim() || !line.category.trim() || line.name.length > 500 || line.category.length > 100))) {
+      display(null); calculationStatus.textContent = 'Enter a name and category for each custom item.'; return;
+    }
     if (!marginValue.checkValidity() || chosen.some((line) => line.override_price != null && (line.override_price === '' || !Number.isFinite(Number(line.override_price)) || Number(line.override_price) < 0 || Number(line.override_price) > 1e12))) {
       display(null); calculationStatus.textContent = 'Enter a valid nonnegative price and margin.'; return;
     }
@@ -119,7 +123,7 @@
         if (Object.keys(totals).some((key) => Math.abs(totals[key] - verified[key]) > 0.005)) {
           display(null); calculationStatus.textContent = 'Master prices changed. Refresh Prices before continuing.';
         } else {
-          display(verified); calculationStatus.textContent = lines.some((line) => !line.id) ? 'Unselected rows are excluded.' : '';
+          display(verified); calculationStatus.textContent = lines.some((line) => !line.id && !line.custom) ? 'Unselected rows are excluded.' : '';
         }
       } catch (error) {
         if (current !== sequence) return;
@@ -169,7 +173,7 @@
     ++sequence; clearTimeout(timer); display(null);
     status.textContent = 'Loading Master Data...';
     $('[data-refresh]').disabled = true;
-    service.disabled = period.disabled = $('[data-add]').disabled = true;
+    service.disabled = period.disabled = $('[data-add]').disabled = $('[data-add-custom]').disabled = true;
     try { const data = await request('catalog'); loading = false; useCatalog(data); }
     catch (error) { catalog = null; lines = []; $('[data-lines]').replaceChildren(); status.textContent = error.message; }
     finally { loading = false; $('[data-refresh]').disabled = false; }
@@ -181,19 +185,24 @@
     const line = lines[Number(row.dataset.line)];
     if (event.target.matches('[data-category]')) { line.category = event.target.value; line.id = 0; line.quantity = 1; delete line.override_price; }
     if (event.target.matches('[data-item]')) { line.id = Number(event.target.value); line.quantity = 1; delete line.override_price; }
-    if (!event.target.matches('[data-quantity], [data-price]')) {
+    if (!event.target.matches('[data-quantity], [data-price], [data-custom-name], [data-custom-category]')) {
       const selector = event.target.matches('[data-category]') ? '[data-category]' : '[data-item]';
       const index = row.dataset.line;
       renderLines(); $(`[data-line="${index}"] ${selector}`)?.focus(); calculate();
     }
   });
   $('[data-lines]').addEventListener('input', (event) => {
-    if (!event.target.matches('[data-quantity], [data-price]')) return;
+    if (!event.target.matches('[data-quantity], [data-price], [data-custom-name], [data-custom-category]')) return;
     const row = event.target.closest('[data-line]');
     const line = lines[Number(row.dataset.line)];
+    if (event.target.matches('[data-custom-name], [data-custom-category]')) {
+      line[event.target.matches('[data-custom-name]') ? 'name' : 'category'] = event.target.value;
+      calculate(); return;
+    }
     if (event.target.matches('[data-price]')) {
       line.override_price = event.target.value;
-      row.querySelector('[data-reset-price]').disabled = false;
+      const reset = row.querySelector('[data-reset-price]');
+      if (reset) reset.disabled = false;
     } else line.quantity = Number(event.target.value);
     row.querySelector('.sales-price').textContent = event.target.checkValidity() ? money(Number(unitPrice(line)) * line.quantity) : '-';
     calculate();
@@ -216,6 +225,11 @@
     renderLines(); calculate(); $('[data-lines]').lastElementChild.querySelector('[data-item]').focus();
   });
   service.addEventListener('change', () => { setPeriods('monthly'); resetLines(); });
+  $('[data-add-custom]').addEventListener('click', () => {
+    if (!categories().length || lines.length >= 100) return;
+    lines.push({ custom: true, id: 0, category: 'Custom', name: '', override_price: '', quantity: 1 });
+    renderLines(); calculate(); $('[data-lines]').lastElementChild.querySelector('[data-custom-name]').focus();
+  });
   period.addEventListener('change', resetLines);
   nodes.addEventListener('input', calculate);
   marginValue.addEventListener('input', calculate);
