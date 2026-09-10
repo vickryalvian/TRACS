@@ -6,6 +6,10 @@
   const service = $('[data-service]');
   const period = $('[data-period]');
   const nodes = $('[data-nodes]');
+  const marginMode = $('[data-margin-mode]');
+  const marginValue = $('[data-margin-value]');
+  let lastBase = 0;
+  let lastMargin = 0;
   const status = $('[data-status]');
   const calculationStatus = $('[data-calculation-status]');
   const labels = { monthly: 'Monthly', annual: 'Annual', one_time: 'One-Time' };
@@ -22,6 +26,7 @@
   const available = () => activeItems().filter((item) => item.service_type === service.value && item.billing_period === period.value);
   const categories = () => [...new Set(available().map((item) => item.category))];
   const selected = (line) => available().find((item) => item.id === line.id && item.category === line.category);
+  const unitPrice = (line) => line.override_price ?? selected(line)?.price ?? 0;
   const icons = () => window.lucide?.createIcons();
 
   async function request(action, input) {
@@ -64,7 +69,11 @@
       return `<div class="sales-line" data-line="${index}">
         <label class="sales-field"><span class="${index ? 'sales-sr-only' : 'sales-column-label'}">Category</span><select class="form-select" data-category>${cats.map((category) => `<option ${category === line.category ? 'selected' : ''}>${esc(category)}</option>`).join('')}</select></label>
         <label class="sales-field"><span class="${index ? 'sales-sr-only' : 'sales-column-label'}">Item</span><select class="form-select" data-item><option value="0">Select ${esc(line.category)}</option>${options.map((option) => `<option value="${option.id}" ${option.id === line.id ? 'selected' : ''}>${esc(option.name)}</option>`).join('')}</select></label>
-        <output class="sales-price">${item ? esc(money(item.price * line.quantity)) : '-'}</output>
+        <div class="sales-price-cell">
+          <label class="sales-field"><span class="${index ? 'sales-sr-only' : ''}">Unit Price (Rp)</span><input class="form-input" data-price type="number" min="0" max="1000000000000" step="any" value="${item ? esc(unitPrice(line)) : ''}" ${item ? 'required' : 'disabled'} aria-label="Unit price for item ${index + 1}"></label>
+          <button type="button" class="btn sales-price-reset" data-reset-price title="Restore Master Data price" aria-label="Restore Master Data price for item ${index + 1}" ${line.override_price == null ? 'disabled' : ''}><i data-lucide="rotate-ccw" class="icon-sm"></i></button>
+          <output class="sales-price">${item ? esc(money(unitPrice(line) * line.quantity)) : '-'}</output>
+        </div>
         <button type="button" class="btn sales-remove" data-remove aria-label="Remove item ${index + 1}" title="Remove item"><i data-lucide="trash-2" class="icon-sm"></i></button>
         ${item?.unit_quantity ? `<label class="sales-field sales-quantity">Units<input class="form-input" data-quantity type="number" min="1" max="100000" step="1" value="${line.quantity}" required></label>` : ''}
         ${item && (item.name.length > 45 || item.description) ? `<div class="sales-specification">${esc(item.name)}${item.description ? '\n' + esc(item.description) : ''}</div>` : ''}
@@ -89,17 +98,23 @@
       display(null); calculationStatus.textContent = 'An item is no longer available. Select a replacement.'; return;
     }
     const chosen = lines.filter((line) => selected(line));
-    const subtotal = chosen.reduce((sum, line) => sum + selected(line).price * line.quantity, 0);
-    const beforeTax = round(subtotal * count);
+    if (!marginValue.checkValidity() || chosen.some((line) => line.override_price != null && (line.override_price === '' || !Number.isFinite(Number(line.override_price)) || Number(line.override_price) < 0 || Number(line.override_price) > 1e12))) {
+      display(null); calculationStatus.textContent = 'Enter a valid nonnegative price and margin.'; return;
+    }
+    const subtotal = chosen.reduce((sum, line) => sum + Number(unitPrice(line)) * line.quantity, 0);
+    const base = round(subtotal * count);
+    const margin = chosen.length ? round(marginMode.value === 'percentage' ? base * Number(marginValue.value) / 100 : Number(marginValue.value)) : 0;
+    lastBase = base; lastMargin = margin;
+    const beforeTax = round(base + margin);
     if (!Number.isFinite(beforeTax) || beforeTax > 1e14) { display(null); calculationStatus.textContent = 'Total exceeds the supported amount.'; return; }
     const tax = round(beforeTax * catalog.tax_rate);
-    const totals = { subtotal_per_node: round(subtotal), subtotal_before_tax: beforeTax, tax, grand_total: round(beforeTax + tax) };
+    const totals = { subtotal_per_node: round(subtotal), subtotal_before_margin: base, margin, subtotal_before_tax: beforeTax, tax, grand_total: round(beforeTax + tax) };
     display(totals);
     calculationStatus.textContent = chosen.length ? 'Checking current prices...' : 'No items selected.';
     if (!chosen.length) return;
     timer = setTimeout(async () => {
       try {
-        const verified = await request('calculate', { service_type: service.value, billing_period: period.value, nodes: count, lines: chosen });
+        const verified = await request('calculate', { service_type: service.value, billing_period: period.value, nodes: count, lines: chosen, margin_mode: marginMode.value, margin_value: marginValue.value });
         if (current !== sequence) return;
         if (Object.keys(totals).some((key) => Math.abs(totals[key] - verified[key]) > 0.005)) {
           display(null); calculationStatus.textContent = 'Master prices changed. Refresh Prices before continuing.';
@@ -153,23 +168,32 @@
     const row = event.target.closest('[data-line]');
     if (!row) return;
     const line = lines[Number(row.dataset.line)];
-    if (event.target.matches('[data-category]')) { line.category = event.target.value; line.id = 0; line.quantity = 1; }
-    if (event.target.matches('[data-item]')) { line.id = Number(event.target.value); line.quantity = 1; }
-    if (!event.target.matches('[data-quantity]')) {
+    if (event.target.matches('[data-category]')) { line.category = event.target.value; line.id = 0; line.quantity = 1; delete line.override_price; }
+    if (event.target.matches('[data-item]')) { line.id = Number(event.target.value); line.quantity = 1; delete line.override_price; }
+    if (!event.target.matches('[data-quantity], [data-price]')) {
       const selector = event.target.matches('[data-category]') ? '[data-category]' : '[data-item]';
       const index = row.dataset.line;
       renderLines(); $(`[data-line="${index}"] ${selector}`)?.focus(); calculate();
     }
   });
   $('[data-lines]').addEventListener('input', (event) => {
-    if (!event.target.matches('[data-quantity]')) return;
+    if (!event.target.matches('[data-quantity], [data-price]')) return;
     const row = event.target.closest('[data-line]');
     const line = lines[Number(row.dataset.line)];
-    line.quantity = Number(event.target.value);
-    row.querySelector('.sales-price').textContent = event.target.checkValidity() ? money(selected(line).price * line.quantity) : '-';
+    if (event.target.matches('[data-price]')) {
+      line.override_price = event.target.value;
+      row.querySelector('[data-reset-price]').disabled = false;
+    } else line.quantity = Number(event.target.value);
+    row.querySelector('.sales-price').textContent = event.target.checkValidity() ? money(Number(unitPrice(line)) * line.quantity) : '-';
     calculate();
   });
   $('[data-lines]').addEventListener('click', (event) => {
+    const reset = event.target.closest('[data-reset-price]');
+    if (reset) {
+      const index = Number(reset.closest('[data-line]').dataset.line);
+      delete lines[index].override_price;
+      renderLines(); calculate(); $(`[data-line="${index}"] [data-price]`)?.focus(); return;
+    }
     const button = event.target.closest('[data-remove]');
     if (!button) return;
     lines.splice(Number(button.closest('[data-line]').dataset.line), 1);
@@ -183,6 +207,14 @@
   service.addEventListener('change', () => { setPeriods('monthly'); resetLines(); });
   period.addEventListener('change', resetLines);
   nodes.addEventListener('input', calculate);
+  marginValue.addEventListener('input', calculate);
+  marginMode.addEventListener('change', () => {
+    const amount = marginMode.value === 'amount';
+    marginValue.max = amount ? '1000000000000' : '1000';
+    marginValue.value = amount ? lastMargin : lastBase ? round(lastMargin / lastBase * 100) : 30;
+    $('[data-margin-value-label]').textContent = amount ? 'Margin (Rp, total)' : 'Margin (%)';
+    calculate();
+  });
   $('[data-refresh]').addEventListener('click', refresh);
   window.addEventListener('pageshow', (event) => { if (event.persisted) refresh(); });
   root.querySelectorAll('[data-tab]').forEach((button) => {

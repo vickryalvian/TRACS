@@ -17,7 +17,12 @@
 .sales-field .form-select, .sales-field .form-input { width: 100%; min-width: 0; box-sizing: border-box; }
 .sales-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 320px); gap: 28px; }
 .sales-builder { min-width: 0; }
-.sales-line { display: grid; grid-template-columns: minmax(105px, .7fr) minmax(0, 2fr) 120px 36px; gap: 10px; align-items: end; border-bottom: 1px solid var(--bd1); padding: 14px 0; }
+.sales-line { display: grid; grid-template-columns: minmax(105px, .7fr) minmax(0, 2fr) 180px 36px; gap: 10px; align-items: start; border-bottom: 1px solid var(--bd1); padding: 14px 0; }
+.sales-price-cell { display: grid; grid-template-columns: minmax(0, 1fr) 30px; align-items: end; gap: 6px; }
+.sales-price-cell .sales-price { grid-column: 1 / -1; padding: 0; font-size: 11px; }
+.sales-price-cell .sales-price-reset { padding: 5px; width: 30px; }
+.sales-line:first-child > .sales-remove { margin-top: 21px; }
+.sales-margin-controls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; margin-top: 16px; }
 .sales-line:first-child { padding-top: 0; }
 .sales-line .sales-price { font-variant-numeric: tabular-nums; text-align: right; overflow-wrap: anywhere; padding-bottom: 9px; font-size: 13px; }
 .sales-line .sales-quantity { grid-column: 2; max-width: 140px; }
@@ -54,6 +59,7 @@
  .sales-line { grid-template-columns: minmax(0, 1fr) 36px; }
  .sales-line > .sales-field { grid-column: 1; }
  .sales-line .sales-price { grid-column: 1; text-align: left; padding: 0; }
+ .sales-price-cell { grid-column: 1; }
  .sales-line .sales-remove { grid-column: 2; grid-row: 1; }
  .sales-line .sales-quantity { grid-column: 1; }
  .sales-totals dl > div { flex-wrap: wrap; }

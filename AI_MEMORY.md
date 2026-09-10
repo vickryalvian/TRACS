@@ -44,6 +44,10 @@ items. See `docs/CONFIGURATOR_OVERHAUL.md` and the sheet extraction/verification
 reports. The source is the actual `Hitungan Sales.xlsx`; 99 reviewed items cover
 Dedicated Server, VPS, Network and Hosting Custom. Separate billing periods and
 database-configured PPN prevent annual/setup prices being treated as monthly.
+Sales can override each selected unit price without changing Master Data and
+reset it to the master price. Default margin is 30% cost-plus before PPN, editable
+as a percentage or one fixed Rupiah amount for all nodes. These are temporary
+configuration values; reload resets them. See the overhaul report for formulas.
 `settings.manage` controls item/tax editing; calculator access remains
 `dashboard.view`. The additive migration and idempotent importer are explicit CLI
 operations. Existing imports preserve administrator edits. Never re-enable the

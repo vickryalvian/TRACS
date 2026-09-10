@@ -44,6 +44,21 @@ const phpCalculate = (input) => JSON.parse(execFileSync('php', ['-r', 'require "
     }
     await set(0, 'B3:C3'); await set(1, 'B8:C8'); await set(2, 'B15:C15');
     await page.locator('[data-add]').click(); await set(3, 'B12:C12');
+    assert.equal(await page.locator('[data-margin-value]').inputValue(), '30');
+    assert.match(await page.locator('[data-total="grand_total"]').textContent(), /15\.295\.800/);
+    await page.locator('[data-margin-mode]').selectOption('amount');
+    await page.locator('[data-margin-value]').fill('1000000');
+    assert.match(await page.locator('[data-total="grand_total"]').textContent(), /12\.876\.000/);
+    await page.locator('[data-margin-mode]').selectOption('percentage');
+    await page.locator('[data-margin-value]').fill('0');
+    await page.locator('[data-price]').first().fill('3000000');
+    assert.match(await page.locator('[data-total="subtotal_per_node"]').textContent(), /9\.900\.000/);
+    await page.waitForFunction(() => document.querySelector('[data-calculation-status]').textContent === '');
+    await page.locator('[data-refresh]').click();
+    await page.waitForFunction(() => !document.querySelector('[data-refresh]').disabled);
+    assert.equal(await page.locator('[data-price]').first().inputValue(), '3000000');
+    await page.locator('[data-reset-price]').first().click();
+    assert.equal(await page.locator('[data-price]').first().inputValue(), '3700000');
     assert.equal(await page.locator('.sales-column-label').count(), 2);
     for (const theme of ['light', 'dark']) {
       await page.evaluate((value) => document.documentElement.setAttribute('data-theme', value), theme);

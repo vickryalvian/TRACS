@@ -54,17 +54,29 @@ changing service/category/name/specification/price/billing/order, and activation
 1. Database catalog -> category and billing filtered dropdown -> immediate price.
 2. Sum prices for selected rows (multiply only workbook per-unit rows by units).
 3. Multiply unrounded subtotal by nodes; round before-tax total to two decimals.
-4. Multiply before-tax total by database PPN; round tax to two decimals.
-5. Grand total = before-tax total + tax.
+4. Apply margin, default 30% cost-plus markup on the subtotal for all nodes.
+   Sales may override the percentage (0-1000%) or use a fixed Rupiah amount
+   (0-1,000,000,000,000) applied once to the whole configuration. Round margin
+   to two decimals and add it to the subtotal before PPN.
+5. Multiply the subtotal including margin by database PPN; round tax to two decimals.
+6. Grand total = subtotal including margin + tax.
 
 The browser displays totals immediately, then checks them against current database
 prices using the server calculator. A changed price, removed/inactive item, invalid
 quantity, expired session, or unavailable API clears unverified totals. Catalog
 requests use `no-store`; reloads and browser back/forward restoration fetch current
-prices. No saved browser price snapshots or manual price overrides are used.
+prices. Every selected item has an editable unit price and a reset-to-master
+action. Overrides are configuration-only, available to calculator users, and
+never update Master Data. Changing the item/category clears its override;
+refreshing prices retains overrides. For per-unit resources, the override is
+multiplied by units and nodes. No saved browser price snapshots are used.
 
 Workbook example: 3,700,000 + 1,800,000 + 3,600,000 + 1,500,000 = 10,600,000 per
-node; 11% PPN = 1,166,000; total = 11,766,000. Three nodes = 35,298,000 including PPN.
+node. With margin set to 0%, 11% PPN = 1,166,000; total = 11,766,000.
+With the new default 30% margin, margin = 3,180,000, subtotal before PPN =
+13,780,000, PPN = 1,515,800 and grand total = 15,295,800. Empty configurations
+remain zero even in fixed-margin mode. Server validation and browser calculations
+use the same override and margin rules. These controls require no database migration.
 
 ## API
 

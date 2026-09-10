@@ -20,8 +20,14 @@ tracs_deny_direct_script_access(__FILE__);
     <section class="sales-builder" aria-label="Configuration items"><h2 data-configuration-title>Configuration</h2><div data-lines></div><button type="button" class="btn" data-add disabled><i data-lucide="plus" class="icon-sm"></i>Add Item</button></section>
     <aside class="sales-totals" aria-label="Calculation totals">
      <label class="sales-field">Quantity / Nodes<input class="form-input" data-nodes type="number" min="1" max="10000" step="1" value="1" required></label>
+     <div class="sales-margin-controls">
+      <label class="sales-field">Margin<select class="form-select" data-margin-mode><option value="percentage">Percentage (%)</option><option value="amount">Amount (Rp)</option></select></label>
+      <label class="sales-field"><span data-margin-value-label>Margin (%)</span><input class="form-input" data-margin-value type="number" min="0" max="1000" step="any" value="30" required></label>
+     </div>
      <dl>
       <div><dt>Subtotal / Node</dt><dd data-total="subtotal_per_node">-</dd></div>
+      <div><dt>Subtotal Before Margin</dt><dd data-total="subtotal_before_margin">-</dd></div>
+      <div><dt>Margin</dt><dd data-total="margin">-</dd></div>
       <div><dt>Subtotal Before PPN</dt><dd data-total="subtotal_before_tax">-</dd></div>
       <div><dt>PPN <span data-tax-label></span></dt><dd data-total="tax">-</dd></div>
       <div class="sales-grand-total"><dt>Grand Total</dt><dd data-total="grand_total">-</dd></div>

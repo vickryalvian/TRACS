@@ -74,10 +74,17 @@ function tracs_configurator_calculate(array $catalog, array $input): array {
         if (!$item || !$item['active'] || $item['service_type'] !== $service || $item['billing_period'] !== $period || $item['category'] !== ($line['category'] ?? '')) throw new InvalidArgumentException('An item is no longer available. Refresh prices and select it again.');
         $quantity = filter_var($line['quantity'] ?? 1, FILTER_VALIDATE_INT);
         if ($quantity === false || $quantity < 1 || $quantity > 100000 || (!$item['unit_quantity'] && $quantity !== 1)) throw new InvalidArgumentException('Invalid item quantity.');
-        $subtotal += $item['price'] * $quantity;
+        $price = $line['override_price'] ?? $item['price'];
+        if (!is_numeric($price) || !is_finite((float)$price) || $price < 0 || $price > 1e12) throw new InvalidArgumentException('Override price must be between 0 and 1,000,000,000,000.');
+        $subtotal += (float)$price * $quantity;
     }
-    $beforeTax = round($subtotal * $nodes, 2);
+    $base = round($subtotal * $nodes, 2);
+    $mode = $input['margin_mode'] ?? 'percentage';
+    $value = $input['margin_value'] ?? 30;
+    if (!in_array($mode, ['percentage', 'amount'], true) || !is_numeric($value) || !is_finite((float)$value) || $value < 0 || $value > ($mode === 'percentage' ? 1000 : 1e12)) throw new InvalidArgumentException('Enter a valid nonnegative margin.');
+    $margin = count($lines) ? round($mode === 'percentage' ? $base * (float)$value / 100 : (float)$value, 2) : 0.0;
+    $beforeTax = round($base + $margin, 2);
     if (!is_finite($beforeTax) || $beforeTax > 1e14) throw new InvalidArgumentException('Total exceeds the supported amount.');
     $tax = round($beforeTax * $catalog['tax_rate'], 2);
-    return ['subtotal_per_node' => round($subtotal, 2), 'subtotal_before_tax' => $beforeTax, 'tax' => $tax, 'grand_total' => round($beforeTax + $tax, 2)];
+    return ['subtotal_per_node' => round($subtotal, 2), 'subtotal_before_margin' => $base, 'margin' => $margin, 'subtotal_before_tax' => $beforeTax, 'tax' => $tax, 'grand_total' => round($beforeTax + $tax, 2)];
 }
