@@ -67,13 +67,22 @@ final class ClientPortfolioController
     public function update(int $id, array $input, string $actorName): void
     {
         $this->assertCanAccess($id);
-        $this->model->updateClient($id, $input, $this->actorId, $actorName);
+        $this->transaction(function () use ($id, $input, $actorName): int {
+            $this->model->updateClient($id, $input, $this->actorId, $actorName);
+            return $id;
+        });
     }
 
     public function addService(int $id, array $input, string $actorName): int
     {
         $this->assertCanAccess($id);
         return $this->transaction(fn() => $this->model->addService($id, $input, $this->actorId, $actorName));
+    }
+
+    public function saveContact(int $id, array $input, string $actorName): int
+    {
+        $this->assertCanAccess($id);
+        return $this->model->saveContact($id, $input, $this->actorId, $actorName);
     }
 
     public function addBilling(int $id, array $input, string $actorName): int
