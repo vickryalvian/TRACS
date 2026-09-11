@@ -173,11 +173,15 @@ font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Ro
 
 ## Client Portfolio
 
-- **Implemented — MVP:** `public/clients.php` and `public/client-detail.php` use a React 19/Vite island loaded through the PHP shell and shared `public/assets/react-dist` manifest.
+- **Deployed 2026-09-11, release `f9afddd`:** `public/clients.php` uses a compact React table with inline details, preserved statistics, and standard modals. `public/client-detail.php` remains a compatibility include. Do not restore the split attention/inspection dashboard.
 - PHP APIs under `public/api/v1/client-portfolio/` enforce full authentication, CSRF for mutations, `clients.view`/`clients.manage` permissions, and owner scope unless `clients.view_all` is granted.
 - Data tables are `tracs_clients`, `tracs_client_contacts`, `tracs_client_services`, `tracs_client_service_addons`, `tracs_client_service_renewal_history`, `tracs_client_billing_records`, `tracs_client_followups`, and `tracs_client_activity_logs`.
 - Spend/reporting fields are computed from billing and recurring service/addon rows: `lifetime_billed_amount`, `total_paid_amount`, `outstanding_amount`, and estimated `mrr_amount`.
-- Follow-ups with due dates create linked `tracs_reminders` records and call the existing reminder notification helper. Do not build a separate client reminder engine.
+- `ClientReminderRecords::query()` is the shared reader for linked reminder state. Do not read copied follow-up title/date/status as authoritative when `reminder_id` exists, or create a second client reminder engine.
+- Client mini/full Calendar views reuse the main Calendar components and `/api/calendar/events.php`. Calendar source `clients` carries structured client context; the generic reminder collector excludes linked records. Edits and pending/done changes use `update_followup` / `complete_followup` with client ownership checks.
+- New dated invoices, explicitly dated tax invoices, and service renewals create linked reminders. Billing cycle metadata does not generate a recurring monthly reminder series. Renewing a service reschedules its pending renewal reminder or creates the next one.
+- Apply `2026_09_10_client_calendar.sql` before new activity types. It widens the existing type column, adds no tables, and is installed locally and in production.
+- Build both root `npm run build:calendar` and `frontend`'s `npm run build:preview` after shared Calendar changes. Details: [Clients / Calendar report](docs/client-calendar-rework.md); release evidence: [deployment summary](deployment-summary.md).
 - Keep this module operational-first: client attention, next action, billing/payment/tax invoice state, renewals, and activity. Do not expand it into sales pipeline CRM behavior without a separate decision.
 
 ## Dobby Telegram persona

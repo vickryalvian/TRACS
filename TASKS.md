@@ -4,6 +4,8 @@ Status labels in this file are deliberate: `Completed`, `In Progress`, `Partiall
 
 ## Completed
 
+- [x] Calendar views aggregate operational sources; client-linked reminders share the main Calendar and the Clients mini/full popup views.
+
 - [x] Restored dashboard stat-strip layout.
 - [x] Dashboard Task Monitoring tabs: Checklist and Reminder, Assignments, Activity.
 - [x] Assignment-to-checklist sync and optional assignment-to-reminder sync.
@@ -17,11 +19,13 @@ Status labels in this file are deliberate: `Completed`, `In Progress`, `Partiall
 - [x] Mandatory 2FA, login throttling, CAPTCHA escalation, session hardening, and permission-aware routes.
 - [x] Fixed post-login 404: re-granted `dashboard.view` to operational roles and added a permission-aware landing fallback so a successful login never dead-ends in a 404 (`docs/USER_LIFECYCLE_REMEDIATION.md`).
 - [x] Safe user removal: archive + email/username release so removed users disappear, history stays intact, and the same email/username can be reused (`2026_06_30_user_removal_release.sql`).
-- [x] Client Portfolio MVP: React/Vite Clients route, owner-scoped client tracking, services, billing, follow-ups, reminder linkage, attention calculation, activity timeline, and `clients.*` permissions.
+- [x] Clients / Calendar rework: preserved statistics, compact expandable table, standard modals, shared reminder records, mini/full Calendar views, activity/status filters, and transactional owner-scoped mutations. Deployed as `f9afddd` on 2026-09-11; see [feature report](docs/client-calendar-rework.md).
 - [x] Dobby interaction sound asset and reusable frontend sound service.
 
 ## In Progress
 
+- [ ] Complete authenticated production smoke checks for Clients creation, inline details, and cross-view reminder editing/completion; local fixture-browser and isolated database tests already pass.
+- [ ] Investigate the pre-existing Calendar domain-expiration collector SQL alias `div` failure observed on local MySQL; it was not changed by the Clients release.
 - [ ] Validate current documentation against every post-May 27 migration after deployment testing.
 - [ ] Verify notification scheduler and Dobby Telegram delivery under real cron/deployment configuration and inspect dedupe/log volume.
 - [ ] Confirm clean install from `config/install.sql`.
@@ -87,7 +91,6 @@ Status labels in this file are deliberate: `Completed`, `In Progress`, `Partiall
 - [ ] Dedicated Infrastructure-only TV route, if operationally required.
 - [ ] Domain Price CSV/Excel import and registrar/WHMCS API integration.
 - [ ] Global search across operational modules.
-- [ ] Calendar/timeline view for reminders, cases, MoM, and task due dates.
 - [ ] PDF/print evidence reports.
 - [ ] KPI/SLA/achievement tracking and management-review exports.
 - [ ] Optional email/WhatsApp delivery and a persisted Dobby sound preference if the profile preference model is extended.

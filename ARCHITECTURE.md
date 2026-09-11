@@ -97,11 +97,17 @@ Files: `modules/case/*`, `public/cases.php`, `public/api/case-*.php`, and the sh
 
 ## Client Portfolio
 
-**Implemented — MVP.** Files: `modules/client-portfolio/*`, `public/clients.php`, `public/client-detail.php`, `public/api/v1/client-portfolio/*`, and `frontend/src/modules/clients/main.jsx`.
+**Implemented and deployed — Clients / Calendar rework (2026-09-11).** Files: `modules/client-portfolio/*`, `public/clients.php`, `public/client-detail.php`, `public/api/v1/client-portfolio/*`, and `frontend/src/modules/clients/main.jsx`.
 
 The Clients route is an authenticated PHP shell that loads a Vite-built React 19 island from `public/assets/react-dist/`. PHP remains the authority for session, CSRF, permissions, object ownership, and data mutation. The module tracks client profiles, primary contacts, owner scope, services, service addons, billing records, invoice/payment/tax-invoice state, operational follow-ups, renewal history, and a client activity timeline.
 
-Server-side attention calculation ranks overdue unpaid billing, tax-invoice pending work, service/addon renewals within 30 days, invoices due this week, and waiting payments. Follow-ups with due dates create linked `tracs_reminders` records so they can appear in the existing Reminder and notification flow. Client spend graphs and reports should use the Clients API fields `lifetime_billed_amount`, `total_paid_amount`, `outstanding_amount`, and estimated `mrr_amount`.
+Server-side attention calculation ranks overdue unpaid billing, tax-invoice pending work, service/addon renewals within 30 days, invoices due this week, and waiting payments. Dated follow-ups link to `tracs_reminders`; `ClientReminderRecords::query()` reads their current title, due date, priority, assignee, and completion status from that reminder. Follow-up rows retain client/service/billing/type relationships and compatibility fields. Calendar collects these as source `clients`; its generic reminder collector excludes linked rows to prevent duplicate events. Client spend graphs and reports should use the Clients API fields `lifetime_billed_amount`, `total_paid_amount`, `outstanding_amount`, and estimated `mrr_amount`.
+
+The page preserves the statistics strip and uses a Domain Transfer-style table with one MoM-style expanded details row at a time. Add/edit and operational-entry forms use TRACS modal markup. `ClientCalendar.jsx` reuses Calendar's mini/month components, event details, API client and data hook; the full-month popup stays on Clients. `client-detail.php` remains a compatibility include of `clients.php`.
+
+Client reminder creation and mutation remain in `/api/v1/client-portfolio/actions.php` (`add_followup`, `update_followup`, `complete_followup`). Both Calendar and Clients call this API for client-owned activities. Mutations check client access and use transactions; profile creation can atomically include the initial service, billing record, and dated reminders. Cross-tab invalidation plus focus/visibility refresh reloads the same underlying records. Manual `calendar_events` storage is unchanged.
+
+The additive type extension is `config/migrations/2026_09_10_client_calendar.sql`: widen `action_type` to `VARCHAR(80)`, preserving old values. No new table is introduced. Keep the Calendar and Clients Vite bundles/manifests together when shipping shared component changes. See [the feature report](docs/client-calendar-rework.md) for scheduling rules, legacy handling, tests and production deployment evidence.
 
 ## Task Monitoring
 

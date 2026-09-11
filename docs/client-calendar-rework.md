@@ -24,6 +24,16 @@ The mini calendar defaults to the current month and shares event data with its f
 
 Scheduled invoice records create invoice reminders. A tax invoice date creates a tax reminder, and service renewal dates create renewal reminders. Renewing a service reschedules its pending renewal reminder, or creates the next reminder if none is pending. Quotations, payment follow-ups, meetings, documents, and general follow-ups can be added explicitly.
 
+## Using Clients and Calendar
+
+1. Open **Clients** and find a client using search, service, or renewal filters. Open the additional filters when you need to narrow the list further.
+2. Select **Add Client** to create a client. Initial service and billing details are optional and save together with the client. Select a row's **View More** to expand its details; **Edit Client** changes its profile.
+3. In expanded details, select **Add Record / Reminder** to record service, billing, or follow-up work. For a scheduled follow-up, enter a title, activity type, and due date/time. Use quotation, payment, meeting, document, or general follow-up activities for work that is not generated from an invoice or renewal.
+4. Use **Client Calendar** to inspect dates and events. **View More** opens the full calendar without leaving Clients. Filter by activity and Pending, Done, or All statuses. **Upcoming** shows the selected month or the current week; it is not an all-time overdue queue.
+5. Open an event, or select **View / Edit** in a client's Reminders table, to change its details or complete it. The same client event appears in the main Calendar. Changes refresh other open Clients and Calendar views. Users without management permission can inspect events but cannot edit them.
+
+Completing a reminder records completion of the task. Update the billing record separately to mark an invoice paid or a tax invoice sent. A billing cycle does not generate a recurring monthly reminder series. Scheduled upcoming invoices, explicit tax-invoice dates, and service renewal dates create the corresponding reminders; renewal actions move the pending renewal reminder to the new date.
+
 ## One source of truth
 
 `ClientReminderRecords::query()` reads mutable fields from the linked `tracs_reminders` row. The existing follow-up retains its client/service/billing/type relationships. Clients details and list signals use that reader, as does Calendar's client collector. The generic reminder collector excludes linked records to avoid duplicate calendar entries.
@@ -52,9 +62,21 @@ The PHP page wrappers, Domain Transfer, MoM, navigation, and global theme source
 
 The rerunnable migration widens `tracs_client_followups.action_type` from its existing enum to `VARCHAR(80)` so quotation and additional activity types can be stored without another schema change. Existing values and rows are preserved. No new table or duplicate reminder relationship is added.
 
-Applied to the local Docker database and verified as `varchar(80)`; follow-up row count remained zero. Apply the migration on any other environment before using the new activity types, and deploy the rebuilt assets with their manifests. Production deployment was subsequently authorized and completed as release `f9afddd`; see `deployment-summary.md` for backup and verification details.
+Applied to the local Docker database and verified as `varchar(80)`; follow-up row count remained zero. Apply the migration on any other environment before using the new activity types, and deploy the rebuilt assets with their manifests. Production deployment was subsequently authorized and completed as release `f9afddd`; see [deployment summary](../deployment-summary.md) for backup and verification details.
 
 ## Validation
+
+Run from the repository root after installing the root and frontend dependencies:
+
+```sh
+npm run build:calendar
+(cd frontend && npm run build:preview)
+php tests/client-calendar-integration.php
+node tests/client-calendar-browser.cjs
+```
+
+The integration test requires a local MySQL server and permission to create and drop its disposable test database. The browser test uses the frontend Playwright dependency and a Chrome installation. See the [Calendar regression checklist](calendar-reference-regression-checklist.md) for manual checks.
+
 
 - Both Vite production builds pass, including all existing React entry points.
 - Modified PHP files pass syntax checks; `git diff --check` passes.

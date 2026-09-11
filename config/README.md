@@ -30,6 +30,14 @@ For existing installations:
 
 Current migrations:
 
+- [`2026_09_10_client_calendar.sql`](migrations/2026_09_10_client_calendar.sql) — widens
+  `tracs_client_followups.action_type` to `VARCHAR(80)` for quotation and additional
+  client activity types. Requires the existing Clients tables; preserves rows and
+  existing values and can be rerun. Applied locally and in production with the
+  Clients / Calendar release on 2026-09-11. Apply before deploying the matching
+  Calendar and Clients bundles to another environment. See the
+  [feature report](../docs/client-calendar-rework.md).
+
 - `2026_09_08_abuse_report_delete_permission.sql` — adds the assignable
   `abuse_reports.delete` permission and preserves supervisor/admin deletion access.
   Apply once when deploying the matching PHP changes; permissions can then be

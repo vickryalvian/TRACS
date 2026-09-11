@@ -9,7 +9,7 @@ TRACS is a compact operational control panel for support, legal, CS, and monitor
 | Dashboard | Restored five-item stat strip, Cases, Task Monitoring, Shift Handover, Currency Converter, Infrastructure Pulse summary, ticker, and Attention Center. |
 | Cases | CRUD, `in_progress` status, filters/search/export, shared ticket detail, progress timeline, Resolve action, and image attachments. |
 | Abuse Reports | Board/list triage, compact preview, full tabbed record, inline table updates, bulk intake, SLA/action-required states, notes, evidence, relationships, and audit timeline. |
-| Clients | **Implemented — MVP:** React/Vite Client Portfolio island for owned/all client tracking, attention summary, services, addons, renewals, spend totals, billing, payment/tax-invoice status, follow-ups, reminder linkage, and client activity. |
+| Clients | **Implemented and deployed:** compact client table with inline details, preserved statistics, standard add/edit modals, and mini/full Calendar views sharing linked reminders with Calendar. Tracks services, addons, billing, tax invoices, quotations, renewals, and client activity. |
 | Reminders | Full reminder page plus Reminder List inside the dashboard `Checklist and Reminder` tab. |
 | Task Monitoring | Dashboard tabs are `Checklist and Reminder`, `Assignments`, and `Activity`; full assignment/review workflow is at `monitoring.php`. |
 | Shift Reports | Active/On Hold/Resolved handover context, dashboard shift reminder, activity snapshots, exports, and image attachments. |
@@ -101,6 +101,7 @@ Change this immediately after first login.
 | [docs/manual-smoke-checklist.md](docs/manual-smoke-checklist.md) | Manual smoke coverage for critical TRACS pages and workflows. |
 | [docs/permission-api-contract-checklist.md](docs/permission-api-contract-checklist.md) | Role, object-scope, CSRF, API, export, upload, and monitoring contracts. |
 | [docs/calendar-reference-regression-checklist.md](docs/calendar-reference-regression-checklist.md) | Zero-mistake Calendar reference regression checklist. |
+| [docs/client-calendar-rework.md](docs/client-calendar-rework.md) | Clients usage, shared reminder architecture, API actions, migration, deployment, and validation. |
 | [docs/react-tailwind-architecture.md](docs/react-tailwind-architecture.md) | React islands, Tailwind isolation, Vite loading, components, tokens, and API client direction. |
 | [docs/frontend-migration-plan.md](docs/frontend-migration-plan.md) | Module order, behavior-slice migration stages, feature flags, parity, and rollback. |
 | [docs/php-api-architecture-plan.md](docs/php-api-architecture-plan.md) | Gradual PHP controller, middleware, service, repository, response, and security direction. |

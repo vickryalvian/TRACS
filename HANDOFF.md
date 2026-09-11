@@ -15,7 +15,7 @@ Current implementation highlights:
 - In-app/browser notification center with scheduler worker and Dobby Telegram persona for monitoring/deployment events.
 - Infrastructure Pulse full page, dashboard widget, and TV widget using shared mock data.
 - Domain Price Crosscheck uses canonical route `domain-price-crosscheck.php` and a compact tabbed operational layout.
-- Client Portfolio MVP uses `clients.php` / `client-detail.php` with a React/Vite island, v1 PHP APIs, owner-scoped access, billing/follow-up attention calculation, reminder linkage, and client activity logs.
+- Clients / Calendar rework is deployed (`f9afddd`, 2026-09-11): compact client table, inline details, preserved statistics, standard modals, and shared mini/full Calendar reminders. See [feature report](docs/client-calendar-rework.md).
 - Settings are in the avatar/profile menu. Dobby sound currently uses the dashboard Dobby interaction and reusable JS service; no profile preference UI was added.
 
 ## Do Not Revert
@@ -74,6 +74,16 @@ Current implementation highlights:
 - Infrastructure Pulse real-server checks call Dobby only on status transitions, including recovery, so repeated failed intervals do not spam Telegram.
 - `bin/tracs-dobby-deploy-event.php` now sends Dobby Telegram messages for deployment/rollback milestones while still enqueuing DOBBY outbox events.
 - `public/assets/audio/dobby-interaction.mp3` is the current Dobby sound. `window.DobbySound` handles open/complete playback, dedupe and autoplay failures.
+
+### Clients / Calendar
+
+- Use `clients.php`; View More expands one client inline. Add Client and Add Record / Reminder open modals. `client-detail.php` remains compatible.
+- The mini calendar defaults to the current month. Its View More opens the shared full-month calendar in a popup. Activity/status filters and week/month summaries use client-related Calendar records.
+- `tracs_reminders` owns linked scheduling state; `tracs_client_followups` owns client/service/billing/type relationships. Preserve `ClientReminderRecords::query()` and Calendar's duplicate exclusion.
+- A completed reminder means the administrative task is done; it does not automatically mark an invoice paid or a tax invoice sent.
+- Migration `2026_09_10_client_calendar.sql` is applied locally and in production. Build/deploy both frontend bundles and their manifests for shared component changes.
+- Validation: `php tests/client-calendar-integration.php` (isolated database) and `node tests/client-calendar-browser.cjs` (compiled UI with API fixtures). Production hashes, assets, services and read-only client queries passed; authenticated production interactions remain a follow-up.
+- Production backup: `/opt/tracs/backups/clients-f9afddd-20260911-133007/`. Existing production profile-update transactions and `save_contact` API action were preserved during deployment.
 
 ### Notifications
 

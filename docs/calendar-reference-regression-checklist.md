@@ -75,3 +75,18 @@ Every future React/Tailwind module should be compared against Calendar for:
 - PHP permission and API enforcement.
 
 Calendar regressions block release of the refactoring batch that caused them.
+
+## Clients Integration Regression Checks
+
+Reference: [Clients / Calendar feature report](client-calendar-rework.md). These are repeatable release checks, not a claim that every production interaction has been manually tested.
+
+- [ ] A dated client reminder appears once in the Clients mini calendar, its full-month popup, and the main Calendar; client IDs and activity types remain structured.
+- [ ] Invoice, tax invoice, quotation, payment-follow-up, and renewal reminders remain visible with the appropriate activity/status filters.
+- [ ] Editing title/date or marking done/reopening from either surface updates the linked reminder; open views refresh without duplicate records or stale cached years.
+- [ ] Client ownership and `clients.view_all` control visibility; `clients.manage` and object access are checked on mutations.
+- [ ] Archived/deleted linked reminders do not reappear as pending via copied follow-up fields. Legacy unlinked follow-ups remain readable and can be scheduled.
+- [ ] Renewing a service moves its pending renewal reminder, or creates the next reminder when no pending one exists.
+- [ ] Full-month View More stays on Clients; month navigation, event details, Escape and close controls work within the viewport.
+- [ ] Expanded client details remain visible after horizontal table scrolling on small screens.
+- [ ] Existing Calendar manual schedules and other source collectors retain their behavior.
+- [ ] Both Vite bundles and all manifest-referenced assets are deployed together; the activity-type migration is installed before new types are used.
