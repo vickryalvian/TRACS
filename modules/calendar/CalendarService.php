@@ -185,13 +185,14 @@ final class CalendarService
         return array_map(function (array $row) use ($manage, $now): array {
             $due = new DateTimeImmutable($row['due_at'], $this->timezone);
             $done = $row['status'] === 'completed';
+            $notApplicable = $row['status'] === 'not_applicable';
             return $this->event([
                 'id' => $row['reminder_id'] ? 'reminder_'.$row['reminder_id'] : 'client_followup_'.$row['id'],
                 'source' => 'clients', 'source_id' => (int)$row['id'], 'type' => 'reminder',
                 'client_id' => (int)$row['client_id'],
                 'title' => $row['company_name'].' · '.$row['title'],
                 'date' => $due->format('Y-m-d'), 'start_time' => $due->format('H:i'),
-                'status' => $done ? 'done' : ($due < $now ? 'overdue' : 'upcoming'),
+                'status' => $notApplicable ? 'not_applicable' : ($done ? 'done' : ($due < $now ? 'overdue' : 'upcoming')),
                 'priority' => $row['priority'], 'notes' => $row['description'] ?? '',
                 'assignee' => $this->assignee($row['assigned_to'], $row['assignee_name']),
                 'created_at' => $row['created_at'], 'updated_at' => $row['updated_at'],
@@ -201,7 +202,7 @@ final class CalendarService
                     'activity_type' => $row['action_type'], 'reminder_title' => $row['title'],
                     'service_id' => $row['service_id'], 'billing_record_id' => $row['billing_record_id'],
                     'url' => 'clients.php?id='.$row['client_id'], 'editable' => $manage,
-                    'can_mark_done' => $manage && !$done, 'actions' => ['view_source','edit','mark_done']],
+                    'can_mark_done' => $manage && !$done && !$notApplicable, 'actions' => ['view_source','edit','mark_done']],
             ]);
         }, $rows);
     }
@@ -517,10 +518,10 @@ final class CalendarService
         [$scope, $scopeTypes, $scopeParams] = $this->ownerScope('d.user_id', 'u.division_id');
         $rows = $this->fetchAll(
             "SELECT d.id,d.user_id,d.domain,d.registrar,d.expires_at,d.auto_renew,d.notes,d.created_at,d.updated_at,
-                    COALESCE(NULLIF(u.name,''),u.email) AS owner_name,u.division_id,div.name AS division_name
+                    COALESCE(NULLIF(u.name,''),u.email) AS owner_name,u.division_id,dv.name AS division_name
              FROM tracs_domains d
              LEFT JOIN tracs_users u ON u.id=d.user_id
-             LEFT JOIN tracs_divisions div ON div.id=u.division_id
+             LEFT JOIN tracs_divisions dv ON dv.id=u.division_id
              WHERE d.expires_at BETWEEN ? AND ? {$scope}",
             'ss' . $scopeTypes,
             [$start, $end, ...$scopeParams]

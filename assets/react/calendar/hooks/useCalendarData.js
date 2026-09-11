@@ -55,10 +55,12 @@ export function useCalendarData(year, requiredSource = null) {
       if (event.type === 'visibilitychange' && document.hidden) return;
       refresh();
     };
+    window.addEventListener('tracs-calendar-updated', changed);
     window.addEventListener('focus', changed);
     window.addEventListener('storage', changed);
     document.addEventListener('visibilitychange', changed);
     return () => {
+      window.removeEventListener('tracs-calendar-updated', changed);
       window.removeEventListener('focus', changed);
       window.removeEventListener('storage', changed);
       document.removeEventListener('visibilitychange', changed);

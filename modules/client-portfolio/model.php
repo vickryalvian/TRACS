@@ -225,9 +225,59 @@ final class ClientPortfolioModel
         $client['billing'] = $this->preparedRows("SELECT b.*, s.service_name FROM tracs_client_billing_records b LEFT JOIN tracs_client_services s ON s.id=b.service_id WHERE b.client_id=? ORDER BY COALESCE(b.due_date,b.invoice_date,b.created_at) DESC, b.id DESC", 'i', [$id]);
         $followupSql = ClientReminderRecords::query();
         $client['followups'] = $this->preparedRows("SELECT f.*, COALESCE(NULLIF(u.name,''), u.email, 'Unassigned') AS assignee_name FROM ({$followupSql}) f LEFT JOIN tracs_users u ON u.id=f.assigned_to WHERE f.client_id=? ORDER BY f.status ASC, f.due_at IS NULL, f.due_at ASC", 'i', [$id]);
+        $client['attachments'] = $this->listAttachments($id);
         $client['activity'] = $this->preparedRows("SELECT * FROM tracs_client_activity_logs WHERE client_id=? ORDER BY created_at DESC LIMIT 80", 'i', [$id]);
         $client['renewal_history'] = $this->preparedRows("SELECT h.*, s.service_name FROM tracs_client_service_renewal_history h LEFT JOIN tracs_client_services s ON s.id=h.service_id WHERE h.client_id=? ORDER BY h.created_at DESC LIMIT 80", 'i', [$id]);
         return $this->decorateClient($this->withDetailSignals($client));
+    }
+
+    public function listAttachments(int $clientId): array
+    {
+        if (!tracs_table_exists($this->db, 'tracs_client_attachments')) return [];
+        $rows = $this->preparedRows("
+            SELECT id, client_id, document_type, original_filename, mime_type, file_size, uploaded_by, uploaded_by_name, created_at
+            FROM tracs_client_attachments
+            WHERE client_id=?
+            ORDER BY created_at DESC, id DESC
+        ", 'i', [$clientId]);
+        foreach ($rows as &$row) {
+            $id = (int)$row['id'];
+            $row['url'] = '/api/v1/client-portfolio/attachments.php?id=' . $id;
+            $row['download_url'] = '/api/v1/client-portfolio/attachments.php?id=' . $id . '&download=1';
+        }
+        unset($row);
+        return $rows;
+    }
+
+    public function recordAttachment(int $clientId, array $file, int $actorId, string $actorName): int
+    {
+        $stmt = $this->db->prepare("
+            INSERT INTO tracs_client_attachments
+              (client_id, document_type, original_filename, stored_filename, file_path, mime_type, file_size, uploaded_by, uploaded_by_name, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+        ");
+        if (!$stmt) throw new RuntimeException('Unable to save client file metadata.');
+        $documentType = (string)$file['document_type'];
+        $original = (string)$file['original_filename'];
+        $stored = (string)$file['stored_filename'];
+        $path = (string)$file['file_path'];
+        $mime = (string)$file['mime_type'];
+        $size = (int)$file['file_size'];
+        $stmt->bind_param('isssssiis', $clientId, $documentType, $original, $stored, $path, $mime, $size, $actorId, $actorName);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            throw new RuntimeException('Unable to save client file metadata.');
+        }
+        $id = (int)$stmt->insert_id;
+        $stmt->close();
+        $this->log($clientId, $actorId, $actorName, 'client.attachment_added', "Client file uploaded: {$original}");
+        return $id;
+    }
+
+    public function attachment(int $id): ?array
+    {
+        if (!tracs_table_exists($this->db, 'tracs_client_attachments')) return null;
+        return $this->one("SELECT * FROM tracs_client_attachments WHERE id=? LIMIT 1", 'i', [$id]);
     }
 
     public function createClient(array $input, int $actorId, string $actorName): int
@@ -430,7 +480,7 @@ final class ClientPortfolioModel
         if ($title === '' || !$due) throw new InvalidArgumentException('Title and reminder date are required.');
         $due = $this->dateTime($due);
         $status = $input['status'] ?? $row['status'];
-        if (!in_array($status, ['open','completed'], true)) throw new InvalidArgumentException('Choose Pending or Done.');
+        if (!in_array($status, ['open','completed','not_applicable'], true)) throw new InvalidArgumentException('Choose Pending, Done, or N/A.');
         $done = $status === 'completed' ? 1 : 0;
         $description = $this->text($input['description'] ?? $row['description'] ?? '', 4000);
         $rid = (int)$row['reminder_id'];
@@ -451,6 +501,11 @@ final class ClientPortfolioModel
         $stmt->bind_param('sssiiiii', $title, $description, $due, $done, $done, $done, $actorId, $rid);
         if (!$stmt->execute()) throw new RuntimeException('Unable to update reminder.');
         $stmt->close();
+        $followupStatus = $status === 'not_applicable' ? 'not_applicable' : ($done ? 'completed' : 'open');
+        $stmt = $this->db->prepare("UPDATE tracs_client_followups SET title=?,due_at=?,status=?,completed_at=IF(?=1,NOW(),NULL),assigned_to=COALESCE(assigned_to,?),updated_at=NOW() WHERE id=?");
+        $stmt->bind_param('sssiii', $title, $due, $followupStatus, $done, $actorId, $id);
+        if (!$stmt->execute()) throw new RuntimeException('Unable to update client follow-up.');
+        $stmt->close();
         $this->log((int)$row['client_id'], $actorId, $actorName, 'client.followup_updated', "Reminder updated: {$title}");
         return (int)$row['client_id'];
     }
@@ -458,6 +513,110 @@ final class ClientPortfolioModel
     public function completeFollowup(int $followupId, int $actorId, string $actorName): int
     {
         return $this->updateFollowup($followupId, ['status' => 'completed'], $actorId, $actorName);
+    }
+
+    public function monthlyChecklist(int $clientId, int $year, int $month, int $actorId, string $actorName): array
+    {
+        $this->ensureMonthlyChecklist($clientId, $year, $month, $actorId, $actorName);
+        return $this->monthlyChecklistRows($clientId, $year, $month);
+    }
+
+    public function updateMonthlyChecklist(int $followupId, string $status, int $actorId, string $actorName): int
+    {
+        if (!in_array($status, ['open','completed','not_applicable'], true)) {
+            throw new InvalidArgumentException('Choose Pending, Done, or N/A.');
+        }
+        return $this->updateFollowup($followupId, ['status' => $status], $actorId, $actorName);
+    }
+
+    private function ensureMonthlyChecklist(int $clientId, int $year, int $month, int $actorId, string $actorName): void
+    {
+        $year = max(2000, min(2100, $year));
+        $month = max(1, min(12, $month));
+        $start = sprintf('%04d-%02d-01', $year, $month);
+        $end = (new DateTimeImmutable($start, $this->zone))->modify('last day of this month')->format('Y-m-d');
+        $existing = $this->preparedRows(
+            "SELECT action_type FROM tracs_client_followups WHERE client_id=? AND action_type IN ('send_invoice','send_tax_invoice','check_payment','renewal') AND due_at BETWEEN ? AND ?",
+            'iss',
+            [$clientId, $start . ' 00:00:00', $end . ' 23:59:59']
+        );
+        $seen = array_fill_keys(array_map(fn(array $row): string => (string)$row['action_type'], $existing), true);
+        $dates = $this->monthlyChecklistDueDates($clientId, $start, $end);
+        $titles = [
+            'send_invoice' => 'Send invoice',
+            'send_tax_invoice' => 'Send tax invoice',
+            'check_payment' => 'Check payment',
+            'renewal' => 'Renewal follow-up',
+        ];
+        foreach ($titles as $type => $title) {
+            if (isset($seen[$type])) continue;
+            $this->addFollowup($clientId, [
+                'title' => $title,
+                'action_type' => $type,
+                'due_at' => ($dates[$type] ?? $start) . ' 09:00:00',
+                'priority' => 'medium',
+                'assigned_to' => $actorId,
+                'description' => '',
+            ], $actorId, $actorName);
+        }
+    }
+
+    private function monthlyChecklistRows(int $clientId, int $year, int $month): array
+    {
+        $start = sprintf('%04d-%02d-01 00:00:00', $year, $month);
+        $end = (new DateTimeImmutable(substr($start, 0, 10), $this->zone))->modify('last day of this month')->format('Y-m-d') . ' 23:59:59';
+        $sql = ClientReminderRecords::query();
+        $rows = $this->preparedRows(
+            "SELECT f.*, r.completed_by, COALESCE(NULLIF(u.name,''),u.email) AS completed_by_name
+             FROM ({$sql}) f
+             LEFT JOIN tracs_reminders r ON r.id=f.reminder_id
+             LEFT JOIN tracs_users u ON u.id=r.completed_by
+             WHERE f.client_id=? AND f.action_type IN ('send_invoice','send_tax_invoice','check_payment','renewal') AND f.due_at BETWEEN ? AND ?
+             ORDER BY FIELD(f.action_type,'send_invoice','send_tax_invoice','check_payment','renewal'), f.due_at, f.id",
+            'iss',
+            [$clientId, $start, $end]
+        );
+        $now = new DateTimeImmutable('now', $this->zone);
+        return array_map(function (array $row) use ($now): array {
+            $due = new DateTimeImmutable((string)$row['due_at'], $this->zone);
+            $status = (string)$row['status'];
+            if ($status === 'open' && $due < $now) $status = 'overdue';
+            return [
+                'id' => (int)$row['id'],
+                'action_type' => (string)$row['action_type'],
+                'title' => (string)$row['title'],
+                'due_at' => (string)$row['due_at'],
+                'status' => $status,
+                'stored_status' => (string)$row['status'],
+                'completed_at' => $row['completed_at'] ?? null,
+                'completed_by_name' => $row['completed_by_name'] ?? null,
+            ];
+        }, $rows);
+    }
+
+    private function monthlyChecklistDueDates(int $clientId, string $start, string $end): array
+    {
+        $billingDay = (int)($this->one(
+            "SELECT MIN(billing_day) AS billing_day FROM tracs_client_services WHERE client_id=? AND billing_day IS NOT NULL AND status NOT IN ('inactive','terminated')",
+            'i',
+            [$clientId]
+        )['billing_day'] ?? 0);
+        $lastDay = (int)(new DateTimeImmutable($start, $this->zone))->modify('last day of this month')->format('j');
+        $invoiceDay = $billingDay > 0 ? min($billingDay, $lastDay) : 5;
+        $taxDay = min($invoiceDay + 1, $lastDay);
+        $paymentDay = min($invoiceDay + 7, $lastDay);
+        $renewal = $this->one(
+            "SELECT MIN(renewal_date) AS renewal_date FROM tracs_client_services WHERE client_id=? AND status NOT IN ('inactive','terminated') AND renewal_date BETWEEN ? AND ?",
+            'iss',
+            [$clientId, $start, $end]
+        )['renewal_date'] ?? null;
+        $prefix = substr($start, 0, 8);
+        return [
+            'send_invoice' => $prefix . str_pad((string)$invoiceDay, 2, '0', STR_PAD_LEFT),
+            'send_tax_invoice' => $prefix . str_pad((string)$taxDay, 2, '0', STR_PAD_LEFT),
+            'check_payment' => $prefix . str_pad((string)$paymentDay, 2, '0', STR_PAD_LEFT),
+            'renewal' => $renewal ?: $prefix . str_pad((string)min(20, $lastDay), 2, '0', STR_PAD_LEFT),
+        ];
     }
 
     private function decorateClient(array $row): array

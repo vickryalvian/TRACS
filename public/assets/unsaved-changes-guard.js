@@ -16,11 +16,13 @@
     '[type="search"]',
     'form[method="get"] *',
     '[data-filter]',
+    '[data-calendar-filter]',
     '[data-dpc-filter]',
     '[data-dpc-sort-secondary]'
   ].join(',');
 
   const scopes = new Set();
+  const registeredRoots = new WeakSet();
   const bypassForms = new WeakSet();
   const originals = new WeakMap();
   const dirtyElements = new Set();
@@ -362,13 +364,18 @@
       .map(root => typeof root === 'string' ? document.querySelector(root) : root)
       .filter(Boolean);
     if (!roots.length) return null;
+    const freshRoots = roots.filter(root => !registeredRoots.has(root));
+    if (!freshRoots.length) return null;
     const scope = {
       ...options,
-      roots,
+      roots: freshRoots,
       ignore: options.ignore || ''
     };
     scopes.add(scope);
-    roots.forEach(root => root.querySelectorAll(editableSelector).forEach(snapshot));
+    freshRoots.forEach(root => {
+      registeredRoots.add(root);
+      root.querySelectorAll(editableSelector).forEach(snapshot);
+    });
     syncUi();
     return scope;
   }
@@ -393,6 +400,22 @@
         }
       });
     });
+  }
+
+  function rescanDynamicEditableSurfaces(root = document) {
+    const scopeRoot = root instanceof Element ? root : document;
+    if (scopeRoot.matches?.('form, .modal-overlay, .dpc-modal, .infra-modal, .cf-modal')) {
+      if (scopeRoot.matches('form')) {
+        autoRegisterForms();
+      } else {
+        autoRegisterModals();
+      }
+      return;
+    }
+    if (scopeRoot.querySelector?.('form, .modal-overlay, .dpc-modal, .infra-modal, .cf-modal')) {
+      autoRegisterForms();
+      autoRegisterModals();
+    }
   }
 
   function autoRegisterModals() {
@@ -544,6 +567,22 @@
     autoRegisterModals();
     autoRegisterEditablePage();
     document.addEventListener('submit', handleSubmit);
+    const observer = new MutationObserver(records => {
+      let removedDirty = false;
+      records.forEach(record => {
+        record.addedNodes.forEach(node => {
+          if (node instanceof Element) rescanDynamicEditableSurfaces(node);
+        });
+        record.removedNodes.forEach(node => {
+          if (!(node instanceof Element)) return;
+          const before = dirtyElements.size;
+          connectedDirtyElements();
+          removedDirty = removedDirty || dirtyElements.size !== before;
+        });
+      });
+      if (removedDirty) syncUi();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
   });
 
   global.TRACSUnsavedChanges = {

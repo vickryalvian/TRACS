@@ -109,6 +109,20 @@ final class ClientPortfolioController
         return $this->transaction(fn() => $this->model->addFollowup($id, $input, $this->actorId, $actorName));
     }
 
+    public function recordAttachment(int $id, array $file, string $actorName): int
+    {
+        $this->assertCanAccess($id);
+        return $this->model->recordAttachment($id, $file, $this->actorId, $actorName);
+    }
+
+    public function attachment(int $id): ?array
+    {
+        $attachment = $this->model->attachment($id);
+        if (!$attachment) return null;
+        $this->assertCanAccess((int)$attachment['client_id']);
+        return $attachment;
+    }
+
     public function completeFollowup(int $followupId, string $actorName): int
     {
         $this->assertCanAccess($this->model->followupClientId($followupId));
@@ -121,7 +135,22 @@ final class ClientPortfolioController
         return $this->transaction(fn() => $this->model->updateFollowup($id, $input, $this->actorId, $actorName));
     }
 
-    private function transaction(callable $operation): int
+    public function monthlyChecklist(int $id, array $input, string $actorName): array
+    {
+        $this->assertCanAccess($id);
+        $year = max(2000, min(2100, (int)($input['year'] ?? date('Y'))));
+        $month = max(1, min(12, (int)($input['month'] ?? date('n'))));
+        return $this->transaction(fn() => $this->model->monthlyChecklist($id, $year, $month, $this->actorId, $actorName));
+    }
+
+    public function updateMonthlyChecklist(array $input, string $actorName): int
+    {
+        $followupId = (int)($input['followup_id'] ?? 0);
+        $this->assertCanAccess($this->model->followupClientId($followupId));
+        return $this->transaction(fn() => $this->model->updateMonthlyChecklist($followupId, (string)($input['status'] ?? 'open'), $this->actorId, $actorName));
+    }
+
+    private function transaction(callable $operation): mixed
     {
         $this->conn->begin_transaction();
         try {

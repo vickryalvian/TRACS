@@ -113,7 +113,7 @@ export function EventDetailPanel({
               ) : null}
               {selected.meta?.can_mark_done ? <TracsButton icon={Check} variant="primary" loading={working} onClick={markDone}>Mark Done</TracsButton> : null}
               {selected.source === 'clients' && selected.meta?.editable ? <TracsButton icon={Pencil} onClick={() => setEditingClient(true)}>Edit Reminder</TracsButton> : null}
-              {selected.source === 'calendar' && selected.meta?.editable ? <TracsButton icon={Pencil} onClick={() => onEdit(selected)}>Edit</TracsButton> : null}
+              {selected.source === 'calendar' && selected.meta?.editable && onEdit ? <TracsButton icon={Pencil} onClick={() => onEdit(selected)}>Edit</TracsButton> : null}
               {selected.source === 'calendar' && selected.meta?.editable ? <TracsButton icon={Trash2} onClick={remove} loading={working}>Delete</TracsButton> : null}
             </div>
           </div>
@@ -164,7 +164,7 @@ function Block({ label, value }) {
 }
 
 function ClientReminderEditor({ event, onCancel, onSaved }) {
-  const [form, setForm] = useState({ title: event.meta.reminder_title, due_at: `${event.date}T${event.start_time || '09:00'}`, status: event.status === 'done' ? 'completed' : 'open', description: event.notes || '' });
+  const [form, setForm] = useState({ title: event.meta.reminder_title, due_at: `${event.date}T${event.start_time || '09:00'}`, status: event.status === 'done' ? 'completed' : event.status === 'not_applicable' ? 'not_applicable' : 'open', description: event.notes || '' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const set = (key, value) => setForm(current => ({ ...current, [key]: value }));
@@ -179,7 +179,7 @@ function ClientReminderEditor({ event, onCancel, onSaved }) {
     {error && <p role="alert" className="cal:text-tracs-danger">{error}</p>}
     <Field label="Title"><TracsInput required value={form.title} onChange={e => set('title', e.target.value)} /></Field>
     <Field label="Reminder date · Asia/Jakarta"><TracsInput required type="datetime-local" value={form.due_at} onChange={e => set('due_at', e.target.value)} /></Field>
-    <Field label="Status"><TracsSelect value={form.status} onChange={e => set('status', e.target.value)}><option value="open">Pending</option><option value="completed">Done</option></TracsSelect></Field>
+    <Field label="Status"><TracsSelect value={form.status} onChange={e => set('status', e.target.value)}><option value="open">Pending</option><option value="completed">Done</option><option value="not_applicable">N/A</option></TracsSelect></Field>
     <Field label="Notes"><TracsTextarea value={form.description} onChange={e => set('description', e.target.value)} /></Field>
     <div className="cal:flex cal:gap-2"><TracsButton type="button" disabled={saving} onClick={onCancel}>Cancel</TracsButton><TracsButton type="submit" variant="primary" loading={saving}>Save Reminder</TracsButton></div>
   </form>;

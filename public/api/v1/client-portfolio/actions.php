@@ -19,6 +19,10 @@ try {
     $controller = new ClientPortfolioController($conn, $context['user_id']);
     $actorName = \tracs_current_user_display($conn);
 
+    if ($action === 'monthly_checklist') {
+        \TRACS\Api\json_success($controller->monthlyChecklist($clientId, $input, $actorName), 'Monthly checklist loaded.', ['request_id' => $context['request_id']]);
+    }
+
     $id = match ($action) {
         'save_contact' => $controller->saveContact($clientId, $input, $actorName),
         'add_service' => $controller->addService($clientId, $input, $actorName),
@@ -27,6 +31,7 @@ try {
         'add_billing' => $controller->addBilling($clientId, $input, $actorName),
         'add_followup' => $controller->addFollowup($clientId, $input, $actorName),
         'update_followup' => $controller->updateFollowup((int)($input['followup_id'] ?? 0), $input, $actorName),
+        'update_monthly_checklist' => $controller->updateMonthlyChecklist($input, $actorName),
         'complete_followup' => $controller->completeFollowup((int)($input['followup_id'] ?? 0), $actorName),
         default => throw new InvalidArgumentException('Unknown client action.'),
     };

@@ -10,7 +10,8 @@ final class ClientReminderRecords
             COALESCE(r.title, f.title) AS title,
             CASE WHEN f.reminder_id IS NULL THEN f.due_at ELSE r.due_date END AS due_at,
             COALESCE(r.priority, f.priority) AS priority,
-            CASE WHEN f.reminder_id IS NULL THEN f.status
+            CASE WHEN f.status='not_applicable' THEN 'not_applicable'
+                 WHEN f.reminder_id IS NULL THEN f.status
                  WHEN r.id IS NULL OR r.archived_at IS NOT NULL THEN 'cancelled'
                  WHEN r.is_completed=1 THEN 'completed' ELSE 'open' END AS status,
             COALESCE(r.user_id, f.assigned_to) AS assigned_to,

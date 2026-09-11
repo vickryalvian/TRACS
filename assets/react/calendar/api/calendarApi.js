@@ -24,6 +24,7 @@ async function request(path, options = {}) {
   }
   if (options.method && options.method !== 'GET') {
     try { localStorage.setItem('tracs-calendar-updated', String(Date.now())); } catch { /* Storage may be disabled. */ }
+    window.dispatchEvent(new CustomEvent('tracs-calendar-updated'));
   }
   return payload.data;
 }
