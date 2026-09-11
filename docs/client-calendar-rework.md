@@ -52,7 +52,7 @@ The PHP page wrappers, Domain Transfer, MoM, navigation, and global theme source
 
 The rerunnable migration widens `tracs_client_followups.action_type` from its existing enum to `VARCHAR(80)` so quotation and additional activity types can be stored without another schema change. Existing values and rows are preserved. No new table or duplicate reminder relationship is added.
 
-Applied to the local Docker database and verified as `varchar(80)`; follow-up row count remained zero. Apply the migration on any other environment before using the new activity types, and deploy the rebuilt assets with their manifests. No remote deployment was performed.
+Applied to the local Docker database and verified as `varchar(80)`; follow-up row count remained zero. Apply the migration on any other environment before using the new activity types, and deploy the rebuilt assets with their manifests. Production deployment was subsequently authorized and completed as release `f9afddd`; see `deployment-summary.md` for backup and verification details.
 
 ## Validation
 

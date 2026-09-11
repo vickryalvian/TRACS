@@ -1,5 +1,16 @@
 # TRACS Deployment Summary
 
+## Clients / Calendar Deployment (2026-09-11)
+
+- Production: https://tracs.vickry.id/clients.php, `/opt/tracs` on `103.82.93.75`.
+- Release: `f9afddd` (Clients rework `dc07063` plus preservation of production client API/transaction safeguards), branch `codex/infrastructure-sales-configurator-overhaul`.
+- Deployed 40 scoped files from committed blobs. Preserved unrelated local/production changes and old hashed assets for already-open pages; published manifests after their assets.
+- Applied `2026_09_10_client_calendar.sql`: widened follow-up activity types to `VARCHAR(80)`; zero follow-up rows before and after. No new tables.
+- Backup: `/opt/tracs/backups/clients-f9afddd-20260911-133007/`, including replaced files, release hashes, and a follow-up table SQL dump.
+- Verification: staged PHP syntax passed, all 40 deployed files matched release hashes, 11 public JS/CSS assets matched committed bytes, login returned 200, protected Clients/Calendar routes redirected to login. PHP-FPM reloaded; PHP-FPM, Nginx, and MariaDB active.
+- Production read-only data smoke check passed: schema ready, client list query successful, and Calendar client source available.
+- Local validation: production builds, isolated MySQL integration tests and desktop/mobile Playwright tests passed. Authenticated production browser interactions were not performed.
+
 ## Sales Configurator Deployment (2026-09-11)
 
 - Production: https://tracs.vickry.id/configurator.php, `/opt/tracs` on `103.82.93.75`.
