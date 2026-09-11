@@ -1,5 +1,15 @@
 # TRACS Deployment Summary
 
+## Sales Configurator Deployment (2026-09-11)
+
+- Production: https://tracs.vickry.id/configurator.php, `/opt/tracs` on `103.82.93.75`.
+- Release: `378ac07`, branch `codex/infrastructure-sales-configurator-overhaul`.
+- Deployed 14 scoped files from committed blobs: configurator route, CSS/JS, four module files, importer, seed, two migrations, two PHP tests, and shared header navigation/CSS integration. Unrelated local and production changes were preserved; shared authentication code was not deployed.
+- Created the additive catalog, settings, and private-template tables. Imported 99 reviewed items; all 99 matched the seed with zero differences.
+- Backup: `/opt/tracs/backups/configurator-378ac07-20260911-132450/`. Includes existing replaced files, deployment file list, and catalog verification report. Configurator tables did not exist before deployment.
+- Verification: production calculator tests and PHP syntax passed; deployed files matched staged committed files; public CSS/JS matched byte-for-byte. Configurator returned 302 for an unauthenticated request; login returned 200. PHP-FPM reloaded; PHP-FPM, nginx, and MariaDB active.
+- Authenticated production interaction testing was not performed. Existing explicit route permission checks remain in force. Configurator is not added to the production preferred-login-landing allowlist.
+
 Status: Deployed successfully (remediated)
 Completed: 2026-07-15 19:13 WIB
 Domain: https://tracs.vickry.id
