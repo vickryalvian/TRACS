@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . "/../client-portfolio/ClientReminderRecords.php";
+
 final class CalendarService
 {
     private mysqli $conn;
@@ -26,6 +28,7 @@ final class CalendarService
         $collectors = [
             'cases' => 'collectCases',
             'reminders' => 'collectReminders',
+            'clients' => 'collectClientReminders',
             'tasks' => 'collectTasks',
             'meetings' => 'collectMeetings',
             'meeting_actions' => 'collectMeetingActions',
@@ -121,6 +124,9 @@ final class CalendarService
         }
 
         [$scope, $scopeTypes, $scopeParams] = $this->ownerScope('r.user_id', 'u.division_id');
+        if (tracs_table_exists($this->conn, 'tracs_client_followups')) {
+            $scope .= ' AND NOT EXISTS (SELECT 1 FROM tracs_client_followups cf WHERE cf.reminder_id=r.id)';
+        }
         $rows = $this->fetchAll(
             "SELECT r.id,r.user_id,r.title,r.description,r.due_date,r.priority,r.is_completed,r.created_at,r.updated_at,
                     COALESCE(NULLIF(u.name,''),u.email) AS owner_name,u.division_id,d.name AS division_name
@@ -158,6 +164,44 @@ final class CalendarService
                         && empty($row['is_completed'])
                         && $this->hasPermission(['reminders.manage']),
                 ],
+            ]);
+        }, $rows);
+    }
+
+    private function collectClientReminders(string $start, string $end): array
+    {
+        if (!$this->hasPermission(['clients.view']) || !tracs_table_exists($this->conn, 'tracs_client_followups')) return [];
+        $query = ClientReminderRecords::query();
+        $all = $this->hasPermission(['clients.view_all']);
+        $scope = $all ? '' : ' AND c.owner_user_id=?';
+        $rows = $this->fetchAll("SELECT f.*, c.company_name, c.owner_user_id,
+            COALESCE(NULLIF(u.name,''),u.email) AS assignee_name
+            FROM ({$query}) f JOIN tracs_clients c ON c.id=f.client_id
+            LEFT JOIN tracs_users u ON u.id=f.assigned_to
+            WHERE f.due_at BETWEEN ? AND ? AND f.status<>'cancelled' {$scope}",
+            $all ? 'ss' : 'ssi', $all ? [$start.' 00:00:00', $end.' 23:59:59'] : [$start.' 00:00:00', $end.' 23:59:59', $this->uid]);
+        $manage = $this->hasPermission(['clients.manage']);
+        $now = new DateTimeImmutable('now', $this->timezone);
+        return array_map(function (array $row) use ($manage, $now): array {
+            $due = new DateTimeImmutable($row['due_at'], $this->timezone);
+            $done = $row['status'] === 'completed';
+            return $this->event([
+                'id' => $row['reminder_id'] ? 'reminder_'.$row['reminder_id'] : 'client_followup_'.$row['id'],
+                'source' => 'clients', 'source_id' => (int)$row['id'], 'type' => 'reminder',
+                'client_id' => (int)$row['client_id'],
+                'title' => $row['company_name'].' · '.$row['title'],
+                'date' => $due->format('Y-m-d'), 'start_time' => $due->format('H:i'),
+                'status' => $done ? 'done' : ($due < $now ? 'overdue' : 'upcoming'),
+                'priority' => $row['priority'], 'notes' => $row['description'] ?? '',
+                'assignee' => $this->assignee($row['assigned_to'], $row['assignee_name']),
+                'created_at' => $row['created_at'], 'updated_at' => $row['updated_at'],
+                'meta' => ['client_id' => (int)$row['client_id'], 'client_name' => $row['company_name'],
+                    'client_owner_id' => (int)$row['owner_user_id'],
+                    'followup_id' => (int)$row['id'], 'reminder_id' => $row['reminder_id'],
+                    'activity_type' => $row['action_type'], 'reminder_title' => $row['title'],
+                    'service_id' => $row['service_id'], 'billing_record_id' => $row['billing_record_id'],
+                    'url' => 'clients.php?id='.$row['client_id'], 'editable' => $manage,
+                    'can_mark_done' => $manage && !$done, 'actions' => ['view_source','edit','mark_done']],
             ]);
         }, $rows);
     }

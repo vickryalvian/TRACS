@@ -57,6 +57,7 @@ export function sourceLabel(source) {
     meetings: 'Meetings / MoM',
     meeting_actions: 'MoM Actions',
     reminders: 'Reminders',
+    clients: 'Clients',
     tasks: 'Checklist',
     holidays: 'Public Holidays',
     notifications: 'Notifications',

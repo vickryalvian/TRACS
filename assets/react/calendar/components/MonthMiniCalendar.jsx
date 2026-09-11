@@ -47,7 +47,7 @@ export function MonthMiniCalendar({
               aria-hidden={!cell.currentMonth}
               tabIndex={cell.iso === selectedDate ? 0 : -1}
               onClick={() => onSelectDate(cell.iso)}
-              onDoubleClick={() => onBookDate(cell.iso)}
+              onDoubleClick={() => onBookDate?.(cell.iso)}
               onKeyDown={(event) => handleDateGridKey(event, cell.iso, onSelectDate, onOpenDate)}
               className={cx(
                 'cal:flex cal:h-8 cal:min-w-0 cal:flex-col cal:items-center cal:justify-center cal:rounded-tracs-sm cal:border cal:text-[10px] cal:transition cal:sm:h-7 focus-visible:cal:outline-none focus-visible:cal:ring-2 focus-visible:cal:ring-tracs-accent',

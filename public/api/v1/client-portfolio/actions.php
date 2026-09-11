@@ -25,11 +25,12 @@ try {
         'renew_service' => $controller->renewService($clientId, $input, $actorName),
         'add_billing' => $controller->addBilling($clientId, $input, $actorName),
         'add_followup' => $controller->addFollowup($clientId, $input, $actorName),
+        'update_followup' => $controller->updateFollowup((int)($input['followup_id'] ?? 0), $input, $actorName),
         'complete_followup' => $controller->completeFollowup((int)($input['followup_id'] ?? 0), $actorName),
         default => throw new InvalidArgumentException('Unknown client action.'),
     };
 
-    $detailId = $action === 'complete_followup' ? $id : $clientId;
+    $detailId = in_array($action, ['complete_followup', 'update_followup'], true) ? $id : $clientId;
     \TRACS\Api\json_success($controller->detail($detailId), 'Client action saved.', ['request_id' => $context['request_id']]);
 } catch (InvalidArgumentException $error) {
     \TRACS\Api\json_error($error->getMessage(), 422, [], ['request_id' => $context['request_id']]);

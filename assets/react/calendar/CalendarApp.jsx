@@ -47,6 +47,12 @@ export function CalendarApp() {
   const [editingEvent, setEditingEvent] = useState(null);
   const { events, metadata, loading, error, refresh, retry } = useCalendarData(year);
 
+  useEffect(() => {
+    if (selectedEvent?.source !== 'clients') return;
+    const latest = events.find(event => event.id === selectedEvent.id);
+    if (latest && latest !== selectedEvent) { setSelectedEvent(latest); setSelectedDate(latest.date); }
+  }, [events, selectedEvent]);
+
   const setFilter = useCallback((name, value) => {
     setFilters((current) => ({ ...current, [name]: value }));
   }, []);

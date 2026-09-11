@@ -24,7 +24,7 @@ export function MonthView({
     <TracsCard className="cal:overflow-hidden">
       <div className="cal:flex cal:items-center cal:justify-between cal:border-b cal:border-tracs-border cal:bg-tracs-surface-2 cal:px-4 cal:py-3">
         <h2 className="cal:text-sm cal:font-semibold cal:text-tracs-primary">{MONTHS[month]} {year}</h2>
-        <span className="cal:font-mono cal:text-[9px] cal:text-tracs-muted">Click a date for summary · double-click to book</span>
+        <span className="cal:font-mono cal:text-[9px] cal:text-tracs-muted">{onBookDate ? 'Click a date for summary · double-click to book' : 'Click a date for summary'}</span>
       </div>
       <div className="cal:grid cal:grid-cols-7 cal:border-b cal:border-tracs-border cal:bg-tracs-surface-2">
         {WEEKDAYS.map((day) => (
@@ -43,7 +43,7 @@ export function MonthView({
               data-calendar-date={cell.iso}
               tabIndex={cell.currentMonth ? 0 : -1}
               onClick={() => onSelectDate(cell.iso)}
-              onDoubleClick={() => onBookDate(cell.iso)}
+              onDoubleClick={() => onBookDate?.(cell.iso)}
               onKeyDown={(event) => handleDateGridKey(event, cell.iso, onSelectDate, onOpenDate)}
               className={cx(
                 'cal:min-h-28 cal:min-w-0 cal:overflow-hidden cal:border-b cal:border-r cal:border-tracs-border cal:p-2 cal:text-left cal:transition focus-visible:cal:z-10 focus-visible:cal:outline-none focus-visible:cal:ring-2 focus-visible:cal:ring-tracs-accent',

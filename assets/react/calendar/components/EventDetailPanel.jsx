@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { CalendarDays, Check, Clock3, ExternalLink, Pencil, Trash2, UserRound, X } from 'lucide-react';
 import { calendarApi } from '../api/calendarApi';
 import { CalendarBadge } from './EventBadge';
-import { TracsButton } from './CalendarPrimitives';
+import { Field, TracsInput, TracsSelect, TracsTextarea, TracsButton } from './CalendarPrimitives';
 import { eventTime, formatDate } from '../utils/date';
 import { eventTypeLabel, sourceLabel, TYPE_TONES } from '../utils/events';
 
@@ -17,6 +17,8 @@ export function EventDetailPanel({
   onRefresh,
 }) {
   const [working, setWorking] = useState(false);
+  const [editingClient, setEditingClient] = useState(false);
+  useEffect(() => { setEditingClient(false); }, [event?.id, open]);
   useEffect(() => {
     if (!open) return undefined;
     const close = (keyEvent) => keyEvent.key === 'Escape' && onClose();
@@ -79,7 +81,7 @@ export function EventDetailPanel({
           <TracsButton size="icon" icon={X} onClick={onClose} aria-label="Close details" />
         </div>
 
-        {selected ? (
+        {editingClient ? <ClientReminderEditor event={selected} onCancel={() => setEditingClient(false)} onSaved={async () => { await onRefresh(); onClose(); }} /> : selected ? (
           <div className="cal:flex cal:flex-1 cal:flex-col cal:overflow-y-auto">
             <div className="cal:border-b cal:border-tracs-border cal:p-4">
               <div className="cal:flex cal:flex-wrap cal:gap-1.5">
@@ -110,6 +112,7 @@ export function EventDetailPanel({
                 </a>
               ) : null}
               {selected.meta?.can_mark_done ? <TracsButton icon={Check} variant="primary" loading={working} onClick={markDone}>Mark Done</TracsButton> : null}
+              {selected.source === 'clients' && selected.meta?.editable ? <TracsButton icon={Pencil} onClick={() => setEditingClient(true)}>Edit Reminder</TracsButton> : null}
               {selected.source === 'calendar' && selected.meta?.editable ? <TracsButton icon={Pencil} onClick={() => onEdit(selected)}>Edit</TracsButton> : null}
               {selected.source === 'calendar' && selected.meta?.editable ? <TracsButton icon={Trash2} onClick={remove} loading={working}>Delete</TracsButton> : null}
             </div>
@@ -158,4 +161,26 @@ function Block({ label, value }) {
       <p className="cal:mt-1 cal:whitespace-pre-wrap cal:text-xs cal:leading-relaxed cal:text-tracs-secondary">{value}</p>
     </div>
   );
+}
+
+function ClientReminderEditor({ event, onCancel, onSaved }) {
+  const [form, setForm] = useState({ title: event.meta.reminder_title, due_at: `${event.date}T${event.start_time || '09:00'}`, status: event.status === 'done' ? 'completed' : 'open', description: event.notes || '' });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const set = (key, value) => setForm(current => ({ ...current, [key]: value }));
+  async function submit(e) {
+    e.preventDefault(); setSaving(true); setError('');
+    try { await calendarApi.updateClientReminder(event, form); await onSaved(); }
+    catch (err) { setError(err.message); }
+    finally { setSaving(false); }
+  }
+  return <form onSubmit={submit} className="cal:flex cal:flex-col cal:gap-4 cal:overflow-y-auto cal:p-4">
+    <p className="cal:text-sm">{event.meta.client_name}</p>
+    {error && <p role="alert" className="cal:text-tracs-danger">{error}</p>}
+    <Field label="Title"><TracsInput required value={form.title} onChange={e => set('title', e.target.value)} /></Field>
+    <Field label="Reminder date · Asia/Jakarta"><TracsInput required type="datetime-local" value={form.due_at} onChange={e => set('due_at', e.target.value)} /></Field>
+    <Field label="Status"><TracsSelect value={form.status} onChange={e => set('status', e.target.value)}><option value="open">Pending</option><option value="completed">Done</option></TracsSelect></Field>
+    <Field label="Notes"><TracsTextarea value={form.description} onChange={e => set('description', e.target.value)} /></Field>
+    <div className="cal:flex cal:gap-2"><TracsButton type="button" disabled={saving} onClick={onCancel}>Cancel</TracsButton><TracsButton type="submit" variant="primary" loading={saving}>Save Reminder</TracsButton></div>
+  </form>;
 }

@@ -51,7 +51,17 @@ final class ClientPortfolioController
 
     public function create(array $input, string $actorName): int
     {
-        return $this->model->createClient($input, $this->actorId, $actorName);
+        if (empty($input['service_name']) && array_filter(array_intersect_key($input, array_flip(['service_type','price','start_date','renewal_date','billing_day'])))) throw new InvalidArgumentException('Enter a service name for the service information.');
+        if (empty($input['invoice_date']) && array_filter(array_intersect_key($input, array_flip(['due_date','amount','tax_invoice_required','tax_invoice_due_date'])))) throw new InvalidArgumentException('Enter an invoice date for the billing information.');
+        return $this->transaction(function () use ($input, $actorName): int {
+            $id = $this->model->createClient($input, $this->actorId, $actorName);
+            $serviceId = null;
+            if (!empty($input['service_name'])) $serviceId = $this->model->addService($id, $input, $this->actorId, $actorName);
+            if (!empty($input['invoice_date'])) {
+                $this->model->addBilling($id, [...$input, 'service_id' => $serviceId], $this->actorId, $actorName);
+            }
+            return $id;
+        });
     }
 
     public function update(int $id, array $input, string $actorName): void
@@ -63,13 +73,13 @@ final class ClientPortfolioController
     public function addService(int $id, array $input, string $actorName): int
     {
         $this->assertCanAccess($id);
-        return $this->model->addService($id, $input, $this->actorId, $actorName);
+        return $this->transaction(fn() => $this->model->addService($id, $input, $this->actorId, $actorName));
     }
 
     public function addBilling(int $id, array $input, string $actorName): int
     {
         $this->assertCanAccess($id);
-        return $this->model->addBilling($id, $input, $this->actorId, $actorName);
+        return $this->transaction(fn() => $this->model->addBilling($id, $input, $this->actorId, $actorName));
     }
 
     public function addAddon(int $id, array $input, string $actorName): int
@@ -81,17 +91,37 @@ final class ClientPortfolioController
     public function renewService(int $id, array $input, string $actorName): int
     {
         $this->assertCanAccess($id);
-        return $this->model->renewService($id, $input, $this->actorId, $actorName);
+        return $this->transaction(fn() => $this->model->renewService($id, $input, $this->actorId, $actorName));
     }
 
     public function addFollowup(int $id, array $input, string $actorName): int
     {
         $this->assertCanAccess($id);
-        return $this->model->addFollowup($id, $input, $this->actorId, $actorName);
+        return $this->transaction(fn() => $this->model->addFollowup($id, $input, $this->actorId, $actorName));
     }
 
     public function completeFollowup(int $followupId, string $actorName): int
     {
-        return $this->model->completeFollowup($followupId, $this->actorId, $actorName);
+        $this->assertCanAccess($this->model->followupClientId($followupId));
+        return $this->transaction(fn() => $this->model->completeFollowup($followupId, $this->actorId, $actorName));
+    }
+
+    public function updateFollowup(int $id, array $input, string $actorName): int
+    {
+        $this->assertCanAccess($this->model->followupClientId($id));
+        return $this->transaction(fn() => $this->model->updateFollowup($id, $input, $this->actorId, $actorName));
+    }
+
+    private function transaction(callable $operation): int
+    {
+        $this->conn->begin_transaction();
+        try {
+            $id = $operation();
+            $this->conn->commit();
+            return $id;
+        } catch (Throwable $error) {
+            $this->conn->rollback();
+            throw $error;
+        }
     }
 }

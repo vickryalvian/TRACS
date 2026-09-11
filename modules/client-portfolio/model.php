@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../core/creator_tracking.php';
+require_once __DIR__ . '/ClientReminderRecords.php';
 require_once __DIR__ . '/../../core/user_management.php';
 require_once __DIR__ . '/../../core/notifications.php';
 require_once __DIR__ . '/../../core/dobby_events.php';
@@ -168,6 +169,30 @@ final class ClientPortfolioModel
         ";
         $rows = $this->preparedRows($sql, $types, $params);
         $clients = array_map(fn(array $row): array => $this->decorateClient($row), $rows);
+        if ($clients) {
+            $ids = array_map(fn(array $c): int => (int)$c['id'], $clients);
+            $placeholders = implode(',', array_fill(0, count($ids), '?'));
+            $followupSql = ClientReminderRecords::query();
+            $pending = $this->preparedRows("SELECT * FROM ({$followupSql}) f WHERE client_id IN ({$placeholders}) AND status='open' AND due_at IS NOT NULL ORDER BY due_at,id", str_repeat('i', count($ids)), $ids);
+            $next = [];
+            foreach ($pending as $reminder) $next[(int)$reminder['client_id']] ??= $reminder;
+            foreach ($clients as &$client) {
+                $reminder = $next[(int)$client['id']] ?? null;
+                $client['next_reminder'] = $reminder;
+                if (!$reminder) continue;
+                $client['next_action'] = $reminder['title'];
+                $client['next_action_due_at'] = $reminder['due_at'];
+                $client['days_until_action'] = (int)(new DateTimeImmutable('today', $this->zone))->diff(new DateTimeImmutable($reminder['due_at'], $this->zone))->format('%r%a');
+                $today = new DateTimeImmutable('today', $this->zone);
+                $due = new DateTimeImmutable($reminder['due_at'], $this->zone);
+                if ($due < $today->modify('+8 days') && $client['attention_level'] === 'normal') {
+                    $client['attention_level'] = $due < $today ? 'critical' : 'due';
+                    $client['attention_reason'] = 'Client reminder due';
+                    $client['attention_rank'] = $due < $today ? 1 : 3;
+                }
+            }
+            unset($client);
+        }
 
         if (!empty($filters['billing_status'])) {
             $clients = array_values(array_filter($clients, fn(array $c): bool => (string)$c['billing_status'] === (string)$filters['billing_status']));
@@ -198,7 +223,8 @@ final class ClientPortfolioModel
         }
         unset($service);
         $client['billing'] = $this->preparedRows("SELECT b.*, s.service_name FROM tracs_client_billing_records b LEFT JOIN tracs_client_services s ON s.id=b.service_id WHERE b.client_id=? ORDER BY COALESCE(b.due_date,b.invoice_date,b.created_at) DESC, b.id DESC", 'i', [$id]);
-        $client['followups'] = $this->preparedRows("SELECT f.*, COALESCE(NULLIF(u.name,''), u.email, 'Unassigned') AS assignee_name FROM tracs_client_followups f LEFT JOIN tracs_users u ON u.id=f.assigned_to WHERE f.client_id=? ORDER BY f.status ASC, f.due_at IS NULL, f.due_at ASC", 'i', [$id]);
+        $followupSql = ClientReminderRecords::query();
+        $client['followups'] = $this->preparedRows("SELECT f.*, COALESCE(NULLIF(u.name,''), u.email, 'Unassigned') AS assignee_name FROM ({$followupSql}) f LEFT JOIN tracs_users u ON u.id=f.assigned_to WHERE f.client_id=? ORDER BY f.status ASC, f.due_at IS NULL, f.due_at ASC", 'i', [$id]);
         $client['activity'] = $this->preparedRows("SELECT * FROM tracs_client_activity_logs WHERE client_id=? ORDER BY created_at DESC LIMIT 80", 'i', [$id]);
         $client['renewal_history'] = $this->preparedRows("SELECT h.*, s.service_name FROM tracs_client_service_renewal_history h LEFT JOIN tracs_client_services s ON s.id=h.service_id WHERE h.client_id=? ORDER BY h.created_at DESC LIMIT 80", 'i', [$id]);
         return $this->decorateClient($this->withDetailSignals($client));
@@ -264,6 +290,7 @@ final class ClientPortfolioModel
         $id = (int)$stmt->insert_id;
         $stmt->close();
         $this->log($clientId, $actorId, $actorName, 'client.service_added', "Service added: {$name}");
+        if ($renewal) $this->addFollowup($clientId, ['title' => "Renewal follow-up: {$name}", 'action_type' => 'renewal', 'due_at' => $renewal.' 09:00:00', 'service_id' => $id], $actorId, $actorName);
         return $id;
     }
 
@@ -313,12 +340,20 @@ final class ClientPortfolioModel
             $history->close();
         }
         $this->log($clientId, $actorId, $actorName, 'client.service_renewed', "Service renewed: {$service['service_name']}");
+        $followupSql = ClientReminderRecords::query();
+        $pending = $this->one("SELECT id FROM ({$followupSql}) f WHERE client_id=? AND service_id=? AND action_type='renewal' AND status='open' ORDER BY due_at,id LIMIT 1", 'ii', [$clientId, $serviceId]);
+        if ($pending) {
+            $this->updateFollowup((int)$pending['id'], ['due_at' => $newDate.' 09:00:00'], $actorId, $actorName);
+        } else {
+            $this->addFollowup($clientId, ['title' => 'Renewal follow-up: '.$service['service_name'], 'action_type' => 'renewal', 'due_at' => $newDate.' 09:00:00', 'service_id' => $serviceId], $actorId, $actorName);
+        }
         return $serviceId;
     }
 
     public function addBilling(int $clientId, array $input, int $actorId, string $actorName): int
     {
         $serviceId = !empty($input['service_id']) ? (int)$input['service_id'] : null;
+        if ($serviceId && !$this->serviceForClient($clientId, $serviceId)) throw new InvalidArgumentException('Service does not belong to this client.');
         $amount = $this->nullableMoney($input['amount'] ?? null);
         $invoiceStatus = $this->enum($input['invoice_status'] ?? 'upcoming', ['upcoming','sent','cancelled'], 'upcoming');
         $paymentStatus = $this->enum($input['payment_status'] ?? 'waiting', ['waiting','paid','overdue'], 'waiting');
@@ -340,6 +375,11 @@ final class ClientPortfolioModel
         $stmt->close();
         $event = $paymentStatus === 'paid' ? 'client.payment_marked_paid' : ($taxSent ? 'client.tax_invoice_sent' : ($invoiceStatus === 'sent' ? 'client.invoice_sent' : 'client.billing_added'));
         $this->log($clientId, $actorId, $actorName, $event, 'Billing record saved.');
+        if ($invoiceDate && $invoiceStatus === 'upcoming') $this->addFollowup($clientId, ['title' => 'Send invoice'.($invoiceNumber ? ': '.$invoiceNumber : ''), 'action_type' => 'send_invoice', 'due_at' => $invoiceDate.' 09:00:00', 'billing_record_id' => $id, 'service_id' => $serviceId], $actorId, $actorName);
+        if ($taxRequired && !$taxSent && !empty($input['tax_invoice_due_date'])) {
+            $taxDue = $this->nullableDate($input['tax_invoice_due_date']);
+            $this->addFollowup($clientId, ['title' => 'Send tax invoice', 'action_type' => 'send_tax_invoice', 'due_at' => $taxDue.' 09:00:00', 'billing_record_id' => $id, 'service_id' => $serviceId], $actorId, $actorName);
+        }
         return $id;
     }
 
@@ -347,54 +387,77 @@ final class ClientPortfolioModel
     {
         $title = $this->text($input['title'] ?? '', 220);
         if ($title === '') throw new InvalidArgumentException('Follow-up title is required.');
+        if (empty($input['due_at'])) throw new InvalidArgumentException('Reminder date is required.');
+        $dueAt = $this->dateTime($input['due_at']);
         $assignedTo = !empty($input['assigned_to']) ? (int)$input['assigned_to'] : $actorId;
-        $dueAt = !empty($input['due_at']) ? $this->dateTime($input['due_at']) : null;
-        $type = $this->enum($input['action_type'] ?? 'general_followup', ['send_invoice','check_payment','send_tax_invoice','renewal','general_followup'], 'general_followup');
+        if ($assignedTo !== $actorId && !tracs_user_can($this->db, 'clients.view_all', $actorId)) throw new InvalidArgumentException('Choose yourself as assignee.');
+        if (!$this->one('SELECT id FROM tracs_users WHERE id=? AND is_active=1', 'i', [$assignedTo])) throw new InvalidArgumentException('Choose an active assignee.');
+        $type = $this->text($input['action_type'] ?? 'general_followup', 80);
+        if (!preg_match('/^[a-z][a-z0-9_]*$/', $type)) throw new InvalidArgumentException('Invalid activity type.');
         $priority = $this->enum($input['priority'] ?? 'medium', ['low','medium','high','critical'], 'medium');
         $serviceId = !empty($input['service_id']) ? (int)$input['service_id'] : null;
         $billingId = !empty($input['billing_record_id']) ? (int)$input['billing_record_id'] : null;
-        $reminderId = null;
-        if ($dueAt !== null) {
-            $desc = 'Client Portfolio follow-up';
-            $stmt = $this->db->prepare("INSERT INTO tracs_reminders (user_id, title, description, due_date, priority, is_completed, created_by, created_by_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 0, ?, ?, NOW(), NOW())");
-            if ($stmt) {
-                $stmt->bind_param('issssis', $assignedTo, $title, $desc, $dueAt, $priority, $actorId, $actorName);
-                $stmt->execute();
-                $reminderId = (int)$stmt->insert_id ?: null;
-                $stmt->close();
-                if ($reminderId) tracs_notify_reminder_created($this->db, $reminderId, $assignedTo, $title, $dueAt, $actorId);
-            }
-        }
-        $stmt = $this->db->prepare("INSERT INTO tracs_client_followups (client_id, service_id, billing_record_id, reminder_id, action_type, title, due_at, priority, status, assigned_to, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, NOW(), NOW())");
-        if (!$stmt) throw new RuntimeException('Unable to add follow-up.');
+        if ($serviceId && !$this->serviceForClient($clientId, $serviceId)) throw new InvalidArgumentException('Service does not belong to this client.');
+        if ($billingId && !$this->one('SELECT id FROM tracs_client_billing_records WHERE id=? AND client_id=?', 'ii', [$billingId, $clientId])) throw new InvalidArgumentException('Billing record does not belong to this client.');
+        $desc = $this->text($input['description'] ?? '', 4000);
+        $stmt = $this->db->prepare("INSERT INTO tracs_reminders (user_id,title,description,due_date,priority,is_completed,created_by,created_by_name,created_at,updated_at) VALUES (?,?,?,?,?,0,?,?,NOW(),NOW())");
+        $stmt->bind_param('issssis', $assignedTo, $title, $desc, $dueAt, $priority, $actorId, $actorName);
+        if (!$stmt->execute()) throw new RuntimeException('Unable to create reminder.');
+        $reminderId = (int)$stmt->insert_id;
+        $stmt->close();
+        $stmt = $this->db->prepare("INSERT INTO tracs_client_followups (client_id,service_id,billing_record_id,reminder_id,action_type,title,due_at,priority,status,assigned_to,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,'open',?,?,NOW(),NOW())");
         $stmt->bind_param('iiiissssii', $clientId, $serviceId, $billingId, $reminderId, $type, $title, $dueAt, $priority, $assignedTo, $actorId);
-        if (!$stmt->execute()) throw new RuntimeException('Unable to add follow-up.');
+        if (!$stmt->execute()) throw new RuntimeException('Unable to link client reminder.');
         $id = (int)$stmt->insert_id;
         $stmt->close();
         $this->log($clientId, $actorId, $actorName, 'client.followup_created', "Follow-up created: {$title}");
+        tracs_notify_reminder_created($this->db, $reminderId, $assignedTo, $title, $dueAt, $actorId);
         return $id;
+    }
+
+    public function followupClientId(int $id): int
+    {
+        return (int)($this->one('SELECT client_id FROM tracs_client_followups WHERE id=?', 'i', [$id])['client_id'] ?? 0);
+    }
+
+    public function updateFollowup(int $id, array $input, int $actorId, string $actorName): int
+    {
+        $sql = ClientReminderRecords::query();
+        $row = $this->one("SELECT * FROM ({$sql}) f WHERE id=?", 'i', [$id]);
+        if (!$row) throw new InvalidArgumentException('Follow-up not found.');
+        $title = $this->text($input['title'] ?? $row['title'], 220);
+        $due = $input['due_at'] ?? $row['due_at'];
+        if ($title === '' || !$due) throw new InvalidArgumentException('Title and reminder date are required.');
+        $due = $this->dateTime($due);
+        $status = $input['status'] ?? $row['status'];
+        if (!in_array($status, ['open','completed'], true)) throw new InvalidArgumentException('Choose Pending or Done.');
+        $done = $status === 'completed' ? 1 : 0;
+        $description = $this->text($input['description'] ?? $row['description'] ?? '', 4000);
+        $rid = (int)$row['reminder_id'];
+        if (!$rid) {
+            $assigned = (int)($row['assigned_to'] ?: $actorId);
+            $priority = $row['priority'];
+            $stmt = $this->db->prepare("INSERT INTO tracs_reminders (user_id,title,description,due_date,priority,is_completed,created_by,created_by_name,created_at,updated_at) VALUES (?,?,?,?,?,0,?,?,NOW(),NOW())");
+            $stmt->bind_param('issssis', $assigned, $title, $description, $due, $priority, $actorId, $actorName);
+            $stmt->execute();
+            $rid = (int)$stmt->insert_id;
+            $stmt->close();
+            $stmt = $this->db->prepare('UPDATE tracs_client_followups SET reminder_id=? WHERE id=?');
+            $stmt->bind_param('ii', $rid, $id);
+            $stmt->execute();
+            $stmt->close();
+        }
+        $stmt = $this->db->prepare("UPDATE tracs_reminders SET title=?,description=?,due_date=?,is_completed=?,completed_at=IF(?=1,NOW(),NULL),completed_by=IF(?=1,?,NULL),archived_at=NULL,updated_at=NOW() WHERE id=?");
+        $stmt->bind_param('sssiiiii', $title, $description, $due, $done, $done, $done, $actorId, $rid);
+        if (!$stmt->execute()) throw new RuntimeException('Unable to update reminder.');
+        $stmt->close();
+        $this->log((int)$row['client_id'], $actorId, $actorName, 'client.followup_updated', "Reminder updated: {$title}");
+        return (int)$row['client_id'];
     }
 
     public function completeFollowup(int $followupId, int $actorId, string $actorName): int
     {
-        $row = $this->one("SELECT * FROM tracs_client_followups WHERE id=? LIMIT 1", 'i', [$followupId]);
-        if (!$row) throw new RuntimeException('Follow-up not found.');
-        $stmt = $this->db->prepare("UPDATE tracs_client_followups SET status='completed', completed_at=NOW(), updated_at=NOW() WHERE id=?");
-        if (!$stmt) throw new RuntimeException('Unable to complete follow-up.');
-        $stmt->bind_param('i', $followupId);
-        $stmt->execute();
-        $stmt->close();
-        if (!empty($row['reminder_id'])) {
-            $rid = (int)$row['reminder_id'];
-            $r = $this->db->prepare("UPDATE tracs_reminders SET is_completed=1, completed_at=NOW(), completed_by=?, updated_at=NOW() WHERE id=?");
-            if ($r) {
-                $r->bind_param('ii', $actorId, $rid);
-                $r->execute();
-                $r->close();
-            }
-        }
-        $this->log((int)$row['client_id'], $actorId, $actorName, 'client.followup_completed', 'Follow-up completed: ' . (string)$row['title']);
-        return (int)$row['client_id'];
+        return $this->updateFollowup($followupId, ['status' => 'completed'], $actorId, $actorName);
     }
 
     private function decorateClient(array $row): array
@@ -673,8 +736,9 @@ final class ClientPortfolioModel
     private function dateTime(mixed $value): string
     {
         $value = trim((string)$value);
-        $date = DateTimeImmutable::createFromFormat('Y-m-d\TH:i', $value, $this->zone) ?: DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $value, $this->zone);
-        if (!$date) throw new InvalidArgumentException('Date/time is invalid.');
+        $date = DateTimeImmutable::createFromFormat('!Y-m-d\TH:i', $value, $this->zone) ?: DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $value, $this->zone);
+        $errors = DateTimeImmutable::getLastErrors();
+        if (!$date || ($errors !== false && ($errors['warning_count'] || $errors['error_count']))) throw new InvalidArgumentException('Date/time is invalid.');
         return $date->format('Y-m-d H:i:s');
     }
 

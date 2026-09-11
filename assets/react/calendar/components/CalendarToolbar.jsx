@@ -56,7 +56,7 @@ function FilterFields({ filters, setFilter, metadata, compact = false }) {
         <option value="medium">Medium</option><option value="low">Low</option>
       </TracsSelect>
       <TracsSelect value={filters.source} onChange={(event) => setFilter('source', event.target.value)} aria-label="Source module">
-        <option value="all">All sources</option>
+        <option value="all">All sources</option><option value="clients">Clients</option>
         <option value="cases">Cases</option><option value="shifts">Shifts</option>
         <option value="meetings">Meetings</option><option value="reminders">Reminders</option>
         <option value="tasks">Checklist</option><option value="holidays">Holidays</option>
