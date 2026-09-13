@@ -8,6 +8,7 @@ fs.mkdirSync(out, { recursive: true });
 const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date());
 let clients = [];
 let events = [];
+let checklistUpdates = [];
 const context = { schema_ready: true, allowed_actions: { manage: true, view_all: true }, user: { id: 1, name: 'Test Owner' }, users: [{ id: 1, name: 'Test Owner' }] };
 function html(entryName) {
   const calendar = entryName === 'calendar';
@@ -42,7 +43,17 @@ const fixture = id => ({ id, company_name: id===1 ? 'PT Example' : 'PT Second', 
       } else if (url.pathname.endsWith('/client.php')) data=clients.find(c=>String(c.id)===url.searchParams.get('id'));
       else if (url.pathname.endsWith('/actions.php')) {
         assert.equal(req.headers()['x-csrf-token'], 'test');
-        if (body.action==='add_followup') {
+        if (body.action==='monthly_checklist') {
+          data=[
+            {id:101,action_type:'send_invoice',title:'Send invoice',due_at:`${today} 09:00:00`,status:checklistUpdates.includes('completed')?'completed':'open',completed_at:checklistUpdates.includes('completed')?`${today} 10:42:00`:null,completed_by_name:checklistUpdates.includes('completed')?'Test Owner':null},
+            {id:102,action_type:'send_tax_invoice',title:'Send tax invoice',due_at:`${today} 09:00:00`,status:'open',completed_at:null,completed_by_name:null},
+            {id:103,action_type:'check_payment',title:'Check payment',due_at:`${today} 09:00:00`,status:'open',completed_at:null,completed_by_name:null},
+            {id:104,action_type:'renewal',title:'Renewal follow-up',due_at:`${today} 09:00:00`,status:'open',completed_at:null,completed_by_name:null},
+          ];
+        } else if (body.action==='update_monthly_checklist') {
+          checklistUpdates.push(body.status);
+          data=clients.find(c=>c.id===body.client_id);
+        } else if (body.action==='add_followup') {
           const client=clients.find(c=>c.id===body.client_id);
           const f={...body,id:1,reminder_id:10,status:'open',assignee_name:'Test Owner',due_at:body.due_at.replace('T',' ')};
           client.followups.push(f);
@@ -79,7 +90,10 @@ const fixture = id => ({ id, company_name: id===1 ? 'PT Example' : 'PT Second', 
     await record.getByRole('button',{name:'Add Followup'}).click();
     await record.waitFor({state:'hidden'});
     await page.locator('.clients-upcoming').getByText('Send quotation',{exact:true}).waitFor();
-    await page.locator('.clients-calendar .panel-head').getByRole('button',{name:'View More'}).click();
+    await page.locator('.client-monthly-checklist').getByRole('checkbox', { name: /^Invoice sent\b/ }).click();
+    await page.locator('.client-monthly-checklist').getByText('Completed', {exact:false}).waitFor();
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('tracs.clients.lastClient')).expanded), true);
+    await page.locator('.clients-calendar .panel-head').getByRole('button',{name:'View Full Calendar'}).click();
     const full=page.getByRole('dialog',{name:'Client Calendar',exact:true});
     await full.getByRole('grid').waitFor();
     await full.getByRole('button',{name:'Next month'}).click();
@@ -106,6 +120,10 @@ const fixture = id => ({ id, company_name: id===1 ? 'PT Example' : 'PT Second', 
     await page.getByLabel('Search client, code, PIC').fill('');
     await page.locator('.clients-list > tbody > .client-row').waitFor();
     await page.getByRole('button',{name:'View Less'}).click();
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('tracs.clients.lastClient')).expanded), false);
+    await page.reload();
+    await page.locator('.clients-list > tbody > .client-row.is-last-opened').waitFor();
+    assert.equal(await page.locator('.client-details').count(),0);
     await page.screenshot({path:`${out}/populated-desktop.png`,fullPage:true});
     await page.setViewportSize({width:390,height:844});
     await page.locator('.clients-list').getByRole('button',{name:'View More'}).click();
@@ -114,7 +132,7 @@ const fixture = id => ({ id, company_name: id===1 ? 'PT Example' : 'PT Second', 
     const detailBox=await page.locator('.client-details').boundingBox();
     assert(detailBox.x>=0 && detailBox.x+detailBox.width<=390,'Expanded details are hidden by horizontal scrolling');
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),'Page overflows mobile viewport');
-    await page.locator('.clients-calendar .panel-head').getByRole('button',{name:'View More'}).click();
+    await page.locator('.clients-calendar .panel-head').getByRole('button',{name:'View Full Calendar'}).click();
     await page.screenshot({path:`${out}/calendar-mobile.png`,fullPage:true});
     const box=await full.boundingBox();
     assert(box.width<=390 && box.height<=844,'Calendar modal exceeds viewport');
@@ -122,6 +140,6 @@ const fixture = id => ({ id, company_name: id===1 ? 'PT Example' : 'PT Second', 
     await page.keyboard.press('Escape');
     await full.waitFor({state:'hidden'});
     assert.deepEqual(errors,[]);
-    console.log(`PASS: empty state, add modal, inline expansion, quotation creation, calendar popup/navigation/edit, main Calendar completion, cross-tab refresh, search, mobile overflow/modal sizing. Screenshots: ${out}`);
+    console.log(`PASS: empty state, add modal, inline expansion, monthly checklist API updates, restored collapsed client state, quotation creation, calendar popup/navigation/edit, main Calendar completion, cross-tab refresh, search, mobile overflow/modal sizing. Screenshots: ${out}`);
   } finally { await browser.close(); }
 })().catch(error=>{console.error(error);process.exitCode=1;});

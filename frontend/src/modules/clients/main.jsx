@@ -14,6 +14,9 @@ import { Button } from '../../components/ui/Button';
 
 const api = createApiClient();
 const emptyFilters = { scope: 'mine', q: '', owner_user_id: '', status: '', billing_status: '', attention: '', service_type: '', service_status: '', renewal_window: '' };
+const clientsStateKey = 'tracs.clients.lastClient';
+const checklistPeriodKey = 'tracs.clients.selectedPeriod';
+const calendarMonthKey = 'tracs.clients.calendarMonth';
 const serviceTypes = ['Dedicated Server', 'Colocation', 'VPS', 'IP Transit', 'Cloud', 'Domain', 'SSL', 'Other'];
 const serviceStatuses = ['active', 'monitoring', 'pending_renewal', 'suspended', 'terminated', 'inactive'];
 const billingCycles = ['monthly', 'quarterly', 'semiannual', 'annual', 'one_time', 'custom'];
@@ -54,6 +57,63 @@ function compactMoney(value) {
   if (Math.abs(amount) >= 1000000000) return `Rp ${(amount / 1000000000).toFixed(2)}M`;
   if (Math.abs(amount) >= 1000000) return `Rp ${(amount / 1000000).toFixed(2)}jt`;
   return money(amount);
+}
+
+function readJsonStorage(key) {
+  try {
+    const raw = window.localStorage?.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeJsonStorage(key, value) {
+  try {
+    window.localStorage?.setItem(key, JSON.stringify(value));
+  } catch {
+    /* Storage may be disabled. */
+  }
+}
+
+function writeStringStorage(key, value) {
+  try {
+    window.localStorage?.setItem(key, value);
+  } catch {
+    /* Storage may be disabled. */
+  }
+}
+
+function validPeriod(value) {
+  return /^\d{4}-(0[1-9]|1[0-2])$/.test(String(value || '')) ? String(value) : null;
+}
+
+function readClientsState() {
+  const stored = readJsonStorage(clientsStateKey) || {};
+  const selectedPeriod = validPeriod(stored.selectedPeriod) || validPeriod(window.localStorage?.getItem(checklistPeriodKey)) || jakartaToday().slice(0, 7);
+  const id = Number.parseInt(stored.lastClientId ?? stored.last_client_id ?? '', 10);
+  return {
+    lastClientId: Number.isFinite(id) && id > 0 ? String(id) : '',
+    expanded: stored.expanded === true || stored.client_expanded === true,
+    selectedPeriod,
+  };
+}
+
+function saveClientsState(next) {
+  const current = readClientsState();
+  const state = { ...current, ...next };
+  if (state.selectedPeriod) writeStringStorage(checklistPeriodKey, state.selectedPeriod);
+  writeJsonStorage(clientsStateKey, state);
+}
+
+function readCalendarPeriod() {
+  const period = validPeriod(window.localStorage?.getItem(calendarMonthKey));
+  if (!period) return null;
+  return { year: Number(period.slice(0, 4)), month: Number(period.slice(5, 7)) - 1 };
+}
+
+function saveCalendarPeriod(year, month) {
+  writeStringStorage(calendarMonthKey, `${year}-${String(month + 1).padStart(2, '0')}`);
 }
 
 function date(value) {
@@ -422,10 +482,11 @@ function checklistActionLabel(type) {
   }[type] || label(type);
 }
 
-function MonthlyChecklist({ client, onSaved, onChanged }) {
+function MonthlyChecklist({ client, period, onPeriodChange, onSaved, onChanged }) {
   const today = jakartaToday();
-  const [year, setYear] = useState(Number(today.slice(0, 4)));
-  const [month, setMonth] = useState(Number(today.slice(5, 7)));
+  const initialPeriod = validPeriod(period) || today.slice(0, 7);
+  const [year, setYear] = useState(Number(initialPeriod.slice(0, 4)));
+  const [month, setMonth] = useState(Number(initialPeriod.slice(5, 7)));
   const [state, setState] = useState({ loading: true, error: '', items: [] });
   const [working, setWorking] = useState(null);
 
@@ -440,7 +501,20 @@ function MonthlyChecklist({ client, onSaved, onChanged }) {
     }
   }
 
-  useEffect(() => { load(); }, [client.id, year, month]);
+  useEffect(() => {
+    const nextPeriod = validPeriod(period);
+    if (!nextPeriod) return;
+    const nextYear = Number(nextPeriod.slice(0, 4));
+    const nextMonth = Number(nextPeriod.slice(5, 7));
+    if (nextYear !== year) setYear(nextYear);
+    if (nextMonth !== month) setMonth(nextMonth);
+  }, [period]);
+
+  useEffect(() => {
+    const nextPeriod = `${year}-${String(month).padStart(2, '0')}`;
+    onPeriodChange?.(nextPeriod);
+    load();
+  }, [client.id, year, month]);
 
   function navigate(delta) {
     const next = new Date(year, month - 1 + delta, 1);
@@ -506,7 +580,7 @@ function MonthlyChecklist({ client, onSaved, onChanged }) {
   );
 }
 
-function Detail({ selected, context, onEdit, onSaved, onChanged, onRecord, onReminder }) {
+function Detail({ selected, context, checklistPeriod, onChecklistPeriodChange, onEdit, onSaved, onChanged, onRecord, onReminder }) {
   if (!selected) return null;
   return <div className="client-details">
     <div className="client-details-head"><strong>{selected.company_name}</strong>{context?.allowed_actions?.manage && <div><Button size="compact" onClick={onEdit}>Edit Client</Button><Button size="compact" onClick={onRecord}>Add Record / Reminder</Button></div>}</div>
@@ -515,7 +589,7 @@ function Detail({ selected, context, onEdit, onSaved, onChanged, onRecord, onRem
       <Info title="Billing Summary" lines={[`Paid: ${money(selected.total_paid_amount)}`, `Outstanding: ${money(selected.outstanding_amount)}`, `Monthly recurring: ${money(selected.mrr_amount)}`]} />
       <Info title="Notes" lines={[selected.notes || 'No notes yet.']} />
     </div>
-    <MonthlyChecklist client={selected} onSaved={onSaved} onChanged={onChanged} />
+    <MonthlyChecklist client={selected} period={checklistPeriod} onPeriodChange={onChecklistPeriodChange} onSaved={onSaved} onChanged={onChanged} />
     <h3 className="client-section-title">Services</h3><ServiceCards services={selected.services} />
     <h3 className="client-section-title">Invoice / Tax Invoice Information</h3>
     <Rows headers={['Invoice / Service', 'Invoice Date', 'Payment Due', 'Amount', 'Status', 'Tax Invoice']} rows={selected.billing} empty="No billing records yet." render={b => <><td>{b.invoice_number || 'Not numbered'}<small>{b.service_name || 'General billing'}</small></td><td>{date(b.invoice_date)}</td><td>{date(b.due_date)}</td><td>{money(b.amount)}</td><td>{label(b.invoice_status)}<small>{label(b.payment_status)}</small></td><td>{Number(b.tax_invoice_required) ? (b.tax_invoice_sent_at ? `Sent · ${date(b.tax_invoice_sent_at)}` : 'Pending') : 'Not required'}<small>{b.tax_invoice_number}</small></td></>} />
@@ -647,14 +721,22 @@ function ClientsApp() {
   const context = useContextData();
   const [filters, setFilters] = useState({ ...emptyFilters });
   const clients = useClients(filters);
-  const [year, setYear] = useState(Number(jakartaToday().slice(0, 4)));
+  const today = jakartaToday();
+  const savedClientState = useMemo(() => readClientsState(), []);
+  const savedCalendarPeriod = useMemo(() => readCalendarPeriod(), []);
+  const [checklistPeriod, setChecklistPeriod] = useState(savedClientState.selectedPeriod || today.slice(0, 7));
+  const [year, setYear] = useState(savedCalendarPeriod?.year || Number(today.slice(0, 4)));
+  const [calendarMonth, setCalendarMonth] = useState(savedCalendarPeriod?.month ?? Number(today.slice(5, 7)) - 1);
   const calendar = useCalendarData(year, 'clients');
-  const [expanded, setExpanded] = useState(new URLSearchParams(window.location.search).get('id'));
+  const initialId = useMemo(() => new URLSearchParams(window.location.search).get('id'), []);
+  const [expanded, setExpanded] = useState(initialId);
+  const [lastOpenedHint, setLastOpenedHint] = useState(null);
   const [selected, setSelected] = useState(null);
   const [detailError, setDetailError] = useState('');
   const [modal, setModal] = useState(null);
   const [reminder, setReminder] = useState(null);
   const detailSequence = useRef(0);
+  const restoredRef = useRef(Boolean(initialId));
   const canManage = Boolean(context.data?.allowed_actions?.manage);
   const filtered = Object.entries(filters).some(([key, value]) => value !== emptyFilters[key]);
   const clientIds = useMemo(() => new Set((clients.data.clients || []).map(c => String(c.id))), [clients.data.clients]);
@@ -667,6 +749,19 @@ function ClientsApp() {
     } catch (error) { if (requestId === detailSequence.current) setDetailError(error.message); }
   }
   useEffect(() => { setSelected(null); if (expanded) loadDetail(expanded); else detailSequence.current++; }, [expanded]);
+  useEffect(() => {
+    if (restoredRef.current || clients.loading || clients.error || filtered || expanded) return;
+    const stored = readClientsState();
+    if (!stored.lastClientId) return;
+    if (!clientIds.has(stored.lastClientId)) return;
+    restoredRef.current = true;
+    setLastOpenedHint(stored.lastClientId);
+    setChecklistPeriod(stored.selectedPeriod || today.slice(0, 7));
+    if (stored.expanded) setExpanded(stored.lastClientId);
+    requestAnimationFrame(() => {
+      document.querySelector(`[data-client-row-id="${stored.lastClientId}"]`)?.scrollIntoView({ block: 'center' });
+    });
+  }, [clients.loading, clients.error, filtered, expanded, clientIds, today]);
   async function refresh() {
     await Promise.all([clients.refresh(), calendar.refresh(), expanded ? loadDetail(expanded) : Promise.resolve()]);
   }
@@ -684,7 +779,29 @@ function ClientsApp() {
   async function afterSaved(client) {
     try { localStorage.setItem('tracs-calendar-updated', String(Date.now())); } catch { /* Storage may be disabled. */ }
     setModal(null); setSelected(client); setExpanded(String(client.id));
+    saveClientsState({ lastClientId: String(client.id), expanded: true, selectedPeriod: checklistPeriod });
     await Promise.all([clients.refresh(), calendar.refresh()]);
+  }
+  function setClientExpanded(id, open) {
+    const nextId = String(id);
+    setExpanded(open ? nextId : null);
+    setLastOpenedHint(nextId);
+    saveClientsState({ lastClientId: nextId, expanded: open, selectedPeriod: checklistPeriod });
+    requestAnimationFrame(() => {
+      if (!open) return;
+      document.querySelector(`[data-client-row-id="${nextId}"]`)?.scrollIntoView({ block: 'nearest' });
+    });
+  }
+  function updateChecklistPeriod(period) {
+    const next = validPeriod(period);
+    if (!next) return;
+    setChecklistPeriod(next);
+    saveClientsState({ lastClientId: expanded || readClientsState().lastClientId, expanded: Boolean(expanded), selectedPeriod: next });
+  }
+  function updateCalendarPeriod(nextYear, nextMonth) {
+    setYear(nextYear);
+    setCalendarMonth(nextMonth);
+    saveCalendarPeriod(nextYear, nextMonth);
   }
   function openReminder(f) {
     setReminder({ id: `reminder_${f.reminder_id || f.id}`, source: 'clients', source_id: f.id,
@@ -697,14 +814,13 @@ function ClientsApp() {
     <div className="topbar clients-topbar">
       <div className="topbar-left">
         <div className="page-title">Clients</div>
-      </div>
-      <div className="topbar-right">
         <HeaderStats summary={clients.data.summary || {}} />
+        <p className="clients-page-description">Owned portfolios, billing signals, invoice follow-ups, and renewal attention.</p>
       </div>
     </div>
     {context.error && <p role="alert">{context.error}</p>}
     {context.loading ? <p>Loading Clients…</p> : context.data?.schema_ready ? <>
-      <ClientCalendar calendar={calendar} year={year} setYear={setYear} clientIds={clientIds} onChanged={refresh} />
+      <ClientCalendar calendar={calendar} year={year} setYear={setYear} month={calendarMonth} setMonth={setCalendarMonth} clientIds={clientIds} onChanged={refresh} onPeriodChange={updateCalendarPeriod} />
       <div className="clients-toolbar"><FilterBar filters={filters} setFilters={setFilters} context={context.data} />{canManage && <Button className="clients-add-button" variant="primary" onClick={() => setModal('create')}>{icon('plus')}Add Client</Button>}</div>
       <section className="panel" aria-busy={clients.loading}>
         <div className="panel-head"><h2 className="panel-title">Clients</h2><span className="panel-meta">{clients.data.clients?.length || 0} {clients.data.clients?.length === 1 ? 'record' : 'records'}{clients.loading ? ' · Updating…' : ''}</span></div>
@@ -713,13 +829,13 @@ function ClientsApp() {
           {(clients.data.clients || []).map(c => {
             const open = String(c.id) === String(expanded);
             const next = c.next_reminder;
-            return <React.Fragment key={c.id}><tr className={`client-row ${open ? 'is-selected' : ''}`}>
+            return <React.Fragment key={c.id}><tr className={`client-row ${open ? 'is-selected' : ''} ${String(c.id) === String(lastOpenedHint) && !open ? 'is-last-opened' : ''}`} data-client-row-id={c.id}>
               <td><strong>{c.company_name}</strong><small>{c.client_code || 'No code'} · {c.primary_contact_name || 'No PIC'}</small></td>
               <td>{c.service_types || 'No services'}<small>{c.service_count} services · {c.addon_count} addons</small></td>
               <td>{next ? next.title : c.next_action}<small>{date(next?.due_at || c.next_action_due_at)}</small></td>
               <td>{date(c.nearest_renewal_date)}</td><td><Badge tone={c.status}>{label(c.status)}</Badge></td>
-              <td><Button size="compact" aria-expanded={open} aria-controls={`client-details-${c.id}`} onClick={() => setExpanded(open ? null : String(c.id))}>{open ? 'View Less' : 'View More'}{icon(open ? 'chevron-up' : 'chevron-down')}</Button></td>
-            </tr>{open && <tr id={`client-details-${c.id}`} className="client-detail-row"><td colSpan={6}>{detailError ? <p role="alert">{detailError} <Button onClick={() => loadDetail(c.id)}>Retry</Button></p> : selected && String(selected.id) === String(c.id) ? <Detail selected={selected} context={context.data} onEdit={() => setModal('edit')} onRecord={() => setModal('record')} onSaved={afterSaved} onChanged={refresh} onReminder={openReminder} /> : <p className="clients-empty">Loading client details…</p>}</td></tr>}</React.Fragment>;
+              <td><Button size="compact" aria-expanded={open} aria-controls={`client-details-${c.id}`} onClick={() => setClientExpanded(c.id, !open)}>{open ? 'View Less' : 'View More'}{icon(open ? 'chevron-up' : 'chevron-down')}</Button></td>
+            </tr>{open && <tr id={`client-details-${c.id}`} className="client-detail-row"><td colSpan={6}>{detailError ? <p role="alert">{detailError} <Button onClick={() => loadDetail(c.id)}>Retry</Button></p> : selected && String(selected.id) === String(c.id) ? <Detail selected={selected} context={context.data} checklistPeriod={checklistPeriod} onChecklistPeriodChange={updateChecklistPeriod} onEdit={() => setModal('edit')} onRecord={() => setModal('record')} onSaved={afterSaved} onChanged={refresh} onReminder={openReminder} /> : <p className="clients-empty">Loading client details…</p>}</td></tr>}</React.Fragment>;
           })}
           {!clients.loading && !clients.error && !clients.data.clients?.length && <tr><td colSpan={6}><div className="clients-empty"><strong>{filtered ? 'No clients match these filters.' : 'No clients yet.'}</strong><p>{filtered ? 'Try another search or reset the filters.' : 'Add your first client to start tracking services, billing, invoices and follow-ups.'}</p>{filtered ? <Button onClick={() => setFilters({ ...emptyFilters })}>Reset Filters</Button> : null}</div></td></tr>}
         </tbody></table></div>

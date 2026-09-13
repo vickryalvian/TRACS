@@ -28,6 +28,9 @@ try {
     $migration = file_get_contents(__DIR__.'/../config/migrations/2026_09_10_client_calendar.sql');
     $db->query($migration);
     $db->query($migration);
+    $checklistMigration = file_get_contents(__DIR__.'/../config/migrations/2026_09_11_client_monthly_checklist.sql');
+    $db->query($checklistMigration);
+    $db->query($checklistMigration);
     $owner = new ClientPortfolioController($db, 1);
     $other = new ClientPortfolioController($db, 2);
     $client = $owner->create(['company_name'=>'Test Client','contact_name'=>'Test PIC','service_name'=>'VPS','service_type'=>'VPS','renewal_date'=>'2026-09-28','invoice_date'=>'2026-09-15','amount'=>'100000','tax_invoice_required'=>true,'tax_invoice_due_date'=>'2026-09-20'], 'Test Owner');
@@ -72,6 +75,17 @@ try {
     $owner->renewService($client, ['service_id' => $detail['services'][0]['id'], 'new_renewal_date' => '2026-10-28'], 'Test Owner');
     $renewals = array_values(array_filter($owner->detail($client)['followups'], fn($f) => $f['action_type']==='renewal'));
     client_check(count($renewals)===1 && $renewals[0]['due_at']==='2026-10-28 09:00:00', 'Renewal rescheduling created duplicate reminders.');
+    $checklist = $owner->monthlyChecklist($client, ['year' => 2026, 'month' => 9], 'Test Owner');
+    client_check(count($checklist)===4, 'Monthly checklist must expose four recurring activities.');
+    client_check(array_column($checklist, 'action_type')===['send_invoice','send_tax_invoice','check_payment','renewal'], 'Monthly checklist order changed.');
+    $again = $owner->monthlyChecklist($client, ['year' => 2026, 'month' => 9], 'Test Owner');
+    client_check(count($again)===4, 'Monthly checklist duplicated scoped activity records.');
+    $owner->updateMonthlyChecklist(['followup_id' => $checklist[0]['id'], 'status' => 'completed'], 'Test Owner');
+    $done = $owner->monthlyChecklist($client, ['year' => 2026, 'month' => 9], 'Test Owner')[0];
+    client_check($done['status']==='completed' && !empty($done['completed_at']), 'Monthly checklist completion was not persisted.');
+    $owner->updateMonthlyChecklist(['followup_id' => $checklist[1]['id'], 'status' => 'not_applicable'], 'Test Owner');
+    $na = $owner->monthlyChecklist($client, ['year' => 2026, 'month' => 9], 'Test Owner')[1];
+    client_check($na['status']==='not_applicable', 'Monthly checklist N/A status was not persisted.');
     $db->query("INSERT INTO tracs_client_followups (client_id,title,status,completed_at) VALUES ($client,'Legacy unscheduled','completed','2026-09-01 09:00:00')");
     $legacyId = (int)$db->insert_id;
     $legacy = array_values(array_filter($owner->detail($client)['followups'], fn($f)=>(int)$f['id']===$legacyId))[0];
@@ -79,7 +93,7 @@ try {
     $owner->updateFollowup($legacyId, ['due_at'=>'2026-09-23T09:00','status'=>'open'], 'Test Owner');
     $legacy = array_values(array_filter($owner->detail($client)['followups'], fn($f)=>(int)$f['id']===$legacyId))[0];
     client_check((int)$legacy['reminder_id']>0 && $legacy['status']==='open', 'Legacy reminder was not linked when scheduled.');
-    echo "PASS: grouped creation, invoice/tax/quotation/renewal events, canonical edits in both directions, completion/reopening, ownership, deduplication, rollback, validation, filters and migration rerun.\n";
+    echo "PASS: grouped creation, invoice/tax/quotation/renewal events, monthly checklist persistence, canonical edits in both directions, completion/reopening, ownership, deduplication, rollback, validation, filters and migration rerun.\n";
 } finally {
     $db->query("DROP DATABASE `$name`");
     $db->close();
