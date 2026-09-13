@@ -35,9 +35,18 @@ tracs_deny_direct_script_access(__FILE__);
    <div class="sales-dialog-frame">
     <div class="sales-dialog-head"><h2 id="sales-template-title">Saved Templates</h2><button type="button" class="btn" data-close-templates aria-label="Close templates" title="Close"><i data-lucide="x" class="icon-sm"></i></button></div>
     <div class="sales-dialog-body">
-     <label class="sales-field">My Templates<select class="form-select" data-template-select disabled><option value="">No templates</option></select></label>
-     <div class="sales-dialog-actions sales-template-actions"><button type="button" class="btn" data-load-template disabled><i data-lucide="folder-open" class="icon-sm"></i>Load</button><button type="button" class="btn" data-delete-template disabled><i data-lucide="trash-2" class="icon-sm"></i>Delete</button></div>
-     <label class="sales-field">Template Name<input class="form-input" data-template-name maxlength="150"></label>
+     <section class="sales-template-section" aria-label="Browse saved templates">
+      <label class="sales-field">My Templates<select class="form-select" data-template-select disabled><option value="">No templates</option></select></label>
+      <div class="sales-template-preview" data-template-preview>
+       <h3>Template Preview</h3>
+       <p class="empty">Select a template to preview its configuration.</p>
+      </div>
+      <div class="sales-dialog-actions sales-template-actions"><button type="button" class="btn primary" data-load-template disabled><i data-lucide="folder-open" class="icon-sm"></i>Load Template</button><button type="button" class="btn" data-delete-template disabled><i data-lucide="trash-2" class="icon-sm"></i>Delete</button></div>
+     </section>
+     <section class="sales-template-section sales-template-save" aria-label="Save current configuration">
+      <h3>Save Current Configuration</h3>
+      <label class="sales-field">Template Name<input class="form-input" data-template-name maxlength="150"></label>
+     </section>
     </div>
     <div class="sales-dialog-footer"><p data-template-status role="status" class="sales-master-count"></p><div class="sales-dialog-actions"><button type="button" class="btn" data-save-template><i data-lucide="save" class="icon-sm"></i>Save New</button><button type="button" class="btn primary" data-update-template disabled>Update Selected</button></div></div>
    </div>
@@ -91,8 +100,8 @@ tracs_deny_direct_script_access(__FILE__);
      <div class="sales-dialog-grid">
       <label class="sales-field">Price (Rp)<input class="form-input" name="price" type="number" min="0" max="1000000000000" step="any" required></label>
       <label class="sales-field">Billing Period<select class="form-select" name="billing_period"><option value="monthly">Monthly</option><option value="annual">Annual</option><option value="one_time">One-Time</option></select></label>
-      <label class="sales-field">Sort Order (Auto)<input class="form-input" name="sort_order" type="number" min="-1000000" max="1000000" step="1" required></label>
      </div>
+     <input type="hidden" name="sort_order" required>
      <div class="sales-dialog-checks"><label><input type="checkbox" name="active"> Active</label><label><input type="checkbox" name="unit_quantity"> Per-unit quantity</label></div>
      </div>
      <div class="sales-dialog-footer"><p data-item-error role="alert"></p><div class="sales-dialog-actions"><button type="button" class="btn" data-cancel>Cancel</button><button type="submit" class="btn primary">Save Item</button></div></div>

@@ -102,6 +102,13 @@ const phpCalculate = (input) => JSON.parse(execFileSync('php', ['-r', 'require "
     await page.locator('[data-save-template]').click();
     await page.waitForFunction(() => document.querySelector('[data-template-status]').textContent.includes('Template saved'));
     assert.equal(savedTemplates[0].configuration.lines.at(-1).name, 'Custom support');
+    await page.locator('[data-template-select]').selectOption('1');
+    const preview = await page.locator('[data-template-preview]').innerText();
+    assert.match(preview, /Template Preview/);
+    assert.match(preview, /Dedicated Server/);
+    assert.match(preview, /Monthly/);
+    assert.match(preview, /Custom support x 2/);
+    assert.match(preview, /Margin\s+0%/);
     await page.locator('[data-close-templates]').click();
     await page.locator('[data-lines] > div').last().locator('[data-remove]').click();
     await page.locator('[data-open-templates]').click();
@@ -163,6 +170,7 @@ const phpCalculate = (input) => JSON.parse(execFileSync('php', ['-r', 'require "
     await page.locator('[data-clear-filters]').click();
     await page.locator('[data-new-item]').click();
     assert.equal(await page.locator('#sales-item-title').textContent(), 'Add Pricing Item');
+    assert.equal(await page.locator('label:has-text("Sort Order")').count(), 0);
     const expectedOrder = Math.max(...catalog.items.filter((item) => item.service_type === 'Dedicated Server' && item.billing_period === 'monthly').map((item) => Number(item.sort_order))) + 1;
     assert.equal(await page.locator('[data-item-form] [name="sort_order"]').inputValue(), String(expectedOrder));
     for (const width of [1440, 390]) {

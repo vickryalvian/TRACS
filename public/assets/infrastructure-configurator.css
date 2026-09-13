@@ -85,8 +85,21 @@
 .sales-dialog .sales-toolbar { margin: 0; }
 .sales-dialog-actions { display: flex; justify-content: end; gap: 8px; }
 .sales-master-dialog { width: min(1240px, calc(100% - 32px)); }
-.sales-template-dialog { width: min(520px, calc(100% - 32px)); }
+.sales-template-dialog { width: min(640px, calc(100% - 32px)); }
+.sales-template-section { display: grid; gap: 12px; }
+.sales-template-section h3, .sales-template-preview h3 { margin: 0; color: var(--tx1); font-size: 12px; font-weight: 700; letter-spacing: 0; }
+.sales-template-save { border-top: 1px solid var(--bd1); padding-top: 16px; }
+.sales-template-preview { display: grid; gap: 10px; min-height: 92px; }
+.sales-template-preview .empty { margin: 0; color: var(--tx2); font-size: 12px; }
+.sales-template-preview-list { max-height: min(320px, 42dvh); overflow-y: auto; border-top: 1px solid var(--bd1); border-bottom: 1px solid var(--bd1); }
+.sales-template-preview-list dl { margin: 0; }
+.sales-template-preview-list div { display: grid; grid-template-columns: minmax(110px, .45fr) minmax(0, 1fr); gap: 16px; padding: 9px 0; border-bottom: 1px solid var(--bd1); }
+.sales-template-preview-list div:last-child { border-bottom: 0; }
+.sales-template-preview-list dt { color: var(--tx2); font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+.sales-template-preview-list dd { margin: 0; color: var(--tx1); font-size: 12px; overflow-wrap: anywhere; }
 .sales-template-actions { justify-content: start; flex-wrap: wrap; }
+.infra-configurator-page .sales-template-actions .btn[data-delete-template] { color: var(--tx2); background: transparent; }
+.infra-configurator-page .sales-template-actions .btn[data-delete-template]:hover { color: var(--red); background: var(--s3); }
 .sales-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .infra-configurator-page .topbar { margin-bottom: 8px; justify-content: space-between; }
 .sales-service-toolbar { display: grid; grid-template-columns: minmax(220px, 360px) 180px; align-items: end; gap: 12px; width: min(100%, 552px); margin: 0 0 18px; }
@@ -132,6 +145,7 @@
  .sales-actions { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
  .sales-service-toolbar { grid-template-columns: minmax(0, 1fr); gap: 10px; margin-bottom: 16px; }
  .sales-master-filters { grid-template-columns: minmax(0, 1fr); }
+ .sales-template-preview-list div { grid-template-columns: minmax(0, 1fr); gap: 4px; }
  .sales-dialog-head { align-items: flex-start; flex-wrap: wrap; }
  .sales-dialog-head-actions { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
  .sales-master-filters > .btn { width: 100%; }

@@ -25,7 +25,6 @@
   let templates = [];
   let templateBusy = false;
   let masterSort = { field: 'order', dir: 'asc' };
-  let autoSortOrder = false;
   const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const activeItems = () => (catalog?.items || []).filter((item) => item.active);
   const available = () => activeItems().filter((item) => item.service_type === service.value && item.billing_period === period.value);
@@ -367,7 +366,7 @@
   const form = $('[data-item-form]');
   const dialog = $('[data-item-dialog]');
   function updateAutoSortOrder() {
-    if (!autoSortOrder || !form || Number(form.elements.id.value || 0)) return;
+    if (!form) return;
     form.elements.sort_order.value = nextSortOrder(form.elements.service_type.value, form.elements.billing_period.value);
   }
 
@@ -378,7 +377,6 @@
     const serviceType = item.service_type || $('[data-filter-service]').value || service.value;
     const billingPeriod = item.billing_period || 'monthly';
     const values = { id: 0, revision: 0, active: true, unit_quantity: false, service_type: serviceType, category: $('[data-filter-category]').value, billing_period: billingPeriod, sort_order: creating ? nextSortOrder(serviceType, billingPeriod) : 0, ...item };
-    autoSortOrder = creating;
     for (const [key, value] of Object.entries(values)) {
       const field = form.elements.namedItem(key);
       if (!field) continue;
@@ -397,7 +395,6 @@
   }
   form?.elements.service_type.addEventListener('input', () => { updateCategorySuggestions(); updateAutoSortOrder(); });
   form?.elements.billing_period.addEventListener('change', updateAutoSortOrder);
-  form?.elements.sort_order.addEventListener('input', () => { autoSortOrder = false; });
   $('[data-new-item]')?.addEventListener('click', () => edit());
   $('[data-master-body]')?.addEventListener('click', (event) => {
     const button = event.target.closest('[data-edit]');
@@ -426,6 +423,52 @@
   });
   $('[data-edit-tax]')?.addEventListener('click', () => setTaxEditing(true));
   $('[data-cancel-tax]')?.addEventListener('click', () => { renderTaxSetting(); setTaxEditing(false); });
+  function templateItemLabel(line) {
+    if (line.custom) return line.name || 'Custom item';
+    const item = catalog?.items?.find((entry) => entry.id === Number(line.id));
+    return item?.name || line.name || `Item #${line.id || '-'}`;
+  }
+
+  function templateItemCategory(line) {
+    if (line.custom) return line.category || 'Custom';
+    const item = catalog?.items?.find((entry) => entry.id === Number(line.id));
+    return item?.category || line.category || 'Additional';
+  }
+
+  function templateItemValue(line) {
+    const quantity = Number(line.quantity || 1);
+    const suffix = quantity > 1 ? ` x ${quantity}` : '';
+    return `${templateItemLabel(line)}${suffix}`;
+  }
+
+  function templateMarginLabel(config) {
+    if ((config.margin_mode || 'percentage') === 'amount') return money(Number(config.margin_value || 0));
+    return `${Number(config.margin_value ?? 30)}%`;
+  }
+
+  function renderTemplatePreview() {
+    const preview = $('[data-template-preview]');
+    if (!preview) return;
+    const template = selectedTemplate();
+    if (!template) {
+      preview.innerHTML = '<h3>Template Preview</h3><p class="empty">Select a template to preview its configuration.</p>';
+      return;
+    }
+    const config = template.configuration || {};
+    const rows = [
+      ['Service', config.service_type || '-'],
+      ['Billing', labels[config.billing_period] || config.billing_period || '-']
+    ];
+    const grouped = new Map();
+    for (const line of config.lines || []) {
+      const category = templateItemCategory(line);
+      grouped.set(category, [...(grouped.get(category) || []), templateItemValue(line)]);
+    }
+    for (const [category, values] of grouped.entries()) rows.push([category, values.join(', ')]);
+    rows.push(['Quantity', config.nodes ?? 1], ['Margin', templateMarginLabel(config)]);
+    preview.innerHTML = `<h3>Template Preview</h3>${rows.length > 2 ? `<div class="sales-template-preview-list"><dl>${rows.map(([key, value]) => `<div><dt>${esc(key)}</dt><dd>${esc(value)}</dd></div>`).join('')}</dl></div>` : '<p class="empty">This template has no saved configuration.</p>'}`;
+  }
+
   function renderTemplates() {
     const select = $('[data-template-select]');
     fill(select, [['', templates.length ? 'Select a template' : 'No saved templates'], ...templates.map((item) => [String(item.id), item.name])], select.value);
@@ -434,6 +477,8 @@
     $('[data-load-template]').disabled = !hasSelection || templateBusy;
     $('[data-update-template]').disabled = !hasSelection || templateBusy;
     $('[data-delete-template]').disabled = !hasSelection || templateBusy;
+    renderTemplatePreview();
+    icons();
   }
 
   function selectedTemplate() {
