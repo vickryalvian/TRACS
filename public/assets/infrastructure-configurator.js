@@ -24,6 +24,8 @@
   let loading = false;
   let templates = [];
   let templateBusy = false;
+  let masterSort = { field: 'order', dir: 'asc' };
+  let autoSortOrder = false;
   const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const activeItems = () => (catalog?.items || []).filter((item) => item.active);
   const available = () => activeItems().filter((item) => item.service_type === service.value && item.billing_period === period.value);
@@ -39,8 +41,8 @@
       body: input === undefined ? undefined : JSON.stringify(input)
     });
     let result;
-    try { result = await response.json(); } catch (_) { throw new Error('Your session or Master Data is unavailable. Reload the page to sign in again.'); }
-    if (!response.ok || !result.success) throw new Error(result.message || 'Unable to load Master Data.');
+    try { result = await response.json(); } catch (_) { throw new Error('Your session or Pricing Matrix is unavailable. Reload the page to sign in again.'); }
+    if (!response.ok || !result.success) throw new Error(result.message || 'Unable to load Pricing Matrix.');
     return result.data;
   }
 
@@ -75,7 +77,7 @@
         <label class="sales-field"><span class="${index ? 'sales-sr-only' : 'sales-column-label'}">Category</span>${line.custom ? `<input class="form-input" data-custom-category value="${esc(line.category)}" maxlength="100" required>` : `<select class="form-select" data-category>${cats.map((category) => `<option ${category === line.category ? 'selected' : ''}>${esc(category)}</option>`).join('')}</select>`}</label>
         <label class="sales-field"><span class="${index ? 'sales-sr-only' : 'sales-column-label'}">Item</span>${line.custom ? `<input class="form-input" data-custom-name value="${esc(line.name)}" maxlength="500" placeholder="Custom item name" required>` : `<select class="form-select" data-item><option value="0">Select ${esc(line.category)}</option>${options.map((option) => `<option value="${option.id}" ${option.id === line.id ? 'selected' : ''}>${esc(option.name)}</option>`).join('')}</select>`}</label>
         <div class="sales-price-cell ${line.custom ? 'is-custom' : ''}">
-          ${editing ? `<input class="form-input" data-price type="number" min="0" max="1000000000000" step="any" value="${esc(priceDrafts.get(line))}" required aria-label="Unit price for item ${index + 1}"><button type="button" class="btn" data-apply-price title="Apply price" aria-label="Apply price"><i data-lucide="check" class="icon-sm"></i></button><button type="button" class="btn" data-cancel-price title="Cancel price edit" aria-label="Cancel price edit"><i data-lucide="x" class="icon-sm"></i></button>` : `<output class="sales-price">${item && unitPrice(line) !== '' ? esc(money(Number(unitPrice(line)))) : '-'}</output>${item ? (!line.custom && line.override_price != null ? `<button type="button" class="btn" data-reset-price title="Restore Master Data price" aria-label="Restore Master Data price for item ${index + 1}"><i data-lucide="rotate-ccw" class="icon-sm"></i></button>` : `<button type="button" class="btn" data-edit-price title="Edit price" aria-label="Edit price for item ${index + 1}"><i data-lucide="pencil" class="icon-sm"></i></button>`) : ''}${line.override_price != null && line.override_price !== '' ? '<small class="sales-price-note">Custom price</small>' : ''}`}
+          ${editing ? `<input class="form-input" data-price type="number" min="0" max="1000000000000" step="any" value="${esc(priceDrafts.get(line))}" required aria-label="Unit price for item ${index + 1}"><button type="button" class="btn" data-apply-price title="Apply price" aria-label="Apply price"><i data-lucide="check" class="icon-sm"></i></button><button type="button" class="btn" data-cancel-price title="Cancel price edit" aria-label="Cancel price edit"><i data-lucide="x" class="icon-sm"></i></button>` : `<output class="sales-price">${item && unitPrice(line) !== '' ? esc(money(Number(unitPrice(line)))) : '-'}</output>${item ? (!line.custom && line.override_price != null ? `<button type="button" class="btn" data-reset-price title="Restore Pricing Matrix price" aria-label="Restore Pricing Matrix price for item ${index + 1}"><i data-lucide="rotate-ccw" class="icon-sm"></i></button>` : `<button type="button" class="btn" data-edit-price title="Edit price" aria-label="Edit price for item ${index + 1}"><i data-lucide="pencil" class="icon-sm"></i></button>`) : ''}${line.override_price != null && line.override_price !== '' ? '<small class="sales-price-note">Custom price</small>' : ''}`}
         </div>
         <button type="button" class="btn sales-remove" data-remove aria-label="Remove item ${index + 1}" title="Remove item"><i data-lucide="trash-2" class="icon-sm"></i></button>
         ${item?.unit_quantity ? `<label class="sales-field sales-quantity">Units<input class="form-input" data-quantity type="number" min="1" max="100000" step="1" value="${line.quantity}" required></label>` : ''}
@@ -123,7 +125,7 @@
         const verified = await request('calculate', { service_type: service.value, billing_period: period.value, nodes: count, lines: chosen, margin_mode: marginMode.value, margin_value: marginValue.value });
         if (current !== sequence) return;
         if (Object.keys(totals).some((key) => Math.abs(totals[key] - verified[key]) > 0.005)) {
-          display(null); calculationStatus.textContent = 'Master prices changed. Refresh Prices before continuing.';
+          display(null); calculationStatus.textContent = 'Pricing Matrix changed. Refresh Prices before continuing.';
         } else {
           display(verified); calculationStatus.textContent = lines.some((line) => !line.id && !line.custom) ? 'Unselected rows are excluded.' : '';
         }
@@ -147,11 +149,81 @@
       && (!serviceFilter.value || item.service_type === serviceFilter.value)
       && (!categoryFilter.value || item.category === categoryFilter.value)
       && (!state || item.active === (state === 'active')));
-    const sort = $('[data-master-sort]').value;
-    items.sort((a, b) => (sort === 'name' ? a.name.localeCompare(b.name) : sort === 'price_asc' ? a.price - b.price : sort === 'price_desc' ? b.price - a.price : a.sort_order - b.sort_order) || a.id - b.id);
-    $('[data-master-count]').textContent = `${items.length} of ${catalog.items.length} items`;
-    body.innerHTML = items.map((item) => `<tr><td>${esc(item.service_type)}<br>${esc(item.category)}</td><td>${esc(item.name)}</td><td>${esc(money(item.price))}</td><td>${labels[item.billing_period]}</td><td>${item.active ? 'Active' : 'Inactive'}</td><td>${item.sort_order}</td><td><button type="button" class="btn" data-edit="${item.id}" title="Edit item" aria-label="Edit ${esc(item.name)}"><i data-lucide="pencil" class="icon-sm"></i></button></td></tr>`).join('') || '<tr><td colspan="7">No matching items.</td></tr>';
+    items.sort(sortMasterItems);
+    $('[data-master-count]').textContent = `${items.length} items`;
+    body.innerHTML = items.map((item) => `<tr><td>${esc(item.service_type)}<br>${esc(item.category)}</td><td>${esc(item.name)}</td><td>${esc(money(item.price))}</td><td>${labels[item.billing_period]}</td><td>${item.active ? 'Active' : 'Inactive'}</td><td><button type="button" class="btn" data-edit="${item.id}" title="Edit item" aria-label="Edit ${esc(item.name)}"><i data-lucide="pencil" class="icon-sm"></i></button></td></tr>`).join('') || '<tr><td colspan="6">No matching items.</td></tr>';
+    syncMasterSortHeaders();
     icons();
+  }
+
+  function masterSortValue(item, field) {
+    if (field === 'price') return Number(item.price || 0);
+    if (field === 'status') return item.active ? 0 : 1;
+    if (field === 'billing') return labels[item.billing_period] || item.billing_period || '';
+    if (field === 'service') return `${item.service_type || ''} ${item.category || ''}`;
+    if (field === 'item') return item.name || '';
+    return Number(item.sort_order || 0);
+  }
+
+  function sortMasterItems(a, b) {
+    const valueA = masterSortValue(a, masterSort.field);
+    const valueB = masterSortValue(b, masterSort.field);
+    const diff = typeof valueA === 'number' && typeof valueB === 'number'
+      ? valueA - valueB
+      : String(valueA).localeCompare(String(valueB));
+    return (masterSort.dir === 'asc' ? diff : -diff) || (a.sort_order - b.sort_order) || a.id - b.id;
+  }
+
+  function syncMasterSortHeaders() {
+    root.querySelectorAll('[data-master-sort]').forEach((button) => {
+      const active = button.dataset.masterSort === masterSort.field;
+      const dir = masterSort.dir === 'asc' ? 'asc' : 'desc';
+      const label = button.textContent.trim();
+      const icon = button.querySelector('[data-lucide]');
+      const th = button.closest('th');
+      button.classList.toggle('is-active', active);
+      button.setAttribute('aria-label', active ? `Sort by ${label}, ${dir === 'asc' ? 'ascending' : 'descending'}` : `Sort by ${label}`);
+      if (th) th.setAttribute('aria-sort', active ? (dir === 'asc' ? 'ascending' : 'descending') : 'none');
+      if (icon) icon.setAttribute('data-lucide', active ? (dir === 'asc' ? 'chevron-up' : 'chevron-down') : 'chevrons-up-down');
+    });
+  }
+
+  function nextSortOrder(serviceType, billingPeriod) {
+    if (!catalog) return 0;
+    const matches = catalog.items.filter((item) => item.service_type === serviceType && item.billing_period === billingPeriod);
+    const max = matches.reduce((value, item) => Math.max(value, Number(item.sort_order || 0)), -1);
+    return Math.min(max + 1, 1000000);
+  }
+
+  function hasConfigurationDraft() {
+    if (!catalog || loading) return false;
+    return lines.some((line) => line.id || line.custom || line.override_price != null)
+      || Number(nodes.value) !== 1
+      || marginMode.value !== 'percentage'
+      || Number(marginValue.value) !== 30;
+  }
+
+  function taxPercent() {
+    return Number((Number(catalog?.tax_rate || 0) * 100).toFixed(4));
+  }
+
+  function renderTaxSetting() {
+    if (!catalog) return;
+    const value = taxPercent();
+    const display = $('[data-tax-display]');
+    if (display) display.textContent = `PPN ${value}%`;
+    if ($('[data-tax-form]')) $('[data-tax-form]').elements.tax.value = value;
+  }
+
+  function setTaxEditing(editing) {
+    const form = $('[data-tax-form]');
+    if (!form) return;
+    form.querySelector('[data-tax-display]').hidden = editing;
+    form.querySelector('[data-edit-tax]').hidden = editing;
+    form.querySelector('.sales-tax-edit-field').hidden = !editing;
+    form.querySelector('[data-save-tax]').hidden = !editing;
+    form.querySelector('[data-cancel-tax]').hidden = !editing;
+    if (editing) form.elements.tax.focus();
   }
 
   function useCatalog(data) {
@@ -162,18 +234,19 @@
     fill(service, [...new Set(activeItems().map((item) => item.service_type))].map((value) => [value, value]), oldService);
     setPeriods(oldPeriod);
     $('[data-tax-label]').textContent = `${Number((catalog.tax_rate * 100).toFixed(4))}%`;
-    if ($('[data-tax-form]')) $('[data-tax-form]').elements.tax.value = Number((catalog.tax_rate * 100).toFixed(4));
+    renderTaxSetting();
     if (firstLoad || service.value !== oldService || period.value !== oldPeriod) resetLines();
     else { renderLines(); calculate(); }
     renderMaster();
-    status.textContent = activeItems().length ? '' : 'No active items. Contact your Master Data administrator.';
+    status.textContent = activeItems().length ? '' : 'No active items. Contact your Pricing Matrix administrator.';
   }
 
-  async function refresh() {
+  async function refresh(confirmFirst = false) {
     if (loading) return;
+    if (confirmFirst && !window.confirm('Refresh prices and reload the Pricing Matrix? Current calculator selections may change if items are no longer available.')) return;
     loading = true;
     ++sequence; clearTimeout(timer); display(null);
-    status.textContent = 'Loading Master Data...';
+    status.textContent = 'Loading Pricing Matrix...';
     $('[data-refresh]').disabled = true;
     service.disabled = period.disabled = $('[data-add]').disabled = $('[data-add-custom]').disabled = true;
     try { const data = await request('catalog'); loading = false; useCatalog(data); }
@@ -263,41 +336,56 @@
     $('[data-margin-value-label]').textContent = amount ? 'Margin (Rp, total)' : 'Margin (%)';
     calculate();
   });
-  $('[data-refresh]').addEventListener('click', refresh);
+  $('[data-refresh]').addEventListener('click', () => refresh(true));
+  window.addEventListener('beforeunload', (event) => {
+    if (!hasConfigurationDraft()) return;
+    event.preventDefault();
+    event.returnValue = '';
+  });
   window.addEventListener('pageshow', (event) => { if (event.persisted) refresh(); });
-  root.querySelectorAll('[data-tab]').forEach((button) => {
+  const masterDialog = $('[data-master-dialog]');
+  const templateDialog = $('[data-template-dialog]');
+  $('[data-open-master]')?.addEventListener('click', () => { if (catalog) { renderMaster(); renderTaxSetting(); setTaxEditing(false); } masterDialog?.showModal(); $('[data-master-search]')?.focus(); });
+  $('[data-close-master]')?.addEventListener('click', () => masterDialog?.close());
+  $('[data-open-templates]')?.addEventListener('click', () => { renderTemplates(); templateDialog?.showModal(); $('[data-template-select]')?.focus(); });
+  $('[data-close-templates]')?.addEventListener('click', () => templateDialog?.close());
+  $('[data-master-search]')?.addEventListener('input', () => { if (catalog) renderMaster(); });
+  root.querySelectorAll('[data-filter-service], [data-filter-category], [data-filter-status]').forEach((field) => field.addEventListener('change', () => { if (catalog) renderMaster(); }));
+  root.querySelectorAll('[data-master-sort]').forEach((button) => {
     button.addEventListener('click', () => {
-      root.querySelectorAll('[data-tab]').forEach((tab) => { const active = tab === button; tab.setAttribute('aria-selected', String(active)); tab.tabIndex = active ? 0 : -1; $(`#sales-${tab.dataset.tab}`).hidden = !active; });
-    });
-    button.addEventListener('keydown', (event) => {
-      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-      event.preventDefault();
-      const tabs = [...root.querySelectorAll('[data-tab]')];
-      const next = event.key === 'Home' ? tabs[0] : event.key === 'End' ? tabs.at(-1) : tabs[(tabs.indexOf(button) + 1) % tabs.length];
-      next.click(); next.focus();
+      const field = button.dataset.masterSort;
+      masterSort = field === masterSort.field ? { field, dir: masterSort.dir === 'asc' ? 'desc' : 'asc' } : { field, dir: 'asc' };
+      if (catalog) renderMaster();
     });
   });
-  $('[data-master-search]')?.addEventListener('input', () => { if (catalog) renderMaster(); });
-  root.querySelectorAll('[data-filter-service], [data-filter-category], [data-filter-status], [data-master-sort]').forEach((field) => field.addEventListener('change', () => { if (catalog) renderMaster(); }));
   $('[data-clear-filters]')?.addEventListener('click', () => {
     $('[data-master-search]').value = '';
     root.querySelectorAll('[data-filter-service], [data-filter-category], [data-filter-status]').forEach((field) => { field.value = ''; });
-    $('[data-master-sort]').value = 'order';
+    masterSort = { field: 'order', dir: 'asc' };
     if (catalog) renderMaster();
   });
   const form = $('[data-item-form]');
   const dialog = $('[data-item-dialog]');
+  function updateAutoSortOrder() {
+    if (!autoSortOrder || !form || Number(form.elements.id.value || 0)) return;
+    form.elements.sort_order.value = nextSortOrder(form.elements.service_type.value, form.elements.billing_period.value);
+  }
+
   function edit(item = {}) {
     if (!catalog) return;
     form.reset();
-    const values = { id: 0, revision: 0, sort_order: 0, active: true, unit_quantity: false, service_type: $('[data-filter-service]').value || service.value, category: $('[data-filter-category]').value, billing_period: 'monthly', ...item };
+    const creating = !item.id;
+    const serviceType = item.service_type || $('[data-filter-service]').value || service.value;
+    const billingPeriod = item.billing_period || 'monthly';
+    const values = { id: 0, revision: 0, active: true, unit_quantity: false, service_type: serviceType, category: $('[data-filter-category]').value, billing_period: billingPeriod, sort_order: creating ? nextSortOrder(serviceType, billingPeriod) : 0, ...item };
+    autoSortOrder = creating;
     for (const [key, value] of Object.entries(values)) {
       const field = form.elements.namedItem(key);
       if (!field) continue;
       if (field.type === 'checkbox') field.checked = Boolean(value); else field.value = value ?? '';
     }
     $('[data-item-error]').textContent = '';
-    $('#sales-item-title').textContent = item.id ? 'Edit Master Item' : 'New Master Item';
+    $('#sales-item-title').textContent = item.id ? 'Edit Pricing Item' : 'Add Pricing Item';
     $('#sales-service-options').replaceChildren(...[...new Set(catalog.items.map((entry) => entry.service_type))].sort().map((value) => new Option(value, value)));
     updateCategorySuggestions();
     dialog.showModal();
@@ -307,7 +395,9 @@
     if (!catalog || !form) return;
     $('#sales-category-options').replaceChildren(...[...new Set(catalog.items.filter((item) => item.service_type === form.elements.service_type.value).map((item) => item.category))].sort().map((value) => new Option(value, value)));
   }
-  form?.elements.service_type.addEventListener('input', updateCategorySuggestions);
+  form?.elements.service_type.addEventListener('input', () => { updateCategorySuggestions(); updateAutoSortOrder(); });
+  form?.elements.billing_period.addEventListener('change', updateAutoSortOrder);
+  form?.elements.sort_order.addEventListener('input', () => { autoSortOrder = false; });
   $('[data-new-item]')?.addEventListener('click', () => edit());
   $('[data-master-body]')?.addEventListener('click', (event) => {
     const button = event.target.closest('[data-edit]');
@@ -322,7 +412,7 @@
       const input = Object.fromEntries(new FormData(form));
       input.active = form.elements.active.checked;
       input.unit_quantity = form.elements.unit_quantity.checked;
-      useCatalog(await request('save_item', input)); dialog.close(); status.textContent = 'Master item saved.';
+      useCatalog(await request('save_item', input)); dialog.close(); status.textContent = 'Pricing item saved.';
     } catch (error) { $('[data-item-error]').textContent = error.message; }
     finally { button.disabled = false; }
   });
@@ -330,38 +420,92 @@
     event.preventDefault();
     if (!catalog) return;
     const button = event.target.querySelector('[type="submit"]'); button.disabled = true;
-    try { useCatalog(await request('save_tax', { tax_rate: Number(event.target.elements.tax.value) / 100, revision: catalog.tax_revision })); status.textContent = 'PPN saved.'; }
+    try { useCatalog(await request('save_tax', { tax_rate: Number(event.target.elements.tax.value) / 100, revision: catalog.tax_revision })); setTaxEditing(false); status.textContent = 'PPN saved.'; }
     catch (error) { status.textContent = error.message; }
     finally { button.disabled = false; }
   });
+  $('[data-edit-tax]')?.addEventListener('click', () => setTaxEditing(true));
+  $('[data-cancel-tax]')?.addEventListener('click', () => { renderTaxSetting(); setTaxEditing(false); });
   function renderTemplates() {
     const select = $('[data-template-select]');
     fill(select, [['', templates.length ? 'Select a template' : 'No saved templates'], ...templates.map((item) => [String(item.id), item.name])], select.value);
-    $('[data-load-template]').disabled = !select.value || templateBusy;
+    select.disabled = !templates.length || templateBusy;
+    const hasSelection = Boolean(select.value);
+    $('[data-load-template]').disabled = !hasSelection || templateBusy;
+    $('[data-update-template]').disabled = !hasSelection || templateBusy;
+    $('[data-delete-template]').disabled = !hasSelection || templateBusy;
   }
+
+  function selectedTemplate() {
+    return templates.find((item) => String(item.id) === $('[data-template-select]').value);
+  }
+
+  function currentTemplateConfiguration(message) {
+    if (!catalog || loading) { message.textContent = 'Load Pricing Matrix before saving a template.'; return null; }
+    if (lines.some((line) => line.id && !selected(line))) { message.textContent = 'Replace unavailable items before saving.'; return null; }
+    return { service_type: service.value, billing_period: period.value, nodes: Number(nodes.value), margin_mode: marginMode.value, margin_value: marginValue.value, lines: lines.filter((line) => selected(line)) };
+  }
+
   async function loadTemplates() {
     try { templates = await request('templates'); renderTemplates(); }
     catch (error) { $('[data-template-status]').textContent = 'Templates unavailable. ' + error.message; }
   }
-  $('[data-template-select]').addEventListener('change', renderTemplates);
+  $('[data-template-select]').addEventListener('change', () => {
+    const template = selectedTemplate();
+    if (template) $('[data-template-name]').value = template.name;
+    renderTemplates();
+  });
   $('[data-save-template]').addEventListener('click', async () => {
     if (templateBusy) return;
     const message = $('[data-template-status]');
-    if (!catalog || loading) { message.textContent = 'Load Master Data before saving a template.'; return; }
     const name = $('[data-template-name]').value.trim();
     if (!name) { message.textContent = 'Enter a template name.'; $('[data-template-name]').focus(); return; }
-    if (lines.some((line) => line.id && !selected(line))) { message.textContent = 'Replace unavailable items before saving.'; return; }
+    const configuration = currentTemplateConfiguration(message);
+    if (!configuration) return;
     templateBusy = true; $('[data-save-template]').disabled = true;
     try {
-      const configuration = { service_type: service.value, billing_period: period.value, nodes: Number(nodes.value), margin_mode: marginMode.value, margin_value: marginValue.value, lines: lines.filter((line) => selected(line)) };
       templates = await request('save_template', { name, configuration });
+      const saved = templates.find((item) => item.name === name);
       renderTemplates(); message.textContent = `Template saved: ${name}`;
+      if (saved) { $('[data-template-select]').value = String(saved.id); renderTemplates(); }
     } catch (error) { message.textContent = error.message; }
     finally { templateBusy = false; $('[data-save-template]').disabled = false; renderTemplates(); }
   });
+  $('[data-update-template]').addEventListener('click', async () => {
+    if (templateBusy) return;
+    const template = selectedTemplate();
+    const message = $('[data-template-status]');
+    if (!template) { message.textContent = 'Choose a template to update.'; return; }
+    const name = $('[data-template-name]').value.trim();
+    if (!name) { message.textContent = 'Enter a template name.'; $('[data-template-name]').focus(); return; }
+    const configuration = currentTemplateConfiguration(message);
+    if (!configuration) return;
+    templateBusy = true; $('[data-update-template]').disabled = true;
+    try {
+      templates = await request('save_template', { id: template.id, name, configuration });
+      $('[data-template-select]').value = String(template.id);
+      renderTemplates(); message.textContent = `Template updated: ${name}`;
+    } catch (error) { message.textContent = error.message; }
+    finally { templateBusy = false; renderTemplates(); }
+  });
+  $('[data-delete-template]').addEventListener('click', async () => {
+    if (templateBusy) return;
+    const template = selectedTemplate();
+    const message = $('[data-template-status]');
+    if (!template) { message.textContent = 'Choose a template to delete.'; return; }
+    if (!window.confirm(`Delete template "${template.name}"?`)) return;
+    templateBusy = true; $('[data-delete-template]').disabled = true;
+    try {
+      templates = await request('delete_template', { id: template.id });
+      $('[data-template-select]').value = '';
+      $('[data-template-name]').value = '';
+      renderTemplates(); message.textContent = `Template deleted: ${template.name}`;
+    } catch (error) { message.textContent = error.message; }
+    finally { templateBusy = false; renderTemplates(); }
+  });
   $('[data-load-template]').addEventListener('click', async () => {
     if (templateBusy) return;
-    const template = templates.find((item) => String(item.id) === $('[data-template-select]').value);
+    const template = selectedTemplate();
     if (!template) return;
     if (lines.some((line) => line.id || line.custom) && !window.confirm('Replace the current calculation with this template?')) return;
     templateBusy = true; $('[data-load-template]').disabled = true;
@@ -380,7 +524,8 @@
       lines = JSON.parse(JSON.stringify(config.lines));
       $('[data-template-name]').value = template.name;
       renderLines(); calculate();
-      message.textContent = `Loaded: ${template.name}. Current Master Data prices and PPN apply.`;
+      templateDialog?.close();
+      message.textContent = `Loaded: ${template.name}. Current Pricing Matrix prices and PPN apply.`;
     } catch (error) { message.textContent = error.message; }
     finally { templateBusy = false; renderTemplates(); }
   });

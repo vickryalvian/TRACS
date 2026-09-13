@@ -16,6 +16,7 @@ TRACS is a compact operational control panel for support, legal, CS, and monitor
 | Shift Assignment | Exact-date scheduling, workload/coverage warnings, monthly templates, and the idempotent default CS agent/schedule seed. |
 | MoM | Scheduled meetings, meeting lifecycle, agenda, notes, decisions, action items, reminders, case links, screenshots, history/export. |
 | Finance | Balance transfer logging, filtering, CSV export, currency conversion support. |
+| Sales Configurator | **Deployed:** database-backed service calculator, custom items, deliberate price overrides, configurable margin/PPN, private templates, and searchable/filterable Master Data. See the [user guide](docs/SALES_CONFIGURATOR_GUIDE.md) and [technical guide](docs/CONFIGURATOR_OVERHAUL.md). |
 | Domains | Domain Transfer Log and Domain Pricing Crosscheck under `Tasks & Monitoring`. |
 | Cancellation Feedback | Cancellation intake, multi-value reasons/services, retention intelligence, filters, export. |
 | User Management | Users, roles, permissions, divisions, intern profiles, user audit activity, profile/preferences. |

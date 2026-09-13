@@ -15,7 +15,7 @@ header('Cache-Control: no-store');
 if ($action !== '') {
     header('Content-Type: application/json; charset=utf-8');
     try {
-        if (!in_array($action, ['catalog', 'calculate', 'save_item', 'save_tax', 'templates', 'save_template'], true)) {
+        if (!in_array($action, ['catalog', 'calculate', 'save_item', 'save_tax', 'templates', 'save_template', 'delete_template'], true)) {
             http_response_code(404);
             throw new InvalidArgumentException('Unknown action.');
         }
@@ -26,7 +26,7 @@ if ($action !== '') {
         }
         if (in_array($action, ['save_item', 'save_tax'], true) && !$can_manage) {
             http_response_code(403);
-            throw new InvalidArgumentException('Master Data access is required.');
+            throw new InvalidArgumentException('Pricing Matrix access is required.');
         }
         if (!$readOnly) verify_csrf();
         $input = $readOnly ? [] : json_decode(file_get_contents('php://input'), true, 32, JSON_THROW_ON_ERROR);
@@ -35,6 +35,10 @@ if ($action !== '') {
             $owner = (int)$_SESSION['user_id'];
             $result = $action === 'templates' ? tracs_configurator_templates($conn, $owner) : tracs_configurator_save_template($conn, $owner, $input);
             echo json_encode(['success' => true, 'data' => $result], JSON_THROW_ON_ERROR);
+            exit;
+        }
+        if ($action === 'delete_template') {
+            echo json_encode(['success' => true, 'data' => tracs_configurator_delete_template($conn, (int)$_SESSION['user_id'], $input)], JSON_THROW_ON_ERROR);
             exit;
         }
         if ($action === 'save_item') tracs_configurator_save_item($conn, $input);
@@ -57,7 +61,7 @@ if ($action !== '') {
     } catch (Throwable $e) {
         error_log('Configurator: ' . $e->getMessage());
         http_response_code(503);
-        echo json_encode(['success' => false, 'message' => 'Master Data is unavailable. Please try again later.']);
+        echo json_encode(['success' => false, 'message' => 'Pricing Matrix is unavailable. Please try again later.']);
     }
     exit;
 }

@@ -22,12 +22,20 @@ const phpCalculate = (input) => JSON.parse(execFileSync('php', ['-r', 'require "
     await page.route('**/configurator.php*', async (route) => {
       const action = new URL(route.request().url()).searchParams.get('action');
       if (!action) return route.fulfill({ contentType: 'text/html', body: html });
-      if (failCatalog && action === 'catalog') return route.fulfill({ status: 503, json: { success: false, message: 'Master Data is unavailable.' } });
+      if (failCatalog && action === 'catalog') return route.fulfill({ status: 503, json: { success: false, message: 'Pricing Matrix is unavailable.' } });
       let result = catalog;
       if (action === 'templates') result = savedTemplates;
       if (action === 'save_template') {
         const input = route.request().postDataJSON();
-        savedTemplates.push({ id: savedTemplates.length + 1, ...input });
+        const index = savedTemplates.findIndex((item) => item.id === Number(input.id));
+        if (index >= 0) savedTemplates[index] = { ...savedTemplates[index], ...input, id: Number(input.id) };
+        else savedTemplates.push({ id: savedTemplates.length + 1, ...input });
+        result = savedTemplates;
+      }
+      if (action === 'delete_template') {
+        const input = route.request().postDataJSON();
+        const index = savedTemplates.findIndex((item) => item.id === Number(input.id));
+        if (index >= 0) savedTemplates.splice(index, 1);
         result = savedTemplates;
       }
       if (action === 'calculate') result = phpCalculate(route.request().postDataJSON());
@@ -69,6 +77,7 @@ const phpCalculate = (input) => JSON.parse(execFileSync('php', ['-r', 'require "
     await page.locator('[data-apply-price]').click();
     assert.match(await page.locator('[data-total="subtotal_per_node"]').textContent(), /9\.900\.000/);
     await page.waitForFunction(() => document.querySelector('[data-calculation-status]').textContent === '');
+    page.once('dialog', (dialog) => dialog.accept());
     await page.locator('[data-refresh]').click();
     await page.waitForFunction(() => !document.querySelector('[data-refresh]').disabled);
     assert.match(await page.locator('.sales-price').first().textContent(), /3\.000\.000/);
@@ -83,23 +92,36 @@ const phpCalculate = (input) => JSON.parse(execFileSync('php', ['-r', 'require "
     await page.locator('[data-lines] > div').last().locator('[data-quantity]').fill('2');
     await page.waitForFunction(() => document.querySelector('[data-calculation-status]').textContent === '');
     assert.match(await page.locator('[data-total="subtotal_per_node"]').textContent(), /10\.800\.000/);
+    page.once('dialog', (dialog) => dialog.accept());
     await page.locator('[data-refresh]').click();
     await page.waitForFunction(() => !document.querySelector('[data-refresh]').disabled);
     assert.equal(await page.locator('[data-custom-name]').inputValue(), 'Custom support');
     assert.equal(catalog.items.length, masterCount);
-    await page.locator('.sales-templates summary').click();
+    await page.locator('[data-open-templates]').click();
     await page.locator('[data-template-name]').fill('Sales test');
     await page.locator('[data-save-template]').click();
     await page.waitForFunction(() => document.querySelector('[data-template-status]').textContent.includes('Template saved'));
     assert.equal(savedTemplates[0].configuration.lines.at(-1).name, 'Custom support');
+    await page.locator('[data-close-templates]').click();
     await page.locator('[data-lines] > div').last().locator('[data-remove]').click();
+    await page.locator('[data-open-templates]').click();
     await page.locator('[data-template-select]').selectOption('1');
     page.once('dialog', (dialog) => dialog.accept());
     await page.locator('[data-load-template]').click();
+    await page.waitForFunction(() => !document.querySelector('[data-template-dialog]').open);
     await page.waitForFunction(() => document.querySelector('[data-template-status]').textContent.includes('Loaded:'));
     assert.equal(await page.locator('[data-custom-name]').inputValue(), 'Custom support');
-    await page.locator('.sales-templates summary').click();
     await page.locator('[data-lines] > div').last().locator('[data-remove]').click();
+    await page.locator('[data-open-templates]').click();
+    await page.locator('[data-template-select]').selectOption('1');
+    await page.locator('[data-update-template]').click();
+    await page.waitForFunction(() => document.querySelector('[data-template-status]').textContent.includes('Template updated'));
+    assert.equal(savedTemplates[0].configuration.lines.some((line) => line.name === 'Custom support'), false);
+    page.once('dialog', (dialog) => dialog.accept());
+    await page.locator('[data-delete-template]').click();
+    await page.waitForFunction(() => document.querySelector('[data-template-status]').textContent.includes('Template deleted'));
+    assert.equal(savedTemplates.length, 0);
+    await page.locator('[data-close-templates]').click();
     assert.match(await page.locator('[data-total="subtotal_per_node"]').textContent(), /10\.600\.000/);
     assert.equal(await page.locator('.sales-column-label').count(), 2);
     for (const theme of ['light', 'dark']) {
@@ -128,18 +150,21 @@ const phpCalculate = (input) => JSON.parse(execFileSync('php', ['-r', 'require "
     await page.setViewportSize({ width: 390, height: 844 });
     await page.screenshot({ path: '/tmp/tracs-configurator-mobile.png', fullPage: true });
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
-    await page.locator('[data-tab="master"]').click();
+    await page.locator('[data-open-master]').click();
     await page.locator('[data-filter-service]').selectOption('Dedicated Server');
     await page.locator('[data-filter-category]').selectOption('Storage');
     await page.locator('[data-filter-status]').selectOption('active');
-    await page.locator('[data-master-sort]').selectOption('price_desc');
+    await page.locator('[data-master-sort="price"]').click();
+    await page.locator('[data-master-sort="price"]').click();
     const filtered = await page.locator('[data-master-body] tr').allTextContents();
     assert.equal(filtered.length, 17);
     assert(filtered.every((text) => text.includes('Storage') && text.includes('Dedicated Server')));
     assert.match(filtered[0], /12\.100\.000/);
     await page.locator('[data-clear-filters]').click();
     await page.locator('[data-new-item]').click();
-    assert.equal(await page.locator('#sales-item-title').textContent(), 'New Master Item');
+    assert.equal(await page.locator('#sales-item-title').textContent(), 'Add Pricing Item');
+    const expectedOrder = Math.max(...catalog.items.filter((item) => item.service_type === 'Dedicated Server' && item.billing_period === 'monthly').map((item) => Number(item.sort_order))) + 1;
+    assert.equal(await page.locator('[data-item-form] [name="sort_order"]').inputValue(), String(expectedOrder));
     for (const width of [1440, 390]) {
       await page.setViewportSize({ width, height: 704 });
       await page.screenshot({ path: `/tmp/tracs-master-modal-${width}.png` });
@@ -152,15 +177,15 @@ const phpCalculate = (input) => JSON.parse(execFileSync('php', ['-r', 'require "
     await page.locator('[data-item-form] [name="category"]').fill('Setup');
     await page.locator('[data-item-form] [name="price"]').fill('1000');
     await page.locator('[data-item-form] [type="submit"]').click();
-    await page.waitForFunction(() => !document.querySelector('dialog').open);
-    assert(catalog.items.some((item) => item.name === 'UI test item'));
+    await page.waitForFunction(() => !document.querySelector('[data-item-dialog]').open);
+    assert(catalog.items.some((item) => item.name === 'UI test item' && item.sort_order === expectedOrder));
     await page.locator('[data-master-search]').fill('128 GB');
     await page.locator('[data-edit]').first().click();
     await page.locator('[data-item-form] [name="price"]').fill('1850000');
     await page.locator('[data-item-form] [type="submit"]').click();
-    await page.waitForFunction(() => !document.querySelector('dialog').open);
+    await page.waitForFunction(() => !document.querySelector('[data-item-dialog]').open);
     assert.equal(find('B8:C8').price, 1850000);
-    await page.locator('[data-tab="calculator"]').click();
+    await page.locator('[data-close-master]').click();
     assert.match(await page.locator('[data-total="subtotal_per_node"]').textContent(), /8\.150\.000/);
     await page.locator('[data-service]').selectOption('VPS');
     await page.locator('[data-item]').first().selectOption(String(catalog.items.find((item) => item.service_type === 'VPS' && item.category === 'CPU').id));
@@ -173,24 +198,28 @@ const phpCalculate = (input) => JSON.parse(execFileSync('php', ['-r', 'require "
     await set(0, 'B3:C3');
     catalog.items.find((item) => item.id === find('B3:C3').id).price = 3800000;
     await page.locator('[data-nodes]').fill('2');
-    await page.waitForFunction(() => document.querySelector('[data-calculation-status]').textContent.includes('Master prices changed'));
+    await page.waitForFunction(() => document.querySelector('[data-calculation-status]').textContent.includes('Pricing Matrix changed'));
     assert.equal(await page.locator('[data-total="grand_total"]').textContent(), '-');
+    page.once('dialog', (dialog) => dialog.accept());
     await page.locator('[data-refresh]').click();
     await page.waitForFunction(() => document.querySelector('[data-total="grand_total"]').textContent.includes('8.436.000'));
     failCatalog = true;
+    page.once('dialog', (dialog) => dialog.accept());
     await page.locator('[data-refresh]').click();
     await page.waitForFunction(() => document.querySelector('[data-status]').textContent.includes('unavailable'));
     assert.equal(await page.locator('[data-total="grand_total"]').textContent(), '-');
     failCatalog = false;
+    page.once('dialog', (dialog) => dialog.accept());
     await page.locator('[data-refresh]').click();
     await page.locator('[data-item]').first().waitFor();
+    page.once('dialog', (dialog) => dialog.accept());
     await page.reload();
     await page.locator('[data-item]').first().waitFor();
-    await page.waitForFunction(() => document.querySelector('[data-template-select]').options.length === 2);
+    await page.waitForFunction(() => document.querySelector('[data-template-select]').options.length === 1);
     await set(0, 'B3:C3');
     assert.match(await page.locator('.sales-price').first().textContent(), /3\.800\.000/);
     assert.deepEqual(errors, []);
-    console.log('Browser calculator, filtering, add/remove/change, quantities, Master Data editor, stale prices, errors/retry, reload, and mobile overflow checks passed.');
+    console.log('Browser calculator, filtering, add/remove/change, quantities, Pricing Matrix editor, stale prices, errors/retry, reload, and mobile overflow checks passed.');
     console.log('Screenshots: /tmp/tracs-configurator-desktop.png and /tmp/tracs-configurator-mobile.png. API is intercepted; calculation uses the real PHP helper.');
   } finally { await browser.close(); }
 })().catch((error) => { console.error(error); process.exitCode = 1; });

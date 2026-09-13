@@ -16,21 +16,41 @@ function tracs_configurator_templates(mysqli $conn, int $userId): array {
 }
 
 function tracs_configurator_save_template(mysqli $conn, int $userId, array $input): array {
+    $id = filter_var($input['id'] ?? 0, FILTER_VALIDATE_INT);
     $name = $input['name'] ?? null;
     $config = $input['configuration'] ?? null;
-    if ($userId <= 0 || !is_string($name) || trim($name) === '' || mb_strlen($name) > 150 || !is_array($config)) throw new InvalidArgumentException('Enter a template name (up to 150 characters).');
+    if ($id === false || $id < 0 || $userId <= 0 || !is_string($name) || trim($name) === '' || mb_strlen($name) > 150 || !is_array($config)) throw new InvalidArgumentException('Enter a template name (up to 150 characters).');
     $name = trim($name);
     tracs_configurator_calculate(tracs_configurator_catalog($conn), $config);
     if (empty($config['lines'])) throw new InvalidArgumentException('Select at least one item before saving a template.');
     $config = array_intersect_key($config, array_flip(['service_type', 'billing_period', 'nodes', 'margin_mode', 'margin_value', 'lines']));
     $config['lines'] = array_map(fn($line) => array_intersect_key($line, array_flip(['id', 'custom', 'name', 'category', 'quantity', 'override_price'])), $config['lines']);
     $json = json_encode($config, JSON_THROW_ON_ERROR);
-    $stmt = $conn->prepare('INSERT INTO tracs_configurator_templates (user_id,name,configuration) VALUES (?,?,?)');
-    $stmt->bind_param('iss', $userId, $name, $json);
+    if ($id) {
+        $stmt = $conn->prepare('UPDATE tracs_configurator_templates SET name=?, configuration=? WHERE id=? AND user_id=?');
+        $stmt->bind_param('ssii', $name, $json, $id, $userId);
+    } else {
+        $stmt = $conn->prepare('INSERT INTO tracs_configurator_templates (user_id,name,configuration) VALUES (?,?,?)');
+        $stmt->bind_param('iss', $userId, $name, $json);
+    }
     try { $stmt->execute(); }
     catch (mysqli_sql_exception $e) {
         if ($e->getCode() === 1062) throw new InvalidArgumentException('A template with this name already exists. Choose a different name.');
         throw $e;
     } finally { $stmt->close(); }
+    return tracs_configurator_templates($conn, $userId);
+}
+
+function tracs_configurator_delete_template(mysqli $conn, int $userId, array $input): array {
+    $id = filter_var($input['id'] ?? 0, FILTER_VALIDATE_INT);
+    if ($id === false || $id <= 0 || $userId <= 0) throw new InvalidArgumentException('Choose a template to delete.');
+    $stmt = $conn->prepare('DELETE FROM tracs_configurator_templates WHERE id=? AND user_id=?');
+    $stmt->bind_param('ii', $id, $userId);
+    $stmt->execute();
+    if ($stmt->affected_rows !== 1) {
+        $stmt->close();
+        throw new InvalidArgumentException('Template not found.');
+    }
+    $stmt->close();
     return tracs_configurator_templates($conn, $userId);
 }

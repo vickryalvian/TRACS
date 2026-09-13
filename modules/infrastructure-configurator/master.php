@@ -55,7 +55,7 @@ function tracs_configurator_save_item(mysqli $conn, array $input): void {
         $stmt->bind_param('ssssdsiii', ...$values);
     }
     $stmt->execute();
-    if ($stmt->affected_rows !== 1) throw new InvalidArgumentException('This item changed in another session. Reload Master Data before saving.');
+    if ($stmt->affected_rows !== 1) throw new InvalidArgumentException('This item changed in another session. Reload Pricing Matrix before saving.');
     $stmt->close();
 }
 

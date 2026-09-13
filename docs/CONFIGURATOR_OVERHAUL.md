@@ -2,6 +2,11 @@
 
 Implemented on `codex/infrastructure-sales-configurator-overhaul`.
 
+Deployed to production on 2026-09-11 at release `378ac07`. See the
+[user guide](SALES_CONFIGURATOR_GUIDE.md) for daily workflows and the
+[deployment record](../deployment-summary.md#sales-configurator-deployment-2026-09-11)
+for backup and production verification details.
+
 ## Current Workflow
 
 The calculator uses compact horizontal rows with a narrow category selector and
@@ -24,7 +29,7 @@ are excluded when saving. Duplicate names are rejected rather than overwritten.
 Loading asks before replacing an existing calculation. No rename/delete UI yet.
 
 Apply `config/migrations/2026_09_10_configurator_templates.sql` before deployment.
-This additive migration was applied to local Docker MySQL only. The authenticated
+This additive migration was applied to local Docker MySQL and production MariaDB. The authenticated
 route supports `templates` (GET, owner-only) and `save_template` (POST + CSRF,
 validated calculation). `tests/configurator-templates.php` checks database round
 trip, custom/override values, owner isolation and duplicate protection in a rolled
@@ -101,8 +106,9 @@ The browser displays totals immediately, then checks them against current databa
 prices using the server calculator. A changed price, removed/inactive item, invalid
 quantity, expired session, or unavailable API clears unverified totals. Catalog
 requests use `no-store`; reloads and browser back/forward restoration fetch current
-prices. Every selected item has an editable unit price and a reset-to-master
-action. Overrides are configuration-only, available to calculator users, and
+prices. Selected items show formatted prices by default; the pencil opens an
+editable draft. Reset-to-master appears only after an override is applied.
+Overrides are configuration-only, available to calculator users, and
 never update Master Data. Changing the item/category clears its override;
 refreshing prices retains overrides. For per-unit resources, the override is
 multiplied by units and nodes. No saved browser price snapshots are used.
@@ -125,6 +131,8 @@ permission checks. JSON responses use `success` and `data` or `message`.
 | calculate | POST + CSRF | dashboard.view | Re-fetch numeric prices; validate service, category, period, units and nodes |
 | save_item | POST + CSRF | dashboard.view + settings.manage | Create or revise a master item |
 | save_tax | POST + CSRF | dashboard.view + settings.manage | Revise feature PPN configuration |
+| templates | GET | dashboard.view | List templates owned by the current user |
+| save_template | POST + CSRF | dashboard.view | Validate and save a private named configuration; reject duplicate names |
 
 ## Extraction and Migration
 
@@ -158,9 +166,19 @@ Source changes appear as differences in verification; reconcile them in Master
 Data. Source rows moved to a new range have a new identity and require review.
 
 Applied to the already-running local Docker TRACS database: first import inserted
-99; second inserted 0; both compared 99 with zero differences. No production
-database was contacted. Rollback is application-code rollback; the additive tables
-and imported records can remain intact without affecting the older route.
+99; second inserted 0; both compared 99 with zero differences. Production's first
+import on 2026-09-11 inserted 99 and compared all 99 with zero differences.
+The importer creates only the catalog and settings tables; initialize templates
+separately from the repository root using the configured application database:
+
+```sh
+php -r 'require "config/database.php"; $conn->query(file_get_contents("config/migrations/2026_09_10_configurator_templates.sql"));'
+```
+
+Run both migrations before exposing the route. Rollback restores backed-up code
+and navigation; additive tables can remain intact. Production had no previous
+configurator route, so a rollback must also withdraw newly deployed entry points,
+not merely restore files that existed. Do not delete template or catalog data.
 
 ## Verification
 
@@ -191,13 +209,13 @@ The running local app is http://localhost:8080/configurator.php (login required)
 
 - Route and page assets: `public/configurator.php`,
   `public/assets/infrastructure-configurator.js`, `.css`.
-- Module: `controller.php`, new `master.php`, new `view.php`.
+- Module: `controller.php`, `master.php`, `view.php`, `templates.php`.
 - Migration and seed: `config/migrations/2026_09_10_configurator_master.sql`,
-  `config/seeds/configurator-items.json`.
+  `config/migrations/2026_09_10_configurator_templates.sql`, `config/seeds/configurator-items.json`.
 - Import/extraction commands: `bin/import-configurator-items.php`,
   `bin/extract-configurator-workbook.py`.
 - Tests: `tests/configurator-sales.php`, `tests/configurator-extraction.py`,
-  `tests/configurator-browser.cjs`.
+  `tests/configurator-browser.cjs`, `tests/configurator-templates.php`.
 - Documentation: extraction, overhaul, verification, historical implementation
   note, and `AI_MEMORY.md`.
 
@@ -213,5 +231,7 @@ corrected to include every selected row, as required by the new workflow.
 
 Named templates are persisted; quote exports are not implemented. Billing-period switches reset rows. There
 is no combined first-invoice or deposit calculator, automatic pricing sync, or
-recommendation engine. Authenticated browser checks with real role accounts and
-production deployment are still required before release.
+recommendation engine. Production deployment is complete; authenticated production
+browser checks with real role accounts remain outstanding. Production verification
+covered syntax, calculator tests, catalog values, asset equality, service health,
+and unauthenticated login redirects, not an authenticated end-to-end walkthrough.
