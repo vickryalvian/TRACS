@@ -72,13 +72,6 @@ export function ClientCalendar({ calendar, year, setYear, month, setMonth, clien
   </div>;
   const error = calendar.error;
   return <section className="panel clients-calendar calendar-react-root">
-    <div className="panel-head">
-      <div>
-        <h2 className="panel-title">Client Calendar</h2>
-        <span className="panel-meta">Upcoming client activities and reminders</span>
-      </div>
-      <button className="btn btn-ghost btn-sm" type="button" onClick={() => setFull(true)}>View Full Calendar</button>
-    </div>
     {error ? <p className="clients-empty" role="alert">{error} <button className="btn btn-ghost btn-sm" onClick={calendar.refresh}>Retry</button></p> : <div className="clients-calendar-summary" aria-busy={calendar.loading}>
       <div className="clients-upcoming"><div className="clients-upcoming-head"><div><h3>Upcoming</h3><span>{period === 'week' ? 'This week' : 'This month'}</span></div><div className="clients-upcoming-actions"><select className="form-input clients-upcoming-period" data-calendar-filter data-filter data-unsaved-ignore aria-label="Upcoming period" value={period} onChange={e => setPeriod(e.target.value)}><option value="month">{MONTHS[month]} {year}</option><option value="week">This week</option></select></div></div>
         {calendar.loading ? <p className="clients-empty">Loading reminders…</p> : upcoming.length ? <ul>{upcoming.map(event => <li key={event.id}><button onClick={() => openEvent(event)}><span className={event.status === 'overdue' ? 'clients-overdue' : ''}>{event.date === today ? 'Today' : event.date === toISO(addDays(today, 1)) ? 'Tomorrow' : event.date.slice(8) + ' ' + MONTHS[Number(event.date.slice(5, 7)) - 1].slice(0, 3)}</span><strong>{event.meta.reminder_title || event.title}</strong><span>{event.meta.client_name}</span><small>{event.status === 'done' ? 'Completed' : event.status === 'overdue' ? 'Overdue' : event.status === 'not_applicable' ? 'N/A' : 'Pending'}</small></button></li>)}</ul> : <p className="clients-empty">No client reminders in this period.</p>}

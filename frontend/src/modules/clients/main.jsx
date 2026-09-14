@@ -823,8 +823,9 @@ function ClientsApp() {
     <div className="topbar clients-topbar">
       <div className="topbar-left">
         <div className="page-title">Clients</div>
+      </div>
+      <div className="topbar-right">
         <HeaderStats summary={clients.data.summary || {}} />
-        <p className="clients-page-description">Owned portfolios, billing signals, invoice follow-ups, and renewal attention.</p>
       </div>
     </div>
     {context.error && <p role="alert">{context.error}</p>}

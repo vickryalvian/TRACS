@@ -16,29 +16,30 @@
 
 .clients-topbar {
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   padding-bottom: 12px;
 }
 
 .clients-topbar .topbar-left {
   min-width: 0;
-  display: grid;
-  gap: 4px;
 }
 
 .clients-topbar .topbar-right {
-  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  flex: 1 1 auto;
+  min-width: min(480px, 100%);
 }
 
 .clients-header-stats {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-start;
+  justify-content: flex-end;
   gap: 4px 10px;
   color: var(--tx3);
   font-size: 11px;
   line-height: 1.45;
-  text-align: left;
+  text-align: right;
 }
 
 .clients-header-stats span + span::before {
@@ -50,12 +51,6 @@
 .clients-header-stats strong {
   color: var(--tx1);
   font-weight: 650;
-}
-
-.clients-page-description {
-  margin: 0;
-  color: var(--tx3);
-  font-size: 12px;
 }
 
 .clients-more-filters {
@@ -290,14 +285,6 @@
   align-items: start;
 }
 
-.clients-calendar .panel-head {
-  align-items: center;
-  padding: 12px 16px 0;
-}
-
-.clients-calendar .panel-head > div {
-  min-width: 0;
-}
 .clients-calendar-summary > article { box-shadow: none; }
 .clients-upcoming { min-width: 0; }
 .clients-upcoming-head { justify-content: space-between; align-items: flex-start; margin-bottom: 8px; font-size: 12px; font-weight: 600; }
