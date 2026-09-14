@@ -82,8 +82,41 @@ END $$
 
 DELIMITER ;
 
-CALL tracs_client_add_column_if_missing('tracs_clients', 'assigned_admin_id', 'INT UNSIGNED DEFAULT NULL AFTER owner_user_id');
+SET @tracs_clients_user_id_unsigned = (
+  SELECT COLUMN_TYPE LIKE '%unsigned%'
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'tracs_users'
+    AND COLUMN_NAME = 'id'
+  LIMIT 1
+);
+SET @tracs_clients_assigned_definition = IF(@tracs_clients_user_id_unsigned, 'INT UNSIGNED DEFAULT NULL AFTER owner_user_id', 'INT DEFAULT NULL AFTER owner_user_id');
+CALL tracs_client_add_column_if_missing('tracs_clients', 'assigned_admin_id', @tracs_clients_assigned_definition);
 CALL tracs_client_add_index_if_missing('tracs_clients', 'idx_tracs_clients_assigned_admin', '(`assigned_admin_id`, `status`)');
+
+SET @tracs_clients_assigned_unsigned = (
+  SELECT COLUMN_TYPE LIKE '%unsigned%'
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'tracs_clients'
+    AND COLUMN_NAME = 'assigned_admin_id'
+  LIMIT 1
+);
+
+SET @tracs_clients_modify_assigned = IF(
+  @tracs_clients_user_id_unsigned = @tracs_clients_assigned_unsigned,
+  NULL,
+  IF(
+    @tracs_clients_user_id_unsigned,
+    'ALTER TABLE `tracs_clients` MODIFY `assigned_admin_id` INT UNSIGNED DEFAULT NULL',
+    'ALTER TABLE `tracs_clients` MODIFY `assigned_admin_id` INT DEFAULT NULL'
+  )
+);
+SET @tracs_clients_modify_assigned = IF(@tracs_clients_modify_assigned IS NULL, 'SELECT 1', @tracs_clients_modify_assigned);
+PREPARE stmt FROM @tracs_clients_modify_assigned;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
 CALL tracs_client_add_fk_if_missing('tracs_clients', 'fk_tracs_clients_assigned_admin', 'FOREIGN KEY (`assigned_admin_id`) REFERENCES `tracs_users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE');
 
 DROP PROCEDURE IF EXISTS tracs_client_add_fk_if_missing;
