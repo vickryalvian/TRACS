@@ -3379,7 +3379,7 @@ function caseTableRowHtml(caseItem){
   const canManage=Boolean(window.TRACS_CASE_CAPS?.canManage);
   const canDelete=Boolean(window.TRACS_CASE_CAPS?.canDelete);
   return `
-    <tr class="case-click-row" ${caseDataAttributes(caseItem)} role="button" tabindex="0"
+    <tr class="case-click-row ${status==='completed'?'is-resolved':''}" ${caseDataAttributes(caseItem)} role="button" tabindex="0"
       onclick="openCaseTicket(${id})"
       onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openCaseTicket(${id})}">
       <td class="tracs-rownum">${id}</td>

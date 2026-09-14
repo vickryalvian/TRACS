@@ -6075,6 +6075,9 @@ input[type="checkbox"]:not([data-native-checkbox]):disabled,
 .case-kanban-card.is-resolved {
   opacity: .78;
 }
+.case-kanban-card.is-resolved h3 {
+  color: var(--tx3);
+}
 
 /* ── Workflow Board drag & drop (Trello-like) ── */
 .case-card-grip {
@@ -6389,6 +6392,23 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
   font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.case-page [data-card-status-badge].b-resolved {
+  background: color-mix(in srgb, var(--tx3) 10%, transparent);
+  color: var(--tx4);
+  border-color: color-mix(in srgb, var(--bd2) 72%, transparent);
+}
+.case-page [data-card-status-badge].b-resolved .badge-dot {
+  background: var(--tx4);
+  animation: none;
+}
+.tracs-table tbody tr.case-click-row.is-resolved .case-table-title > strong {
+  color: var(--tx3);
+}
+.tracs-table tbody tr.case-click-row.is-resolved .tracs-creator-meta,
+.tracs-table tbody tr.case-click-row.is-resolved .case-table-date,
+.tracs-table tbody tr.case-click-row.is-resolved .case-time {
+  color: var(--tx4);
 }
 .case-table-date {
   color: var(--tx2);
