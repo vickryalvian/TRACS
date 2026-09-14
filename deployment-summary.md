@@ -1,5 +1,15 @@
 # TRACS Deployment Summary
 
+## Dirty-State / Unsaved-Changes Deployment (2026-09-14)
+
+- Production: https://tracs.vickry.id, `/opt/tracs` on `103.82.93.75`.
+- Release: `a9f26f6`, branch `codex/infrastructure-sales-configurator-overhaul`.
+- Deployed 20 scoped runtime files from committed blobs: six shared/module scripts, Calendar and React bundles with dependencies, and two manifests. Published manifests after assets; retained old hashed bundles. No source maps or database migrations deployed.
+- Checked production baseline hashes before replacement; preserved unrelated local and production changes.
+- Backup: `/opt/tracs/backups/dirty-state-a9f26f6-20260914-092224/`, including replaced files and release hashes.
+- Verification: all 20 deployed files matched release hashes; all 18 public JS/CSS URLs returned 200 and matched committed bytes. Login returned 200; Cases, Clients, Calendar, Configurator, and Shifting Assignment redirected to login. PHP-FPM reloaded; PHP-FPM, nginx, and MariaDB active.
+- Local browser suites and build results, including existing unrelated contract failures, are recorded in `docs/dirty-state-results.md`. Authenticated production editing was not performed.
+
 ## Clients / Calendar Deployment (2026-09-11)
 
 - Production: https://tracs.vickry.id/clients.php, `/opt/tracs` on `103.82.93.75`.
