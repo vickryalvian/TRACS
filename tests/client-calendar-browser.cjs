@@ -25,6 +25,11 @@ const fixture = id => ({ id, company_name: id===1 ? 'PT Example' : 'PT Second', 
   const browser = await chromium.launch({ headless: true, channel: 'chrome' });
   try {
     const session = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
+    await session.addInitScript({ path: path.join(root, 'public/assets/unsaved-changes-guard.js') });
+    await session.route('**/assets/**', route => {
+      const file = path.join(root, 'public', new URL(route.request().url()).pathname);
+      return fs.existsSync(file) ? route.fulfill({ path: file }) : route.fulfill({ status: 404, body: '' });
+    });
     const errors = [];
     const page = await session.newPage();
     page.on('pageerror', e => errors.push(e.message));
@@ -32,6 +37,7 @@ const fixture = id => ({ id, company_name: id===1 ? 'PT Example' : 'PT Second', 
     await session.route('**/calendar.php', route => route.fulfill({ contentType:'text/html', body:html('calendar') }));
     await session.route('**/api/**', async route => {
       const req = route.request(); const url = new URL(req.url());
+      if (url.pathname.endsWith('/attachments.php')) return route.fulfill({ status: 422, json: { success: false, message: 'Test attachment failure' } });
       const body = req.method()==='GET' ? {} : req.postDataJSON();
       let data = {};
       if (url.pathname.endsWith('/context.php')) data=context;
@@ -73,10 +79,34 @@ const fixture = id => ({ id, company_name: id===1 ? 'PT Example' : 'PT Second', 
     await page.screenshot({path:`${out}/empty-desktop.png`,fullPage:true});
     await page.getByRole('button',{name:'Add Client',exact:true}).first().click();
     const modal=page.getByRole('dialog',{name:'Add Client',exact:true});
+    assert.equal(await page.evaluate(() => TRACSUnsavedChanges.isDirty()), false);
+    await modal.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await modal.waitFor({ state: 'hidden' });
+    await page.getByRole('button',{name:'Add Client',exact:true}).first().click();
+    await modal.getByLabel('Company',{exact:true}).fill('Temporary');
+    await modal.getByRole('button', { name: 'Cancel', exact: true }).click();
+    const unsaved = page.locator('.tracs-unsaved-dialog-overlay:not(.hidden)');
+    await unsaved.getByRole('button', { name: 'Keep Editing', exact: true }).click();
+    await modal.getByLabel('Company',{exact:true}).fill('');
+    assert.equal(await page.evaluate(() => TRACSUnsavedChanges.isDirty()), false);
+    await modal.locator('input[type="file"]').setInputFiles({ name: 'sample.txt', mimeType: 'text/plain', buffer: Buffer.from('Attachment fixture') });
+    assert.equal(await page.evaluate(() => TRACSUnsavedChanges.isDirty()), true);
+    await modal.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await unsaved.getByRole('button', { name: 'Discard Changes', exact: true }).click();
+    await modal.waitFor({ state: 'hidden' });
+    await page.getByRole('button',{name:'Add Client',exact:true}).first().click();
+    assert.equal(await page.evaluate(() => TRACSUnsavedChanges.isDirty()), false);
     await modal.getByLabel('Company',{exact:true}).fill('PT Example');
     await modal.getByLabel('PIC Name',{exact:true}).fill('Test PIC');
+    await modal.locator('input[type="file"]').setInputFiles({ name: 'failed.txt', mimeType: 'text/plain', buffer: Buffer.from('Attachment fixture') });
+    await modal.getByRole('button',{name:'Save Client'}).click();
+    await modal.getByText('Test attachment failure', { exact:true }).waitFor();
+    assert.equal(await page.evaluate(() => TRACSUnsavedChanges.isDirty()), true);
+    assert.equal(clients.length, 1);
+    await modal.getByRole('button', { name:'Remove', exact:true }).click();
     await modal.getByRole('button',{name:'Save Client'}).click();
     await modal.waitFor({state:'hidden'});
+    assert.equal(clients.length, 1, 'Retry after attachment failure must update the existing client');
     await page.locator('.client-details').waitFor();
     assert.equal(new URL(page.url()).pathname,'/clients.php');
     await page.getByRole('button',{name:'View Less'}).click();
@@ -101,6 +131,12 @@ const fixture = id => ({ id, company_name: id===1 ? 'PT Example' : 'PT Second', 
     await page.screenshot({path:`${out}/calendar-desktop.png`,fullPage:true});
     await full.getByRole('button', {name:/PT Example · Send quotation/}).click();
     await full.getByRole('button',{name:'Edit Reminder'}).click();
+    assert.equal(await page.evaluate(() => TRACSUnsavedChanges.isDirty()), false);
+    await full.getByLabel('Title',{exact:true}).fill('Temporary reminder');
+    await full.getByRole('button',{name:'Cancel', exact:true}).click();
+    await unsaved.getByRole('button', { name: 'Keep Editing', exact: true }).click();
+    await full.getByLabel('Title',{exact:true}).fill('Send quotation');
+    assert.equal(await page.evaluate(() => TRACSUnsavedChanges.isDirty()), false);
     await full.getByLabel('Title',{exact:true}).fill('Send updated quotation');
     await full.getByRole('button',{name:'Save Reminder'}).click();
     await full.getByRole('button', {name:/PT Example · Send updated quotation/}).waitFor();

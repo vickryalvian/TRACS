@@ -3,6 +3,7 @@ import { CalendarPlus, Save, X } from 'lucide-react';
 import { calendarApi } from '../api/calendarApi';
 import { formatDate, parseDisplayDate } from '../utils/date';
 import { EVENT_TYPES, STATUSES } from '../utils/events';
+import { useUnsavedForm, requestFormClose } from '../hooks/useUnsavedForm';
 import { Field, TracsButton, TracsInput, TracsSelect, TracsTextarea } from './CalendarPrimitives';
 
 const blankForm = (date, currentUserId) => ({
@@ -45,6 +46,8 @@ export function BookScheduleModal({ open, date, event, metadata, onClose, onSave
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const editing = event?.source === 'calendar';
+  useUnsavedForm(modalRef, form, { active: open, baseline: formFromEvent(event || (date ? { date } : null), metadata?.current_user?.id), restore: setForm });
+  const requestClose = () => { if (!saving) requestFormClose(modalRef.current, onClose); };
 
   useEffect(() => {
     if (!open) return;
@@ -56,7 +59,7 @@ export function BookScheduleModal({ open, date, event, metadata, onClose, onSave
 
   useEffect(() => {
     if (!open) return undefined;
-    const close = (keyEvent) => keyEvent.key === 'Escape' && !saving && onClose();
+    const close = (keyEvent) => keyEvent.key === 'Escape' && !window.TRACSUnsavedChanges?.prompting && requestClose();
     window.addEventListener('keydown', close);
     return () => window.removeEventListener('keydown', close);
   }, [open, onClose, saving]);
@@ -96,6 +99,7 @@ export function BookScheduleModal({ open, date, event, metadata, onClose, onSave
 
   const submit = async (submitEvent) => {
     submitEvent.preventDefault();
+    if (saving) return;
     if (!validate()) return;
     setSaving(true);
     try {
@@ -116,6 +120,7 @@ export function BookScheduleModal({ open, date, event, metadata, onClose, onSave
         sourceElement: modalRef.current,
         duration: 900,
       });
+      window.TRACSUnsavedChanges?.markSaved(modalRef.current);
       await onSaved();
       setTimeout(onClose, 700);
     } catch (requestError) {
@@ -136,9 +141,11 @@ export function BookScheduleModal({ open, date, event, metadata, onClose, onSave
   };
 
   return (
-    <div className="modal-overlay calendar-modal-overlay cal:fixed cal:inset-0 cal:z-[11000] cal:flex cal:items-center cal:justify-center cal:bg-black/80 cal:p-4" onMouseDown={() => !saving && onClose()}>
+    <div data-react-modal className="modal-overlay calendar-modal-overlay cal:fixed cal:inset-0 cal:z-[11000] cal:flex cal:items-center cal:justify-center cal:bg-black/80 cal:p-4" onMouseDown={requestClose}>
       <form
         ref={modalRef}
+        aria-busy={saving}
+        inert={saving}
         className="modal calendar-modal cal:flex cal:max-h-[min(92vh,760px)] cal:w-[min(94vw,680px)] cal:flex-col cal:overflow-hidden cal:rounded-tracs-lg cal:border cal:border-tracs-border-strong cal:bg-tracs-card cal:shadow-tracs-lg"
         role="dialog"
         aria-modal="true"
@@ -154,7 +161,7 @@ export function BookScheduleModal({ open, date, event, metadata, onClose, onSave
               <p className="cal:font-mono cal:text-[9px] cal:text-tracs-muted">Manual Calendar event · Asia/Jakarta</p>
             </div>
           </div>
-          <TracsButton type="button" size="icon" icon={X} onClick={onClose} disabled={saving} aria-label="Close modal" />
+          <TracsButton type="button" size="icon" icon={X} onClick={requestClose} disabled={saving} aria-label="Close modal" />
         </div>
 
         <div className="cal:grid cal:grid-cols-1 cal:gap-3 cal:overflow-y-auto cal:p-4 cal:sm:grid-cols-2">
@@ -221,7 +228,7 @@ export function BookScheduleModal({ open, date, event, metadata, onClose, onSave
         </div>
 
         <div className="cal:flex cal:items-center cal:justify-end cal:gap-2 cal:border-t cal:border-tracs-border cal:bg-tracs-surface-2 cal:px-4 cal:py-3">
-          <TracsButton type="button" onClick={onClose} disabled={saving}>Cancel</TracsButton>
+          <TracsButton type="button" onClick={requestClose} disabled={saving}>Cancel</TracsButton>
           <TracsButton type="submit" variant="primary" icon={Save} loading={saving}>{editing ? 'Save Changes' : 'Book Schedule'}</TracsButton>
         </div>
       </form>

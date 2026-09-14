@@ -308,6 +308,7 @@ function toggleMOMSuggestedCase(item, force) {
   const icon = item.querySelector('.mom-suggestion-check');
   if(icon) icon.innerHTML = selected ? '<i data-lucide="check" class="icon-sm"></i>' : '<i data-lucide="plus" class="icon-sm"></i>';
   if(window.lucide) lucide.createIcons();
+  window.TRACSUnsavedChanges?.refresh();
 }
 
 function getSelectedMOMCases() {
@@ -326,7 +327,19 @@ function linkSelectedCasesToMOM(mom_id) {
   })));
 }
 
+function momTrackSuggestedCases() {
+  const modal=document.getElementById('momFormModal');
+  if(modal && !modal.dataset.casesTracked && window.TRACSUnsavedChanges){
+    modal.dataset.casesTracked='1';
+    window.TRACSUnsavedChanges.trackState(modal,()=>getSelectedMOMCases().sort((a,b)=>a-b),{
+      active:()=>!modal.classList.contains('hidden'),
+      restore:ids=>modal.querySelectorAll('.mom-suggestion-item').forEach(item=>toggleMOMSuggestedCase(item,ids.includes(Number(item.dataset.caseId))))
+    });
+  }
+}
+
 function openNewMOM() {
+  momTrackSuggestedCases();
   document.getElementById('momFormId').value = '';
   document.getElementById('momFormTitle').value = '';
   document.getElementById('momFormType').value = 'weekly';
@@ -344,9 +357,11 @@ function openNewMOMWithCase(case_id) {
   openNewMOM();
   const item = document.querySelector(`.mom-suggestion-item[data-case-id="${case_id}"]`);
   if(item) toggleMOMSuggestedCase(item, true);
+  window.TRACSUnsavedChanges?.captureInitialState(document.getElementById('momFormModal'));
 }
 
 function editMOMHeader(mom_id, meeting_at) {
+  momTrackSuggestedCases();
   const row = document.querySelector(`[data-mid="${mom_id}"]`);
   const editButton = document.querySelector(`[data-edit-mom-id="${mom_id}"]`);
   const title = row?.cells[1]?.textContent?.trim() || document.querySelector('.mom-title')?.textContent?.trim() || '';

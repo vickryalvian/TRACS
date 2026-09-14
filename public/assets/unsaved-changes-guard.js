@@ -8,6 +8,8 @@
     'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([readonly]):not([disabled])',
     'textarea:not([readonly]):not([disabled])',
     'select:not([disabled])',
+    'input[data-unsaved-track]',
+    'input.flatpickr-input',
     '[contenteditable="true"]'
   ].join(',');
   const ignoredSelector = [
@@ -26,13 +28,19 @@
   const bypassForms = new WeakSet();
   const originals = new WeakMap();
   const dirtyElements = new Set();
+  const trackedControls = new Set();
+  const stateTrackers = new Set();
+  const initializing = new Set();
   let pendingPrompt = null;
   let allowNextUnload = false;
   let bar = null;
   let dialog = null;
-  let historyGuardArmed = false;
-  let suppressNextPop = false;
-  let preserveHistoryForAction = false;
+
+  function serializeState(value) {
+    const ordered = item => Array.isArray(item) ? item.map(ordered)
+      : item && typeof item === 'object' ? Object.fromEntries(Object.keys(item).sort().map(key => [key, ordered(item[key])])) : item;
+    return JSON.stringify(ordered(value));
+  }
 
   function normalizeCurrency(raw, decimalComma = false) {
     let value = String(raw ?? '').trim().replace(/rp|\$|\s/gi, '').replace(/[^\d.,+-]/g, '');
@@ -56,7 +64,8 @@
 
   function valueOf(control, scope = null) {
     if (scope?.normalize) return String(scope.normalize(control));
-    if (control.matches('[contenteditable="true"]')) return control.textContent?.trim() || '';
+    if (control.matches('[contenteditable="true"]')) return control.textContent || '';
+    if (control.multiple && control.tagName === 'SELECT') return JSON.stringify(Array.from(control.selectedOptions, option => option.value).sort());
     if (control.type === 'checkbox' || control.type === 'radio') return control.checked ? '1' : '0';
     if (control.type === 'file') {
       return Array.from(control.files || []).map(file => `${file.name}:${file.size}:${file.lastModified}`).join('|');
@@ -67,27 +76,30 @@
     if (control.dataset.currency === 'USD' || control.closest('.usd-input, [data-currency="USD"]')) {
       return normalizeCurrency(control.value, true);
     }
-    return String(control.value ?? '').trim();
+    return String(control.value ?? '').replace(/\r\n/g, '\n');
   }
 
   function elementScope(control) {
     let match = null;
     scopes.forEach(scope => {
-      if (match || !scope.roots.some(root => root === control || root.contains(control))) return;
-      if (scope.ignore && control.matches(scope.ignore)) return;
+      if (!scope.roots.some(root => root === control || root.contains(control))) return;
+      if (match && !match.roots.some(parent => scope.roots.some(root => parent.contains(root)))) return;
       match = scope;
     });
     return match;
   }
 
-  function isIgnored(control) {
+  function isIgnored(control, existing = false) {
+    if (control instanceof Element && (control.matches('.flatpickr-alt-input') || control.closest('[data-unsaved-state]'))) return true;
     if (!(control instanceof Element)
-      || !control.matches(editableSelector)
+      || (!control.matches(editableSelector) && !(existing && control.matches('input, textarea, select, [contenteditable]')))
       || control.matches(ignoredSelector)
       || !!control.closest(ignoredSelector)) {
       return true;
     }
     if (control.hasAttribute('data-unsaved-track')) return false;
+    if (elementScope(control)?.ignore && control.matches(elementScope(control).ignore)) return true;
+    if (control.closest('form:not([method="get"]), .modal-overlay, dialog')) return false;
     const filterHint = [
       control.id,
       control.getAttribute('name'),
@@ -101,10 +113,12 @@
   function snapshot(control) {
     if (isIgnored(control) || originals.has(control)) return;
     originals.set(control, valueOf(control, elementScope(control)));
+    trackedControls.add(control);
   }
 
   function syncControl(control) {
     if (isIgnored(control)) return;
+    if (Array.from(initializing).some(root => root.contains(control))) return;
     snapshot(control);
     const original = originals.get(control);
     const current = valueOf(control, elementScope(control));
@@ -114,6 +128,19 @@
   }
 
   function connectedDirtyElements() {
+    trackedControls.forEach(control => {
+      if (!control.isConnected) { trackedControls.delete(control); dirtyElements.delete(control); return; }
+      if (isIgnored(control, true) || Array.from(initializing).some(root => root.contains(control))) { dirtyElements.delete(control); return; }
+      const modal = control.closest('.modal-overlay, .dpc-modal, .infra-modal, .cf-modal, dialog');
+      if (modal && (modal.hidden || modal.classList.contains('hidden') || modal.style.display === 'none' || (modal.tagName === 'DIALOG' && !modal.open))) { dirtyElements.delete(control); return; }
+      if (valueOf(control, elementScope(control)) === originals.get(control)) dirtyElements.delete(control);
+      else dirtyElements.add(control);
+    });
+    stateTrackers.forEach(tracker => {
+      const active = tracker.root.isConnected && !initializing.has(tracker.root) && (!tracker.active || tracker.active());
+      if (active && serializeState(tracker.getState()) !== tracker.baseline) dirtyElements.add(tracker.root);
+      else dirtyElements.delete(tracker.root);
+    });
     Array.from(dirtyElements).forEach(control => {
       if (!control.isConnected) dirtyElements.delete(control);
     });
@@ -158,8 +185,8 @@
       const confirmed = await confirmChoice({
         title: 'Discard unsaved changes?',
         message: 'This restores the edited fields to their last saved values.',
-        stayLabel: 'Keep editing',
-        leaveLabel: 'Discard changes',
+        stayLabel: 'Keep Editing',
+        leaveLabel: 'Discard Changes',
         showSave: false
       });
       if (confirmed === 'leave') discard();
@@ -176,28 +203,25 @@
     const saveButton = warningBar.querySelector('[data-unsaved-save]');
     if (saveButton) saveButton.hidden = !scope?.save;
     document.documentElement.classList.toggle('tracs-has-unsaved-changes', dirty);
-    if (dirty && !historyGuardArmed) {
-      history.pushState({ ...(history.state || {}), tracsUnsavedGuard: true }, '', window.location.href);
-      historyGuardArmed = true;
-    } else if (!dirty && historyGuardArmed && !preserveHistoryForAction) {
-      historyGuardArmed = false;
-      suppressNextPop = true;
-      history.back();
-    } else if (!dirty && preserveHistoryForAction) {
-      historyGuardArmed = false;
-    }
   }
 
   function markSaved(root = null) {
+    stateTrackers.forEach(tracker => {
+      if (!root || root === tracker.root || root.contains(tracker.root)) tracker.baseline = serializeState(tracker.getState());
+    });
     const controls = root
       ? [
           ...(root instanceof Element && root.matches(editableSelector) ? [root] : []),
           ...Array.from(root.querySelectorAll?.(editableSelector) || [])
         ]
       : Array.from(document.querySelectorAll(editableSelector));
+    trackedControls.forEach(control => {
+      if ((!root || root === control || root.contains(control)) && !controls.includes(control)) controls.push(control);
+    });
     controls.forEach(control => {
-      if (isIgnored(control)) return;
+      if (isIgnored(control, originals.has(control))) return;
       originals.set(control, valueOf(control, elementScope(control)));
+      trackedControls.add(control);
       dirtyElements.delete(control);
     });
     if (root) {
@@ -214,13 +238,27 @@
     const scope = dirtyScope(root);
     connectedDirtyElements().forEach(control => {
       if (root && root !== control && !root.contains(control)) return;
+      if (!originals.has(control)) return;
       const original = originals.get(control);
       if (control.type === 'checkbox' || control.type === 'radio') control.checked = original === '1';
+      else if (control.multiple && control.tagName === 'SELECT') Array.from(control.options).forEach(option => { option.selected = JSON.parse(original || '[]').includes(option.value); });
+      else if (control._flatpickr) control._flatpickr.setDate(original || '', false);
       else if (control.type !== 'file' && !control.matches('[contenteditable="true"]')) control.value = original ?? '';
       else if (control.matches('[contenteditable="true"]')) control.textContent = original ?? '';
       else control.value = '';
       dirtyElements.delete(control);
-      control.dispatchEvent(new Event('change', { bubbles: true }));
+      if(control.matches('select')) global.TRACSDropdowns?.syncSelect?.(control);
+    });
+    const syncIds = new Set(Array.from(trackedControls).filter(control => !root || root === control || root.contains(control)).map(control => control.getAttribute('data-sync')).filter(Boolean));
+    syncIds.forEach(id => {
+      const parts = Array.from(document.querySelectorAll('[data-sync]')).filter(control => control.getAttribute('data-sync') === id && !control.classList.contains('flatpickr-alt-input'));
+      const date = parts.find(control => control.classList.contains('split-date'))?.value;
+      const time = parts.find(control => control.classList.contains('split-time'))?.value;
+      const target = document.getElementById(id);
+      if (target) target.value = date && time ? `${date}T${time}` : '';
+    });
+    stateTrackers.forEach(tracker => {
+      if (!root || root === tracker.root || root.contains(tracker.root)) tracker.restore?.(JSON.parse(tracker.baseline));
     });
     if (scope?.discard) scope.discard();
     syncUi();
@@ -230,16 +268,17 @@
     if (dialog?.isConnected) return dialog;
     dialog = document.createElement('div');
     dialog.className = 'tracs-unsaved-dialog-overlay hidden';
+    dialog.style.zIndex = '2147483646';
     dialog.innerHTML = `
       <div class="tracs-unsaved-dialog" role="dialog" aria-modal="true" aria-labelledby="tracsUnsavedTitle" aria-describedby="tracsUnsavedMessage">
         <div class="tracs-unsaved-dialog__icon"><i data-lucide="triangle-alert"></i></div>
         <div>
           <h2 id="tracsUnsavedTitle">Unsaved changes</h2>
-          <p id="tracsUnsavedMessage">You have unsaved changes. Save your changes before leaving this page?</p>
+          <p id="tracsUnsavedMessage">You have changes that haven't been saved. Discard them and leave?</p>
         </div>
         <div class="tracs-unsaved-dialog__actions">
-          <button type="button" class="btn btn-ghost" data-unsaved-stay>Stay on page</button>
-          <button type="button" class="btn btn-danger" data-unsaved-leave>Leave without saving</button>
+          <button type="button" class="btn btn-ghost" data-unsaved-stay>Keep Editing</button>
+          <button type="button" class="btn btn-danger" data-unsaved-leave>Discard Changes</button>
           <button type="button" class="btn btn-primary" data-unsaved-dialog-save>Save changes</button>
         </div>
       </div>`;
@@ -247,6 +286,7 @@
     dialog.addEventListener('keydown', event => {
       if (event.key === 'Escape') {
         event.preventDefault();
+        event.stopPropagation();
         dialog.querySelector('[data-unsaved-stay]')?.click();
         return;
       }
@@ -270,15 +310,17 @@
   function confirmChoice(options = {}) {
     if (pendingPrompt) return pendingPrompt;
     const overlay = ensureDialog();
+    const nativeDialog = Array.from(document.querySelectorAll('dialog[open]')).at(-1);
+    (nativeDialog || document.body).appendChild(overlay);
     const title = overlay.querySelector('#tracsUnsavedTitle');
     const message = overlay.querySelector('#tracsUnsavedMessage');
     const stay = overlay.querySelector('[data-unsaved-stay]');
     const leave = overlay.querySelector('[data-unsaved-leave]');
     const save = overlay.querySelector('[data-unsaved-dialog-save]');
     title.textContent = options.title || 'Unsaved changes';
-    message.textContent = options.message || 'You have unsaved changes. Save your changes before leaving this page?';
-    stay.textContent = options.stayLabel || 'Stay on page';
-    leave.textContent = options.leaveLabel || 'Leave without saving';
+    message.textContent = options.message || "You have changes that haven't been saved. Discard them and leave?";
+    stay.textContent = options.stayLabel || 'Keep Editing';
+    leave.textContent = options.leaveLabel || 'Discard Changes';
     save.textContent = options.saveLabel || 'Save changes';
     save.hidden = options.showSave === false;
     overlay.classList.remove('hidden');
@@ -300,19 +342,23 @@
   }
 
   async function runSave(scope = dirtyScope()) {
-    if (!scope?.save) return false;
+    if (!scope?.save || scope.saving) return false;
+    scope.saving = true;
     try {
       const result = await scope.save();
       if (result === false) return false;
-      markSaved(scope.roots[0] || null);
+      scope.roots.forEach(root => markSaved(root));
       return true;
     } catch (error) {
       global.showToast?.(error?.message || 'Your changes could not be saved.', 'error');
       return false;
+    } finally {
+      scope.saving = false;
     }
   }
 
   async function protect(action, options = {}) {
+    if (pendingPrompt) return false;
     const root = options.root || null;
     if (!isDirty(root)) {
       action();
@@ -320,31 +366,23 @@
     }
     const scope = dirtyScope(root);
     const choice = await confirmChoice({
-      title: options.modal ? 'Unsaved changes in this popup' : 'Unsaved changes',
-      message: options.modal
-        ? 'You have unsaved changes in this popup. Close without saving?'
-        : 'You have unsaved changes. Save your changes before leaving this page?',
-      stayLabel: options.modal ? 'Keep editing' : 'Stay on page',
-      leaveLabel: options.modal ? 'Close without saving' : 'Leave without saving',
-      showSave: !!scope?.save
+      title: 'Unsaved changes',
+      showSave: false
     });
     if (choice === 'leave') {
-      preserveHistoryForAction = true;
       discard(root);
+      markSaved(root);
       if (!options.modal) allowNextUnload = true;
       try {
         action();
         return true;
       } finally {
-        preserveHistoryForAction = false;
         if (options.modal) syncUi();
       }
     }
     if (choice === 'save') {
-      preserveHistoryForAction = true;
       const saved = await runSave(scope);
       if (!saved) {
-        preserveHistoryForAction = false;
         return false;
       }
       if (!options.modal) allowNextUnload = true;
@@ -352,7 +390,6 @@
         action();
         return true;
       } finally {
-        preserveHistoryForAction = false;
         if (options.modal) syncUi();
       }
     }
@@ -374,7 +411,11 @@
     scopes.add(scope);
     freshRoots.forEach(root => {
       registeredRoots.add(root);
-      root.querySelectorAll(editableSelector).forEach(snapshot);
+      root.querySelectorAll(editableSelector).forEach(control => {
+        if (isIgnored(control)) return;
+        originals.set(control, valueOf(control, elementScope(control)));
+        trackedControls.add(control);
+      });
     });
     syncUi();
     return scope;
@@ -389,13 +430,13 @@
         save: () => {
           const submit = form.querySelector('button[type="submit"], input[type="submit"]');
           if (!submit) return false;
-          form.requestSubmit(submit);
           return new Promise(resolve => {
             const timeout = setTimeout(() => resolve(false), 15000);
             form.addEventListener('tracs:save-success', () => {
               clearTimeout(timeout);
               resolve(true);
             }, { once: true });
+            form.requestSubmit(submit);
           });
         }
       });
@@ -491,8 +532,8 @@
   }
 
   document.addEventListener('focusin', event => snapshot(event.target), true);
-  document.addEventListener('input', event => syncControl(event.target), true);
-  document.addEventListener('change', event => syncControl(event.target), true);
+  document.addEventListener('input', event => { syncControl(event.target); queueMicrotask(syncUi); }, true);
+  document.addEventListener('change', event => { syncControl(event.target); queueMicrotask(syncUi); }, true);
   function handleSubmit(event) {
     const form = event.target;
     if (!(form instanceof HTMLFormElement)) return;
@@ -527,12 +568,15 @@
   document.addEventListener('tracs:save-success', event => markSaved(event.detail?.root || event.target), true);
 
   document.addEventListener('click', event => {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     const link = event.target.closest('a[href]');
     if (!link || link.target === '_blank' || link.hasAttribute('download') || link.dataset.unsavedIgnore !== undefined) return;
     if (!isDirty()) return;
     const destination = new URL(link.href, window.location.href);
+    if (!['http:', 'https:'].includes(destination.protocol)) return;
     if (destination.href === window.location.href || destination.hash && destination.pathname === location.pathname && destination.search === location.search) return;
     event.preventDefault();
+    event.stopImmediatePropagation();
     protect(() => {
       allowNextUnload = true;
       window.location.assign(destination.href);
@@ -545,33 +589,23 @@
     event.returnValue = '';
   });
 
-  window.addEventListener('popstate', () => {
-    if (suppressNextPop) {
-      suppressNextPop = false;
-      return;
-    }
-    if (!historyGuardArmed || !isDirty()) return;
-    suppressNextPop = true;
-    history.forward();
-    window.setTimeout(() => {
-      protect(() => {
-        allowNextUnload = true;
-        historyGuardArmed = false;
-        history.go(-2);
-      });
-    }, 0);
-  });
+  window.addEventListener('pageshow', () => { allowNextUnload = false; });
 
   window.addEventListener('DOMContentLoaded', () => {
     autoRegisterForms();
     autoRegisterModals();
     autoRegisterEditablePage();
+    document.querySelectorAll(editableSelector).forEach(snapshot);
     document.addEventListener('submit', handleSubmit);
     const observer = new MutationObserver(records => {
       let removedDirty = false;
       records.forEach(record => {
         record.addedNodes.forEach(node => {
-          if (node instanceof Element) rescanDynamicEditableSurfaces(node);
+          if (node instanceof Element) {
+            rescanDynamicEditableSurfaces(node);
+            if (node.matches(editableSelector)) snapshot(node);
+            node.querySelectorAll(editableSelector).forEach(snapshot);
+          }
         });
         record.removedNodes.forEach(node => {
           if (!(node instanceof Element)) return;
@@ -591,7 +625,18 @@
     markSaved,
     discard,
     protect,
+    refresh: syncUi,
+    captureInitialState: markSaved,
+    beginInitialization(root) { initializing.add(root); },
+    finishInitialization(root) { markSaved(root); initializing.delete(root); syncUi(); },
+    trackState(root, getState, options = {}) {
+      const tracker = { root, getState, ...options, baseline: serializeState(options.initialState ?? getState()) };
+      stateTrackers.add(tracker);
+      return () => { stateTrackers.delete(tracker); dirtyElements.delete(root); syncUi(); };
+    },
+    get prompting() { return !!pendingPrompt; },
     requestModalClose(modal, close) {
+      if (modal?.matches('[aria-busy="true"]') || modal?.querySelector('[aria-busy="true"]')) return Promise.resolve(false);
       return protect(close, { root: modal, modal: true });
     }
   };

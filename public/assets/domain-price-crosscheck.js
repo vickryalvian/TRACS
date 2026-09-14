@@ -119,9 +119,13 @@ function openUpdateRateModal(monthId, currentRate) {
 
 function closeUpdateRateModal() {
     const modal = document.getElementById('updateRateModal');
-    if (modal) tracsCloseModalElement(modal);
-    window.DPC_CURRENT_EXCHANGE_RATE = Number(window.DPC_SAVED_EXCHANGE_RATE || 0);
-    dpcSyncLiveMatrixPreview();
+    const close = () => {
+        if (modal) tracsCloseModalElement(modal, { bypassUnsaved: true });
+        window.DPC_CURRENT_EXCHANGE_RATE = Number(window.DPC_SAVED_EXCHANGE_RATE || 0);
+        dpcSyncLiveMatrixPreview();
+    };
+    if (modal && window.TRACSUnsavedChanges) window.TRACSUnsavedChanges.requestModalClose(modal, close);
+    else close();
 }
 
 // 3. Approve and Lock Modal

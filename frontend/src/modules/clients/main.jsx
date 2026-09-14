@@ -5,6 +5,7 @@ import '../../styles/tracs-tailwind.css';
 import './styles.css';
 import '../../../../assets/react/calendar/styles.css';
 import { TracsModal } from '../../../../assets/react/calendar/components/TracsModal';
+import { useUnsavedForm, requestFormClose } from '../../../../assets/react/calendar/hooks/useUnsavedForm';
 import { useCalendarData } from '../../../../assets/react/calendar/hooks/useCalendarData';
 import { jakartaToday } from '../../../../assets/react/calendar/utils/date';
 import { EventDetailPanel } from '../../../../assets/react/calendar/components/EventDetailPanel';
@@ -324,6 +325,7 @@ function FormPanel({ context, selected, onSaved, onCancel }) {
     contact_phone: selected?.contacts?.[0]?.phone || '',
     contact_role: selected?.contacts?.[0]?.role_title || '',
     notes: selected?.notes || '',
+    ...(!selected ? { billing_cycle: 'monthly' } : {}),
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -333,6 +335,8 @@ function FormPanel({ context, selected, onSaved, onCancel }) {
   const canPickOwner = Boolean(context?.allowed_actions?.view_all);
   const errorRef = useRef(null);
   const formRef = useRef(null);
+  const savedClientId = useRef(selected?.id || null);
+  useUnsavedForm(formRef, { form, files: attachmentFiles.map(file => [file.name, file.size, file.lastModified]), documentType: attachmentFiles.length ? documentType : '' }, { restore: state => { setForm(state.form); setAttachmentFiles([]); } });
   function set(key, value) {
     setForm((current) => ({ ...current, [key]: value }));
     setFieldErrors((current) => {
@@ -355,6 +359,7 @@ function FormPanel({ context, selected, onSaved, onCancel }) {
   }
   async function submit(event) {
     event.preventDefault();
+    if (saving) return;
     const nextErrors = validate();
     setFieldErrors(nextErrors);
     if (Object.keys(nextErrors).length) {
@@ -364,9 +369,10 @@ function FormPanel({ context, selected, onSaved, onCancel }) {
     }
     setSaving(true); setError('');
     try {
-      const path = selected ? `/api/v1/client-portfolio/client.php?id=${selected.id}` : '/api/v1/client-portfolio/clients.php';
-      const res = await api.request(path, { method: selected ? 'PATCH' : 'POST', body: form });
+      const path = savedClientId.current ? `/api/v1/client-portfolio/client.php?id=${savedClientId.current}` : '/api/v1/client-portfolio/clients.php';
+      const res = await api.request(path, { method: savedClientId.current ? 'PATCH' : 'POST', body: form });
       let client = res.data;
+      savedClientId.current = client.id;
       if (attachmentFiles.length) {
         const upload = await uploadClientAttachments(client.id, attachmentFiles, documentType);
         client = upload?.data?.client || client;
@@ -382,7 +388,7 @@ function FormPanel({ context, selected, onSaved, onCancel }) {
   }
   return (
     <div>
-      <form className="tr:flex tr:flex-col tr:gap-tracs-3" onSubmit={submit} noValidate ref={formRef}>
+      <form inert={saving} aria-busy={saving} className="tr:flex tr:flex-col tr:gap-tracs-3" onSubmit={submit} noValidate ref={formRef}>
         <div className="tr:flex tr:items-start tr:justify-between tr:gap-tracs-3">
           <div><h2 className="tr:text-sm tr:font-semibold">Client Information</h2><p className="tr:mt-1 tr:text-xs tr:text-tracs-muted">Profile, primary PIC, owner, and operational notes.</p></div>
         </div>
@@ -426,17 +432,19 @@ function FormPanel({ context, selected, onSaved, onCancel }) {
         </>}
         <Field id="client-notes" label="Operational Notes"><Textarea id="client-notes" value={form.notes} onChange={(e) => set('notes', e.target.value)} /></Field>
         <AttachmentPicker files={attachmentFiles} setFiles={setAttachmentFiles} documentType={documentType} setDocumentType={setDocumentType} disabled={saving} />
-        <div className="tr:flex tr:justify-end tr:gap-tracs-2"><Button variant="secondary" onClick={onCancel}>Cancel</Button><Button variant="primary" disabled={saving} type="submit">{saving ? 'Saving...' : 'Save Client'}</Button></div>
+        <div className="tr:flex tr:justify-end tr:gap-tracs-2"><Button variant="secondary" disabled={saving} onClick={() => requestFormClose(formRef.current, onCancel)}>Cancel</Button><Button variant="primary" disabled={saving} type="submit">{saving ? 'Saving...' : 'Save Client'}</Button></div>
       </form>
     </div>
   );
 }
 
 function QuickActionForm({ selected, context, onSaved }) {
+  const formRef = useRef(null);
   const [kind, setKind] = useState('followup');
   const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  useUnsavedForm(formRef, { kind, form: { ...(kind === 'followup' ? { action_type: 'general_followup', priority: 'medium', assigned_to: context?.user?.id } : kind === 'service' ? { billing_cycle: 'monthly', status: 'active' } : kind === 'addon' ? { billing_cycle: 'included', status: 'active' } : kind === 'billing' ? { invoice_status: 'upcoming', payment_status: 'waiting' } : {}), ...form } }, { restore: state => { setKind(state.kind); setForm(state.form); } });
   if (!context?.allowed_actions?.manage || !selected) return null;
   function set(key, value) { setForm((current) => ({ ...current, [key]: value })); }
   async function submit(event) {
@@ -445,6 +453,7 @@ function QuickActionForm({ selected, context, onSaved }) {
     try {
       const action = kind === 'service' ? 'add_service' : kind === 'addon' ? 'add_addon' : kind === 'renewal' ? 'renew_service' : kind === 'billing' ? 'add_billing' : 'add_followup';
       const res = await api.request('/api/v1/client-portfolio/actions.php', { method: 'POST', body: { ...form, action, client_id: selected.id } });
+      window.TRACSUnsavedChanges?.markSaved(formRef.current);
       setForm({});
       onSaved(res.data);
     } catch (err) {
@@ -455,7 +464,7 @@ function QuickActionForm({ selected, context, onSaved }) {
   }
   return (
     <div>
-      <form className="tr:flex tr:flex-col tr:gap-tracs-3" onSubmit={submit}>
+      <form ref={formRef} inert={saving} aria-busy={saving} className="tr:flex tr:flex-col tr:gap-tracs-3" onSubmit={submit}>
         <div className="tr:flex tr:flex-col tr:gap-tracs-2 tr:sm:flex-row tr:sm:items-center tr:sm:justify-between"><h3 className="tr:text-sm tr:font-semibold">Add Operational Record</h3><Select value={kind} onChange={(e) => { setKind(e.target.value); setForm({}); }}><option value="followup">Follow-up</option><option value="service">Service</option><option value="addon">Addon</option><option value="renewal">Renew Service</option><option value="billing">Billing</option></Select></div>
         {error && <div className="tr:rounded-tracs tr:border tr:border-tracs-danger-border tr:bg-tracs-danger-soft tr:p-3 tr:text-xs tr:text-tracs-danger">{error}</div>}
         {kind === 'service' && <div className="tr:grid tr:grid-cols-1 tr:gap-tracs-3 tr:md:grid-cols-2"><Field label="Service Name"><Input required value={form.service_name || ''} onChange={(e) => set('service_name', e.target.value)} /></Field><Field label="Type"><Select value={form.service_type || ''} onChange={(e) => set('service_type', e.target.value)}><option value="">Choose type</option>{serviceTypes.map((type) => <option key={type} value={type}>{type}</option>)}</Select></Field><Field label="Reference"><Input value={form.service_reference || ''} onChange={(e) => set('service_reference', e.target.value)} /></Field><Field label="Billing Cycle"><Select value={form.billing_cycle || 'monthly'} onChange={(e) => set('billing_cycle', e.target.value)}>{billingCycles.map((cycle) => <option key={cycle} value={cycle}>{label(cycle)}</option>)}</Select></Field><Field label="Price"><Input type="number" min="0" value={form.price || ''} onChange={(e) => set('price', e.target.value)} /></Field><Field label="Billing Day"><Input type="number" min="1" max="31" value={form.billing_day || ''} onChange={(e) => set('billing_day', e.target.value)} /></Field><Field label="Start Date"><Input type="date" value={form.start_date || ''} onChange={(e) => set('start_date', e.target.value)} /></Field><Field label="Renewal Date"><Input type="date" value={form.renewal_date || ''} onChange={(e) => set('renewal_date', e.target.value)} /></Field><Field label="Status"><Select value={form.status || 'active'} onChange={(e) => set('status', e.target.value)}>{serviceStatuses.map((status) => <option key={status} value={status}>{label(status)}</option>)}</Select></Field><label className="tr:flex tr:min-h-9 tr:items-center tr:gap-2 tr:text-xs tr:font-semibold tr:text-tracs-secondary"><input type="checkbox" checked={Boolean(form.auto_renew)} onChange={(e) => set('auto_renew', e.target.checked)} /> Auto renew</label><Field label="Plan Spec"><Textarea value={form.plan_spec || ''} onChange={(e) => set('plan_spec', e.target.value)} /></Field></div>}

@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useUnsavedForm, requestFormClose } from '../hooks/useUnsavedForm';
 import { CalendarDays, Check, Clock3, ExternalLink, Pencil, Trash2, UserRound, X } from 'lucide-react';
 import { calendarApi } from '../api/calendarApi';
 import { CalendarBadge } from './EventBadge';
@@ -18,10 +19,12 @@ export function EventDetailPanel({
 }) {
   const [working, setWorking] = useState(false);
   const [editingClient, setEditingClient] = useState(false);
+  const panelRef = useRef(null);
+  const requestClose = () => requestFormClose(panelRef.current, onClose);
   useEffect(() => { setEditingClient(false); }, [event?.id, open]);
   useEffect(() => {
     if (!open) return undefined;
-    const close = (keyEvent) => keyEvent.key === 'Escape' && onClose();
+    const close = (keyEvent) => keyEvent.key === 'Escape' && !window.TRACSUnsavedChanges?.prompting && requestClose();
     window.addEventListener('keydown', close);
     return () => window.removeEventListener('keydown', close);
   }, [open, onClose]);
@@ -65,8 +68,9 @@ export function EventDetailPanel({
   };
 
   return (
-    <div className="cal:fixed cal:inset-0 cal:z-[10000] cal:bg-black/60" role="presentation" onMouseDown={onClose}>
+    <div data-react-modal className="cal:fixed cal:inset-0 cal:z-[10000] cal:bg-black/60" role="presentation" onMouseDown={requestClose}>
       <aside
+        ref={panelRef}
         className="cal:absolute cal:inset-y-0 cal:right-0 cal:flex cal:w-[min(94vw,460px)] cal:flex-col cal:border-l cal:border-tracs-border-strong cal:bg-tracs-card cal:shadow-tracs-lg"
         role="dialog"
         aria-modal="true"
@@ -78,7 +82,7 @@ export function EventDetailPanel({
             <h2 className="cal:text-sm cal:font-semibold cal:text-tracs-primary">{selected ? 'Event Details' : 'Date Summary'}</h2>
             <p className="cal:font-mono cal:text-[9px] cal:text-tracs-muted">{formatDate(selected?.date || date)}</p>
           </div>
-          <TracsButton size="icon" icon={X} onClick={onClose} aria-label="Close details" />
+          <TracsButton size="icon" icon={X} onClick={requestClose} aria-label="Close details" />
         </div>
 
         {editingClient ? <ClientReminderEditor event={selected} onCancel={() => setEditingClient(false)} onSaved={async () => { await onRefresh(); onClose(); }} /> : selected ? (
@@ -164,23 +168,25 @@ function Block({ label, value }) {
 }
 
 function ClientReminderEditor({ event, onCancel, onSaved }) {
+  const formRef = useRef(null);
   const [form, setForm] = useState({ title: event.meta.reminder_title, due_at: `${event.date}T${event.start_time || '09:00'}`, status: event.status === 'done' ? 'completed' : event.status === 'not_applicable' ? 'not_applicable' : 'open', description: event.notes || '' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  useUnsavedForm(formRef, form, { restore: setForm });
   const set = (key, value) => setForm(current => ({ ...current, [key]: value }));
   async function submit(e) {
-    e.preventDefault(); setSaving(true); setError('');
-    try { await calendarApi.updateClientReminder(event, form); await onSaved(); }
+    e.preventDefault(); if (saving) return; setSaving(true); setError('');
+    try { await calendarApi.updateClientReminder(event, form); window.TRACSUnsavedChanges?.markSaved(formRef.current); await onSaved(); }
     catch (err) { setError(err.message); }
     finally { setSaving(false); }
   }
-  return <form onSubmit={submit} className="cal:flex cal:flex-col cal:gap-4 cal:overflow-y-auto cal:p-4">
+  return <form ref={formRef} inert={saving} aria-busy={saving} onSubmit={submit} className="cal:flex cal:flex-col cal:gap-4 cal:overflow-y-auto cal:p-4">
     <p className="cal:text-sm">{event.meta.client_name}</p>
     {error && <p role="alert" className="cal:text-tracs-danger">{error}</p>}
     <Field label="Title"><TracsInput required value={form.title} onChange={e => set('title', e.target.value)} /></Field>
     <Field label="Reminder date · Asia/Jakarta"><TracsInput required type="datetime-local" value={form.due_at} onChange={e => set('due_at', e.target.value)} /></Field>
     <Field label="Status"><TracsSelect value={form.status} onChange={e => set('status', e.target.value)}><option value="open">Pending</option><option value="completed">Done</option><option value="not_applicable">N/A</option></TracsSelect></Field>
     <Field label="Notes"><TracsTextarea value={form.description} onChange={e => set('description', e.target.value)} /></Field>
-    <div className="cal:flex cal:gap-2"><TracsButton type="button" disabled={saving} onClick={onCancel}>Cancel</TracsButton><TracsButton type="submit" variant="primary" loading={saving}>Save Reminder</TracsButton></div>
+    <div className="cal:flex cal:gap-2"><TracsButton type="button" disabled={saving} onClick={() => requestFormClose(formRef.current, onCancel)}>Cancel</TracsButton><TracsButton type="submit" variant="primary" loading={saving}>Save Reminder</TracsButton></div>
   </form>;
 }

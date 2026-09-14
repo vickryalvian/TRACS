@@ -34,7 +34,8 @@ foreach ([$create, $edit] as $modal) {
             && str_contains($modal, 'mutationErrorMessage(error,')
             && str_contains($modal, 'aria-required="true"')
             && str_contains($modal, 'shift-required-mark')
-            && str_contains($modal, "window.confirm('Discard unsaved assignment changes?')"),
+            && str_contains($modal, 'useUnsavedForm(modalRef, draft,')
+            && str_contains($modal, 'requestFormClose(modalRef.current, onClose)'),
         'Create/Edit modal hardening behavior changed.'
     );
 }

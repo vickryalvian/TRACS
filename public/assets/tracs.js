@@ -613,6 +613,7 @@ function tracsCloseModalElement(modal,options={}){
   const target=tracsResolveModal(modal);
   if(!target)return;
   if(target.dataset.tracsSuccessPending === '1')return;
+  if(target.getAttribute('aria-busy') === 'true' || target.querySelector('[aria-busy="true"]'))return;
   if(!options.bypassUnsaved && window.TRACSUnsavedChanges?.isDirty(target)){
     window.TRACSUnsavedChanges.requestModalClose(target,()=>tracsCloseModalElement(target,{bypassUnsaved:true}));
     return;
@@ -646,7 +647,7 @@ function tracsOpenModalElement(modal,options={}){
     if(!panel.hasAttribute('role'))panel.setAttribute('role','dialog');
     panel.setAttribute('aria-modal','true');
   }
-  requestAnimationFrame(()=>window.TRACSUnsavedChanges?.markSaved(target));
+  window.TRACSUnsavedChanges?.captureInitialState(target);
   return target;
 }
 function tracsValidationTarget(field){
@@ -1143,9 +1144,10 @@ function closeTopModal(){
   if(top.id==='screenshotResultModal'){closeScreenshotResultModal();return;}
   tracsCloseModalElement(top);
 }
-document.addEventListener('keydown',e=>{if(e.key==='Escape' && !tracsDialogActive)closeTopModal();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape' && !tracsDialogActive && !window.TRACSUnsavedChanges?.prompting && !e.target.closest('[data-react-modal]'))closeTopModal();});
 document.addEventListener('click',e=>{
   if(!e.target.classList.contains('modal-overlay'))return;
+  if(e.target.hasAttribute('data-react-modal'))return;
   if(e.target.id==='caseImageModal'){closeCaseImagePreview();return;}
   if(e.target.id==='screenshotResultModal'){closeScreenshotResultModal();return;}
   tracsCloseModalElement(e.target);
@@ -2466,6 +2468,14 @@ function setVal(id,v){
   const el=document.getElementById(id);
   if(!el)return;
   el.value=v||'';
+  if(el._flatpickr)el._flatpickr.setDate(v || '',false);
+  document.querySelectorAll(`[data-sync="${id}"]`).forEach(part=>{
+    if(!part.matches('.split-date, .split-time') || part.classList.contains('flatpickr-alt-input'))return;
+    const [date='',time='']=String(v || '').replace(' ','T').split('T');
+    const value=part.classList.contains('split-date')?date:time.slice(0,5);
+    if(part._flatpickr)part._flatpickr.setDate(value,false);
+    else part.value=value;
+  });
   if(el.matches?.('select')) window.TRACSDropdowns?.syncSelect(el);
 }
 function removeRow(sel){
@@ -2592,6 +2602,18 @@ const CASE_ATTACHMENT_MAX = 5 * 1024 * 1024;
 const CASE_ATTACHMENT_TYPES = new Set(['image/jpeg','image/png','image/webp']);
 let caseSelectedAttachments = [];
 let caseRemovedAttachmentIds = new Set();
+let caseEditRequestSeq = 0;
+let caseSaving = false;
+function caseTrackAttachments(){
+  const modal=document.getElementById('caseModal');
+  if(!modal || modal.dataset.attachmentsTracked || !window.TRACSUnsavedChanges)return;
+  modal.dataset.attachmentsTracked='1';
+  caseAttachmentEls().input?.setAttribute('data-unsaved-ignore','');
+  window.TRACSUnsavedChanges.trackState(modal,()=>({
+    files:caseSelectedAttachments.map(({file})=>[file.name,file.size,file.lastModified]),
+    removed:Array.from(caseRemovedAttachmentIds).sort((a,b)=>a-b)
+  }),{active:()=>!modal.classList.contains('hidden'),restore:()=>{clearCaseAttachmentState();renderCaseExistingAttachments(window.__caseExistingAttachments||[]);}});
+}
 let currentCaseTicketId = 0;
 let currentCaseTicketData = null;
 let caseTicketRequestSeq = 0;
@@ -2784,6 +2806,7 @@ function removeCaseSelectedAttachment(id){
   caseSetUploadStatus(caseSelectedAttachments.length?`${caseSelectedAttachments.length} image${caseSelectedAttachments.length===1?'':'s'} ready to upload.`:'');
 }
 function renderCaseSelectedAttachments(){
+  window.TRACSUnsavedChanges?.refresh();
   const el=caseAttachmentEls().selected;
   if(!el)return;
   el.innerHTML=caseSelectedAttachments.map(item=>`
@@ -2817,6 +2840,7 @@ function removeExistingCaseAttachment(id){
   const existing=window.__caseExistingAttachments||[];
   renderCaseExistingAttachments(existing);
   caseSetUploadStatus('Attachment will be removed when you save.','warn');
+  window.TRACSUnsavedChanges?.refresh();
 }
 function openCaseImagePreview(src,title='Attachment'){
   const modal=document.getElementById('caseImageModal');
@@ -2912,6 +2936,9 @@ function initCaseAttachmentUpload(){
   }
 }
 function openNewCase(defaultStatus='active'){
+  if(caseSaving)return;
+  ++caseEditRequestSeq;
+  caseTrackAttachments();
   initCaseAttachmentUpload();
   document.getElementById('caseModalTitle').textContent='New Case';
   ['caseId','caseTitle','caseNextCheck','caseNotes'].forEach(id=>setVal(id,''));
@@ -2922,6 +2949,9 @@ function openNewCase(defaultStatus='active'){
   openModal('case');
 }
 async function openEditCase(id){
+  if(caseSaving)return;
+  const requestSeq=++caseEditRequestSeq;
+  caseTrackAttachments();
   initCaseAttachmentUpload();
   const row=document.querySelector(`[data-cid="${id}"]`);
   const caseItem=caseBoardState.rawCases.find(item=>Number(item.id)===Number(id));
@@ -2935,8 +2965,9 @@ async function openEditCase(id){
   setVal('caseNotes',row?.dataset.notes||caseItem?.notes||'');
   clearCaseAttachmentState();
   caseSetUploadStatus('Loading attachments...');
-  openModal('case');
+  // Complete hydration before exposing editable fields.
   const d=await api(API.CASE.GET,{id});
+  if(requestSeq!==caseEditRequestSeq)return;
   if(d.success){
     const data=d.data||{};
     setVal('caseTitle',data.title||row?.dataset.title||caseItem?.title||'');
@@ -2950,6 +2981,7 @@ async function openEditCase(id){
   }else{
     caseSetUploadStatus(d.message||'Could not load attachments.','error');
   }
+  openModal('case');
 }
 async function openCaseTicket(id){
   currentCaseTicketId=Number(id)||0;
@@ -4101,17 +4133,26 @@ function deleteCaseFromTicket(){
   deleteCase(id);
 }
 async function saveCase(){
+  if(caseSaving)return;
   const title=val('caseTitle').trim();
   if(!title){toast('Case title is required','error');return;}
   const id=val('caseId');
   const saveBtn=caseAttachmentEls().save;
   caseSetUploadStatus(caseSelectedAttachments.length?'Uploading images...':'Saving case...');
   const useForm=caseSelectedAttachments.length>0 || caseRemovedAttachmentIds.size>0;
-  const d=await withLoadingState(saveBtn,'Saving...',()=>useForm
+  caseSaving=true;
+  const modal=document.getElementById('caseModal');
+  modal.setAttribute('aria-busy','true');
+  const fields=Array.from(modal.querySelectorAll('input:not(:disabled), textarea:not(:disabled), select:not(:disabled)'));
+  fields.forEach(field=>{field.disabled=true;});
+  let d;
+  try { d=await withLoadingState(saveBtn,'Saving...',()=>useForm
     ? caseApiWithUploads(id?API.CASE.UPDATE:API.CASE.CREATE,casePayloadFormData(id))
     : api(id?API.CASE.UPDATE:API.CASE.CREATE,{id,title,status:val('caseStatus'),priority:val('casePriority'),next_check_at:val('caseNextCheck'),notes:val('caseNotes')}));
+  } finally { caseSaving=false; fields.forEach(field=>{field.disabled=false;}); modal.removeAttribute('aria-busy'); }
   if(!d)return;
   if(d.success){
+    tracsMarkSaved(document.getElementById('caseModal'));
     showModalSuccessAndClose({
       modal:'case',
       message:id?'Case updated.':'Case created.',
@@ -4377,6 +4418,7 @@ function removeTaskSelectedAttachment(id){
   taskSetUploadStatus(taskSelectedAttachments.length?`${taskSelectedAttachments.length} image${taskSelectedAttachments.length===1?'':'s'} ready to upload.`:'');
 }
 function renderTaskSelectedAttachments(){
+  window.TRACSUnsavedChanges?.refresh();
   const el=taskAttachmentEls().selected;
   if(!el)return;
   el.innerHTML=taskSelectedAttachments.map(item=>`
@@ -4401,6 +4443,9 @@ function taskPayloadFormData(id=''){
 function initTaskAttachmentUpload(){
   const els=taskAttachmentEls();
   if(!els.input||els.input.dataset.ready)return;
+  const modal=document.getElementById('taskModal');
+  els.input.setAttribute('data-unsaved-ignore','');
+  window.TRACSUnsavedChanges?.trackState(modal,()=>taskSelectedAttachments.map(({file})=>[file.name,file.size,file.lastModified]),{active:()=>!modal.classList.contains('hidden'),restore:clearTaskAttachmentState});
   els.input.dataset.ready='1';
   els.input.addEventListener('change',()=>taskAddAttachmentFiles(els.input.files));
   if(els.drop){
@@ -5349,6 +5394,22 @@ let shiftItems=[];             // [{uid,title,details,priority,status,resolution
 let shiftItemFiles={};         // uid -> [{id,file,url}]
 let shiftSummaryFiles=[];      // [{id,file,url}] shared handover-level screenshots
 let shiftItemSeq=0;
+function trackShiftDraft(){
+  const modal=document.getElementById('shiftModal');
+  if(!modal || modal.dataset.unsavedState !== undefined || !window.TRACSUnsavedChanges)return;
+  modal.setAttribute('data-unsaved-state','');
+  const files=list=>(list||[]).map(({file})=>[file.name,file.size,file.lastModified]);
+  window.TRACSUnsavedChanges.trackState(modal,()=>{
+    syncShiftItemsFromDom();
+    return {name:val('shiftName'),date:val('shiftDate'),summary:shiftModalMode==='create'?val('shiftSummary'):'',
+      files:shiftModalMode==='create'?files(shiftSummaryFiles):[],
+      items:shiftItems.map(({uid,...item})=>({...item,files:files(shiftItemFiles[uid])}))};
+  },{active:()=>!modal.classList.contains('hidden'),restore:state=>{
+    setVal('shiftName',state.name);setVal('shiftDate',state.date);setVal('shiftSummary',state.summary);
+    clearShiftAllFiles();clearShiftSummaryFiles();
+    shiftItems=state.items.map(({files,...item})=>shiftBlankItem(item));renderShiftItems();
+  }});
+}
 
 function shiftNewUid(){return 'it'+(++shiftItemSeq)+'_'+(crypto.randomUUID?.()||String(Date.now()+Math.random()).replace('.','' ));}
 function shiftBlankItem(overrides={}){
@@ -5442,6 +5503,7 @@ function addShiftItem(){
   syncShiftItemsFromDom();
   shiftItems.push(shiftBlankItem());
   renderShiftItems();
+  window.TRACSUnsavedChanges?.refresh();
   const cards=document.querySelectorAll('.shift-item-card');
   cards[cards.length-1]?.querySelector('.shift-i-title')?.focus();
 }
@@ -5451,6 +5513,7 @@ function removeShiftItem(uid){
   delete shiftItemFiles[uid];
   shiftItems=shiftItems.filter(x=>x.uid!==uid);
   renderShiftItems();
+  window.TRACSUnsavedChanges?.refresh();
 }
 function shiftItemAddFiles(uid,files){
   const incoming=Array.from(files||[]);
@@ -5473,6 +5536,7 @@ function shiftItemRemoveFile(uid,fileId){
   renderShiftItemFiles(uid);
 }
 function renderShiftItemFiles(uid){
+  queueMicrotask(()=>window.TRACSUnsavedChanges?.refresh());
   const list=shiftItemFiles[uid]||[];
   const wrap=shiftCardByUid(uid)?.querySelector(`#shiftItemPhotos_${uid}`);
   if(!wrap)return;
@@ -5518,6 +5582,7 @@ function shiftSummaryRemoveFile(fileId){
   renderShiftSummaryFiles();
 }
 function renderShiftSummaryFiles(){
+  queueMicrotask(()=>window.TRACSUnsavedChanges?.refresh());
   const el=shiftSummaryAttachmentEls().selected;
   if(!el)return;
   el.innerHTML=shiftSummaryFiles.map(item=>`
@@ -5621,6 +5686,7 @@ function openNewShiftReport(){
   shiftItems=[];
   applyShiftModalMode();
   renderShiftItems();
+  trackShiftDraft();
   openModal('shift');
 }
 function openEditShiftReport(id){
@@ -5643,6 +5709,7 @@ function openEditShiftReport(id){
   })];
   applyShiftModalMode();
   renderShiftItems();
+  trackShiftDraft();
   openModal('shift');
 }
 async function saveShiftReport(){

@@ -32,6 +32,24 @@
   const selected = (line) => line.custom ? { name: line.name, price: 0, unit_quantity: true } : available().find((item) => item.id === line.id && item.category === line.category);
   const unitPrice = (line) => line.override_price ?? selected(line)?.price ?? 0;
   const icons = () => window.lucide?.createIcons();
+  const trackedDialogs = new WeakSet();
+  let configurationTracked = false;
+  const configurationState = () => ({ service: service.value, period: period.value, nodes: Number(nodes.value), marginMode: marginMode.value, marginValue: Number(marginValue.value), lines: lines.map(line => ({ ...line, quantity: Number(line.quantity), ...(line.override_price != null ? { override_price: Number(line.override_price) } : {}), draft: priceDrafts.has(line) && Number(priceDrafts.get(line)) !== Number(unitPrice(line)) ? Number(priceDrafts.get(line)) : null })) });
+  function captureDialog(dialog) {
+    const guard = window.TRACSUnsavedChanges;
+    if (!dialog || !guard) return;
+    if (!trackedDialogs.has(dialog)) {
+      trackedDialogs.add(dialog);
+      const fields=()=>Array.from(dialog.querySelectorAll('input:not([type="hidden"]), textarea, select')).filter(field => !field.matches('[data-master-search], [data-filter-service], [data-filter-category], [data-filter-status], [data-template-select]'));
+      guard.trackState(dialog, () => fields().map(field => field.type === 'checkbox' ? field.checked : field.value), { active: () => dialog.open, restore: values=>fields().forEach((field,index)=>{if(field.type==='checkbox')field.checked=values[index];else field.value=values[index];}) });
+    }
+    guard.captureInitialState(dialog);
+  }
+  function closeDialog(dialog) {
+    if (!dialog || dialog.querySelector('button[type="submit"]:disabled') || templateBusy) return;
+    if (window.TRACSUnsavedChanges) window.TRACSUnsavedChanges.requestModalClose(dialog, () => dialog.close());
+    else dialog.close();
+  }
 
   async function request(action, input) {
     const response = await fetch(`configurator.php?action=${action}`, {
@@ -194,14 +212,6 @@
     return Math.min(max + 1, 1000000);
   }
 
-  function hasConfigurationDraft() {
-    if (!catalog || loading) return false;
-    return lines.some((line) => line.id || line.custom || line.override_price != null)
-      || Number(nodes.value) !== 1
-      || marginMode.value !== 'percentage'
-      || Number(marginValue.value) !== 30;
-  }
-
   function taxPercent() {
     return Number((Number(catalog?.tax_rate || 0) * 100).toFixed(4));
   }
@@ -237,6 +247,14 @@
     if (firstLoad || service.value !== oldService || period.value !== oldPeriod) resetLines();
     else { renderLines(); calculate(); }
     renderMaster();
+    if (firstLoad && !configurationTracked && window.TRACSUnsavedChanges) {
+      configurationTracked = true;
+      window.TRACSUnsavedChanges.trackState($('#sales-calculator'), configurationState, { restore: state => {
+        service.value = state.service; setPeriods(state.period); nodes.value = state.nodes;
+        marginMode.value = state.marginMode; marginValue.value = state.marginValue;
+        lines = state.lines.map(({ draft, ...line }) => line); renderLines(); calculate();
+      } });
+    }
     status.textContent = activeItems().length ? '' : 'No active items. Contact your Pricing Matrix administrator.';
   }
 
@@ -336,18 +354,17 @@
     calculate();
   });
   $('[data-refresh]').addEventListener('click', () => refresh(true));
-  window.addEventListener('beforeunload', (event) => {
-    if (!hasConfigurationDraft()) return;
-    event.preventDefault();
-    event.returnValue = '';
-  });
+  ['input', 'change', 'click'].forEach(type => root.addEventListener(type, () => queueMicrotask(() => window.TRACSUnsavedChanges?.refresh())));
+  root.querySelectorAll('dialog').forEach(dialog => dialog.addEventListener('cancel', event => { event.preventDefault(); closeDialog(dialog); }));
   window.addEventListener('pageshow', (event) => { if (event.persisted) refresh(); });
   const masterDialog = $('[data-master-dialog]');
   const templateDialog = $('[data-template-dialog]');
   $('[data-open-master]')?.addEventListener('click', () => { if (catalog) { renderMaster(); renderTaxSetting(); setTaxEditing(false); } masterDialog?.showModal(); $('[data-master-search]')?.focus(); });
-  $('[data-close-master]')?.addEventListener('click', () => masterDialog?.close());
+  $('[data-open-master]')?.addEventListener('click', () => captureDialog(masterDialog));
+  $('[data-close-master]')?.addEventListener('click', () => closeDialog(masterDialog));
   $('[data-open-templates]')?.addEventListener('click', () => { renderTemplates(); templateDialog?.showModal(); $('[data-template-select]')?.focus(); });
-  $('[data-close-templates]')?.addEventListener('click', () => templateDialog?.close());
+  $('[data-open-templates]')?.addEventListener('click', () => captureDialog(templateDialog));
+  $('[data-close-templates]')?.addEventListener('click', () => closeDialog(templateDialog));
   $('[data-master-search]')?.addEventListener('input', () => { if (catalog) renderMaster(); });
   root.querySelectorAll('[data-filter-service], [data-filter-category], [data-filter-status]').forEach((field) => field.addEventListener('change', () => { if (catalog) renderMaster(); }));
   root.querySelectorAll('[data-master-sort]').forEach((button) => {
@@ -387,6 +404,7 @@
     $('#sales-service-options').replaceChildren(...[...new Set(catalog.items.map((entry) => entry.service_type))].sort().map((value) => new Option(value, value)));
     updateCategorySuggestions();
     dialog.showModal();
+    captureDialog(dialog);
     form.elements.name.focus();
   }
   function updateCategorySuggestions() {
@@ -400,8 +418,8 @@
     const button = event.target.closest('[data-edit]');
     if (button) edit(catalog.items.find((item) => item.id === Number(button.dataset.edit)));
   });
-  $('[data-cancel]')?.addEventListener('click', () => dialog.close());
-  $('[data-close-item]')?.addEventListener('click', () => dialog.close());
+  $('[data-cancel]')?.addEventListener('click', () => closeDialog(dialog));
+  $('[data-close-item]')?.addEventListener('click', () => closeDialog(dialog));
   form?.addEventListener('submit', async (event) => {
     event.preventDefault();
     const button = form.querySelector('[type="submit"]'); button.disabled = true;
@@ -409,7 +427,7 @@
       const input = Object.fromEntries(new FormData(form));
       input.active = form.elements.active.checked;
       input.unit_quantity = form.elements.unit_quantity.checked;
-      useCatalog(await request('save_item', input)); dialog.close(); status.textContent = 'Pricing item saved.';
+      useCatalog(await request('save_item', input)); window.TRACSUnsavedChanges?.markSaved(dialog); dialog.close(); status.textContent = 'Pricing item saved.';
     } catch (error) { $('[data-item-error]').textContent = error.message; }
     finally { button.disabled = false; }
   });
@@ -417,7 +435,7 @@
     event.preventDefault();
     if (!catalog) return;
     const button = event.target.querySelector('[type="submit"]'); button.disabled = true;
-    try { useCatalog(await request('save_tax', { tax_rate: Number(event.target.elements.tax.value) / 100, revision: catalog.tax_revision })); setTaxEditing(false); status.textContent = 'PPN saved.'; }
+    try { useCatalog(await request('save_tax', { tax_rate: Number(event.target.elements.tax.value) / 100, revision: catalog.tax_revision })); setTaxEditing(false); window.TRACSUnsavedChanges?.markSaved(masterDialog); status.textContent = 'PPN saved.'; }
     catch (error) { status.textContent = error.message; }
     finally { button.disabled = false; }
   });
@@ -497,8 +515,9 @@
   }
   $('[data-template-select]').addEventListener('change', () => {
     const template = selectedTemplate();
-    if (template) $('[data-template-name]').value = template.name;
-    renderTemplates();
+    const apply=()=>{ if (template) $('[data-template-name]').value = template.name; renderTemplates(); captureDialog(templateDialog); };
+    if(window.TRACSUnsavedChanges) window.TRACSUnsavedChanges.requestModalClose(templateDialog,apply);
+    else apply();
   });
   $('[data-save-template]').addEventListener('click', async () => {
     if (templateBusy) return;
@@ -510,9 +529,11 @@
     templateBusy = true; $('[data-save-template]').disabled = true;
     try {
       templates = await request('save_template', { name, configuration });
+      window.TRACSUnsavedChanges?.markSaved($('#sales-calculator'));
       const saved = templates.find((item) => item.name === name);
       renderTemplates(); message.textContent = `Template saved: ${name}`;
       if (saved) { $('[data-template-select]').value = String(saved.id); renderTemplates(); }
+      window.TRACSUnsavedChanges?.markSaved(templateDialog);
     } catch (error) { message.textContent = error.message; }
     finally { templateBusy = false; $('[data-save-template]').disabled = false; renderTemplates(); }
   });
@@ -528,8 +549,10 @@
     templateBusy = true; $('[data-update-template]').disabled = true;
     try {
       templates = await request('save_template', { id: template.id, name, configuration });
+      window.TRACSUnsavedChanges?.markSaved($('#sales-calculator'));
       $('[data-template-select]').value = String(template.id);
       renderTemplates(); message.textContent = `Template updated: ${name}`;
+      window.TRACSUnsavedChanges?.markSaved(templateDialog);
     } catch (error) { message.textContent = error.message; }
     finally { templateBusy = false; renderTemplates(); }
   });
@@ -569,6 +592,8 @@
       lines = JSON.parse(JSON.stringify(config.lines));
       $('[data-template-name]').value = template.name;
       renderLines(); calculate();
+      window.TRACSUnsavedChanges?.markSaved($('#sales-calculator'));
+      window.TRACSUnsavedChanges?.markSaved(templateDialog);
       templateDialog?.close();
       message.textContent = `Loaded: ${template.name}. Current Pricing Matrix prices and PPN apply.`;
     } catch (error) { message.textContent = error.message; }

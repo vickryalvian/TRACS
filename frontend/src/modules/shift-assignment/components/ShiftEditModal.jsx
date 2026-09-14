@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useUnsavedForm, requestFormClose } from '../../../../../assets/react/calendar/hooks/useUnsavedForm';
 import { Button } from '../../../components/ui/Button';
 import { updateShiftAssignment } from '../api';
 import { fieldErrorsFromApi } from '../utils/shiftCreate';
@@ -46,7 +47,7 @@ export function ShiftEditModal({
   const [saving, setSaving] = useState(false);
   const firstFieldRef = useRef(null);
   const modalRef = useRef(null);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(initialDraft);
+  useUnsavedForm(modalRef, draft, { active: open && !!assignment, baseline: initialDraft, resetKey: assignment?.id, restore: setDraft });
   const filters = context?.filters ?? {};
   const csrf = context?.csrf ?? {};
 
@@ -64,29 +65,14 @@ export function ShiftEditModal({
     if (!open) {
       return undefined;
     }
-    function warnBeforeUnload(event) {
-      if (dirty) {
-        event.preventDefault();
-        event.returnValue = '';
-      }
-    }
-    window.addEventListener('beforeunload', warnBeforeUnload);
-    return () => window.removeEventListener('beforeunload', warnBeforeUnload);
-  }, [dirty, open]);
-
-  useEffect(() => {
-    if (!open) {
-      return undefined;
-    }
     function closeOnEscape(event) {
-      if (event.key === 'Escape' && !saving
-          && (!dirty || window.confirm('Discard unsaved assignment changes?'))) {
-        onClose();
+      if (event.key === 'Escape' && !saving && !window.TRACSUnsavedChanges?.prompting) {
+        requestFormClose(modalRef.current, onClose);
       }
     }
     window.addEventListener('keydown', closeOnEscape);
     return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [dirty, onClose, open, saving]);
+  }, [onClose, open, saving]);
 
   if (!open || !assignment) {
     return null;
@@ -113,9 +99,7 @@ export function ShiftEditModal({
   }
 
   function requestClose() {
-    if (!saving && (!dirty || window.confirm('Discard unsaved assignment changes?'))) {
-      onClose();
-    }
+    if (!saving) requestFormClose(modalRef.current, onClose);
   }
 
   async function submit(event) {
@@ -139,6 +123,7 @@ export function ShiftEditModal({
     setSaving(true);
     try {
       const response = await updateShiftAssignment(draft.id, result.payload, csrf);
+      window.TRACSUnsavedChanges?.markSaved(modalRef.current);
       await onUpdated(response.data?.assignment, response.message);
       onClose();
     } catch (error) {
@@ -156,6 +141,7 @@ export function ShiftEditModal({
 
   return (
     <div
+      data-react-modal
       aria-labelledby="shift-edit-title"
       aria-modal="true"
       className="shift-create-backdrop tr:fixed tr:inset-0 tr:z-[60] tr:flex tr:items-end tr:justify-center tr:bg-black/55 tr:p-0 tr:sm:items-center tr:sm:p-tracs-4"

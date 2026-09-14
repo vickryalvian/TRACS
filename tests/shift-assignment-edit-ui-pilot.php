@@ -41,7 +41,7 @@ edit_ui_assert(
         && str_contains($modal, "saving ? 'Saving...'")
         && str_contains($modal, 'Change at least one field before saving.')
         === false
-        && str_contains($modal, "window.confirm('Discard unsaved assignment changes?')")
+        && str_contains($modal, 'requestFormClose(modalRef.current, onClose)')
         && str_contains($modal, "mutationErrorMessage(error, 'edit')")
         && str_contains($mutation, 'case 404:')
         && str_contains($mutation, 'case 409:')

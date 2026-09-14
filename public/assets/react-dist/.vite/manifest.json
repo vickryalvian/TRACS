@@ -17,9 +17,12 @@
       "_Button-YSMs1zGf.js"
     ]
   },
-  "_apiClient-CYP8AMeK.js": {
-    "file": "assets/apiClient-CYP8AMeK.js",
-    "name": "apiClient"
+  "_apiClient-Ch0b0eBa.js": {
+    "file": "assets/apiClient-Ch0b0eBa.js",
+    "name": "apiClient",
+    "imports": [
+      "_Button-YSMs1zGf.js"
+    ]
   },
   "src/modules/branch-network/main.jsx": {
     "file": "assets/branchNetwork-BRwP0Qo6.js",
@@ -35,27 +38,27 @@
     ]
   },
   "src/modules/clients/main.jsx": {
-    "file": "assets/clients-D2O8Tr25.js",
+    "file": "assets/clients-ClyGjppX.js",
     "name": "clients",
     "src": "src/modules/clients/main.jsx",
     "isEntry": true,
     "imports": [
       "_Button-YSMs1zGf.js",
-      "_apiClient-CYP8AMeK.js"
+      "_apiClient-Ch0b0eBa.js"
     ],
     "css": [
       "assets/clients-BPZ51dp1.css"
     ]
   },
   "src/modules/shift-assignment/main.jsx": {
-    "file": "assets/shiftAssignment-CfQCI2FH.js",
+    "file": "assets/shiftAssignment-DvBClf9-.js",
     "name": "shiftAssignment",
     "src": "src/modules/shift-assignment/main.jsx",
     "isEntry": true,
     "imports": [
       "_Button-YSMs1zGf.js",
       "_Card-xHNLRQV5.js",
-      "_apiClient-CYP8AMeK.js"
+      "_apiClient-Ch0b0eBa.js"
     ],
     "css": [
       "assets/shiftAssignment-CZzW7jaW.css"

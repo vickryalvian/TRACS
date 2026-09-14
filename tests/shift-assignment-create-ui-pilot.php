@@ -35,7 +35,7 @@ create_ui_assert(
 create_ui_assert(
     str_contains($modal, 'createShiftAssignment(result.payload, csrf)')
         && str_contains($modal, "saving ? 'Saving...'")
-        && str_contains($modal, "window.confirm('Discard unsaved assignment changes?')")
+        && str_contains($modal, 'requestFormClose(modalRef.current, onClose)')
         && str_contains($modal, 'aria-modal="true"'),
     'Controlled modal safety behavior changed.'
 );

@@ -970,6 +970,7 @@
     updateMethodUi(modal);
     activateModalTab(modal, 'add');
     form.querySelector('input[name="name"]')?.focus();
+    window.TRACSUnsavedChanges?.captureInitialState(modal);
   }
 
   function exitEditMode(modal) {
@@ -994,12 +995,14 @@
       activateModalTab(modal, 'add');
       updateMethodUi(modal);
       renderServerRegistry(modal, store);
+      window.TRACSUnsavedChanges?.captureInitialState(modal);
       form?.querySelector('input[name="name"]')?.focus();
     }
 
     function closeModal() {
-      tracsCloseModalElement(modal);
-      exitEditMode(modal);
+      const close=()=>{ tracsCloseModalElement(modal,{bypassUnsaved:true}); exitEditMode(modal); };
+      if(window.TRACSUnsavedChanges) window.TRACSUnsavedChanges.requestModalClose(modal,close);
+      else close();
     }
 
     document.querySelectorAll('[data-infra-manage-open]').forEach((button) => {
@@ -1018,26 +1021,23 @@
     form?.addEventListener('change', (event) => {
       if (event.target.name === 'method') updateMethodUi(modal);
     });
-    modal.querySelector('[data-infra-form-reset]')?.addEventListener('click', () => {
-      form.reset();
-      form.elements.method.value = 'icmp';
-      form.elements.expected_status.value = '200';
-      form.elements.packet_count.value = '4';
-      form.elements.timeout_seconds.value = '5';
-      form.elements.interval_seconds.value = '60';
-      exitEditMode(modal);
-      updateMethodUi(modal);
-    });
-    modal.querySelector('[data-infra-edit-cancel]')?.addEventListener('click', () => {
-      form.reset();
-      form.elements.method.value = 'icmp';
-      form.elements.expected_status.value = '200';
-      form.elements.packet_count.value = '4';
-      form.elements.timeout_seconds.value = '5';
-      form.elements.interval_seconds.value = '60';
-      exitEditMode(modal);
-      updateMethodUi(modal);
-    });
+    function resetServerForm() {
+      const reset=()=>{
+        form.reset();
+        form.elements.method.value = 'icmp';
+        form.elements.expected_status.value = '200';
+        form.elements.packet_count.value = '4';
+        form.elements.timeout_seconds.value = '5';
+        form.elements.interval_seconds.value = '60';
+        exitEditMode(modal);
+        updateMethodUi(modal);
+        window.TRACSUnsavedChanges?.captureInitialState(modal);
+      };
+      if(window.TRACSUnsavedChanges) window.TRACSUnsavedChanges.requestModalClose(modal,reset);
+      else reset();
+    }
+    modal.querySelector('[data-infra-form-reset]')?.addEventListener('click', resetServerForm);
+    modal.querySelector('[data-infra-edit-cancel]')?.addEventListener('click', resetServerForm);
     modal.addEventListener('click', async (event) => {
       const edit = event.target.closest('[data-infra-edit-server]');
       const remove = event.target.closest('[data-infra-remove-server]');
@@ -1046,7 +1046,10 @@
       if (edit) {
         const code = edit.getAttribute('data-infra-edit-server');
         const node = store.getSnapshot().nodes.find((item) => item.code === code);
-        if (node) enterEditMode(modal, node);
+        if (node) {
+          if(window.TRACSUnsavedChanges) window.TRACSUnsavedChanges.requestModalClose(modal,()=>enterEditMode(modal,node));
+          else enterEditMode(modal,node);
+        }
         return;
       }
       if (cancelRemove) {
