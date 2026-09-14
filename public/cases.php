@@ -21,6 +21,7 @@ $ticker_items = $TC->formatAlertsForTicker();
 $case_can_manage = tracs_user_can($conn, 'cases.manage');
 $case_role = (string)($_SESSION['user_role_slug'] ?? '');
 $case_can_delete = tracs_user_can_delete_cases($conn, $uid);
+$case_can_export = tracs_user_can($conn, 'cases.export');
 
 $all = array_map([$CC, 'formatCase'], $CC->getCases() ?: []);
 $total = count($all);
@@ -181,6 +182,7 @@ include 'includes/header.php';
         <button type="button" role="menuitemradio" data-board-order="manual"><i data-lucide="hand" class="icon-xs"></i>Manual Order (your arrangement)</button>
       </div>
     </details>
+    <?php if ($case_can_export): ?>
     <details class="report-export-menu">
       <summary class="btn btn-ghost btn-icon report-export-trigger" title="Export cases" aria-label="Export cases"><i data-lucide="download" class="icon-sm"></i></summary>
       <form method="get" action="/api/export-cases.php" class="report-export-popover">
@@ -196,6 +198,7 @@ include 'includes/header.php';
         <button type="submit" class="btn btn-primary"><i data-lucide="download" class="icon-sm"></i>Download CSV</button>
       </form>
     </details>
+    <?php endif; ?>
     </div><!-- /case-board-tools -->
   </div>
   <div class="case-kanban">

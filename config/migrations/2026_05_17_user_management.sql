@@ -295,6 +295,7 @@ VALUES
   ('reports.export', 'Reports', 'Export reports'),
   ('cases.view', 'Cases', 'View cases'),
   ('cases.manage', 'Cases', 'Create and update cases'),
+  ('cases.export', 'Cases', 'Download cases as CSV'),
   ('reminders.view', 'Reminders', 'View reminders'),
   ('reminders.manage', 'Reminders', 'Create and update reminders'),
   ('checklist.view', 'Checklist', 'View checklist'),
@@ -370,7 +371,7 @@ JOIN `tracs_permissions` p ON p.permission_key IN (
   'divisions.view','divisions.create','divisions.update','divisions.archive','divisions.manage_members',
   'roles.view',
   'reports.view','reports.create','reports.update','reports.export',
-  'cases.view','cases.manage','reminders.view','reminders.manage','checklist.view','checklist.manage',
+  'cases.view','cases.manage','cases.export','reminders.view','reminders.manage','checklist.view','checklist.manage',
   'finance.view','finance.manage','domains.view','domains.manage','moms.view','moms.manage',
   'cancellation_feedback.view','cancellation_feedback.manage'
 )
@@ -385,7 +386,7 @@ JOIN `tracs_permissions` p ON p.permission_key IN (
   'profile.view_own','profile.update_own','profile.change_password_own','profile.update_preferences_own',
   'divisions.view','divisions.manage_members',
   'reports.view','reports.create','reports.update','reports.export',
-  'cases.view','cases.manage','reminders.view','reminders.manage','checklist.view','checklist.manage',
+  'cases.view','cases.manage','cases.export','reminders.view','reminders.manage','checklist.view','checklist.manage',
   'domains.view','domains.manage','moms.view','moms.manage',
   'cancellation_feedback.view','cancellation_feedback.manage'
 )

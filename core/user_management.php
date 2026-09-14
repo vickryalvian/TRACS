@@ -152,6 +152,7 @@ function tracs_permission_catalog(): array {
         'Cases' => [
             'cases.view' => 'View cases',
             'cases.manage' => 'Create and update cases',
+            'cases.export' => 'Download cases as CSV',
             'cases.delete' => 'Delete operational cases',
         ],
         'Abuse Reports' => [
@@ -253,6 +254,7 @@ function tracs_default_role_permissions(string $roleSlug): array {
             'divisions.manage_members',
             'cases.view',
             'cases.manage',
+            'cases.export',
             'abuse_reports.view',
             'abuse_reports.manage',
             'abuse_reports.delete',
@@ -316,6 +318,7 @@ function tracs_default_role_permissions(string $roleSlug): array {
             'dashboard.view',
             'cases.view',
             'cases.manage',
+            'cases.export',
             'abuse_reports.view',
             'abuse_reports.manage',
             'clients.view',

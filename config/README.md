@@ -30,6 +30,11 @@ For existing installations:
 
 Current migrations:
 
+- `2026_09_14_cases_export_permission.sql` — adds the assignable
+  `cases.export` permission for Cases CSV downloads. Existing admin,
+  supervisor, and super admin export access is preserved; other roles can be
+  granted the option from User Management.
+
 - [`2026_09_10_client_calendar.sql`](migrations/2026_09_10_client_calendar.sql) — widens
   `tracs_client_followups.action_type` to `VARCHAR(80)` for quotation and additional
   client activity types. Requires the existing Clients tables; preserves rows and
