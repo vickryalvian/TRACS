@@ -21,17 +21,13 @@ try {
     if ($method === 'POST') {
         \TRACS\Api\require_permission($conn, 'clients.manage', $context['user']);
         $input = \TRACS\Api\get_request_json();
-        if (!\tracs_user_can($conn, 'clients.view_all', $context['user_id'])) {
-            $input['owner_user_id'] = $context['user_id'];
-        }
         $id = $controller->create($input, \tracs_current_user_display($conn));
         \TRACS\Api\json_success($controller->detail($id), 'Client created.', ['request_id' => $context['request_id']], 201);
     }
 
     $data = $controller->list([
-        'scope' => $_GET['scope'] ?? 'mine',
         'q' => trim((string)($_GET['q'] ?? '')),
-        'owner_user_id' => $_GET['owner_user_id'] ?? '',
+        'assigned_admin_id' => $_GET['assigned_admin_id'] ?? '',
         'status' => $_GET['status'] ?? '',
         'billing_status' => $_GET['billing_status'] ?? '',
         'attention' => $_GET['attention'] ?? '',

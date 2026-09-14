@@ -1,64 +1,64 @@
 {
-  "_Button-YSMs1zGf.js": {
-    "file": "assets/Button-YSMs1zGf.js",
+  "_Button-B1mC5Lz1.css": {
+    "file": "assets/Button-B1mC5Lz1.css",
+    "src": "_Button-B1mC5Lz1.css"
+  },
+  "_Button-CtHpNjWP.js": {
+    "file": "assets/Button-CtHpNjWP.js",
     "name": "Button",
     "css": [
-      "assets/Button-yEbSImvx.css"
+      "assets/Button-B1mC5Lz1.css"
     ]
   },
-  "_Button-yEbSImvx.css": {
-    "file": "assets/Button-yEbSImvx.css",
-    "src": "_Button-yEbSImvx.css"
-  },
-  "_Card-xHNLRQV5.js": {
-    "file": "assets/Card-xHNLRQV5.js",
+  "_Card-BNwyFcem.js": {
+    "file": "assets/Card-BNwyFcem.js",
     "name": "Card",
     "imports": [
-      "_Button-YSMs1zGf.js"
+      "_Button-CtHpNjWP.js"
     ]
   },
-  "_apiClient-Ch0b0eBa.js": {
-    "file": "assets/apiClient-Ch0b0eBa.js",
+  "_apiClient-DouenMql.js": {
+    "file": "assets/apiClient-DouenMql.js",
     "name": "apiClient",
     "imports": [
-      "_Button-YSMs1zGf.js"
+      "_Button-CtHpNjWP.js"
     ]
   },
   "src/modules/branch-network/main.jsx": {
-    "file": "assets/branchNetwork-BRwP0Qo6.js",
+    "file": "assets/branchNetwork-Cs-UsAYg.js",
     "name": "branchNetwork",
     "src": "src/modules/branch-network/main.jsx",
     "isEntry": true,
     "imports": [
-      "_Button-YSMs1zGf.js",
-      "_Card-xHNLRQV5.js"
+      "_Button-CtHpNjWP.js",
+      "_Card-BNwyFcem.js"
     ],
     "css": [
       "assets/branchNetwork-DkaOJuys.css"
     ]
   },
   "src/modules/clients/main.jsx": {
-    "file": "assets/clients-Dknw_u1h.js",
+    "file": "assets/clients-CIdO86j7.js",
     "name": "clients",
     "src": "src/modules/clients/main.jsx",
     "isEntry": true,
     "imports": [
-      "_Button-YSMs1zGf.js",
-      "_apiClient-Ch0b0eBa.js"
+      "_Button-CtHpNjWP.js",
+      "_apiClient-DouenMql.js"
     ],
     "css": [
-      "assets/clients-BDSqGsQR.css"
+      "assets/clients-CBjvrRjP.css"
     ]
   },
   "src/modules/shift-assignment/main.jsx": {
-    "file": "assets/shiftAssignment-DvBClf9-.js",
+    "file": "assets/shiftAssignment-C5RwZgVp.js",
     "name": "shiftAssignment",
     "src": "src/modules/shift-assignment/main.jsx",
     "isEntry": true,
     "imports": [
-      "_Button-YSMs1zGf.js",
-      "_Card-xHNLRQV5.js",
-      "_apiClient-Ch0b0eBa.js"
+      "_Button-CtHpNjWP.js",
+      "_Card-BNwyFcem.js",
+      "_apiClient-DouenMql.js"
     ],
     "css": [
       "assets/shiftAssignment-CZzW7jaW.css"

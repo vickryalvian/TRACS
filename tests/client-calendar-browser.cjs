@@ -10,6 +10,9 @@ let clients = [];
 let events = [];
 let checklistUpdates = [];
 const context = { schema_ready: true, allowed_actions: { manage: true, view_all: true }, user: { id: 1, name: 'Test Owner' }, users: [{ id: 1, name: 'Test Owner' }] };
+async function expectSelected(locator, value) {
+  assert.equal(await locator.inputValue(), String(value));
+}
 function html(entryName) {
   const calendar = entryName === 'calendar';
   const prefix = calendar ? 'calendar-dist' : 'react-dist';
@@ -20,7 +23,7 @@ function html(entryName) {
   visit(key);
   return `<!doctype html><html lang="en" data-theme="dark" data-visual-theme="tracs-v2"><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="test"><link rel="stylesheet" href="/assets/tracs.css"><link rel="stylesheet" href="/assets/css/themes/tracs-v2.css">${[...css].map(file=>`<link rel="stylesheet" href="/assets/${prefix}/${file}">`).join('')}<style>body{height:auto;min-height:100vh;overflow:auto}.fixture{padding:24px;max-width:1400px;margin:auto}@media(max-width:640px){.fixture{padding:12px}}</style></head><body><div class="fixture"><div id="${calendar ? 'calendar-react-root' : 'tracs-clients-root'}"></div></div><script type="module" src="/assets/${prefix}/${manifest[key].file}"></script></body></html>`;
 }
-const fixture = id => ({ id, company_name: id===1 ? 'PT Example' : 'PT Second', client_code: `CL-${id}`, owner_user_id: 1, owner_name: 'Test Owner', primary_contact_name: 'Test PIC', status: 'active', service_count: 1, addon_count: 0, service_types: 'VPS', nearest_renewal_date: today, next_action: 'Send invoice', next_action_due_at: today, contacts: [{ name:'Test PIC', email:'pic@example.test' }], services:[{id:1,service_name:'Production VPS',service_type:'VPS',status:'active',price:100000,billing_cycle:'monthly',renewal_date:today,addons:[]}], billing:[], followups:[], activity:[], renewal_history:[], notes:'Client operational notes', mrr_amount:100000, total_paid_amount:200000, outstanding_amount:100000 });
+const fixture = id => ({ id, company_name: id===1 ? 'PT Example' : 'PT Second', client_code: `CL-${id}`, owner_user_id: 1, owner_name: 'Test Owner', assigned_admin_id: 1, assigned_admin_name: 'Test Owner', primary_contact_name: 'Test PIC', status: 'active', service_count: 1, addon_count: 0, service_types: 'VPS', nearest_renewal_date: today, next_action: 'Send invoice', next_action_due_at: today, contacts: [{ name:'Test PIC', email:'pic@example.test' }], services:[{id:1,service_name:'Production VPS',service_type:'VPS',status:'active',price:100000,billing_cycle:'monthly',renewal_date:today,addons:[]}], billing:[], followups:[], activity:[], renewal_history:[], notes:'Client operational notes', mrr_amount:100000, total_paid_amount:200000, outstanding_amount:100000 });
 (async () => {
   const browser = await chromium.launch({ headless: true, channel: 'chrome' });
   try {
@@ -45,7 +48,11 @@ const fixture = id => ({ id, company_name: id===1 ? 'PT Example' : 'PT Second', 
       else if (url.pathname.endsWith('/events.php')) data={ events, sources:{clients:{available:true}} };
       else if (url.pathname.endsWith('/clients.php')) {
         if (req.method()==='POST') { const client={...fixture(clients.length+1),...body}; clients.push(client); data=client; }
-        else { const q=url.searchParams.get('q') || ''; data={clients:clients.filter(c=>`${c.company_name} ${c.client_code} ${c.primary_contact_name}`.toLowerCase().includes(q.toLowerCase())),summary:{mrr_amount:100000,invoice_this_week:1},attention:[]}; }
+        else {
+          const q=url.searchParams.get('q') || '';
+          const pic=url.searchParams.get('assigned_admin_id') || '';
+          data={clients:clients.filter(c=>`${c.company_name} ${c.client_code} ${c.primary_contact_name} ${c.assigned_admin_name}`.toLowerCase().includes(q.toLowerCase())).filter(c=>pic==='' || pic==='mine' ? true : pic==='unassigned' ? !c.assigned_admin_id : String(c.assigned_admin_id)===pic),summary:{mrr_amount:100000,invoice_this_week:1},attention:[]};
+        }
       } else if (url.pathname.endsWith('/client.php')) data=clients.find(c=>String(c.id)===url.searchParams.get('id'));
       else if (url.pathname.endsWith('/actions.php')) {
         assert.equal(req.headers()['x-csrf-token'], 'test');
@@ -79,6 +86,7 @@ const fixture = id => ({ id, company_name: id===1 ? 'PT Example' : 'PT Second', 
     await page.screenshot({path:`${out}/empty-desktop.png`,fullPage:true});
     await page.getByRole('button',{name:'Add Client',exact:true}).first().click();
     const modal=page.getByRole('dialog',{name:'Add Client',exact:true});
+    await expectSelected(modal.getByLabel('PIC / Assigned Admin'), '1');
     assert.equal(await page.evaluate(() => TRACSUnsavedChanges.isDirty()), false);
     await modal.getByRole('button', { name: 'Cancel', exact: true }).click();
     await modal.waitFor({ state: 'hidden' });
@@ -109,9 +117,10 @@ const fixture = id => ({ id, company_name: id===1 ? 'PT Example' : 'PT Second', 
     assert.equal(clients.length, 1, 'Retry after attachment failure must update the existing client');
     await page.locator('.client-details').waitFor();
     assert.equal(new URL(page.url()).pathname,'/clients.php');
-    await page.getByRole('button',{name:'View Less'}).click();
+    await page.getByRole('button',{name:'Hide'}).click();
     assert.equal(await page.locator('.client-details').count(),0);
-    await page.locator('.clients-list').getByRole('button',{name:'View More'}).click();
+    await page.getByRole('button', { name: /Sort by Client/ }).click();
+    await page.locator('.clients-list').getByRole('button',{name:'Details'}).click();
     await page.getByRole('button',{name:'Add Record / Reminder'}).click();
     const record=page.getByRole('dialog',{name:'Add Record · PT Example',exact:true});
     await record.getByLabel('Title',{exact:true}).fill('Send quotation');
@@ -123,7 +132,7 @@ const fixture = id => ({ id, company_name: id===1 ? 'PT Example' : 'PT Second', 
     await page.locator('.client-monthly-checklist').getByRole('checkbox', { name: /^Invoice sent\b/ }).click();
     await page.locator('.client-monthly-checklist').getByText('Completed', {exact:false}).waitFor();
     assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('tracs.clients.lastClient')).expanded), true);
-    await page.locator('.clients-calendar .panel-head').getByRole('button',{name:'View Full Calendar'}).click();
+    await page.locator('.clients-mini-calendar article > button').click();
     const full=page.getByRole('dialog',{name:'Client Calendar',exact:true});
     await full.getByRole('grid').waitFor();
     await full.getByRole('button',{name:'Next month'}).click();
@@ -155,20 +164,20 @@ const fixture = id => ({ id, company_name: id===1 ? 'PT Example' : 'PT Second', 
     await page.getByText('No clients match these filters.',{exact:true}).waitFor();
     await page.getByLabel('Search client, code, PIC').fill('');
     await page.locator('.clients-list > tbody > .client-row').waitFor();
-    await page.getByRole('button',{name:'View Less'}).click();
+    await page.getByRole('button',{name:'Hide'}).click();
     assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('tracs.clients.lastClient')).expanded), false);
     await page.reload();
     await page.locator('.clients-list > tbody > .client-row.is-last-opened').waitFor();
     assert.equal(await page.locator('.client-details').count(),0);
     await page.screenshot({path:`${out}/populated-desktop.png`,fullPage:true});
     await page.setViewportSize({width:390,height:844});
-    await page.locator('.clients-list').getByRole('button',{name:'View More'}).click();
+    await page.locator('.clients-list').getByRole('button',{name:'Details'}).click();
     await page.locator('.client-details').waitFor();
     await page.screenshot({path:`${out}/expanded-mobile.png`,fullPage:true});
     const detailBox=await page.locator('.client-details').boundingBox();
     assert(detailBox.x>=0 && detailBox.x+detailBox.width<=390,'Expanded details are hidden by horizontal scrolling');
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),'Page overflows mobile viewport');
-    await page.locator('.clients-calendar .panel-head').getByRole('button',{name:'View Full Calendar'}).click();
+    await page.locator('.clients-mini-calendar article > button').click();
     await page.screenshot({path:`${out}/calendar-mobile.png`,fullPage:true});
     const box=await full.boundingBox();
     assert(box.width<=390 && box.height<=844,'Calendar modal exceeds viewport');

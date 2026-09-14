@@ -172,14 +172,15 @@ final class CalendarService
     {
         if (!$this->hasPermission(['clients.view']) || !tracs_table_exists($this->conn, 'tracs_client_followups')) return [];
         $query = ClientReminderRecords::query();
-        $all = $this->hasPermission(['clients.view_all']);
-        $scope = $all ? '' : ' AND c.owner_user_id=?';
-        $rows = $this->fetchAll("SELECT f.*, c.company_name, c.owner_user_id,
+        $assignedAdminSelect = tracs_column_exists($this->conn, 'tracs_clients', 'assigned_admin_id')
+            ? 'c.assigned_admin_id'
+            : 'NULL';
+        $rows = $this->fetchAll("SELECT f.*, c.company_name, c.owner_user_id, {$assignedAdminSelect} AS assigned_admin_id,
             COALESCE(NULLIF(u.name,''),u.email) AS assignee_name
             FROM ({$query}) f JOIN tracs_clients c ON c.id=f.client_id
             LEFT JOIN tracs_users u ON u.id=f.assigned_to
-            WHERE f.due_at BETWEEN ? AND ? AND f.status<>'cancelled' {$scope}",
-            $all ? 'ss' : 'ssi', $all ? [$start.' 00:00:00', $end.' 23:59:59'] : [$start.' 00:00:00', $end.' 23:59:59', $this->uid]);
+            WHERE f.due_at BETWEEN ? AND ? AND f.status<>'cancelled'",
+            'ss', [$start.' 00:00:00', $end.' 23:59:59']);
         $manage = $this->hasPermission(['clients.manage']);
         $now = new DateTimeImmutable('now', $this->timezone);
         return array_map(function (array $row) use ($manage, $now): array {
@@ -198,6 +199,7 @@ final class CalendarService
                 'created_at' => $row['created_at'], 'updated_at' => $row['updated_at'],
                 'meta' => ['client_id' => (int)$row['client_id'], 'client_name' => $row['company_name'],
                     'client_owner_id' => (int)$row['owner_user_id'],
+                    'assigned_admin_id' => $row['assigned_admin_id'] !== null ? (int)$row['assigned_admin_id'] : null,
                     'followup_id' => (int)$row['id'], 'reminder_id' => $row['reminder_id'],
                     'activity_type' => $row['action_type'], 'reminder_title' => $row['title'],
                     'service_id' => $row['service_id'], 'billing_record_id' => $row['billing_record_id'],

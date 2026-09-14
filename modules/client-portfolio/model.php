@@ -21,13 +21,27 @@ final class ClientPortfolioModel
         foreach (['tracs_clients', 'tracs_client_contacts', 'tracs_client_services', 'tracs_client_service_addons', 'tracs_client_service_renewal_history', 'tracs_client_billing_records', 'tracs_client_followups', 'tracs_client_activity_logs'] as $table) {
             if (!tracs_table_exists($this->db, $table)) return false;
         }
+        if (!tracs_column_exists($this->db, 'tracs_clients', 'assigned_admin_id')) return false;
         return true;
     }
 
     public function users(): array
     {
-        $statusFilter = tracs_column_exists($this->db, 'tracs_users', 'status') ? "COALESCE(status,'active') <> 'removed' AND " : '';
-        $sql = "SELECT id, COALESCE(NULLIF(name,''), email) AS name, email FROM tracs_users WHERE {$statusFilter}is_active = 1 ORDER BY name ASC, email ASC";
+        $statusFilter = tracs_column_exists($this->db, 'tracs_users', 'status') ? "COALESCE(u.status,'active') = 'active' AND " : '';
+        $sql = "
+            SELECT DISTINCT u.id, COALESCE(NULLIF(u.name,''), u.email) AS name, u.email
+            FROM tracs_users u
+            LEFT JOIN tracs_roles r ON r.id = u.role_id
+            LEFT JOIN tracs_role_permissions rp ON rp.role_id = r.id
+            LEFT JOIN tracs_permissions p ON p.id = rp.permission_id
+            WHERE {$statusFilter}u.is_active = 1
+              AND (
+                r.slug = 'super_admin'
+                OR p.permission_key = 'clients.manage'
+                OR u.role = 'admin'
+              )
+            ORDER BY name ASC, email ASC
+        ";
         $res = $this->db->query($sql);
         return $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
     }
@@ -39,15 +53,17 @@ final class ClientPortfolioModel
         $where = [];
         $types = '';
         $params = [];
-        $scope = (string)($filters['scope'] ?? 'mine');
-        if (!$canViewAll || $scope !== 'all') {
-            $where[] = 'c.owner_user_id = ?';
+        $assignedAdmin = (string)($filters['assigned_admin_id'] ?? '');
+        if ($assignedAdmin === 'mine') {
+            $where[] = 'c.assigned_admin_id = ?';
             $types .= 'i';
             $params[] = $actorId;
-        } elseif (!empty($filters['owner_user_id'])) {
-            $where[] = 'c.owner_user_id = ?';
+        } elseif ($assignedAdmin === 'unassigned') {
+            $where[] = 'c.assigned_admin_id IS NULL';
+        } elseif ($assignedAdmin !== '' && ctype_digit($assignedAdmin)) {
+            $where[] = 'c.assigned_admin_id = ?';
             $types .= 'i';
-            $params[] = (int)$filters['owner_user_id'];
+            $params[] = (int)$assignedAdmin;
         }
         if (!empty($filters['status'])) {
             $where[] = 'c.status = ?';
@@ -55,10 +71,10 @@ final class ClientPortfolioModel
             $params[] = (string)$filters['status'];
         }
         if (!empty($filters['q'])) {
-            $where[] = "(c.company_name LIKE ? OR c.client_code LIKE ? OR pc.name LIKE ? OR pc.email LIKE ?)";
+            $where[] = "(c.company_name LIKE ? OR c.client_code LIKE ? OR pc.name LIKE ? OR pc.email LIKE ? OR aa.name LIKE ? OR aa.email LIKE ?)";
             $needle = '%' . (string)$filters['q'] . '%';
-            $types .= 'ssss';
-            array_push($params, $needle, $needle, $needle, $needle);
+            $types .= 'ssssss';
+            array_push($params, $needle, $needle, $needle, $needle, $needle, $needle);
         }
         if (!empty($filters['service_type'])) {
             $where[] = "EXISTS (SELECT 1 FROM tracs_client_services fs WHERE fs.client_id = c.id AND fs.service_type = ?)";
@@ -94,6 +110,7 @@ final class ClientPortfolioModel
         $sql = "
             SELECT c.*,
                    COALESCE(NULLIF(u.name,''), u.email, 'Unassigned') AS owner_name,
+                   COALESCE(NULLIF(aa.name,''), aa.email) AS assigned_admin_name,
                    pc.name AS primary_contact_name,
                    pc.email AS primary_contact_email,
                    pc.phone AS primary_contact_phone,
@@ -116,6 +133,7 @@ final class ClientPortfolioModel
                    COALESCE(bill.outstanding_amount, 0) AS outstanding_amount
             FROM tracs_clients c
             LEFT JOIN tracs_users u ON u.id = c.owner_user_id
+            LEFT JOIN tracs_users aa ON aa.id = c.assigned_admin_id
             LEFT JOIN tracs_client_contacts pc ON pc.client_id = c.id AND pc.is_primary = 1
             LEFT JOIN (
                 SELECT s.client_id,
@@ -212,8 +230,8 @@ final class ClientPortfolioModel
 
     public function getClient(int $id, int $actorId, bool $canViewAll): ?array
     {
-        $client = $this->one("SELECT c.*, COALESCE(NULLIF(u.name,''), u.email, 'Unassigned') AS owner_name FROM tracs_clients c LEFT JOIN tracs_users u ON u.id=c.owner_user_id WHERE c.id=? LIMIT 1", 'i', [$id]);
-        if (!$client || (!$canViewAll && (int)$client['owner_user_id'] !== $actorId)) return null;
+        $client = $this->one("SELECT c.*, COALESCE(NULLIF(u.name,''), u.email, 'Unassigned') AS owner_name, COALESCE(NULLIF(aa.name,''), aa.email) AS assigned_admin_name FROM tracs_clients c LEFT JOIN tracs_users u ON u.id=c.owner_user_id LEFT JOIN tracs_users aa ON aa.id=c.assigned_admin_id WHERE c.id=? LIMIT 1", 'i', [$id]);
+        if (!$client) return null;
         $client['contacts'] = $this->preparedRows("SELECT * FROM tracs_client_contacts WHERE client_id=? ORDER BY is_primary DESC, name ASC", 'i', [$id]);
         $client['services'] = $this->preparedRows("SELECT * FROM tracs_client_services WHERE client_id=? ORDER BY status ASC, renewal_date IS NULL, renewal_date ASC, service_name ASC", 'i', [$id]);
         $serviceIds = array_map(fn(array $service): int => (int)$service['id'], $client['services']);
@@ -284,13 +302,14 @@ final class ClientPortfolioModel
     {
         $name = $this->text($input['company_name'] ?? '', 190);
         if ($name === '') throw new InvalidArgumentException('Company name is required.');
-        $owner = max(1, (int)($input['owner_user_id'] ?? $actorId));
+        $owner = $actorId;
+        $assignedAdmin = $this->nullableUserId($input['assigned_admin_id'] ?? $actorId, 'assigned admin');
         $code = $this->nullableText($input['client_code'] ?? null, 40);
         $status = $this->enum($input['status'] ?? 'active', ['active','monitoring','inactive'], 'active');
         $notes = $this->nullableText($input['notes'] ?? null, 2000);
-        $stmt = $this->db->prepare("INSERT INTO tracs_clients (client_code, company_name, owner_user_id, status, notes, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())");
+        $stmt = $this->db->prepare("INSERT INTO tracs_clients (client_code, company_name, owner_user_id, assigned_admin_id, status, notes, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())");
         if (!$stmt) throw new RuntimeException('Unable to create client.');
-        $stmt->bind_param('ssissi', $code, $name, $owner, $status, $notes, $actorId);
+        $stmt->bind_param('ssiissi', $code, $name, $owner, $assignedAdmin, $status, $notes, $actorId);
         if (!$stmt->execute()) throw new RuntimeException('Unable to create client.');
         $id = (int)$stmt->insert_id;
         $stmt->close();
@@ -305,18 +324,20 @@ final class ClientPortfolioModel
         if (!$current) throw new RuntimeException('Client not found.');
         $name = $this->text($input['company_name'] ?? $current['company_name'], 190);
         if ($name === '') throw new InvalidArgumentException('Company name is required.');
-        $owner = max(1, (int)($input['owner_user_id'] ?? $current['owner_user_id']));
+        $assignedAdmin = array_key_exists('assigned_admin_id', $input)
+            ? $this->nullableUserId($input['assigned_admin_id'], 'assigned admin')
+            : ($current['assigned_admin_id'] !== null ? (int)$current['assigned_admin_id'] : null);
         $code = $this->nullableText($input['client_code'] ?? $current['client_code'], 40);
         $status = $this->enum($input['status'] ?? $current['status'], ['active','monitoring','inactive'], 'active');
         $notes = $this->nullableText($input['notes'] ?? $current['notes'], 2000);
-        $stmt = $this->db->prepare("UPDATE tracs_clients SET client_code=?, company_name=?, owner_user_id=?, status=?, notes=?, updated_at=NOW() WHERE id=?");
+        $stmt = $this->db->prepare("UPDATE tracs_clients SET client_code=?, company_name=?, assigned_admin_id=?, status=?, notes=?, updated_at=NOW() WHERE id=?");
         if (!$stmt) throw new RuntimeException('Unable to update client.');
-        $stmt->bind_param('ssissi', $code, $name, $owner, $status, $notes, $id);
+        $stmt->bind_param('ssissi', $code, $name, $assignedAdmin, $status, $notes, $id);
         if (!$stmt->execute()) throw new RuntimeException('Unable to update client.');
         $stmt->close();
         $this->savePrimaryContact($id, $input);
-        $event = (int)$current['owner_user_id'] !== $owner ? 'client.owner_changed' : 'client.updated';
-        $this->log($id, $actorId, $actorName, $event, $event === 'client.owner_changed' ? "Client owner changed: {$name}" : "Client updated: {$name}");
+        $event = (int)($current['assigned_admin_id'] ?? 0) !== (int)($assignedAdmin ?? 0) ? 'client.assigned_admin_changed' : 'client.updated';
+        $this->log($id, $actorId, $actorName, $event, $event === 'client.assigned_admin_changed' ? "Client assigned admin changed: {$name}" : "Client updated: {$name}");
     }
 
     public function addService(int $clientId, array $input, int $actorId, string $actorName): int
@@ -631,6 +652,8 @@ final class ClientPortfolioModel
         $row['lifetime_billed_amount'] = (float)($row['lifetime_billed_amount'] ?? 0);
         $row['total_paid_amount'] = (float)($row['total_paid_amount'] ?? 0);
         $row['outstanding_amount'] = (float)($row['outstanding_amount'] ?? 0);
+        $row['assigned_admin_id'] = $row['assigned_admin_id'] !== null ? (int)$row['assigned_admin_id'] : null;
+        $row['assigned_admin_name'] = $row['assigned_admin_name'] ?: null;
         return array_merge($row, $attention);
     }
 
@@ -864,6 +887,39 @@ final class ClientPortfolioModel
     {
         $value = trim((string)$value);
         return in_array($value, $allowed, true) ? $value : $default;
+    }
+
+    private function nullableUserId(mixed $value, string $label): ?int
+    {
+        $raw = trim((string)($value ?? ''));
+        if ($raw === '' || $raw === '0' || strtolower($raw) === 'null') return null;
+        $id = filter_var($raw, FILTER_VALIDATE_INT);
+        if ($id === false || $id <= 0) throw new InvalidArgumentException("Choose a valid {$label}.");
+        if (!$this->assignableAdminExists((int)$id)) {
+            throw new InvalidArgumentException("Choose an active {$label}.");
+        }
+        return (int)$id;
+    }
+
+    private function assignableAdminExists(int $id): bool
+    {
+        if ($id <= 0) return false;
+        return (bool)$this->one("
+            SELECT u.id
+            FROM tracs_users u
+            LEFT JOIN tracs_roles r ON r.id = u.role_id
+            LEFT JOIN tracs_role_permissions rp ON rp.role_id = r.id
+            LEFT JOIN tracs_permissions p ON p.id = rp.permission_id
+            WHERE u.id = ?
+              AND u.is_active = 1
+              AND COALESCE(u.status,'active') = 'active'
+              AND (
+                r.slug = 'super_admin'
+                OR p.permission_key = 'clients.manage'
+                OR u.role = 'admin'
+              )
+            LIMIT 1
+        ", 'i', [$id]);
     }
 
     private function nullableMoney(mixed $value): ?float

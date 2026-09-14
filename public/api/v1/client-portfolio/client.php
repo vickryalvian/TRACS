@@ -22,9 +22,6 @@ try {
     if ($method === 'PATCH') {
         \TRACS\Api\require_permission($conn, 'clients.manage', $context['user']);
         $input = \TRACS\Api\get_request_json();
-        if (!\tracs_user_can($conn, 'clients.view_all', $context['user_id'])) {
-            unset($input['owner_user_id']);
-        }
         $controller->update($id, $input, \tracs_current_user_display($conn));
     }
     $client = $controller->detail($id);

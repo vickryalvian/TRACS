@@ -22,7 +22,7 @@ final class ClientPortfolioController
         $canViewAll = tracs_user_can($this->conn, 'clients.view_all', $this->actorId);
         return [
             'schema_ready' => $this->schemaReady(),
-            'users' => $canViewAll ? $this->model->users() : [],
+            'users' => $this->model->users(),
             'allowed_actions' => [
                 'view_all' => $canViewAll,
                 'manage' => tracs_user_can($this->conn, 'clients.manage', $this->actorId),

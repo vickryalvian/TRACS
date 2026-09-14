@@ -111,12 +111,51 @@
   box-shadow: 0 12px 24px rgba(24, 27, 31, .12);
   transform: translateY(-1px);
 }
-.clients-list { width: 100%; min-width: 740px; border-collapse: collapse; font-size: 12px; }
+.clients-list { width: 100%; min-width: 840px; border-collapse: collapse; font-size: 12px; }
 .clients-list > thead { background: var(--s2); }
 .clients-react-shell th { padding: 10px 12px; text-align: left; font-size: 11px; font-weight: 600; color: var(--tx3); }
 .clients-list > tbody > tr { border-top: 1px solid var(--bd1); }
 .clients-list > tbody > .client-row > td { vertical-align: middle; }
 .clients-list > tbody > .client-row > td:last-child { width: 125px; white-space: nowrap; }
+.clients-action-heading,
+.clients-action-cell {
+  text-align: center;
+}
+.clients-action-cell .btn {
+  margin-inline: auto;
+}
+.clients-sort-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-height: 24px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  text-align: left;
+}
+.clients-sort-button:hover,
+.clients-sort-button.is-active {
+  color: var(--tx1);
+}
+.clients-sort-button svg {
+  flex: 0 0 auto;
+  color: var(--tx4);
+}
+.clients-sort-button.is-active svg {
+  color: var(--tx2);
+}
+.client-admin-pic {
+  color: var(--tx2);
+  font-weight: 600;
+}
+.client-admin-pic.is-unassigned {
+  color: var(--tx3);
+  font-weight: 500;
+}
 .clients-empty { padding: 16px; color: var(--tx3); font-size: 12px; }
 .clients-empty p { margin: 6px 0 12px; }
 .client-detail-row > td { background: var(--s2); }

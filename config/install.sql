@@ -312,6 +312,7 @@ CREATE TABLE IF NOT EXISTS `tracs_clients` (
   `company_name` VARCHAR(190) NOT NULL,
   `client_area_id` INT UNSIGNED DEFAULT NULL,
   `owner_user_id` INT UNSIGNED NOT NULL,
+  `assigned_admin_id` INT UNSIGNED DEFAULT NULL,
   `status` ENUM('active','monitoring','inactive') NOT NULL DEFAULT 'active',
   `notes` TEXT DEFAULT NULL,
   `created_by` INT UNSIGNED DEFAULT NULL,
@@ -321,8 +322,10 @@ CREATE TABLE IF NOT EXISTS `tracs_clients` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_tracs_clients_code` (`client_code`),
   INDEX `idx_tracs_clients_owner` (`owner_user_id`, `status`),
+  INDEX `idx_tracs_clients_assigned_admin` (`assigned_admin_id`, `status`),
   INDEX `idx_tracs_clients_status` (`status`),
-  INDEX `idx_tracs_clients_company` (`company_name`)
+  INDEX `idx_tracs_clients_company` (`company_name`),
+  CONSTRAINT `fk_tracs_clients_assigned_admin` FOREIGN KEY (`assigned_admin_id`) REFERENCES `tracs_users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_unicode_ci

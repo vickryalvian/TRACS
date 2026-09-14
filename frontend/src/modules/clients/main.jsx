@@ -14,10 +14,11 @@ import { createApiClient } from '../../lib/apiClient';
 import { Button } from '../../components/ui/Button';
 
 const api = createApiClient();
-const emptyFilters = { scope: 'mine', q: '', owner_user_id: '', status: '', billing_status: '', attention: '', service_type: '', service_status: '', renewal_window: '' };
+const emptyFilters = { q: '', assigned_admin_id: '', status: '', billing_status: '', attention: '', service_type: '', service_status: '', renewal_window: '' };
 const clientsStateKey = 'tracs.clients.lastClient';
 const checklistPeriodKey = 'tracs.clients.selectedPeriod';
 const calendarMonthKey = 'tracs.clients.calendarMonth';
+const sortStorageKey = 'tracs.clients.listSort';
 const serviceTypes = ['Dedicated Server', 'Colocation', 'VPS', 'IP Transit', 'Cloud', 'Domain', 'SSL', 'Other'];
 const serviceStatuses = ['active', 'monitoring', 'pending_renewal', 'suspended', 'terminated', 'inactive'];
 const billingCycles = ['monthly', 'quarterly', 'semiannual', 'annual', 'one_time', 'custom'];
@@ -58,6 +59,49 @@ function compactMoney(value) {
   if (Math.abs(amount) >= 1000000000) return `Rp ${(amount / 1000000000).toFixed(2)}M`;
   if (Math.abs(amount) >= 1000000) return `Rp ${(amount / 1000000).toFixed(2)}jt`;
   return money(amount);
+}
+
+function assignedAdminName(client) {
+  return client?.assigned_admin_name || 'Unassigned';
+}
+
+function readClientSort() {
+  const fallback = { field: 'attention', dir: 'asc' };
+  try {
+    const stored = JSON.parse(window.localStorage?.getItem(sortStorageKey) || '{}');
+    return ['client', 'services', 'pic', 'next_action', 'renewal', 'status', 'attention'].includes(stored.field)
+      ? { field: stored.field, dir: stored.dir === 'desc' ? 'desc' : 'asc' }
+      : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeClientSort(sort) {
+  writeJsonStorage(sortStorageKey, sort);
+}
+
+function clientSortValue(client, field) {
+  if (field === 'client') return `${client.company_name || ''} ${client.client_code || ''}`;
+  if (field === 'services') return Number(client.service_count || 0);
+  if (field === 'pic') return assignedAdminName(client);
+  if (field === 'next_action') return client.next_reminder?.due_at || client.next_action_due_at || '9999-12-31';
+  if (field === 'renewal') return client.nearest_renewal_date || '9999-12-31';
+  if (field === 'status') return client.status || '';
+  return Number(client.attention_rank || 999);
+}
+
+function sortClients(rows, sort) {
+  return [...rows].sort((a, b) => {
+    const valueA = clientSortValue(a, sort.field);
+    const valueB = clientSortValue(b, sort.field);
+    const diff = typeof valueA === 'number' && typeof valueB === 'number'
+      ? valueA - valueB
+      : String(valueA).localeCompare(String(valueB), undefined, { numeric: true, sensitivity: 'base' });
+    const directional = sort.dir === 'asc' ? diff : -diff;
+    if (directional !== 0) return directional;
+    return String(a.company_name || '').localeCompare(String(b.company_name || ''), undefined, { sensitivity: 'base' });
+  });
 }
 
 function readJsonStorage(key) {
@@ -319,7 +363,7 @@ function FormPanel({ context, selected, onSaved, onCancel }) {
     company_name: selected?.company_name || '',
     client_code: selected?.client_code || '',
     status: selected?.status || 'active',
-    owner_user_id: selected?.owner_user_id || context?.user?.id || '',
+    assigned_admin_id: selected ? (selected.assigned_admin_id || '') : (context?.user?.id || ''),
     contact_name: selected?.contacts?.[0]?.name || selected?.primary_contact_name || '',
     contact_email: selected?.contacts?.[0]?.email || '',
     contact_phone: selected?.contacts?.[0]?.phone || '',
@@ -332,7 +376,6 @@ function FormPanel({ context, selected, onSaved, onCancel }) {
   const [fieldErrors, setFieldErrors] = useState({});
   const [attachmentFiles, setAttachmentFiles] = useState([]);
   const [documentType, setDocumentType] = useState('document');
-  const canPickOwner = Boolean(context?.allowed_actions?.view_all);
   const errorRef = useRef(null);
   const formRef = useRef(null);
   const savedClientId = useRef(selected?.id || null);
@@ -397,7 +440,7 @@ function FormPanel({ context, selected, onSaved, onCancel }) {
           <Field id="client-company-name" label="Company" error={fieldErrors.company_name}><Input id="client-company-name" required aria-describedby={fieldErrors.company_name ? 'client-company-name-error' : undefined} value={form.company_name} onChange={(e) => set('company_name', e.target.value)} /></Field>
           <Field id="client-code" label="Client Code"><Input id="client-code" value={form.client_code || ''} onChange={(e) => set('client_code', e.target.value)} /></Field>
           <Field id="client-status" label="Status"><Select id="client-status" value={form.status} onChange={(e) => set('status', e.target.value)}><option value="active">Active</option><option value="monitoring">Monitoring</option><option value="inactive">Inactive</option></Select></Field>
-          <Field id="client-owner" label="Owner"><Select id="client-owner" disabled={!canPickOwner} value={form.owner_user_id} onChange={(e) => set('owner_user_id', e.target.value)}>{canPickOwner ? context.users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>) : <option value={context?.user?.id}>{context?.user?.name}</option>}</Select></Field>
+          <Field id="client-assigned-admin" label="PIC / Assigned Admin"><Select id="client-assigned-admin" value={form.assigned_admin_id || ''} onChange={(e) => set('assigned_admin_id', e.target.value)}><option value="">Unassigned</option>{(context.users?.length ? context.users : [context.user]).map((u) => <option key={u.id} value={u.id}>{u.name}{Number(u.id) === Number(context?.user?.id) ? ' — You' : ''}</option>)}</Select></Field>
           <Field id="client-contact-name" label="PIC Name"><Input id="client-contact-name" value={form.contact_name} onChange={(e) => set('contact_name', e.target.value)} /></Field>
           <Field id="client-contact-email" label="PIC Email"><Input id="client-contact-email" type="email" value={form.contact_email} onChange={(e) => set('contact_email', e.target.value)} /></Field>
           <Field id="client-contact-phone" label="PIC Phone"><Input id="client-contact-phone" value={form.contact_phone} onChange={(e) => set('contact_phone', e.target.value)} /></Field>
@@ -594,7 +637,7 @@ function Detail({ selected, context, checklistPeriod, onChecklistPeriodChange, o
   return <div className="client-details">
     <div className="client-details-head"><strong>{selected.company_name}</strong>{context?.allowed_actions?.manage && <div><Button size="compact" onClick={onEdit}>Edit Client</Button><Button size="compact" onClick={onRecord}>Add Record / Reminder</Button></div>}</div>
     <div className="client-detail-grid">
-      <Info title="PIC / Contact" lines={selected.contacts?.flatMap(c => [c.name, c.role_title, c.email, c.phone]).filter(Boolean).length ? selected.contacts.flatMap(c => [c.name, c.role_title, c.email, c.phone]).filter(Boolean) : ['No contact recorded.']} />
+      <Info title="PIC / Contact" lines={[`Assigned Admin: ${assignedAdminName(selected)}`, ...(selected.contacts?.flatMap(c => [c.name, c.role_title, c.email, c.phone]).filter(Boolean).length ? selected.contacts.flatMap(c => [c.name, c.role_title, c.email, c.phone]).filter(Boolean) : ['No contact recorded.'])]} />
       <Info title="Billing Summary" lines={[`Paid: ${money(selected.total_paid_amount)}`, `Outstanding: ${money(selected.outstanding_amount)}`, `Monthly recurring: ${money(selected.mrr_amount)}`]} />
       <Info title="Notes" lines={[selected.notes || 'No notes yet.']} />
     </div>
@@ -682,28 +725,32 @@ function HeaderStats({ summary }) {
   return <div className="clients-header-stats">{stats.map(([title, value]) => <span key={title}><strong>{value}</strong> {title}</span>)}</div>;
 }
 
+function SortHeader({ label: title, field, sort, onSort }) {
+  const active = sort.field === field;
+  const dir = active ? sort.dir : 'asc';
+  return (
+    <button
+      type="button"
+      className={`clients-sort-button ${active ? 'is-active' : ''}`}
+      aria-label={`Sort by ${title}${active ? `, ${dir === 'asc' ? 'ascending' : 'descending'}` : ''}`}
+      onClick={() => onSort(field)}
+    >
+      <span>{title}</span>
+      {icon(active ? (dir === 'asc' ? 'chevron-up' : 'chevron-down') : 'chevron-down', 'tr:h-3 tr:w-3')}
+    </button>
+  );
+}
+
 function FilterBar({ filters, setFilters, context }) {
   const [open, setOpen] = useState(false);
-  const canViewAll = Boolean(context.allowed_actions.view_all);
-  const ownerValue = filters.scope === 'mine' ? 'mine' : filters.owner_user_id ? `owner:${filters.owner_user_id}` : 'all';
-
-  function setOwner(value) {
-    if (value === 'mine') {
-      setFilters({ ...filters, scope: 'mine', owner_user_id: '' });
-      return;
-    }
-    if (value === 'all') {
-      setFilters({ ...filters, scope: 'all', owner_user_id: '' });
-      return;
-    }
-    setFilters({ ...filters, scope: 'all', owner_user_id: value.replace('owner:', '') });
-  }
+  const adminOptions = context.users?.length ? context.users : [context.user].filter(Boolean);
 
   return (
     <div className="clients-filter-bar">
-      <div className="tr:grid tr:grid-cols-1 tr:gap-tracs-2 tr:lg:grid-cols-[minmax(220px,1fr)_170px_170px_auto]">
+      <div className="tr:grid tr:grid-cols-1 tr:gap-tracs-2 tr:lg:grid-cols-[minmax(220px,1fr)_160px_160px_160px_auto]">
         <Input aria-label="Search client, code, PIC" placeholder="Search client, code, PIC" value={filters.q} onChange={(e) => setFilters({ ...filters, q: e.target.value })} />
         <Select aria-label="Service filter" value={filters.service_type} onChange={(e) => setFilters({ ...filters, service_type: e.target.value })}><option value="">Any service</option>{serviceTypes.map((type) => <option key={type} value={type}>{type}</option>)}</Select>
+        <Select aria-label="PIC filter" value={filters.assigned_admin_id} onChange={(e) => setFilters({ ...filters, assigned_admin_id: e.target.value })}><option value="">Any PIC</option><option value="mine">My Clients</option><option value="unassigned">Unassigned</option>{adminOptions.length ? <option disabled>----------</option> : null}{adminOptions.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</Select>
         <Select aria-label="Renewal filter" value={filters.renewal_window} onChange={(e) => setFilters({ ...filters, renewal_window: e.target.value })}><option value="">Any renewal</option><option value="7">Renewal &lt;= 7 days</option><option value="30">Renewal &lt;= 30 days</option><option value="90">Renewal &lt;= 90 days</option></Select>
         <div className="tr:flex tr:gap-tracs-2">
           <Button className="tr:flex-1 tr:px-tracs-3 lg:tr:min-w-32" onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-controls="client-more-filters">{icon('sliders-horizontal')}More Filters</Button>
@@ -711,12 +758,7 @@ function FilterBar({ filters, setFilters, context }) {
         </div>
       </div>
       {open && (
-        <div id="client-more-filters" className="clients-more-filters tr:mt-tracs-3 tr:grid tr:grid-cols-1 tr:gap-tracs-2 tr:border-t tr:border-tracs-border tr:pt-tracs-3 tr:md:grid-cols-2 tr:xl:grid-cols-4">
-          <Select disabled={!canViewAll} value={ownerValue} onChange={(e) => setOwner(e.target.value)}>
-            <option value="mine">My Clients</option>
-            {canViewAll && <option value="all">All Owners</option>}
-            {canViewAll && context.users.map((u) => <option key={u.id} value={`owner:${u.id}`}>{u.name}</option>)}
-          </Select>
+        <div id="client-more-filters" className="clients-more-filters tr:mt-tracs-3 tr:grid tr:grid-cols-1 tr:gap-tracs-2 tr:border-t tr:border-tracs-border tr:pt-tracs-3 tr:md:grid-cols-2 tr:xl:grid-cols-3">
           <Select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}><option value="">Any client status</option><option value="active">Active</option><option value="monitoring">Monitoring</option><option value="inactive">Inactive</option></Select>
           <Select value={filters.service_status} onChange={(e) => setFilters({ ...filters, service_status: e.target.value })}><option value="">Any service status</option>{serviceStatuses.map((status) => <option key={status} value={status}>{label(status)}</option>)}</Select>
           <Select value={filters.attention} onChange={(e) => setFilters({ ...filters, attention: e.target.value })}><option value="">Any attention</option><option value="attention">Needs attention</option><option value="critical">Critical</option><option value="warning">Warning</option><option value="due">Due</option><option value="watch">Watch</option></Select>
@@ -729,6 +771,7 @@ function FilterBar({ filters, setFilters, context }) {
 function ClientsApp() {
   const context = useContextData();
   const [filters, setFilters] = useState({ ...emptyFilters });
+  const [sort, setSort] = useState(() => readClientSort());
   const clients = useClients(filters);
   const today = jakartaToday();
   const savedClientState = useMemo(() => readClientsState(), []);
@@ -749,6 +792,16 @@ function ClientsApp() {
   const canManage = Boolean(context.data?.allowed_actions?.manage);
   const filtered = Object.entries(filters).some(([key, value]) => value !== emptyFilters[key]);
   const clientIds = useMemo(() => new Set((clients.data.clients || []).map(c => String(c.id))), [clients.data.clients]);
+  const sortedClients = useMemo(() => sortClients(clients.data.clients || [], sort), [clients.data.clients, sort]);
+  function updateSort(field) {
+    setSort((current) => {
+      const next = current.field === field
+        ? { field, dir: current.dir === 'asc' ? 'desc' : 'asc' }
+        : { field, dir: field === 'attention' || field === 'next_action' || field === 'renewal' ? 'asc' : 'asc' };
+      writeClientSort(next);
+      return next;
+    });
+  }
   async function loadDetail(id) {
     const requestId = ++detailSequence.current;
     setDetailError('');
@@ -835,19 +888,30 @@ function ClientsApp() {
       <section className="panel" aria-busy={clients.loading}>
         <div className="panel-head"><h2 className="panel-title">Clients</h2><span className="panel-meta">{clients.data.clients?.length || 0} {clients.data.clients?.length === 1 ? 'record' : 'records'}{clients.loading ? ' · Updating…' : ''}</span></div>
         {clients.error ? <p className="clients-empty" role="alert">{clients.error} <Button onClick={clients.refresh}>Retry</Button></p> : null}
-        <div className="clients-table-scroll"><table className="clients-list"><thead><tr>{['Client / Company', 'Services', 'Next Action', 'Renewal', 'Status', 'Action'].map(h => <th scope="col" key={h}>{h}</th>)}</tr></thead><tbody>
-          {(clients.data.clients || []).map(c => {
+        <div className="clients-table-scroll"><table className="clients-list"><thead><tr>
+          {[
+            ['Client / Company', 'client'],
+            ['Services', 'services'],
+            ['PIC', 'pic'],
+            ['Next Action', 'next_action'],
+            ['Renewal', 'renewal'],
+            ['Status', 'status'],
+          ].map(([title, field]) => <th scope="col" key={field} aria-sort={sort.field === field ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}><SortHeader label={title} field={field} sort={sort} onSort={updateSort} /></th>)}
+          <th scope="col" className="clients-action-heading" aria-label="Actions"></th>
+        </tr></thead><tbody>
+          {sortedClients.map(c => {
             const open = String(c.id) === String(expanded);
             const next = c.next_reminder;
             return <React.Fragment key={c.id}><tr className={`client-row ${open ? 'is-selected' : ''} ${String(c.id) === String(lastOpenedHint) && !open ? 'is-last-opened' : ''}`} data-client-row-id={c.id}>
               <td><strong>{c.company_name}</strong><small>{c.client_code || 'No code'} · {c.primary_contact_name || 'No PIC'}</small></td>
               <td>{c.service_types || 'No services'}<small>{c.service_count} services · {c.addon_count} addons</small></td>
+              <td><span className={`client-admin-pic ${c.assigned_admin_name ? '' : 'is-unassigned'}`}>{assignedAdminName(c)}</span></td>
               <td>{next ? next.title : c.next_action}<small>{date(next?.due_at || c.next_action_due_at)}</small></td>
               <td>{date(c.nearest_renewal_date)}</td><td><Badge tone={c.status}>{label(c.status)}</Badge></td>
-              <td><Button size="compact" aria-expanded={open} aria-controls={`client-details-${c.id}`} onClick={() => setClientExpanded(c.id, !open)}>{open ? 'View Less' : 'View More'}{icon(open ? 'chevron-up' : 'chevron-down')}</Button></td>
-            </tr>{open && <tr id={`client-details-${c.id}`} className="client-detail-row"><td colSpan={6}>{detailError ? <p role="alert">{detailError} <Button onClick={() => loadDetail(c.id)}>Retry</Button></p> : selected && String(selected.id) === String(c.id) ? <Detail selected={selected} context={context.data} checklistPeriod={checklistPeriod} onChecklistPeriodChange={updateChecklistPeriod} onEdit={() => setModal('edit')} onRecord={() => setModal('record')} onSaved={afterSaved} onChanged={refresh} onReminder={openReminder} /> : <p className="clients-empty">Loading client details…</p>}</td></tr>}</React.Fragment>;
+              <td className="clients-action-cell"><Button size="compact" aria-expanded={open} aria-controls={`client-details-${c.id}`} onClick={() => setClientExpanded(c.id, !open)}>{open ? 'Hide' : 'Details'}{icon(open ? 'chevron-up' : 'chevron-down')}</Button></td>
+            </tr>{open && <tr id={`client-details-${c.id}`} className="client-detail-row"><td colSpan={7}>{detailError ? <p role="alert">{detailError} <Button onClick={() => loadDetail(c.id)}>Retry</Button></p> : selected && String(selected.id) === String(c.id) ? <Detail selected={selected} context={context.data} checklistPeriod={checklistPeriod} onChecklistPeriodChange={updateChecklistPeriod} onEdit={() => setModal('edit')} onRecord={() => setModal('record')} onSaved={afterSaved} onChanged={refresh} onReminder={openReminder} /> : <p className="clients-empty">Loading client details…</p>}</td></tr>}</React.Fragment>;
           })}
-          {!clients.loading && !clients.error && !clients.data.clients?.length && <tr><td colSpan={6}><div className="clients-empty"><strong>{filtered ? 'No clients match these filters.' : 'No clients yet.'}</strong><p>{filtered ? 'Try another search or reset the filters.' : 'Add your first client to start tracking services, billing, invoices and follow-ups.'}</p>{filtered ? <Button onClick={() => setFilters({ ...emptyFilters })}>Reset Filters</Button> : null}</div></td></tr>}
+          {!clients.loading && !clients.error && !clients.data.clients?.length && <tr><td colSpan={7}><div className="clients-empty"><strong>{filtered ? 'No clients match these filters.' : 'No clients yet.'}</strong><p>{filtered ? 'Try another search or reset the filters.' : 'Add your first client to start tracking services, billing, invoices and follow-ups.'}</p>{filtered ? <Button onClick={() => setFilters({ ...emptyFilters })}>Reset Filters</Button> : null}</div></td></tr>}
         </tbody></table></div>
       </section>
     </> : !context.error && <p>Client Portfolio storage is not ready. Apply the client portfolio migrations.</p>}
