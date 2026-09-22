@@ -44,46 +44,66 @@ function momTimeNow(){
   return new Date().toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit',hour12:false});
 }
 
-function momAppendAgendaItem(id, topic){
+function momAppendAgendaItem(id, topic, notes='', status='pending'){
   const host=document.getElementById('momAgendaTopic')?.closest('.section-body');
   if(!host)return;
-  const div=document.createElement('div');
-  div.className='agenda-item agenda-item-pending';
+  let div=host.querySelector(`[data-agenda-id="${Number(id)}"]`);
+  if(!div)div=document.createElement('div');
+  div.className=`agenda-item agenda-item-${status}`;
   div.dataset.agendaId=String(id);
-  div.innerHTML=`<input type="checkbox" class="agenda-check" data-unsaved-ignore onchange="toggleAgendaItem(${id},this.checked)"><div class="agenda-content"><div class="agenda-topic">${momEscape(topic)}</div></div><button class="btn btn-ghost btn-icon btn-sm mom-item-delete" onclick="deleteAgendaItem(${id})" title="Delete" aria-label="Delete agenda item"><i data-lucide="x" class="icon-xs"></i></button>`;
-  host.appendChild(div);
+  div.dataset.topic=topic;
+  div.dataset.notes=notes;
+  div.dataset.status=status;
+  div.innerHTML=`<input type="checkbox" class="agenda-check" data-unsaved-ignore ${status === 'completed' ? 'checked' : ''} onchange="toggleAgendaItem(${id},this.checked)"><div class="agenda-content"><div class="agenda-topic">${momEscape(topic)}</div>${notes ? `<div class="agenda-notes">${momEscape(notes)}</div>` : ''}</div><button class="btn btn-ghost btn-icon btn-sm" type="button" onclick="editAgendaItem(${id})" title="Edit" aria-label="Edit agenda item"><i data-lucide="edit-2" class="icon-xs"></i></button><button class="btn btn-ghost btn-icon btn-sm mom-item-delete" onclick="deleteAgendaItem(${id})" title="Delete" aria-label="Delete agenda item"><i data-lucide="x" class="icon-xs"></i></button>`;
+  if(!div.isConnected)host.appendChild(div);
   momFlash(div);
 }
 
 function momAppendNote(id, content, type='discussion'){
   const host=document.getElementById('momNotesArea');
   if(!host)return;
-  const div=document.createElement('div');
+  let div=host.querySelector(`[data-note-id="${Number(id)}"]`);
+  if(!div)div=document.createElement('div');
   div.className=`discussion-note discussion-note-${type}`;
   div.dataset.noteId=String(id);
-  div.innerHTML=`<div class="note-header"><span class="note-type">${momEscape(type.charAt(0).toUpperCase()+type.slice(1))}</span><span class="note-time">${momEscape(momTimeNow())}</span><button class="btn btn-ghost btn-icon btn-xs mom-item-delete" onclick="deleteNote(${id})" title="Delete" aria-label="Delete discussion note"><i data-lucide="x" class="icon-xs"></i></button></div><div class="note-text" onmouseup="handleTextSelection(this.parentElement.parentElement)">${momEscape(content).replace(/\n/g,'<br>')}</div>`;
-  host.appendChild(div);
+  div.dataset.noteType=type;
+  div.dataset.content=content;
+  div.innerHTML=`<div class="note-header"><span class="note-type">${momEscape(type.charAt(0).toUpperCase()+type.slice(1))}</span><span class="note-time">${momEscape(momTimeNow())}</span><button class="btn btn-ghost btn-icon btn-xs" type="button" onclick="editDiscussionNote(${id})" title="Edit" aria-label="Edit discussion note"><i data-lucide="edit-2" class="icon-xs"></i></button><button class="btn btn-ghost btn-icon btn-xs mom-item-delete" onclick="deleteNote(${id})" title="Delete" aria-label="Delete discussion note"><i data-lucide="x" class="icon-xs"></i></button></div><div class="note-text" onmouseup="handleTextSelection(this.parentElement.parentElement)">${momEscape(content).replace(/\n/g,'<br>')}</div>`;
+  if(!div.isConnected)host.appendChild(div);
   momFlash(div);
 }
 
-function momAppendDecision(id, decision, rationale='', owner=''){
+function momAppendDecision(id, decision, rationale='', owner='', status='pending'){
   const host=document.getElementById('momInlineDecisionText')?.closest('.section-body');
   if(!host)return;
-  const div=document.createElement('div');
+  let div=host.querySelector(`[data-decision-id="${Number(id)}"]`);
+  if(!div)div=document.createElement('div');
   div.className='decision-card';
-  div.innerHTML=`<div class="decision-head"><strong>${momEscape(decision)}</strong><button class="btn btn-ghost btn-icon btn-xs mom-item-delete" onclick="deleteDecision(${id})" title="Delete" aria-label="Delete decision"><i data-lucide="x" class="icon-xs"></i></button></div>${rationale ? `<div class="decision-rationale"><span class="label">Rationale:</span> ${momEscape(rationale)}</div>` : ''}${owner ? `<div class="decision-owner"><span class="label">Owner:</span> ${momEscape(owner)}</div>` : ''}`;
-  host.appendChild(div);
+  div.dataset.decisionId=String(id);
+  div.dataset.decision=decision;
+  div.dataset.rationale=rationale;
+  div.dataset.owner=owner;
+  div.dataset.status=status;
+  div.innerHTML=`<div class="decision-head"><strong>${momEscape(decision)}</strong><button class="btn btn-ghost btn-icon btn-xs" type="button" onclick="editDecision(${id})" title="Edit" aria-label="Edit decision"><i data-lucide="edit-2" class="icon-xs"></i></button><button class="btn btn-ghost btn-icon btn-xs mom-item-delete" onclick="deleteDecision(${id})" title="Delete" aria-label="Delete decision"><i data-lucide="x" class="icon-xs"></i></button></div>${rationale ? `<div class="decision-rationale"><span class="label">Rationale:</span> ${momEscape(rationale)}</div>` : ''}${owner ? `<div class="decision-owner"><span class="label">Owner:</span> ${momEscape(owner)}</div>` : ''}`;
+  if(!div.isConnected)host.appendChild(div);
   momFlash(div);
 }
 
-function momAppendAction(id, title, description='', assignee='', priority='medium', dueDate=''){
+function momAppendAction(id, title, description='', assignee='', priority='medium', dueDate='', status='pending'){
   const host=document.getElementById('momInlineActionTitle')?.closest('.section-body');
   if(!host)return;
-  const div=document.createElement('div');
-  div.className=`action-item action-item-${priority} action-item-pending`;
+  let div=host.querySelector(`[data-aid="${Number(id)}"]`);
+  if(!div)div=document.createElement('div');
+  div.className=`action-item action-item-${priority} action-item-${status}`;
   div.dataset.aid=String(id);
-  div.innerHTML=`<input type="checkbox" class="action-check" data-unsaved-ignore onchange="completeAction(${id},this.checked)"><div class="action-content"><div class="action-title">${momEscape(title)}</div>${description ? `<div class="action-desc">${momEscape(description)}</div>` : ''}<div class="action-meta"><span class="action-owner">${momEscape(assignee || '—')}</span>${dueDate ? `<span class="action-due">${momEscape(dueDate)}</span>` : ''}</div></div><div class="action-btns"><button class="btn btn-ghost btn-icon btn-sm" onclick="createReminderFromAction(${id})" title="Create Reminder" aria-label="Create reminder from action"><i data-lucide="bell" class="icon-sm"></i></button><button class="btn btn-ghost btn-icon btn-sm" onclick="createCaseFromAction(${id})" title="Create Case" aria-label="Create case from action"><i data-lucide="briefcase" class="icon-sm"></i></button><button class="btn btn-ghost btn-icon btn-sm" onclick="editActionItem(${id})" title="Edit" aria-label="Edit action item"><i data-lucide="edit-2" class="icon-sm"></i></button><button class="btn btn-ghost btn-icon btn-sm mom-item-delete" onclick="deleteActionItem(${id})" title="Delete" aria-label="Delete action item"><i data-lucide="trash-2" class="icon-sm"></i></button></div>`;
-  host.appendChild(div);
+  div.dataset.title=title;
+  div.dataset.description=description;
+  div.dataset.assignedTo=assignee;
+  div.dataset.priority=priority;
+  div.dataset.dueDate=dueDate;
+  div.dataset.status=status;
+  div.innerHTML=`<input type="checkbox" class="action-check" data-unsaved-ignore ${status === 'completed' ? 'checked' : ''} onchange="completeAction(${id},this.checked)"><div class="action-content"><div class="action-title">${momEscape(title)}</div>${description ? `<div class="action-desc">${momEscape(description)}</div>` : ''}<div class="action-meta"><span class="action-owner">${momEscape(assignee || '—')}</span>${dueDate ? `<span class="action-due">${momEscape(dueDate)}</span>` : ''}</div></div><div class="action-btns"><button class="btn btn-ghost btn-icon btn-sm" onclick="createReminderFromAction(${id})" title="Create Reminder" aria-label="Create reminder from action"><i data-lucide="bell" class="icon-sm"></i></button><button class="btn btn-ghost btn-icon btn-sm" onclick="createCaseFromAction(${id})" title="Create Case" aria-label="Create case from action"><i data-lucide="briefcase" class="icon-sm"></i></button><button class="btn btn-ghost btn-icon btn-sm" onclick="editActionItem(${id})" title="Edit" aria-label="Edit action item"><i data-lucide="edit-2" class="icon-sm"></i></button><button class="btn btn-ghost btn-icon btn-sm mom-item-delete" onclick="deleteActionItem(${id})" title="Delete" aria-label="Delete action item"><i data-lucide="trash-2" class="icon-sm"></i></button></div>`;
+  if(!div.isConnected)host.appendChild(div);
   momFlash(div);
   momUpdateActionProgress();
 }
@@ -625,9 +645,56 @@ function momStopInlineSave(type, mom_id) {
   momInlineSaving.delete(momInlineKey(type, mom_id));
 }
 
+function momInlineEditor(type) {
+  return document.querySelector(`[data-mom-autosave="${type}"]`);
+}
+
+function momBeginInlineEdit(type, id, buttonId) {
+  const form=momInlineEditor(type);
+  if(!form)return;
+  form.dataset.editingId=String(id);
+  const cancel=document.getElementById(`mom${type.charAt(0).toUpperCase()+type.slice(1)}CancelEdit`);
+  cancel?.classList.remove('hidden');
+  const button=document.getElementById(buttonId);
+  if(button)button.textContent='Save Changes';
+  window.TRACSUnsavedChanges?.captureInitialState(form);
+}
+
+function momFinishInlineEdit(type, fieldIds, buttonId, addLabel) {
+  const form=momInlineEditor(type);
+  if(!form)return;
+  delete form.dataset.editingId;
+  fieldIds.forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const cancel=document.getElementById(`mom${type.charAt(0).toUpperCase()+type.slice(1)}CancelEdit`);
+  cancel?.classList.add('hidden');
+  const button=document.getElementById(buttonId);
+  if(button)button.textContent=addLabel;
+  momMarkSaved(form);
+}
+
+function editAgendaItem(item_id) {
+  const row=document.querySelector(`[data-agenda-id="${Number(item_id)}"]`);
+  const form=momInlineEditor('agenda');
+  if(!row || !form)return;
+  document.getElementById('momAgendaTopic').value=row.dataset.topic || '';
+  document.getElementById('momAgendaNotes').value=row.dataset.notes || '';
+  form.dataset.editingStatus=row.dataset.status || 'pending';
+  momBeginInlineEdit('agenda', item_id, 'momAgendaSaveButton');
+  document.getElementById('momAgendaTopic')?.focus();
+}
+
+function cancelAgendaEdit() {
+  const form=momInlineEditor('agenda');
+  if(form)delete form.dataset.editingStatus;
+  momFinishInlineEdit('agenda',['momAgendaTopic','momAgendaNotes'],'momAgendaSaveButton','Add Item');
+}
+
 function saveInlineAgendaItem(mom_id, options = {}) {
   const input = document.getElementById('momAgendaTopic');
+  const form = input?.closest('[data-mom-autosave]');
   const topic = input?.value?.trim() || '';
+  const notes = document.getElementById('momAgendaNotes')?.value?.trim() || '';
+  const editingId = Number(form?.dataset.editingId || 0);
   if(!topic) {
     if(options.silent) return;
     toast('Agenda topic is required', 'warning');
@@ -636,16 +703,19 @@ function saveInlineAgendaItem(mom_id, options = {}) {
   }
   if(!momStartInlineSave('agenda', mom_id)) return;
   api('api/api_mom.php', {
-    action: 'add_agenda_item',
+    action: editingId ? 'update_agenda_item' : 'add_agenda_item',
     mom_id: mom_id,
-    topic: topic
+    item_id: editingId || undefined,
+    topic: topic,
+    notes: notes,
+    status: form?.dataset.editingStatus || 'pending'
   }).then(r => {
     if(r.ok) {
-      toast('Agenda item added', 'success');
-      momAppendAgendaItem(r.item_id, topic);
-      input.value='';
+      const item=r.item || {id:r.item_id || editingId,topic,notes,status:form?.dataset.editingStatus || 'pending'};
+      toast(editingId ? 'Agenda item updated' : 'Agenda item added', 'success');
+      momAppendAgendaItem(item.id, item.topic, item.notes || '', item.status || 'pending');
+      cancelAgendaEdit();
       momStopInlineSave('agenda', mom_id);
-      momMarkSaved(input.closest('[data-mom-autosave]') || input);
     } else {
       momStopInlineSave('agenda', mom_id);
       toast(r.msg || 'Failed to add agenda item', 'error');
@@ -661,6 +731,7 @@ function toggleAgendaItem(item_id, checked) {
   
   api('api/api_mom.php', {
     action: 'update_agenda_item',
+    mom_id: window._currentMOMId,
     item_id: item_id,
     status: status
   }).then(r => {
@@ -669,6 +740,8 @@ function toggleAgendaItem(item_id, checked) {
       const item = document.querySelector(`[data-agenda-id="${item_id}"]`);
       if(item) {
         item.classList.toggle('agenda-item-completed', checked);
+        item.classList.toggle('agenda-item-pending', !checked);
+        item.dataset.status=status;
       }
     }
   }).catch(e => toast(e.message || "The change didn't go through. Please try again.", 'error'));
@@ -678,6 +751,7 @@ function deleteAgendaItem(item_id) {
   tracsConfirm('Delete this agenda item?', () => {
     api('api/api_mom.php', {
       action: 'delete_agenda_item',
+      mom_id: window._currentMOMId,
       item_id: item_id
     }).then(r => {
       if(r.ok) {
@@ -697,11 +771,28 @@ function addDiscussionNote(mom_id) {
   document.getElementById('momInlineNoteContent')?.focus();
 }
 
+function editDiscussionNote(note_id) {
+  const row=document.querySelector(`[data-note-id="${Number(note_id)}"]`);
+  if(!row)return;
+  document.getElementById('momInlineNoteContent').value=row.dataset.content || '';
+  document.getElementById('momInlineNoteType').value=row.dataset.noteType || 'discussion';
+  momBeginInlineEdit('note', note_id, 'momNoteSaveButton');
+  document.getElementById('momInlineNoteContent')?.focus();
+}
+
+function cancelNoteEdit() {
+  const type=document.getElementById('momInlineNoteType');
+  if(type)type.value='discussion';
+  momFinishInlineEdit('note',['momInlineNoteContent'],'momNoteSaveButton','Add Note');
+}
+
 function saveInlineDiscussionNote(mom_id, options = {}) {
   const contentEl = document.getElementById('momInlineNoteContent');
   const typeEl = document.getElementById('momInlineNoteType');
   const content = contentEl?.value?.trim() || '';
   const note_type = typeEl?.value || 'discussion';
+  const form=contentEl?.closest('[data-mom-autosave]');
+  const editingId=Number(form?.dataset.editingId || 0);
   
   if(!content) {
     if(options.silent) return;
@@ -712,17 +803,18 @@ function saveInlineDiscussionNote(mom_id, options = {}) {
   if(!momStartInlineSave('note', mom_id)) return;
   
   api('api/api_mom.php', {
-    action: 'add_discussion_note',
+    action: editingId ? 'update_discussion_note' : 'add_discussion_note',
     mom_id: mom_id,
+    note_id: editingId || undefined,
     content: content,
     note_type: note_type
   }).then(r => {
     if(r.ok) {
-      toast('Note added', 'success');
-      momAppendNote(r.note_id, content, note_type);
-      contentEl.value='';
+      const note=r.note || {id:r.note_id || editingId,content,note_type};
+      toast(editingId ? 'Note updated' : 'Note added', 'success');
+      momAppendNote(note.id, note.content, note.note_type || note_type);
+      cancelNoteEdit();
       momStopInlineSave('note', mom_id);
-      momMarkSaved(contentEl.closest('[data-mom-autosave]') || contentEl);
     } else {
       momStopInlineSave('note', mom_id);
       toast(r.msg || 'Failed to add note', 'error');
@@ -765,6 +857,7 @@ function deleteNote(note_id) {
   tracsConfirm('Delete this note?', () => {
     api('api/api_mom.php', {
       action: 'delete_note',
+      mom_id: window._currentMOMId,
       note_id: note_id
     }).then(r => {
       if(r.ok) {
@@ -823,11 +916,31 @@ function addDecisionFromText(text) {
   if(el) el.value = text;
 }
 
+function editDecision(decision_id) {
+  const row=document.querySelector(`[data-decision-id="${Number(decision_id)}"]`);
+  if(!row)return;
+  document.getElementById('momInlineDecisionText').value=row.dataset.decision || '';
+  document.getElementById('momInlineDecisionRationale').value=row.dataset.rationale || '';
+  document.getElementById('momInlineDecisionOwner').value=row.dataset.owner || '';
+  const form=momInlineEditor('decision');
+  if(form)form.dataset.editingStatus=row.dataset.status || 'pending';
+  momBeginInlineEdit('decision', decision_id, 'momDecisionSaveButton');
+  document.getElementById('momInlineDecisionText')?.focus();
+}
+
+function cancelDecisionEdit() {
+  const form=momInlineEditor('decision');
+  if(form)delete form.dataset.editingStatus;
+  momFinishInlineEdit('decision',['momInlineDecisionText','momInlineDecisionRationale','momInlineDecisionOwner'],'momDecisionSaveButton','Add Decision');
+}
+
 function saveInlineDecision(mom_id, options = {}) {
   const decisionEl = document.getElementById('momInlineDecisionText');
   const decision = decisionEl?.value?.trim() || '';
   const rationale = document.getElementById('momInlineDecisionRationale')?.value?.trim() || '';
   const owner = document.getElementById('momInlineDecisionOwner')?.value?.trim() || '';
+  const form=decisionEl?.closest('[data-mom-autosave]');
+  const editingId=Number(form?.dataset.editingId || 0);
   
   if(!decision) {
     if(options.silent) return;
@@ -838,22 +951,20 @@ function saveInlineDecision(mom_id, options = {}) {
   if(!momStartInlineSave('decision', mom_id)) return;
   
   api('api/api_mom.php', {
-    action: 'add_decision',
+    action: editingId ? 'update_decision' : 'add_decision',
     mom_id: mom_id,
+    decision_id: editingId || undefined,
     decision: decision,
     rationale: rationale,
-    owner: owner
+    owner: owner,
+    status: form?.dataset.editingStatus || 'pending'
   }).then(r => {
     if(r.ok) {
-      toast('Decision recorded', 'success');
-      momAppendDecision(r.decision_id, decision, rationale, owner);
-      decisionEl.value='';
-      const rationaleEl=document.getElementById('momInlineDecisionRationale');
-      const ownerEl=document.getElementById('momInlineDecisionOwner');
-      if(rationaleEl)rationaleEl.value='';
-      if(ownerEl)ownerEl.value='';
+      const item=r.decision || {id:r.decision_id || editingId,decision,rationale,owner,status:form?.dataset.editingStatus || 'pending'};
+      toast(editingId ? 'Decision updated' : 'Decision recorded', 'success');
+      momAppendDecision(item.id, item.decision, item.rationale || '', item.owner || '', item.status || 'pending');
+      cancelDecisionEdit();
       momStopInlineSave('decision', mom_id);
-      momMarkSaved(decisionEl.closest('[data-mom-autosave]') || decisionEl);
     } else {
       momStopInlineSave('decision', mom_id);
       toast(r.msg || 'Failed to add decision', 'error');
@@ -897,12 +1008,12 @@ function deleteDecision(decision_id) {
   tracsConfirm('Delete this decision?', () => {
     api('api/api_mom.php', {
       action: 'delete_decision',
+      mom_id: window._currentMOMId,
       decision_id: decision_id
     }).then(r => {
       if(r.ok) {
         toast('Decision deleted', 'success');
-        const btn=document.querySelector(`[onclick="deleteDecision(${decision_id})"]`);
-        momRemoveNode(btn?.closest('.decision-card'));
+        momRemoveNode(document.querySelector(`[data-decision-id="${Number(decision_id)}"]`));
       }
     }).catch(e => toast(e.message || "The change didn't go through. Please try again.", 'error'));
   });
@@ -926,10 +1037,23 @@ function createActionFromText(text) {
 function editActionItem(action_id) {
   const row = document.querySelector(`[data-aid="${action_id}"]`);
   if(!row) return;
-  document.getElementById('momInlineActionTitle').value = row.querySelector('.action-title')?.textContent?.trim() || '';
-  document.getElementById('momInlineActionDesc').value = row.querySelector('.action-desc')?.textContent?.trim() || '';
+  document.getElementById('momInlineActionTitle').value = row.dataset.title || '';
+  document.getElementById('momInlineActionDesc').value = row.dataset.description || '';
+  document.getElementById('momInlineActionAssignee').value = row.dataset.assignedTo || '';
+  document.getElementById('momInlineActionPriority').value = row.dataset.priority || 'medium';
+  document.getElementById('momInlineActionDueDate').value = String(row.dataset.dueDate || '').slice(0,10);
+  const form=momInlineEditor('action');
+  if(form)form.dataset.editingStatus=row.dataset.status || 'pending';
+  momBeginInlineEdit('action', action_id, 'momActionSaveButton');
   document.getElementById('momInlineActionTitle')?.focus();
-  toast('Loaded action into inline editor. Update the fields and save.', 'info');
+}
+
+function cancelActionEdit() {
+  const form=momInlineEditor('action');
+  if(form)delete form.dataset.editingStatus;
+  const priority=document.getElementById('momInlineActionPriority');
+  if(priority)priority.value='medium';
+  momFinishInlineEdit('action',['momInlineActionTitle','momInlineActionDesc','momInlineActionAssignee','momInlineActionDueDate'],'momActionSaveButton','Add Action');
 }
 
 function saveInlineActionItem(mom_id, options = {}) {
@@ -939,6 +1063,8 @@ function saveInlineActionItem(mom_id, options = {}) {
   const assignee = document.getElementById('momInlineActionAssignee')?.value?.trim() || '';
   const priority = document.getElementById('momInlineActionPriority')?.value || 'medium';
   const due_date = document.getElementById('momInlineActionDueDate')?.value || '';
+  const form=titleEl?.closest('[data-mom-autosave]');
+  const editingId=Number(form?.dataset.editingId || 0);
   
   if(!title) {
     if(options.silent) return;
@@ -949,8 +1075,9 @@ function saveInlineActionItem(mom_id, options = {}) {
   if(!momStartInlineSave('action', mom_id)) return;
   
   const payload = {
-    action: 'add_action_item',
+    action: editingId ? 'update_action_item' : 'add_action_item',
     mom_id: mom_id,
+    action_id: editingId || undefined,
     title: title,
     description: description,
     assigned_to: assignee,
@@ -960,16 +1087,11 @@ function saveInlineActionItem(mom_id, options = {}) {
   
   api('api/api_mom.php', payload).then(r => {
     if(r.ok) {
-      toast('Action created', 'success');
-      momAppendAction(r.action_id, title, description, assignee, priority, due_date);
-      ['momInlineActionTitle','momInlineActionDesc','momInlineActionAssignee','momInlineActionDueDate'].forEach(id => {
-        const el=document.getElementById(id);
-        if(el)el.value='';
-      });
-      const priorityEl=document.getElementById('momInlineActionPriority');
-      if(priorityEl)priorityEl.value='medium';
+      const item=r.item || {id:r.action_id || editingId,title,description,assigned_to:assignee,priority,due_date,status:form?.dataset.editingStatus || 'pending'};
+      toast(editingId ? 'Action updated' : 'Action created', 'success');
+      momAppendAction(item.id, item.title, item.description || '', item.assigned_to || '', item.priority || 'medium', item.due_date || '', item.status || 'pending');
+      cancelActionEdit();
       momStopInlineSave('action', mom_id);
-      momMarkSaved(titleEl.closest('[data-mom-autosave]') || titleEl);
     } else {
       momStopInlineSave('action', mom_id);
       toast(r.msg || 'Failed to save action', 'error');
@@ -1056,6 +1178,7 @@ document.addEventListener('keydown', event => {
 function completeAction(action_id, checked) {
   api('api/api_mom.php', {
     action: 'complete_action',
+    mom_id: window._currentMOMId,
     action_id: action_id,
     completed: checked
   }).then(r => {
@@ -1065,6 +1188,7 @@ function completeAction(action_id, checked) {
       if(item) {
         item.classList.toggle('action-item-completed', checked);
         item.classList.toggle('action-item-pending', !checked);
+        item.dataset.status=checked ? 'completed' : 'pending';
       }
       momUpdateActionProgress();
       toast(checked ? 'Action completed' : 'Action reopened', 'success');
@@ -1076,6 +1200,7 @@ function deleteActionItem(action_id) {
   tracsConfirm('Delete this action item?', () => {
     api('api/api_mom.php', {
       action: 'delete_action_item',
+      mom_id: window._currentMOMId,
       action_id: action_id
     }).then(r => {
       if(r.ok) {
@@ -1095,6 +1220,7 @@ function createReminderFromAction(action_id) {
   tracsConfirm('Create a reminder for this action?', () => {
     api('api/api_mom.php', {
       action: 'create_reminder_from_action',
+      mom_id: window._currentMOMId,
       action_id: action_id
     }).then(r => {
       if(r.ok) {
@@ -1200,6 +1326,7 @@ function createCaseFromAction(action_id) {
   tracsConfirm('Create an operational case for this action?', () => {
     api('api/api_mom.php', {
       action: 'create_case_from_action',
+      mom_id: window._currentMOMId,
       action_id: action_id
     }).then(r => {
       if(r.ok) {

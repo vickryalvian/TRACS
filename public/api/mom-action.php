@@ -17,6 +17,14 @@ function mom_legacy_fail(string $error='Error', int $code=400): void {
   exit;
 }
 
+function mom_legacy_require_mom(MOMController $MC, array $input): int {
+  $momId = (int)($input['mid'] ?? 0);
+  if($momId <= 0 || !$MC->getMOM($momId)) {
+    mom_legacy_fail('Meeting or item not found', 404);
+  }
+  return $momId;
+}
+
 if(!$MC->isInstalled()) {
   mom_legacy_fail('MOM storage is not available.', 503);
 }
@@ -64,22 +72,27 @@ try {
       $MC->deleteMOM($legacy_mom_id) ? mom_legacy_ok() : mom_legacy_fail('Failed to delete meeting');
 
     case 'add_note':
-      $id = $MC->addDiscussionNote((int)($input['mid'] ?? 0), trim($input['note_text'] ?? ''), trim($input['note_type'] ?? 'discussion'));
+      $legacy_mom_id = mom_legacy_require_mom($MC, $input);
+      $id = $MC->addDiscussionNote($legacy_mom_id, trim($input['note_text'] ?? ''), trim($input['note_type'] ?? 'discussion'));
       $id ? mom_legacy_ok(['note_id'=>$id]) : mom_legacy_fail('Failed to add note');
 
     case 'delete_note':
-      $MC->deleteNote((int)($input['noteid'] ?? 0)) ? mom_legacy_ok() : mom_legacy_fail('Failed to delete note');
+      $legacy_mom_id = mom_legacy_require_mom($MC, $input);
+      $MC->deleteNote((int)($input['noteid'] ?? 0), $legacy_mom_id) ? mom_legacy_ok() : mom_legacy_fail('Meeting or item not found', 404);
 
     case 'add_decision':
-      $id = $MC->addDecision((int)($input['mid'] ?? 0), trim($input['decision_text'] ?? ''));
+      $legacy_mom_id = mom_legacy_require_mom($MC, $input);
+      $id = $MC->addDecision($legacy_mom_id, trim($input['decision_text'] ?? ''));
       $id ? mom_legacy_ok(['decision_id'=>$id]) : mom_legacy_fail('Failed to add decision');
 
     case 'delete_decision':
-      $MC->deleteDecision((int)($input['did'] ?? 0)) ? mom_legacy_ok() : mom_legacy_fail('Failed to delete decision');
+      $legacy_mom_id = mom_legacy_require_mom($MC, $input);
+      $MC->deleteDecision((int)($input['did'] ?? 0), $legacy_mom_id) ? mom_legacy_ok() : mom_legacy_fail('Meeting or item not found', 404);
 
     case 'add_action':
+      $legacy_mom_id = mom_legacy_require_mom($MC, $input);
       $id = $MC->addActionItem(
-        (int)($input['mid'] ?? 0),
+        $legacy_mom_id,
         trim($input['action_text'] ?? ''),
         trim($input['description'] ?? ''),
         trim($input['assigned_to'] ?? ''),
@@ -89,28 +102,38 @@ try {
       $id ? mom_legacy_ok(['action_id'=>$id]) : mom_legacy_fail('Failed to add action');
 
     case 'update_action_status':
+      $legacy_mom_id = mom_legacy_require_mom($MC, $input);
       $completed = ($input['status'] ?? 'pending') === 'completed';
-      $MC->completeAction((int)($input['aid'] ?? 0), $completed) ? mom_legacy_ok() : mom_legacy_fail('Failed to update action');
+      $MC->completeAction((int)($input['aid'] ?? 0), $completed, $legacy_mom_id) ? mom_legacy_ok() : mom_legacy_fail('Meeting or item not found', 404);
 
     case 'delete_action':
-      $MC->deleteActionItem((int)($input['aid'] ?? 0)) ? mom_legacy_ok() : mom_legacy_fail('Failed to delete action');
+      $legacy_mom_id = mom_legacy_require_mom($MC, $input);
+      $MC->deleteActionItem((int)($input['aid'] ?? 0), $legacy_mom_id) ? mom_legacy_ok() : mom_legacy_fail('Meeting or item not found', 404);
 
     case 'add_agenda_item':
-      $id = $MC->addAgendaItem((int)($input['mid'] ?? 0), trim($input['item_text'] ?? ''));
+      $legacy_mom_id = mom_legacy_require_mom($MC, $input);
+      $id = $MC->addAgendaItem($legacy_mom_id, trim($input['item_text'] ?? ''));
       $id ? mom_legacy_ok(['agenda_id'=>$id]) : mom_legacy_fail('Failed to add agenda item');
 
     case 'update_agenda_status':
-      $MC->updateAgendaItem((int)($input['agendaid'] ?? 0), '', '', trim($input['status'] ?? 'pending')) ? mom_legacy_ok() : mom_legacy_fail('Failed to update agenda item');
+      $legacy_mom_id = mom_legacy_require_mom($MC, $input);
+      $MC->updateAgendaItem((int)($input['agendaid'] ?? 0), null, null, trim($input['status'] ?? 'pending'), $legacy_mom_id) ? mom_legacy_ok() : mom_legacy_fail('Meeting or item not found', 404);
 
     case 'delete_agenda_item':
-      $MC->deleteAgendaItem((int)($input['agendaid'] ?? 0)) ? mom_legacy_ok() : mom_legacy_fail('Failed to delete agenda item');
+      $legacy_mom_id = mom_legacy_require_mom($MC, $input);
+      $MC->deleteAgendaItem((int)($input['agendaid'] ?? 0), $legacy_mom_id) ? mom_legacy_ok() : mom_legacy_fail('Meeting or item not found', 404);
 
     case 'add_reminder_from_action':
-      $id = $MC->createReminderFromAction((int)($input['aid'] ?? 0));
+      $legacy_mom_id = mom_legacy_require_mom($MC, $input);
+      $legacy_action_id = (int)($input['aid'] ?? 0);
+      $legacy_action = $MC->getActionItem($legacy_action_id);
+      if(!$legacy_action || (int)$legacy_action['mom_id'] !== $legacy_mom_id) mom_legacy_fail('Meeting or item not found', 404);
+      $id = $MC->createReminderFromAction($legacy_action_id);
       $id ? mom_legacy_ok(['reminder_id'=>$id]) : mom_legacy_fail('Failed to create reminder');
 
     case 'link_case':
-      $MC->linkCaseToMOM((int)($input['mid'] ?? 0), (int)($input['case_id'] ?? 0)) ? mom_legacy_ok() : mom_legacy_fail('Failed to link case');
+      $legacy_mom_id = mom_legacy_require_mom($MC, $input);
+      $MC->linkCaseToMOM($legacy_mom_id, (int)($input['case_id'] ?? 0)) ? mom_legacy_ok() : mom_legacy_fail('Failed to link case');
 
     default:
       mom_legacy_fail('Unknown action');

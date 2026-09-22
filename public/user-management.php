@@ -1116,7 +1116,12 @@ function umCreateUser(){
   if(notesSection) notesSection.hidden=true;
   openModal('userForm'); umToggleInternSection(); window.TRACSDropdowns?.syncAll();
 }
-function umCreateUserInDivision(divisionId){ umCreateUser(); umSetValue('umDivisionId', divisionId); window.TRACSDropdowns?.syncAll(); }
+function umCreateUserInDivision(divisionId){
+  umCreateUser();
+  umSetValue('umDivisionId', divisionId);
+  window.TRACSDropdowns?.syncAll();
+  window.TRACSUnsavedChanges?.captureInitialState(document.getElementById('userFormModal'));
+}
 function umEditUser(btn){
   const u=umData(btn,'user');
   document.getElementById('umUserModalTitle').textContent='Edit User';

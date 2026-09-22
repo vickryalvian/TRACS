@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { FileText, Paperclip, Plus, RotateCcw, Server, SlidersHorizontal, Upload, X, ChevronDown, ChevronUp } from 'lucide-react';
 import '../../styles/tracs-tailwind.css';
@@ -218,27 +218,45 @@ function Badge({ children, tone }) {
   return <span className={`tr:inline-flex tr:items-center tr:rounded-tracs-sm tr:border tr:px-2 tr:py-0.5 tr:text-[11px] tr:font-semibold ${badgeClass(tone)}`}>{children}</span>;
 }
 
+function useDebouncedValue(value, delay) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(value), delay);
+    return () => window.clearTimeout(timer);
+  }, [delay, value]);
+  return debounced;
+}
+
 function useClients(filters) {
   const [state, setState] = useState({ loading: true, error: '', data: { clients: [], summary: {}, attention: [] } });
+  const debouncedSearch = useDebouncedValue(filters.q, 275);
   const query = useMemo(() => {
     const params = new URLSearchParams();
-    Object.entries(filters).forEach(([key, value]) => value && params.set(key, value));
+    Object.entries({ ...filters, q: debouncedSearch }).forEach(([key, value]) => value && params.set(key, value));
     return params.toString();
-  }, [filters]);
+  }, [debouncedSearch, filters]);
   const sequence = useRef(0);
-  async function load() {
+  const activeRequest = useRef(null);
+  const load = useCallback(async () => {
     const requestId = ++sequence.current;
+    activeRequest.current?.abort();
+    const controller = new AbortController();
+    activeRequest.current = controller;
     setState((s) => ({ ...s, loading: true, error: '' }));
     try {
-      const res = await api.request(`/api/v1/client-portfolio/clients.php${query ? `?${query}` : ''}`);
+      const res = await api.request(`/api/v1/client-portfolio/clients.php${query ? `?${query}` : ''}`, { signal: controller.signal });
       if (requestId !== sequence.current) return;
       setState({ loading: false, error: '', data: res.data });
     } catch (error) {
+      if (error?.name === 'AbortError') return;
       if (requestId !== sequence.current) return;
       setState((s) => ({ ...s, loading: false, error: error.message }));
     }
-  }
-  useEffect(() => { load(); }, [query]);
+  }, [query]);
+  useEffect(() => {
+    load();
+    return () => activeRequest.current?.abort();
+  }, [load]);
   return { ...state, refresh: load };
 }
 
@@ -788,6 +806,7 @@ function ClientsApp() {
   const [modal, setModal] = useState(null);
   const [reminder, setReminder] = useState(null);
   const detailSequence = useRef(0);
+  const lastLifecycleRefresh = useRef(0);
   const restoredRef = useRef(Boolean(initialId));
   const canManage = Boolean(context.data?.allowed_actions?.manage);
   const filtered = Object.entries(filters).some(([key, value]) => value !== emptyFilters[key]);
@@ -831,6 +850,11 @@ function ClientsApp() {
     const focus = (event) => {
       if (event.type === 'storage' && event.key !== 'tracs-calendar-updated') return;
       if (event.type === 'visibilitychange' && document.hidden) return;
+      if (event.type === 'focus' || event.type === 'visibilitychange') {
+        const now = Date.now();
+        if (now - lastLifecycleRefresh.current < 1000) return;
+        lastLifecycleRefresh.current = now;
+      }
       clients.refresh(); if (expanded) loadDetail(expanded);
     };
     window.addEventListener('focus', focus);

@@ -22,6 +22,11 @@ require_once __DIR__ . '/../../../core/notifications.php';
 class MOMController {
   private $conn;
   private $uid;
+  private $installed = null;
+  private $tableCache = [];
+  private $columnCache = [];
+  private $operationalSchemaChecked = false;
+  private $autoStartChecked = false;
 
   public function __construct($conn, $uid) {
     $this->conn = $conn;
@@ -29,6 +34,8 @@ class MOMController {
   }
 
   private function tableExists($table) {
+    $key = strtolower((string)$table);
+    if(array_key_exists($key, $this->tableCache)) return $this->tableCache[$key];
     try {
       $stmt = $this->conn->prepare("
         SELECT COUNT(*) AS total
@@ -36,17 +43,18 @@ class MOMController {
         WHERE TABLE_SCHEMA = DATABASE()
           AND TABLE_NAME = ?
       ");
-      if(!$stmt) return false;
+      if(!$stmt) return $this->tableCache[$key] = false;
       $stmt->bind_param('s', $table);
       $stmt->execute();
       $row = $stmt->get_result()->fetch_assoc();
-      return (int)($row['total'] ?? 0) > 0;
+      return $this->tableCache[$key] = ((int)($row['total'] ?? 0) > 0);
     } catch(Throwable $e) {
-      return false;
+      return $this->tableCache[$key] = false;
     }
   }
 
   public function isInstalled() {
+    if($this->installed !== null) return $this->installed;
     $required = [
       'tracs_moms',
       'tracs_mom_agenda',
@@ -58,9 +66,9 @@ class MOMController {
       'tracs_mom_audit_log'
     ];
     foreach($required as $table) {
-      if(!$this->tableExists($table)) return false;
+      if(!$this->tableExists($table)) return $this->installed = false;
     }
-    return true;
+    return $this->installed = true;
   }
 
   private function requireInstalled() {
@@ -70,6 +78,8 @@ class MOMController {
   }
 
   private function hasColumn($table, $column) {
+    $key = strtolower((string)$table . ':' . (string)$column);
+    if(array_key_exists($key, $this->columnCache)) return $this->columnCache[$key];
     $stmt = $this->conn->prepare("
       SELECT COUNT(*) AS total
       FROM INFORMATION_SCHEMA.COLUMNS
@@ -77,10 +87,11 @@ class MOMController {
         AND TABLE_NAME = ?
         AND COLUMN_NAME = ?
     ");
+    if(!$stmt) return $this->columnCache[$key] = false;
     $stmt->bind_param('ss', $table, $column);
     $stmt->execute();
     $row = $stmt->get_result()->fetch_assoc();
-    return (int)($row['total'] ?? 0) > 0;
+    return $this->columnCache[$key] = ((int)($row['total'] ?? 0) > 0);
   }
 
   private function normalizeMeetingAt($meeting_at) {
@@ -105,6 +116,7 @@ class MOMController {
     try {
       $this->conn->query("ALTER TABLE tracs_moms ADD COLUMN meeting_at DATETIME DEFAULT NULL COMMENT 'Planned meeting date and time' AFTER participants");
       $this->conn->query("ALTER TABLE tracs_moms ADD INDEX idx_meeting_at (meeting_at)");
+      unset($this->columnCache['tracs_moms:meeting_at']);
     } catch(Throwable $e) {
       return $this->hasColumn('tracs_moms', 'meeting_at');
     }
@@ -117,6 +129,7 @@ class MOMController {
 
     try {
       $this->conn->query("ALTER TABLE tracs_moms ADD COLUMN meeting_url VARCHAR(500) DEFAULT NULL COMMENT 'Meeting URL such as Google Meet or Zoom' AFTER meeting_at");
+      unset($this->columnCache['tracs_moms:meeting_url']);
     } catch(Throwable $e) {
       return $this->hasColumn('tracs_moms', 'meeting_url');
     }
@@ -129,6 +142,7 @@ class MOMController {
     $afterSql = $after ? " AFTER `$after`" : '';
     try {
       $this->conn->query("ALTER TABLE tracs_moms ADD COLUMN `$column` $definition$afterSql");
+      unset($this->columnCache['tracs_moms:' . strtolower((string)$column)]);
     } catch(Throwable $e) {
       return $this->hasColumn('tracs_moms', $column);
     }
@@ -136,6 +150,7 @@ class MOMController {
   }
 
   private function ensureOperationalSchema() {
+    if($this->operationalSchemaChecked) return true;
     if(!$this->isInstalled()) return false;
     $this->ensureMeetingAtColumn();
     $this->ensureMeetingUrlColumn();
@@ -155,7 +170,7 @@ class MOMController {
       // Older installs may still use active; formatMOM normalizes it for the UI.
     }
 
-    return true;
+    return $this->operationalSchemaChecked = true;
   }
 
   private function tickerEvent($message, $type='info', $ref_id=null) {
@@ -209,6 +224,8 @@ class MOMController {
   }
 
   private function autoStartDueMOMs() {
+    if($this->autoStartChecked) return;
+    $this->autoStartChecked = true;
     if(!$this->hasColumn('tracs_moms', 'meeting_at')) return;
     $this->ensureColumn('started_at', 'DATETIME DEFAULT NULL', 'ops_status_id');
 
@@ -615,23 +632,41 @@ class MOMController {
     return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
   }
 
-  public function updateAgendaItem($item_id, $topic, $notes='', $status='pending') {
+  public function getAgendaItem($item_id) {
     $item_id = (int)$item_id;
-    $stmt = $this->conn->prepare("
-      UPDATE tracs_mom_agenda a
-      INNER JOIN tracs_moms m ON m.id=a.mom_id
-      SET
-        a.topic=CASE WHEN ?='' THEN a.topic ELSE ? END,
-        a.notes=CASE WHEN ?='' THEN a.notes ELSE ? END,
-        a.status=?
-      WHERE a.id=?
-    ");
-    $stmt->bind_param('sssssi', $topic, $topic, $notes, $notes, $status, $item_id);
-    return $stmt->execute() && $stmt->affected_rows > 0;
+    $stmt = $this->conn->prepare("SELECT * FROM tracs_mom_agenda WHERE id=? LIMIT 1");
+    if(!$stmt) return null;
+    $stmt->bind_param('i', $item_id);
+    $stmt->execute();
+    return $stmt->get_result()->fetch_assoc() ?: null;
   }
 
-  public function deleteAgendaItem($item_id) {
+  public function updateAgendaItem($item_id, $topic=null, $notes=null, $status='pending', $mom_id=0) {
     $item_id = (int)$item_id;
+    $mom_id = (int)$mom_id;
+    $existing = $this->getAgendaItem($item_id);
+    if(!$existing || ($mom_id > 0 && (int)$existing['mom_id'] !== $mom_id)) return false;
+    $topic = $topic === null ? (string)$existing['topic'] : trim((string)$topic);
+    $notes = $notes === null ? (string)($existing['notes'] ?? '') : trim((string)$notes);
+    if($topic === '') return false;
+    $status = in_array($status, ['pending','completed','skipped'], true) ? $status : 'pending';
+    $stmt = $this->conn->prepare("
+      UPDATE tracs_mom_agenda
+      SET topic=?, notes=?, status=?
+      WHERE id=? AND mom_id=?
+    ");
+    $actualMomId = (int)$existing['mom_id'];
+    $stmt->bind_param('sssii', $topic, $notes, $status, $item_id, $actualMomId);
+    return $stmt->execute();
+  }
+
+  public function deleteAgendaItem($item_id, $mom_id=0) {
+    $item_id = (int)$item_id;
+    $mom_id = (int)$mom_id;
+    if($mom_id > 0) {
+      $existing = $this->getAgendaItem($item_id);
+      if(!$existing || (int)$existing['mom_id'] !== $mom_id) return false;
+    }
     $stmt = $this->conn->prepare("
       DELETE a FROM tracs_mom_agenda a
       INNER JOIN tracs_moms m ON m.id=a.mom_id
@@ -672,8 +707,36 @@ class MOMController {
     return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
   }
 
-  public function deleteNote($note_id) {
+  public function getDiscussionNote($note_id) {
     $note_id = (int)$note_id;
+    $stmt = $this->conn->prepare("SELECT * FROM tracs_mom_notes WHERE id=? LIMIT 1");
+    if(!$stmt) return null;
+    $stmt->bind_param('i', $note_id);
+    $stmt->execute();
+    return $stmt->get_result()->fetch_assoc() ?: null;
+  }
+
+  public function updateDiscussionNote($note_id, $content, $note_type='discussion', $mom_id=0) {
+    $note_id = (int)$note_id;
+    $mom_id = (int)$mom_id;
+    $existing = $this->getDiscussionNote($note_id);
+    if(!$existing || ($mom_id > 0 && (int)$existing['mom_id'] !== $mom_id)) return false;
+    $content = trim((string)$content);
+    if($content === '') return false;
+    $note_type = in_array($note_type, ['discussion','decision','action','insight','risk'], true) ? $note_type : 'discussion';
+    $stmt = $this->conn->prepare("UPDATE tracs_mom_notes SET content=?, note_type=? WHERE id=? AND mom_id=?");
+    $actualMomId = (int)$existing['mom_id'];
+    $stmt->bind_param('ssii', $content, $note_type, $note_id, $actualMomId);
+    return $stmt->execute();
+  }
+
+  public function deleteNote($note_id, $mom_id=0) {
+    $note_id = (int)$note_id;
+    $mom_id = (int)$mom_id;
+    if($mom_id > 0) {
+      $existing = $this->getDiscussionNote($note_id);
+      if(!$existing || (int)$existing['mom_id'] !== $mom_id) return false;
+    }
     $stmt = $this->conn->prepare("
       DELETE n FROM tracs_mom_notes n
       INNER JOIN tracs_moms m ON m.id=n.mom_id
@@ -717,8 +780,38 @@ class MOMController {
     return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
   }
 
-  public function deleteDecision($decision_id) {
+  public function getDecision($decision_id) {
     $decision_id = (int)$decision_id;
+    $stmt = $this->conn->prepare("SELECT * FROM tracs_mom_decisions WHERE id=? LIMIT 1");
+    if(!$stmt) return null;
+    $stmt->bind_param('i', $decision_id);
+    $stmt->execute();
+    return $stmt->get_result()->fetch_assoc() ?: null;
+  }
+
+  public function updateDecision($decision_id, $decision, $rationale='', $owner='', $status='pending', $mom_id=0) {
+    $decision_id = (int)$decision_id;
+    $mom_id = (int)$mom_id;
+    $existing = $this->getDecision($decision_id);
+    if(!$existing || ($mom_id > 0 && (int)$existing['mom_id'] !== $mom_id)) return false;
+    $decision = trim((string)$decision);
+    if($decision === '') return false;
+    $status = in_array($status, ['pending','approved','implemented','cancelled'], true) ? $status : (string)($existing['status'] ?? 'pending');
+    $stmt = $this->conn->prepare("UPDATE tracs_mom_decisions SET decision=?, rationale=?, owner=?, status=?, updated_at=NOW() WHERE id=? AND mom_id=?");
+    $actualMomId = (int)$existing['mom_id'];
+    $stmt->bind_param('ssssii', $decision, $rationale, $owner, $status, $decision_id, $actualMomId);
+    $ok = $stmt->execute();
+    if($ok) $this->logMOMActivity('mom_decision_updated', "Updated decision #$decision_id in MOM #$actualMomId", $actualMomId);
+    return $ok;
+  }
+
+  public function deleteDecision($decision_id, $mom_id=0) {
+    $decision_id = (int)$decision_id;
+    $mom_id = (int)$mom_id;
+    if($mom_id > 0) {
+      $existing = $this->getDecision($decision_id);
+      if(!$existing || (int)$existing['mom_id'] !== $mom_id) return false;
+    }
     $stmt = $this->conn->prepare("
       DELETE d FROM tracs_mom_decisions d
       INNER JOIN tracs_moms m ON m.id=d.mom_id
@@ -776,8 +869,12 @@ class MOMController {
     return $stmt->get_result()->fetch_assoc();
   }
 
-  public function updateActionItem($action_id, $title, $description='', $assigned_to='', $priority='medium', $due_date=null) {
+  public function updateActionItem($action_id, $title, $description='', $assigned_to='', $priority='medium', $due_date=null, $mom_id=0) {
     $action_id = (int)$action_id;
+    $mom_id = (int)$mom_id;
+    $existing = $this->getActionItem($action_id);
+    if(!$existing || ($mom_id > 0 && (int)$existing['mom_id'] !== $mom_id)) return false;
+    $actualMomId = (int)$existing['mom_id'];
     $priority = in_array($priority, ['low','medium','high','critical']) ? $priority : 'medium';
     $now = date('Y-m-d H:i:s');
 
@@ -785,9 +882,9 @@ class MOMController {
       UPDATE tracs_mom_actions a
       INNER JOIN tracs_moms m ON m.id=a.mom_id
       SET a.title=?, a.description=?, a.assigned_to=?, a.priority=?, a.due_date=?, a.updated_at=?
-      WHERE a.id=?
+      WHERE a.id=? AND a.mom_id=?
     ");
-    $stmt->bind_param('sssssi', $title, $description, $assigned_to, $priority, $due_date, $now, $action_id);
+    $stmt->bind_param('ssssssii', $title, $description, $assigned_to, $priority, $due_date, $now, $action_id, $actualMomId);
     $ok = $stmt->execute();
     if($ok) {
       $desc = "Action Item from MOM: " . $description;
@@ -796,16 +893,21 @@ class MOMController {
         INNER JOIN tracs_mom_actions a ON a.linked_reminder_id=r.id
         INNER JOIN tracs_moms m ON m.id=a.mom_id
         SET r.title=?, r.description=?, r.priority=?, r.due_date=COALESCE(?, r.due_date), r.updated_at=NOW()
-        WHERE a.id=?
+        WHERE a.id=? AND a.mom_id=?
       ");
-      $rem->bind_param('ssssi', $title, $desc, $priority, $due_date, $action_id);
+      $rem->bind_param('ssssii', $title, $desc, $priority, $due_date, $action_id, $actualMomId);
       $rem->execute();
+      $this->logMOMActivity('mom_action_updated', "Updated action #$action_id in MOM #$actualMomId", $actualMomId);
     }
     return $ok;
   }
 
-  public function completeAction($action_id, $completed=true) {
+  public function completeAction($action_id, $completed=true, $mom_id=0) {
     $action_id = (int)$action_id;
+    $mom_id = (int)$mom_id;
+    $existing = $this->getActionItem($action_id);
+    if(!$existing || ($mom_id > 0 && (int)$existing['mom_id'] !== $mom_id)) return false;
+    $actualMomId = (int)$existing['mom_id'];
     $now = date('Y-m-d H:i:s');
     $status = $completed ? 'completed' : 'pending';
 
@@ -813,9 +915,9 @@ class MOMController {
       UPDATE tracs_mom_actions a
       INNER JOIN tracs_moms m ON m.id=a.mom_id
       SET a.status=?, a.updated_at=?
-      WHERE a.id=?
+      WHERE a.id=? AND a.mom_id=?
     ");
-    $stmt->bind_param('ssi', $status, $now, $action_id);
+    $stmt->bind_param('ssii', $status, $now, $action_id, $actualMomId);
     $ok = $stmt->execute();
     if($ok) {
       $done = $completed ? 1 : 0;
@@ -824,32 +926,36 @@ class MOMController {
         INNER JOIN tracs_mom_actions a ON a.linked_reminder_id=r.id
         INNER JOIN tracs_moms m ON m.id=a.mom_id
         SET r.is_completed=?, r.updated_at=NOW()
-        WHERE a.id=?
+        WHERE a.id=? AND a.mom_id=?
       ");
-      $rem->bind_param('ii', $done, $action_id);
+      $rem->bind_param('iii', $done, $action_id, $actualMomId);
       $rem->execute();
-      $this->logMOMActivity($completed ? 'action_completed' : 'action_reopened', ($completed ? 'Completed' : 'Reopened') . " action #$action_id", $action_id);
+      $this->logMOMActivity($completed ? 'action_completed' : 'action_reopened', ($completed ? 'Completed' : 'Reopened') . " action #$action_id", $actualMomId);
     }
     return $ok;
   }
 
-  public function deleteActionItem($action_id) {
+  public function deleteActionItem($action_id, $mom_id=0) {
     $action_id = (int)$action_id;
+    $mom_id = (int)$mom_id;
+    $existing = $this->getActionItem($action_id);
+    if(!$existing || ($mom_id > 0 && (int)$existing['mom_id'] !== $mom_id)) return false;
+    $actualMomId = (int)$existing['mom_id'];
     $rem = $this->conn->prepare("
       DELETE r FROM tracs_reminders r
       INNER JOIN tracs_mom_actions a ON a.linked_reminder_id=r.id
       INNER JOIN tracs_moms m ON m.id=a.mom_id
-      WHERE a.id=?
+      WHERE a.id=? AND a.mom_id=?
     ");
-    $rem->bind_param('i', $action_id);
+    $rem->bind_param('ii', $action_id, $actualMomId);
     $rem->execute();
 
     $stmt = $this->conn->prepare("
       DELETE a FROM tracs_mom_actions a
       INNER JOIN tracs_moms m ON m.id=a.mom_id
-      WHERE a.id=?
+      WHERE a.id=? AND a.mom_id=?
     ");
-    $stmt->bind_param('i', $action_id);
+    $stmt->bind_param('ii', $action_id, $actualMomId);
     return $stmt->execute() && $stmt->affected_rows > 0;
   }
 

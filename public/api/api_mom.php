@@ -33,6 +33,28 @@ function respond($ok, $data = [], $msg = '') {
   exit;
 }
 
+function mom_api_text(array $input, string $key, int $maxLength, bool $required = false): string {
+  $value = trim((string)($input[$key] ?? ''));
+  if($required && $value === '') {
+    http_response_code(422);
+    respond(false, [], ucfirst(str_replace('_', ' ', $key)) . ' is required');
+  }
+  if(strlen($value) > $maxLength) {
+    http_response_code(422);
+    respond(false, [], ucfirst(str_replace('_', ' ', $key)) . " is too long (maximum {$maxLength} characters)");
+  }
+  return $value;
+}
+
+function mom_api_require_mom(MOMController $MC, array $input): int {
+  $mom_id = (int)($input['mom_id'] ?? 0);
+  if($mom_id <= 0 || !$MC->getMOM($mom_id)) {
+    http_response_code(404);
+    respond(false, [], 'Meeting or item not found');
+  }
+  return $mom_id;
+}
+
 function mom_api_case_payload(MOMController $MC, CaseController $CC, int $case_id): ?array {
   $case = $MC->getCaseForUser($case_id);
   return $case ? $CC->formatCase($case) : null;
@@ -225,45 +247,45 @@ else if($action === 'delete_mom') {
 // ═══════════════════════════════════════════════════════════════
 
 else if($action === 'add_agenda_item') {
-  $mom_id = (int)($input['mom_id'] ?? 0);
-  $topic = trim($input['topic'] ?? '');
-  
-  if(!$mom_id || !$topic) {
-    respond(false, [], 'Topic is required');
-  }
-  
-  if(!$MC->getMOM($mom_id)) {
-    respond(false, [], 'Meeting not found');
-  }
-  
-  $item_id = $MC->addAgendaItem($mom_id, $topic);
+  $mom_id = mom_api_require_mom($MC, $input);
+  $topic = mom_api_text($input, 'topic', 500, true);
+  $notes = mom_api_text($input, 'notes', 20000);
+  $status = in_array(($input['status'] ?? 'pending'), ['pending', 'completed', 'skipped'], true)
+    ? $input['status']
+    : 'pending';
+  $item_id = $MC->addAgendaItem($mom_id, $topic, $notes, $status);
   if($item_id) {
-    respond(true, ['item_id' => $item_id], 'Agenda item added');
+    respond(true, ['item_id' => $item_id, 'item' => $MC->getAgendaItem((int)$item_id)], 'Agenda item added');
   } else {
     respond(false, [], 'Failed to add agenda item');
   }
 }
 
 else if($action === 'update_agenda_item') {
+  $mom_id = mom_api_require_mom($MC, $input);
   $item_id = (int)($input['item_id'] ?? 0);
   $status = trim($input['status'] ?? 'pending');
-  
-  if(!in_array($status, ['pending', 'completed'])) {
+  $topic = array_key_exists('topic', $input) ? mom_api_text($input, 'topic', 500, true) : null;
+  $notes = array_key_exists('notes', $input) ? mom_api_text($input, 'notes', 20000) : null;
+
+  if(!in_array($status, ['pending', 'completed', 'skipped'], true)) {
     $status = 'pending';
   }
-  
-  if($MC->updateAgendaItem($item_id, '', '', $status)) {
-    respond(true, [], 'Agenda item updated');
+  if($item_id > 0 && $MC->updateAgendaItem($item_id, $topic, $notes, $status, $mom_id)) {
+    respond(true, ['item' => $MC->getAgendaItem($item_id)], 'Agenda item updated');
   } else {
+    http_response_code(404);
     respond(false, [], 'Failed to update agenda item');
   }
 }
 
 else if($action === 'delete_agenda_item') {
+  $mom_id = mom_api_require_mom($MC, $input);
   $item_id = (int)($input['item_id'] ?? 0);
-  if($MC->deleteAgendaItem($item_id)) {
+  if($item_id > 0 && $MC->deleteAgendaItem($item_id, $mom_id)) {
     respond(true, [], 'Agenda item deleted');
   }
+  http_response_code(404);
   respond(false, [], 'Not found');
 }
 
@@ -272,35 +294,43 @@ else if($action === 'delete_agenda_item') {
 // ═══════════════════════════════════════════════════════════════
 
 else if($action === 'add_discussion_note') {
-  $mom_id = (int)($input['mom_id'] ?? 0);
-  $content = trim($input['content'] ?? '');
+  $mom_id = mom_api_require_mom($MC, $input);
+  $content = mom_api_text($input, 'content', 50000, true);
   $note_type = trim($input['note_type'] ?? 'discussion');
-  
-  if(!$mom_id || !$content) {
-    respond(false, [], 'Content is required');
-  }
-  
-  if(!in_array($note_type, ['discussion', 'decision', 'action', 'insight'])) {
+
+  if(!in_array($note_type, ['discussion', 'decision', 'action', 'insight', 'risk'], true)) {
     $note_type = 'discussion';
   }
-  
-  if(!$MC->getMOM($mom_id)) {
-    respond(false, [], 'Meeting not found');
-  }
-  
   $note_id = $MC->addDiscussionNote($mom_id, $content, $note_type);
   if($note_id) {
-    respond(true, ['note_id' => $note_id], 'Note added');
+    respond(true, ['note_id' => $note_id, 'note' => $MC->getDiscussionNote((int)$note_id)], 'Note added');
   } else {
     respond(false, [], 'Failed to add note');
   }
 }
 
-else if($action === 'delete_note') {
+else if($action === 'update_discussion_note') {
+  $mom_id = mom_api_require_mom($MC, $input);
   $note_id = (int)($input['note_id'] ?? 0);
-  if($MC->deleteNote($note_id)) {
+  $content = mom_api_text($input, 'content', 50000, true);
+  $note_type = trim((string)($input['note_type'] ?? 'discussion'));
+  if(!in_array($note_type, ['discussion', 'decision', 'action', 'insight', 'risk'], true)) {
+    $note_type = 'discussion';
+  }
+  if($note_id > 0 && $MC->updateDiscussionNote($note_id, $content, $note_type, $mom_id)) {
+    respond(true, ['note' => $MC->getDiscussionNote($note_id)], 'Note updated');
+  }
+  http_response_code(404);
+  respond(false, [], 'Meeting or item not found');
+}
+
+else if($action === 'delete_note') {
+  $mom_id = mom_api_require_mom($MC, $input);
+  $note_id = (int)($input['note_id'] ?? 0);
+  if($note_id > 0 && $MC->deleteNote($note_id, $mom_id)) {
     respond(true, [], 'Note deleted');
   }
+  http_response_code(404);
   respond(false, [], 'Not found');
 }
 
@@ -309,32 +339,39 @@ else if($action === 'delete_note') {
 // ═══════════════════════════════════════════════════════════════
 
 else if($action === 'add_decision') {
-  $mom_id = (int)($input['mom_id'] ?? 0);
-  $decision = trim($input['decision'] ?? '');
-  $rationale = trim($input['rationale'] ?? '');
-  $owner = trim($input['owner'] ?? '');
-  
-  if(!$mom_id || !$decision) {
-    respond(false, [], 'Decision text is required');
-  }
-  
-  if(!$MC->getMOM($mom_id)) {
-    respond(false, [], 'Meeting not found');
-  }
-  
+  $mom_id = mom_api_require_mom($MC, $input);
+  $decision = mom_api_text($input, 'decision', 20000, true);
+  $rationale = mom_api_text($input, 'rationale', 20000);
+  $owner = mom_api_text($input, 'owner', 255);
   $decision_id = $MC->addDecision($mom_id, $decision, $rationale, $owner);
   if($decision_id) {
-    respond(true, ['decision_id' => $decision_id], 'Decision recorded');
+    respond(true, ['decision_id' => $decision_id, 'decision' => $MC->getDecision((int)$decision_id)], 'Decision recorded');
   } else {
     respond(false, [], 'Failed to add decision');
   }
 }
 
-else if($action === 'delete_decision') {
+else if($action === 'update_decision') {
+  $mom_id = mom_api_require_mom($MC, $input);
   $decision_id = (int)($input['decision_id'] ?? 0);
-  if($MC->deleteDecision($decision_id)) {
+  $decision = mom_api_text($input, 'decision', 20000, true);
+  $rationale = mom_api_text($input, 'rationale', 20000);
+  $owner = mom_api_text($input, 'owner', 255);
+  $status = trim((string)($input['status'] ?? 'pending'));
+  if($decision_id > 0 && $MC->updateDecision($decision_id, $decision, $rationale, $owner, $status, $mom_id)) {
+    respond(true, ['decision' => $MC->getDecision($decision_id)], 'Decision updated');
+  }
+  http_response_code(404);
+  respond(false, [], 'Meeting or item not found');
+}
+
+else if($action === 'delete_decision') {
+  $mom_id = mom_api_require_mom($MC, $input);
+  $decision_id = (int)($input['decision_id'] ?? 0);
+  if($decision_id > 0 && $MC->deleteDecision($decision_id, $mom_id)) {
     respond(true, [], 'Decision deleted');
   }
+  http_response_code(404);
   respond(false, [], 'Not found');
 }
 
@@ -343,59 +380,50 @@ else if($action === 'delete_decision') {
 // ═══════════════════════════════════════════════════════════════
 
 else if($action === 'add_action_item') {
-  $mom_id = (int)($input['mom_id'] ?? 0);
-  $title = trim($input['title'] ?? '');
-  $description = trim($input['description'] ?? '');
-  $assigned_to = trim($input['assigned_to'] ?? '');
+  $mom_id = mom_api_require_mom($MC, $input);
+  $title = mom_api_text($input, 'title', 500, true);
+  $description = mom_api_text($input, 'description', 20000);
+  $assigned_to = mom_api_text($input, 'assigned_to', 255);
   $priority = trim($input['priority'] ?? 'medium');
   $due_date = trim($input['due_date'] ?? '');
   
-  if(!$mom_id || !$title) {
-    respond(false, [], 'Title is required');
-  }
-  
-  if(!in_array($priority, ['low', 'medium', 'high', 'critical'])) {
+  if(!in_array($priority, ['low', 'medium', 'high', 'critical'], true)) {
     $priority = 'medium';
-  }
-  
-  if(!$MC->getMOM($mom_id)) {
-    respond(false, [], 'Meeting not found');
   }
   
   $action_id = $MC->addActionItem($mom_id, $title, $description, $assigned_to, $priority, 
     $due_date ? $due_date : null);
   
   if($action_id) {
-    respond(true, ['action_id' => $action_id], 'Action item created');
+    respond(true, ['action_id' => $action_id, 'item' => $MC->getActionItem((int)$action_id)], 'Action item created');
   } else {
     respond(false, [], 'Failed to create action');
   }
 }
 
 else if($action === 'update_action_item') {
+  $mom_id = mom_api_require_mom($MC, $input);
   $action_id = (int)($input['action_id'] ?? 0);
-  $title = trim($input['title'] ?? '');
-  $description = trim($input['description'] ?? '');
-  $assigned_to = trim($input['assigned_to'] ?? '');
+  $title = mom_api_text($input, 'title', 500, true);
+  $description = mom_api_text($input, 'description', 20000);
+  $assigned_to = mom_api_text($input, 'assigned_to', 255);
   $priority = trim($input['priority'] ?? 'medium');
   $due_date = trim($input['due_date'] ?? '');
   
-  if(!$action_id || !$title) {
-    respond(false, [], 'Title is required');
-  }
-  
-  if(!in_array($priority, ['low', 'medium', 'high', 'critical'])) {
+  if(!in_array($priority, ['low', 'medium', 'high', 'critical'], true)) {
     $priority = 'medium';
   }
 
-  if($MC->updateActionItem($action_id, $title, $description, $assigned_to, $priority, $due_date ?: null)) {
-    respond(true, [], 'Action item updated');
+  if($action_id > 0 && $MC->updateActionItem($action_id, $title, $description, $assigned_to, $priority, $due_date ?: null, $mom_id)) {
+    respond(true, ['item' => $MC->getActionItem($action_id)], 'Action item updated');
   } else {
+    http_response_code(404);
     respond(false, [], 'Failed to update action');
   }
 }
 
 else if($action === 'complete_action') {
+  $mom_id = mom_api_require_mom($MC, $input);
   $action_id = (int)($input['action_id'] ?? 0);
   $completed = filter_var($input['completed'] ?? true, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
   $completed = $completed ?? true;
@@ -404,7 +432,7 @@ else if($action === 'complete_action') {
     respond(false, [], 'Action ID required');
   }
   
-  if($MC->completeAction($action_id, $completed)) {
+  if($MC->completeAction($action_id, $completed, $mom_id)) {
     respond(true, [], $completed ? 'Action completed' : 'Action reopened');
   } else {
     respond(false, [], 'Failed to complete action');
@@ -412,10 +440,12 @@ else if($action === 'complete_action') {
 }
 
 else if($action === 'delete_action_item') {
+  $mom_id = mom_api_require_mom($MC, $input);
   $action_id = (int)($input['action_id'] ?? 0);
-  if($MC->deleteActionItem($action_id)) {
+  if($action_id > 0 && $MC->deleteActionItem($action_id, $mom_id)) {
     respond(true, [], 'Action deleted');
   }
+  http_response_code(404);
   respond(false, [], 'Not found');
 }
 
@@ -424,10 +454,12 @@ else if($action === 'delete_action_item') {
 // ═══════════════════════════════════════════════════════════════
 
 else if($action === 'create_reminder_from_action') {
+  $mom_id = mom_api_require_mom($MC, $input);
   $action_id = (int)($input['action_id'] ?? 0);
-  
-  if(!$action_id) {
-    respond(false, [], 'Action ID required');
+  $actionItem = $MC->getActionItem($action_id);
+  if(!$actionItem || (int)$actionItem['mom_id'] !== $mom_id) {
+    http_response_code(404);
+    respond(false, [], 'Meeting or item not found');
   }
   
   $rem_id = $MC->createReminderFromAction($action_id);
@@ -472,10 +504,12 @@ else if($action === 'link_case') {
 }
 
 else if($action === 'create_case_from_action') {
+  $mom_id = mom_api_require_mom($MC, $input);
   $action_id = (int)($input['action_id'] ?? 0);
-  
-  if(!$action_id) {
-    respond(false, [], 'Action ID required');
+  $actionItem = $MC->getActionItem($action_id);
+  if(!$actionItem || (int)$actionItem['mom_id'] !== $mom_id) {
+    http_response_code(404);
+    respond(false, [], 'Meeting or item not found');
   }
   
   $case_id = $MC->createCaseFromAction($action_id);

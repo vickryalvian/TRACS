@@ -75,8 +75,9 @@
       return [];
     }
   };
+  const parsedPayload = parsePayload();
   const state = {
-    reports: Array.isArray(parsePayload()) ? parsePayload() : [],
+    reports: Array.isArray(parsedPayload) ? parsedPayload : [],
     selectedId: toId(root.dataset.selectedId),
     detail: null,
     draggedId: 0,
@@ -585,12 +586,18 @@
   function renderBoard() {
     const filters = currentFilters();
     const visible = state.reports.filter(report => matchesFilters(report, filters));
-    const open = visible.filter(report => !['resolved', 'closed'].includes(report.status)).length;
-    const critical = visible.filter(report => report.priority === 'critical' && !['resolved', 'closed'].includes(report.status)).length;
-    const actionRequired = visible.filter(report => !isDone(report) && report.action_required).length;
+    const grouped = Object.fromEntries(stages.map(stage => [stage, []]));
+    const summary = visible.reduce((counts, report) => {
+      const done = ['resolved', 'closed'].includes(report.status);
+      if (!done) counts.open += 1;
+      if (!done && report.priority === 'critical') counts.critical += 1;
+      if (!isDone(report) && report.action_required) counts.actionRequired += 1;
+      if (grouped[report.workflow_stage]) grouped[report.workflow_stage].push(report);
+      return counts;
+    }, { open: 0, critical: 0, actionRequired: 0 });
     const resolvedToday = $('#abusePageSummary')?.dataset.resolvedToday || '0';
 
-    $('#abusePageSummary') && ($('#abusePageSummary').textContent = `${visible.length} shown · ${open} open · ${critical} critical · ${actionRequired} action required · ${resolvedToday} resolved today`);
+    $('#abusePageSummary') && ($('#abusePageSummary').textContent = `${visible.length} shown · ${summary.open} open · ${summary.critical} critical · ${summary.actionRequired} action required · ${resolvedToday} resolved today`);
     renderMoreFilterCount(filters);
     $('#abuseBoardWrap') && ($('#abuseBoardWrap').hidden = state.view !== 'board');
     $('#abuseListWrap') && ($('#abuseListWrap').hidden = state.view !== 'list');
@@ -600,17 +607,20 @@
       button.setAttribute('aria-pressed', active ? 'true' : 'false');
     });
 
-    stages.forEach(stage => {
-      const column = $(`[data-abuse-column="${stage}"]`, root);
-      const list = $(`[data-abuse-dropzone="${stage}"]`, root);
-      if (!column || !list) return;
-      const reports = visible.filter(report => report.workflow_stage === stage).sort(sortReports);
-      $('[data-column-count]', column).textContent = reports.length;
-      list.innerHTML = reports.length
-        ? reports.map(renderCard).join('')
-        : '<div class="abuse-empty-column">No reports</div>';
-    });
-    renderList(visible);
+    if (state.view === 'board') {
+      stages.forEach(stage => {
+        const column = $(`[data-abuse-column="${stage}"]`, root);
+        const list = $(`[data-abuse-dropzone="${stage}"]`, root);
+        if (!column || !list) return;
+        const reports = grouped[stage].sort(sortReports);
+        $('[data-column-count]', column).textContent = reports.length;
+        list.innerHTML = reports.length
+          ? reports.map(renderCard).join('')
+          : '<div class="abuse-empty-column">No reports</div>';
+      });
+    } else {
+      renderList(visible);
+    }
     icons();
   }
 

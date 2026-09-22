@@ -515,6 +515,7 @@ class UserManagementModel {
         }
         $id = (int)$stmt->insert_id;
         $stmt->close();
+        tracs_forget_user_access_cache($this->conn, $id);
         return $id;
     }
 
@@ -553,6 +554,7 @@ class UserManagementModel {
             throw new RuntimeException('Unable to update user.');
         }
         $stmt->close();
+        tracs_forget_user_access_cache($this->conn, $userId);
     }
 
     public function updateAvatarPath(int $userId, ?string $avatarPath, int $actorId): void {
@@ -573,6 +575,7 @@ class UserManagementModel {
             throw new RuntimeException('Unable to update profile picture.');
         }
         $stmt->close();
+        tracs_forget_user_access_cache($this->conn, $userId);
     }
 
     private function legacyRoleForRoleId(int $roleId): string {
@@ -699,6 +702,7 @@ class UserManagementModel {
             throw new RuntimeException('Unable to update user status.');
         }
         $stmt->close();
+        tracs_forget_user_access_cache($this->conn, $userId);
     }
 
     /**
@@ -778,6 +782,7 @@ class UserManagementModel {
             throw new RuntimeException('Unable to remove user.');
         }
         $stmt->close();
+        tracs_forget_user_access_cache($this->conn, $userId);
     }
 
     public function updatePasswordHash(int $userId, string $hash, int $actorId): void {
@@ -958,6 +963,7 @@ class UserManagementModel {
                 $stmt->close();
             }
             $this->conn->commit();
+            tracs_forget_user_access_cache($this->conn);
         } catch (Throwable $e) {
             $this->conn->rollback();
             throw $e;
@@ -1119,5 +1125,6 @@ class UserManagementModel {
             throw new RuntimeException('Unable to update profile.');
         }
         $stmt->close();
+        tracs_forget_user_access_cache($this->conn, $userId);
     }
 }

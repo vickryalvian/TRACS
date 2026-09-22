@@ -5,6 +5,7 @@
  */
 
  require_once __DIR__ . '/env.php';
+ require_once __DIR__ . '/../core/performance_diagnostics.php';
 
  $db_host = $_ENV['DB_HOST'] ?? 'localhost';
  $db_user = $_ENV['DB_USER'] ?? 'root';
@@ -24,6 +25,7 @@ if ($conn->connect_error) {
     die('Service temporarily unavailable. Please try again later.');
 }
 
+tracs_enable_performance_diagnostics($conn);
 $conn->set_charset('utf8mb4');
 $conn->query("SET time_zone = '+07:00'"); // WIB / Asia/Jakarta
 date_default_timezone_set('Asia/Jakarta');

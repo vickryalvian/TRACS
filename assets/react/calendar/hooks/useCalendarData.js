@@ -5,6 +5,7 @@ import { yearRange } from '../utils/date';
 export function useCalendarData(year, requiredSource = null) {
   const cache = useRef(new Map());
   const sequence = useRef(0);
+  const lastLifecycleRefresh = useRef(0);
   const [events, setEvents] = useState([]);
   const [metadata, setMetadata] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -53,6 +54,11 @@ export function useCalendarData(year, requiredSource = null) {
     const changed = (event) => {
       if (event.type === 'storage' && event.key !== 'tracs-calendar-updated') return;
       if (event.type === 'visibilitychange' && document.hidden) return;
+      if (event.type === 'focus' || event.type === 'visibilitychange') {
+        const now = Date.now();
+        if (now - lastLifecycleRefresh.current < 1000) return;
+        lastLifecycleRefresh.current = now;
+      }
       refresh();
     };
     window.addEventListener('tracs-calendar-updated', changed);

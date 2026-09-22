@@ -12,7 +12,39 @@ function tracs_identifier(string $identifier): string {
     return "`{$identifier}`";
 }
 
+function &tracs_column_exists_cache(): array {
+    static $cache = [];
+    return $cache;
+}
+
+function tracs_forget_column_exists_cache(?mysqli $conn = null, ?string $table = null, ?string $column = null): void {
+    $cache =& tracs_column_exists_cache();
+    if ($conn === null) {
+        $cache = [];
+        return;
+    }
+
+    $prefix = spl_object_id($conn) . ':';
+    if ($table !== null) {
+        $prefix .= strtolower($table) . ':';
+    }
+    if ($column !== null) {
+        $prefix .= strtolower($column);
+    }
+    foreach (array_keys($cache) as $key) {
+        if (str_starts_with($key, $prefix)) {
+            unset($cache[$key]);
+        }
+    }
+}
+
 function tracs_column_exists(mysqli $conn, string $table, string $column): bool {
+    $cache =& tracs_column_exists_cache();
+    $cacheKey = spl_object_id($conn) . ':' . strtolower($table) . ':' . strtolower($column);
+    if (array_key_exists($cacheKey, $cache)) {
+        return $cache[$cacheKey];
+    }
+
     $stmt = $conn->prepare("
         SELECT 1
         FROM information_schema.COLUMNS
@@ -22,13 +54,13 @@ function tracs_column_exists(mysqli $conn, string $table, string $column): bool 
         LIMIT 1
     ");
     if (!$stmt) {
-        return false;
+        return $cache[$cacheKey] = false;
     }
     $stmt->bind_param('ss', $table, $column);
     $stmt->execute();
     $exists = $stmt->get_result()->num_rows > 0;
     $stmt->close();
-    return $exists;
+    return $cache[$cacheKey] = $exists;
 }
 
 function tracs_ensure_creator_columns(mysqli $conn, string $table, ?string $sourceColumn = null): void {
@@ -37,10 +69,12 @@ function tracs_ensure_creator_columns(mysqli $conn, string $table, ?string $sour
     if (!tracs_column_exists($conn, $table, 'created_by')) {
         $conn->query("ALTER TABLE {$tableSql} ADD COLUMN `created_by` INT UNSIGNED NULL DEFAULT NULL");
         $conn->query("ALTER TABLE {$tableSql} ADD INDEX `idx_{$table}_created_by` (`created_by`)");
+        tracs_forget_column_exists_cache($conn, $table, 'created_by');
     }
 
     if (!tracs_column_exists($conn, $table, 'created_by_name')) {
         $conn->query("ALTER TABLE {$tableSql} ADD COLUMN `created_by_name` VARCHAR(150) NULL DEFAULT NULL");
+        tracs_forget_column_exists_cache($conn, $table, 'created_by_name');
     }
 
     if ($sourceColumn && tracs_column_exists($conn, $table, $sourceColumn)) {
@@ -50,7 +84,13 @@ function tracs_ensure_creator_columns(mysqli $conn, string $table, ?string $sour
 }
 
 function tracs_ensure_case_status_values(mysqli $conn): void {
+    static $checked = [];
+    $cacheKey = spl_object_id($conn);
+    if (isset($checked[$cacheKey])) {
+        return;
+    }
     if (!tracs_column_exists($conn, 'tracs_cases', 'status')) {
+        $checked[$cacheKey] = true;
         return;
     }
 
@@ -70,6 +110,7 @@ function tracs_ensure_case_status_values(mysqli $conn): void {
     $stmt->close();
 
     if (str_contains((string)($row['COLUMN_TYPE'] ?? ''), "'in_progress'")) {
+        $checked[$cacheKey] = true;
         return;
     }
 
@@ -77,6 +118,7 @@ function tracs_ensure_case_status_values(mysqli $conn): void {
         ALTER TABLE `tracs_cases`
         MODIFY COLUMN `status` ENUM('active','pending','in_progress','stuck','on_hold','completed') NOT NULL DEFAULT 'active'
     ");
+    $checked[$cacheKey] = true;
 }
 
 /**
@@ -96,6 +138,7 @@ function tracs_ensure_case_board_order(mysqli $conn): void {
 
     $conn->query("ALTER TABLE `tracs_cases` ADD COLUMN `board_order` INT NOT NULL DEFAULT 0");
     $conn->query("ALTER TABLE `tracs_cases` ADD INDEX `idx_cases_board_order` (`status`, `board_order`)");
+    tracs_forget_column_exists_cache($conn, 'tracs_cases', 'board_order');
 
     // Backfill a deterministic manual order per status column so nothing starts
     // at a tied 0. Uses a session variable window instead of window functions

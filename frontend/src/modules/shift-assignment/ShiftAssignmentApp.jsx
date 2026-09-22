@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card } from '../../components/ui/Card';
 import { ShiftAssignmentBoard } from './components/ShiftAssignmentBoard';
 import { ShiftAssignmentTable } from './components/ShiftAssignmentTable';
@@ -33,6 +33,21 @@ const initialFilters = {
   status: '',
 };
 
+function useDesktopPresentation() {
+  const query = '(min-width: 768px)';
+  const [desktop, setDesktop] = useState(() => window.matchMedia(query).matches);
+
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const update = (event) => setDesktop(event.matches);
+    setDesktop(media.matches);
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+
+  return desktop;
+}
+
 export function ShiftAssignmentApp() {
   const [filters, setFilters] = useState(initialFilters);
   const [copyPreviewOpen, setCopyPreviewOpen] = useState(false);
@@ -41,6 +56,7 @@ export function ShiftAssignmentApp() {
   const [editingAssignment, setEditingAssignment] = useState(null);
   const [deletingAssignment, setDeletingAssignment] = useState(null);
   const [toast, setToast] = useState(null);
+  const desktopPresentation = useDesktopPresentation();
   const context = useShiftAssignmentContext();
   const requestFilters = useMemo(() => filters, [filters]);
   const assignments = useShiftAssignments(requestFilters, Boolean(context.shift));
@@ -185,7 +201,7 @@ export function ShiftAssignmentApp() {
                     <ShiftErrorState error={assignments.error} onRetry={assignments.retry} />
                   </div>
                 ) : assignments.data?.assignments?.length ? (
-                  <>
+                  desktopPresentation ? (
                     <ShiftAssignmentTable
                       assignments={assignments.data.assignments}
                       canDelete={canDelete}
@@ -193,7 +209,8 @@ export function ShiftAssignmentApp() {
                       onDelete={setDeletingAssignment}
                       onEdit={setEditingAssignment}
                     />
-                    <div className="tr:p-tracs-3 tr:md:hidden">
+                  ) : (
+                    <div className="tr:p-tracs-3">
                       <ShiftAssignmentBoard
                         assignments={assignments.data.assignments}
                         canDelete={canDelete}
@@ -202,7 +219,7 @@ export function ShiftAssignmentApp() {
                         onEdit={setEditingAssignment}
                       />
                     </div>
-                  </>
+                  )
                 ) : (
                   <div className="tr:p-tracs-4">
                     <ShiftEmptyState />

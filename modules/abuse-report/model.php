@@ -10,6 +10,7 @@ class AbuseReportModel {
     public const PRIORITIES = ['low', 'medium', 'high', 'critical'];
 
     private mysqli $conn;
+    private static array $schemaReady = [];
 
     public function __construct(mysqli $connection) {
         $this->conn = $connection;
@@ -17,6 +18,10 @@ class AbuseReportModel {
     }
 
     public function ensureSchema(): bool {
+        $cacheKey = spl_object_id($this->conn);
+        if (array_key_exists($cacheKey, self::$schemaReady)) {
+            return self::$schemaReady[$cacheKey];
+        }
         $ddl = [
             "CREATE TABLE IF NOT EXISTS `tracs_abuse_reports` (
               `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -119,16 +124,16 @@ class AbuseReportModel {
             foreach ($ddl as $sql) {
                 if ($this->conn->query($sql) !== true) {
                     error_log('TRACS abuse report schema failed: ' . $this->conn->error);
-                    return false;
+                    return self::$schemaReady[$cacheKey] = false;
                 }
             }
             $this->ensureWorkflowColumns();
         } catch (Throwable $e) {
             error_log('TRACS abuse report schema exception: ' . $e->getMessage());
-            return false;
+            return self::$schemaReady[$cacheKey] = false;
         }
 
-        return tracs_table_exists($this->conn, 'tracs_abuse_reports')
+        return self::$schemaReady[$cacheKey] = tracs_table_exists($this->conn, 'tracs_abuse_reports')
             && tracs_table_exists($this->conn, 'tracs_abuse_report_events')
             && tracs_table_exists($this->conn, 'tracs_abuse_report_notes')
             && tracs_table_exists($this->conn, 'tracs_abuse_report_evidence');

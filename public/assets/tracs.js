@@ -2656,7 +2656,10 @@ const caseBoardState = {
   tableSort: { field: 'case_number', dir: 'desc' },
   boardOrder: 'updated',   // Workflow-board per-column ordering (see CASE_BOARD_ORDER_MODES)
   draggedId: 0,
-  initialized: false
+  initialized: false,
+  view: 'board',
+  revision: 0,
+  renderedRevision: {board: -1, table: -1}
 };
 const CASE_BOARD_ORDER_MODES = new Set(['manual','priority','next_check','created','updated','case_number','category','assigned']);
 function caseStatusMeta(status='pending'){
@@ -3591,17 +3594,26 @@ function bindCaseCardMenus(){
     });
   });
 }
+function renderCasePresentation(view){
+  const selected=view==='table'?'table':'board';
+  if(selected==='table')renderTable(caseBoardState.filteredCases);
+  else{
+    renderBoard(caseBoardState.filteredCases);
+    bindCaseCardMenus();
+  }
+  const panel=document.querySelector(`[data-case-view-panel="${selected}"]`);
+  tracsRefreshIcons(panel || document.getElementById('caseWorkspace'));
+  caseBoardState.renderedRevision[selected]=caseBoardState.revision;
+}
 function renderCaseWorkspace({preserveScroll=true,syncUrl=true}={}){
   if(!caseBoardState.initialized)return;
   const scrollState=preserveScroll?caseCaptureScrollState():null;
   const searched=caseBoardState.rawCases.filter(item=>matchesSearch(item,caseBoardState.query));
   const filtered=searched.filter(item=>matchesFilter(item,caseBoardState.filter));
   caseBoardState.filteredCases=sortCases(filtered,caseBoardState.sort);
-  renderBoard(caseBoardState.filteredCases);
-  renderTable(caseBoardState.filteredCases);
+  caseBoardState.revision+=1;
+  renderCasePresentation(caseBoardState.view);
   updateBoardCounters();
-  bindCaseCardMenus();
-  tracsRefreshIcons(document.getElementById('caseWorkspace'));
   if(scrollState)requestAnimationFrame(()=>caseRestoreScrollState(scrollState));
   if(syncUrl)caseSyncUrl();
 }
@@ -3674,6 +3686,7 @@ function requestCaseTicketStatus(status){
 }
 function setCaseWorkspaceView(view,remember=true){
   const selected=view==='table'?'table':'board';
+  caseBoardState.view=selected;
   document.querySelectorAll('[data-case-view-panel]').forEach(panel=>{panel.hidden=panel.dataset.caseViewPanel!==selected;});
   document.querySelectorAll('[data-case-view]').forEach(button=>{
     const active=button.dataset.caseView===selected;
@@ -3682,6 +3695,9 @@ function setCaseWorkspaceView(view,remember=true){
   });
   if(remember){
     try{localStorage.setItem(CASE_VIEW_STORAGE_KEY,selected);}catch(e){}
+  }
+  if(remember && caseBoardState.initialized && caseBoardState.renderedRevision[selected]!==caseBoardState.revision){
+    renderCasePresentation(selected);
   }
 }
 async function caseRefreshFromServer(){
@@ -3762,7 +3778,7 @@ function initCaseBoard(){
     searchTimer=window.setTimeout(()=>{
       caseBoardState.query=search.value.trim();
       renderCaseWorkspace({preserveScroll:false});
-    },100);
+    },275);
   });
   document.querySelectorAll('[data-case-filter-option]').forEach(button=>button.addEventListener('click',()=>{
     caseBoardState.filter=CASE_FILTER_LABELS[button.dataset.caseFilterOption]?button.dataset.caseFilterOption:'all';

@@ -161,11 +161,15 @@ include 'includes/header.php';
     <div class="mom-section">
       <div class="section-head">
         <span class="section-title"><i data-lucide="list" class="icon-sm"></i>Agenda</span>
-        <button class="btn btn-primary btn-sm" onclick="saveInlineAgendaItem(<?=$mom_id?>)">Add Item</button>
+        <div>
+          <button class="btn btn-ghost btn-sm hidden" id="momAgendaCancelEdit" type="button" onclick="cancelAgendaEdit()">Cancel</button>
+          <button class="btn btn-primary btn-sm" id="momAgendaSaveButton" type="button" onclick="saveInlineAgendaItem(<?=$mom_id?>)">Add Item</button>
+        </div>
       </div>
       <div class="section-body">
         <div class="mom-inline-form mom-inline-row" data-mom-autosave="agenda" data-mom-id="<?=$mom_id?>">
           <textarea class="form-textarea mom-agenda-topic-input" id="momAgendaTopic" placeholder="Agenda topic, e.g. Review stuck domain transfers"></textarea>
+          <textarea class="form-textarea" id="momAgendaNotes" placeholder="Agenda notes or context"></textarea>
         </div>
         <?php
           $agenda=$MC->getAgendaItems($mom_id)??[];
@@ -173,7 +177,7 @@ include 'includes/header.php';
           $aist=$ai['status']??'pending';
           $aidone=($aist==='completed');
         ?>
-          <div class="agenda-item agenda-item-<?=$aist?>" data-agenda-id="<?=intval($ai['id']??0)?>">
+          <div class="agenda-item agenda-item-<?=$aist?>" data-agenda-id="<?=intval($ai['id']??0)?>" data-topic="<?=esc($ai['topic']??'')?>" data-notes="<?=esc($ai['notes']??'')?>" data-status="<?=esc($aist)?>">
             <input type="checkbox" class="agenda-check" data-unsaved-ignore <?=$aidone?'checked':''?> onchange="toggleAgendaItem(<?=intval($ai['id']??0)?>,this.checked)">
             <div class="agenda-content">
               <div class="agenda-topic"><?=esc($ai['topic']??'')?></div>
@@ -181,6 +185,7 @@ include 'includes/header.php';
                 <div class="agenda-notes"><?=esc($ai['notes'])?></div>
               <?php endif; ?>
             </div>
+            <button class="btn btn-ghost btn-icon btn-sm" type="button" onclick="editAgendaItem(<?=intval($ai['id']??0)?>)" title="Edit" aria-label="Edit agenda item"><i data-lucide="edit-2" class="icon-xs"></i></button>
             <button class="btn btn-ghost btn-icon btn-sm mom-item-delete" onclick="deleteAgendaItem(<?=intval($ai['id']??0)?>)" title="Delete" aria-label="Delete agenda item"><i data-lucide="x" class="icon-xs"></i></button>
           </div>
         <?php endforeach; ?>
@@ -191,7 +196,10 @@ include 'includes/header.php';
     <div class="mom-section">
       <div class="section-head">
         <span class="section-title"><i data-lucide="message-circle" class="icon-sm"></i>Discussion Notes</span>
-        <button class="btn btn-primary btn-sm" onclick="saveInlineDiscussionNote(<?=$mom_id?>)">Add Note</button>
+        <div>
+          <button class="btn btn-ghost btn-sm hidden" id="momNoteCancelEdit" type="button" onclick="cancelNoteEdit()">Cancel</button>
+          <button class="btn btn-primary btn-sm" id="momNoteSaveButton" type="button" onclick="saveInlineDiscussionNote(<?=$mom_id?>)">Add Note</button>
+        </div>
       </div>
       <div class="section-body mom-notes-area" id="momNotesArea">
         <div class="mom-inline-form mom-note-inline" data-mom-autosave="note" data-mom-id="<?=$mom_id?>">
@@ -209,11 +217,12 @@ include 'includes/header.php';
           $nid=intval($n['id']??0);
           $ntype=$n['note_type']??'discussion';
         ?>
-          <div class="discussion-note discussion-note-<?=$ntype?>" data-note-id="<?=$nid?>">
+          <div class="discussion-note discussion-note-<?=$ntype?>" data-note-id="<?=$nid?>" data-note-type="<?=esc($ntype)?>" data-content="<?=esc($n['content']??'')?>">
             <div class="note-header">
               <span class="note-type"><?=ucfirst($ntype)?></span>
               <span class="note-time"><?=safe_dt($n['created_at']??null,'H:i')?></span>
               <?=tracs_creator_meta($n, $n['created_at'] ?? null, false)?>
+              <button class="btn btn-ghost btn-icon btn-xs" type="button" onclick="editDiscussionNote(<?=$nid?>)" title="Edit" aria-label="Edit discussion note"><i data-lucide="edit-2" class="icon-xs"></i></button>
               <button class="btn btn-ghost btn-icon btn-xs mom-item-delete" onclick="deleteNote(<?=$nid?>)" title="Delete" aria-label="Delete discussion note"><i data-lucide="x" class="icon-xs"></i></button>
             </div>
             <div class="note-text" onmouseup="handleTextSelection(this.parentElement.parentElement)"><?=nl2br(esc($n['content']??''))?></div>
@@ -228,7 +237,10 @@ include 'includes/header.php';
     <div class="mom-section">
       <div class="section-head">
         <span class="section-title"><i data-lucide="check-square" class="icon-sm"></i>Decisions</span>
-        <button class="btn btn-primary btn-sm" onclick="saveInlineDecision(<?=$mom_id?>)">Add Decision</button>
+        <div>
+          <button class="btn btn-ghost btn-sm hidden" id="momDecisionCancelEdit" type="button" onclick="cancelDecisionEdit()">Cancel</button>
+          <button class="btn btn-primary btn-sm" id="momDecisionSaveButton" type="button" onclick="saveInlineDecision(<?=$mom_id?>)">Add Decision</button>
+        </div>
       </div>
       <div class="section-body">
         <div class="mom-inline-form mom-decision-inline" data-mom-autosave="decision" data-mom-id="<?=$mom_id?>">
@@ -242,9 +254,10 @@ include 'includes/header.php';
           $did=intval($d['id']??0);
           $downer=$d['owner']??'—';
         ?>
-          <div class="decision-card">
+          <div class="decision-card" data-decision-id="<?=$did?>" data-decision="<?=esc($d['decision']??'')?>" data-rationale="<?=esc($d['rationale']??'')?>" data-owner="<?=esc($d['owner']??'')?>" data-status="<?=esc($d['status']??'pending')?>">
             <div class="decision-head">
               <strong><?=esc($d['decision']??'Decision')?></strong>
+              <button class="btn btn-ghost btn-icon btn-xs" type="button" onclick="editDecision(<?=$did?>)" title="Edit" aria-label="Edit decision"><i data-lucide="edit-2" class="icon-xs"></i></button>
               <button class="btn btn-ghost btn-icon btn-xs mom-item-delete" onclick="deleteDecision(<?=$did?>)" title="Delete" aria-label="Delete decision"><i data-lucide="x" class="icon-xs"></i></button>
             </div>
             <?php if($d['rationale']??null): ?>
@@ -268,7 +281,10 @@ include 'includes/header.php';
     <div class="mom-section">
       <div class="section-head">
         <span class="section-title"><i data-lucide="zap" class="icon-sm"></i>Action Items</span>
-        <button class="btn btn-primary btn-sm" onclick="saveInlineActionItem(<?=$mom_id?>)">Add Action</button>
+        <div>
+          <button class="btn btn-ghost btn-sm hidden" id="momActionCancelEdit" type="button" onclick="cancelActionEdit()">Cancel</button>
+          <button class="btn btn-primary btn-sm" id="momActionSaveButton" type="button" onclick="saveInlineActionItem(<?=$mom_id?>)">Add Action</button>
+        </div>
       </div>
       <div class="section-body">
         <div class="mom-inline-form mom-action-inline" data-mom-autosave="action" data-mom-id="<?=$mom_id?>">
@@ -293,7 +309,7 @@ include 'includes/header.php';
           $aowner=$a['assigned_to']??'—';
           $adue=$a['due_date']??null;
         ?>
-          <div class="action-item action-item-<?=$aprio?> action-item-<?=$astatus?>" data-aid="<?=$aid?>">
+          <div class="action-item action-item-<?=$aprio?> action-item-<?=$astatus?>" data-aid="<?=$aid?>" data-title="<?=esc($a['title']??'')?>" data-description="<?=esc($a['description']??'')?>" data-assigned-to="<?=esc($a['assigned_to']??'')?>" data-priority="<?=esc($aprio)?>" data-due-date="<?=esc($adue??'')?>" data-status="<?=esc($astatus)?>">
             <input type="checkbox" class="action-check" data-unsaved-ignore <?=$adone?'checked':''?> onchange="completeAction(<?=$aid?>,this.checked)">
             <div class="action-content">
               <div class="action-title"><?=esc($a['title']??'Untitled')?></div>
@@ -910,6 +926,7 @@ function render_mom_table($items, $MC, $mode='upcoming', $canDelete=false) {
 <?php endif; ?>
 
 </div></main>
+<script>window._currentMOMId = <?=intval($mom_id)?>;</script>
 <div class="mom-shot-lightbox hidden" id="momShotLightbox" role="dialog" aria-modal="true" aria-label="MOM screenshot preview">
   <button class="mom-shot-lightbox-close" type="button" onclick="closeMOMScreenshotLightbox()" aria-label="Close screenshot preview"><i data-lucide="x" class="icon-sm"></i></button>
   <button class="mom-shot-lightbox-nav mom-shot-lightbox-prev" type="button" onclick="moveMOMScreenshotLightbox(-1)" aria-label="Previous screenshot"><i data-lucide="chevron-left" class="icon-lg"></i></button>

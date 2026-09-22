@@ -5,7 +5,33 @@
 
 require_once __DIR__ . '/creator_tracking.php';
 
+function &tracs_table_exists_cache(): array {
+    static $cache = [];
+    return $cache;
+}
+
+function tracs_forget_table_exists_cache(?mysqli $conn = null, ?string $table = null): void {
+    $cache =& tracs_table_exists_cache();
+    if ($conn === null) {
+        $cache = [];
+        return;
+    }
+
+    $prefix = spl_object_id($conn) . ':' . ($table === null ? '' : strtolower($table));
+    foreach (array_keys($cache) as $key) {
+        if (str_starts_with($key, $prefix)) {
+            unset($cache[$key]);
+        }
+    }
+}
+
 function tracs_table_exists(mysqli $conn, string $table): bool {
+    $cache =& tracs_table_exists_cache();
+    $cacheKey = spl_object_id($conn) . ':' . strtolower($table);
+    if (array_key_exists($cacheKey, $cache)) {
+        return $cache[$cacheKey];
+    }
+
     try {
         $stmt = $conn->prepare("
             SELECT 1
@@ -15,15 +41,57 @@ function tracs_table_exists(mysqli $conn, string $table): bool {
             LIMIT 1
         ");
         if (!$stmt) {
-            return false;
+            return $cache[$cacheKey] = false;
         }
         $stmt->bind_param('s', $table);
         $stmt->execute();
         $exists = $stmt->get_result()->num_rows > 0;
         $stmt->close();
-        return $exists;
+        return $cache[$cacheKey] = $exists;
     } catch (Throwable) {
-        return false;
+        return $cache[$cacheKey] = false;
+    }
+}
+
+function &tracs_user_row_cache(): array {
+    static $cache = [];
+    return $cache;
+}
+
+function &tracs_user_permission_cache(): array {
+    static $cache = [];
+    return $cache;
+}
+
+function &tracs_user_can_cache(): array {
+    static $cache = [];
+    return $cache;
+}
+
+function tracs_forget_user_access_cache(?mysqli $conn = null, ?int $userId = null): void {
+    $userRows =& tracs_user_row_cache();
+    $permissions =& tracs_user_permission_cache();
+    $decisions =& tracs_user_can_cache();
+    if ($conn === null) {
+        $userRows = [];
+        $permissions = [];
+        $decisions = [];
+        return;
+    }
+
+    $prefix = spl_object_id($conn) . ':' . ($userId === null ? '' : $userId);
+    foreach ([$userRows, $permissions, $decisions] as $storeIndex => $store) {
+        foreach (array_keys($store) as $key) {
+            if (str_starts_with($key, $prefix)) {
+                if ($storeIndex === 0) {
+                    unset($userRows[$key]);
+                } elseif ($storeIndex === 1) {
+                    unset($permissions[$key]);
+                } else {
+                    unset($decisions[$key]);
+                }
+            }
+        }
     }
 }
 
@@ -66,7 +134,11 @@ function tracs_ensure_user_preferences_table(mysqli $conn): bool {
               INDEX `idx_user_preferences_user` (`user_id`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         ";
-        return $conn->query($sql) === true && tracs_table_exists($conn, 'tracs_user_preferences');
+        if ($conn->query($sql) !== true) {
+            return false;
+        }
+        tracs_forget_table_exists_cache($conn, 'tracs_user_preferences');
+        return tracs_table_exists($conn, 'tracs_user_preferences');
     } catch (Throwable) {
         return false;
     }
@@ -463,6 +535,12 @@ function tracs_get_user_by_id(mysqli $conn, int $userId): ?array {
         return null;
     }
 
+    $cache =& tracs_user_row_cache();
+    $cacheKey = spl_object_id($conn) . ':' . $userId;
+    if (array_key_exists($cacheKey, $cache)) {
+        return $cache[$cacheKey];
+    }
+
     $columns = tracs_select_existing_user_columns($conn, 'u');
     $joins = '';
     if (tracs_table_exists($conn, 'tracs_roles') && tracs_column_exists($conn, 'tracs_users', 'role_id')) {
@@ -488,7 +566,7 @@ function tracs_get_user_by_id(mysqli $conn, int $userId): ?array {
     $row = $stmt->get_result()->fetch_assoc();
     $stmt->close();
 
-    return $row ? tracs_normalize_user_row($row) : null;
+    return $cache[$cacheKey] = ($row ? tracs_normalize_user_row($row) : null);
 }
 
 function tracs_get_user_by_email(mysqli $conn, string $email): ?array {
@@ -591,12 +669,18 @@ function tracs_touch_user_activity(mysqli $conn, int $userId): void {
 }
 
 function tracs_user_permissions(mysqli $conn, int $userId): array {
+    $cache =& tracs_user_permission_cache();
+    $cacheKey = spl_object_id($conn) . ':' . $userId;
+    if (array_key_exists($cacheKey, $cache)) {
+        return $cache[$cacheKey];
+    }
+
     $user = tracs_get_user_by_id($conn, $userId);
     if (!$user || !tracs_user_can_login($user)) {
-        return [];
+        return $cache[$cacheKey] = [];
     }
     if (($user['role_slug'] ?? '') === 'super_admin') {
-        return tracs_all_permission_keys();
+        return $cache[$cacheKey] = tracs_all_permission_keys();
     }
 
     if (tracs_table_exists($conn, 'tracs_role_permissions') && !empty($user['role_id'])) {
@@ -616,11 +700,11 @@ function tracs_user_permissions(mysqli $conn, int $userId): array {
                 $permissions[] = (string)$row['permission_key'];
             }
             $stmt->close();
-            return array_values(array_unique($permissions));
+            return $cache[$cacheKey] = array_values(array_unique($permissions));
         }
     }
 
-    return tracs_default_role_permissions((string)($user['role_slug'] ?? 'agent'));
+    return $cache[$cacheKey] = tracs_default_role_permissions((string)($user['role_slug'] ?? 'agent'));
 }
 
 function tracs_user_can(mysqli $conn, string $permission, ?int $userId = null): bool {
@@ -629,18 +713,24 @@ function tracs_user_can(mysqli $conn, string $permission, ?int $userId = null): 
         return false;
     }
 
-    $user = tracs_get_user_by_id($conn, $uid);
-    if (!$user || !tracs_user_can_login($user)) {
-        return false;
-    }
-    if (in_array($permission, ['abuse_reports.view', 'abuse_reports.manage'], true)) {
-        return true;
-    }
-    if (($user['role_slug'] ?? '') === 'super_admin') {
-        return true;
+    $cache =& tracs_user_can_cache();
+    $cacheKey = spl_object_id($conn) . ':' . $uid . ':' . $permission;
+    if (array_key_exists($cacheKey, $cache)) {
+        return $cache[$cacheKey];
     }
 
-    return in_array($permission, tracs_user_permissions($conn, $uid), true);
+    $user = tracs_get_user_by_id($conn, $uid);
+    if (!$user || !tracs_user_can_login($user)) {
+        return $cache[$cacheKey] = false;
+    }
+    if (in_array($permission, ['abuse_reports.view', 'abuse_reports.manage'], true)) {
+        return $cache[$cacheKey] = true;
+    }
+    if (($user['role_slug'] ?? '') === 'super_admin') {
+        return $cache[$cacheKey] = true;
+    }
+
+    return $cache[$cacheKey] = in_array($permission, tracs_user_permissions($conn, $uid), true);
 }
 
 function tracs_require_permission(mysqli $conn, string $permission): void {

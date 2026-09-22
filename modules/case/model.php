@@ -8,20 +8,30 @@ require_once __DIR__ . '/../../core/creator_tracking.php';
 
 class CaseModel {
     private $conn;
+    private static array $schemaChecked = [];
+    private static array $attachmentReady = [];
     
     public function __construct($connection) {
         $this->conn = $connection;
-        if (function_exists('tracs_ensure_case_status_values')) {
-            tracs_ensure_case_status_values($this->conn);
-        }
-        if (function_exists('tracs_ensure_case_board_order')) {
-            tracs_ensure_case_board_order($this->conn);
+        $cacheKey = spl_object_id($this->conn);
+        if (!isset(self::$schemaChecked[$cacheKey])) {
+            if (function_exists('tracs_ensure_case_status_values')) {
+                tracs_ensure_case_status_values($this->conn);
+            }
+            if (function_exists('tracs_ensure_case_board_order')) {
+                tracs_ensure_case_board_order($this->conn);
+            }
+            self::$schemaChecked[$cacheKey] = true;
         }
     }
 
     private function ensureAttachmentTable(): bool {
+        $cacheKey = spl_object_id($this->conn);
+        if (array_key_exists($cacheKey, self::$attachmentReady)) {
+            return self::$attachmentReady[$cacheKey];
+        }
         try {
-            return (bool)$this->conn->query("
+            return self::$attachmentReady[$cacheKey] = (bool)$this->conn->query("
             CREATE TABLE IF NOT EXISTS `case_attachments` (
               `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
               `case_id` INT NOT NULL,
@@ -41,7 +51,7 @@ class CaseModel {
             ");
         } catch (Throwable $e) {
             error_log('TRACS case attachment table ensure failed: ' . $e->getMessage());
-            return false;
+            return self::$attachmentReady[$cacheKey] = false;
         }
     }
     
