@@ -501,7 +501,6 @@ function tracs_notifications_run_scheduler(mysqli $conn): array {
         $locked = (int)(($lockResult->fetch_assoc()['locked'] ?? 0)) === 1;
     }
     if (!$locked) {
-        tracs_notification_log($conn, 'skipped_duplicate', 'Notification scheduler already running.');
         return ['created' => 0, 'status' => 'locked'];
     }
 
@@ -511,7 +510,6 @@ function tracs_notifications_run_scheduler(mysqli $conn): array {
         $created += tracs_notifications_schedule_meetings($conn);
         $created += tracs_notifications_schedule_shift_handover($conn);
         $created += tracs_notifications_schedule_abuse_sla($conn);
-        tracs_notification_log($conn, 'success', 'Notification scheduler completed.', null, null, ['created' => $created]);
     } catch (Throwable $e) {
         tracs_notification_log($conn, 'failed', 'Notification scheduler failed.', null, null, ['error' => $e->getMessage()]);
     } finally {
