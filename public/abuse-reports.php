@@ -15,10 +15,6 @@ $uid = (int)($_SESSION['user_id'] ?? 0);
 $AR = new AbuseReportController($conn, $uid);
 $TC = new AlertTickerController($conn, $uid);
 
-if (function_exists('tracs_notifications_schedule_abuse_sla')) {
-    tracs_notifications_schedule_abuse_sla($conn);
-}
-
 $reports = $AR->getReports();
 $summary = $AR->dashboardSummary();
 $users = $AR->selectableUsers();

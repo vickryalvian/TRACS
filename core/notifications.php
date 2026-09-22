@@ -219,10 +219,6 @@ function tracs_create_notification(mysqli $conn, array $payload): ?int {
     }
     if ($stmt->affected_rows < 1) {
         $stmt->close();
-        tracs_notification_log($conn, 'skipped_duplicate', 'Skipped duplicate notification trigger.', null, $targetUserId, [
-            'dedupe_key' => $dedupeKey,
-            'trigger_type' => $triggerType,
-        ]);
         return null;
     }
     $notificationId = (int)$stmt->insert_id;

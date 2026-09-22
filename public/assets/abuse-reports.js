@@ -90,6 +90,7 @@
     createMode: 'single',
     saveInFlight: false,
     previewTimer: 0,
+    listEditingId: 0,
     inlineSaving: new Set(),
   };
 
@@ -110,9 +111,20 @@
       window.showToast(message, type, { context: 'page' });
     }
   };
+  let iconRefreshPending = false;
   const icons = () => {
-    if (typeof window.tracsRefreshIcons === 'function') window.tracsRefreshIcons(root);
-    else window.lucide?.createIcons?.();
+    if (iconRefreshPending) return;
+    iconRefreshPending = true;
+    const refresh = () => {
+      iconRefreshPending = false;
+      if (typeof window.tracsRefreshIcons === 'function') window.tracsRefreshIcons(root);
+      else window.lucide?.createIcons?.();
+    };
+    if (typeof window.requestIdleCallback === 'function') {
+      window.requestIdleCallback(refresh, { timeout: 200 });
+    } else {
+      window.requestAnimationFrame(refresh);
+    }
   };
   const formatBytes = value => {
     const bytes = Number(value) || 0;
@@ -142,6 +154,10 @@
     return base.toISOString().slice(0, 16);
   };
   const eventLabel = value => String(value || 'updated').replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+  const compactText = (value, limit = 180) => {
+    const text = String(value || '').trim();
+    return text.length > limit ? `${text.slice(0, limit).trimEnd()}…` : text;
+  };
   const reportTarget = report => [report.affected_domain, report.affected_ip].filter(Boolean).join(' / ') || 'No target set';
   const truthy = value => value === true || value === 1 || value === '1';
   const isDone = report => ['resolved', 'closed'].includes(report.status);
@@ -509,7 +525,7 @@
             <div class="abuse-list-report">
               <strong>${esc(report.title || 'Untitled abuse report')}</strong>
               <div class="abuse-list-report-meta"><span>${esc(shortReportNumber(report))}</span><span>${esc(reportTarget(report))}</span></div>
-              ${report.description ? `<small>${esc(report.description)}</small>` : ''}
+              ${report.description ? `<small>${esc(compactText(report.description))}</small>` : ''}
             </div>
           </td>
           <td>
@@ -528,7 +544,7 @@
             : `<span class="${report.reporter ? '' : 'abuse-list-muted'}">${esc(report.reporter || 'Unknown reporter')}</span>`}</td>
           <td>${Number(report.evidence_count || 0)}</td>
           <td><div class="abuse-list-actions">${state.canManage ? `<button type="button" class="abuse-list-edit-toggle" data-abuse-list-edit="${report.id}" aria-expanded="false" title="Edit report details" aria-label="Edit report details"><i data-lucide="pencil" class="icon-sm"></i></button>` : ''}${renderDeleteButton(report, 'abuse-list-delete-toggle')}</div></td>
-        </tr>${state.canManage ? renderListEditor(report) : ''}`;
+        </tr>${state.canManage && state.listEditingId === report.id ? renderListEditor(report) : ''}`;
     }).join('') : '<tr><td colspan="8"><div class="abuse-empty-column">No reports match the current filters</div></td></tr>';
     syncListSortHeaders();
   }
@@ -561,15 +577,14 @@
   }
 
   function toggleListEditor(id, visible = null) {
-    const editor = $(`[data-abuse-list-edit-row="${id}"]`, root);
-    const button = $(`[data-abuse-list-edit="${id}"]`, root);
-    if (!editor || !button) return;
-    const show = visible ?? editor.hidden;
-    $$('[data-abuse-list-edit-row]', root).forEach(row => { row.hidden = true; });
-    $$('[data-abuse-list-edit]', root).forEach(toggle => toggle.setAttribute('aria-expanded', 'false'));
-    editor.hidden = !show;
-    button.setAttribute('aria-expanded', show ? 'true' : 'false');
-    if (show) $('input[name="title"]', editor)?.focus();
+    if (!id) return;
+    const show = visible ?? state.listEditingId !== id;
+    state.listEditingId = show ? id : 0;
+    renderBoard();
+    if (show) {
+      const editor = $(`[data-abuse-list-edit-row="${id}"]`, root);
+      $('input[name="title"]', editor)?.focus();
+    }
   }
 
   function renderMoreFilterCount(filters) {
@@ -1554,12 +1569,15 @@
   $('#abuseAdvancedFields')?.addEventListener('toggle', event => {
     sessionStorage.setItem('tracsAbuseAdvancedOpen', event.currentTarget.open ? '1' : '0');
   });
+  let searchRenderTimer = 0;
+  $('#abuseSearchInput')?.addEventListener('input', () => {
+    window.clearTimeout(searchRenderTimer);
+    searchRenderTimer = window.setTimeout(renderBoard, 160);
+  });
   [
-    '#abuseSearchInput', '#abuseStatusFilter', '#abusePriorityFilter', '#abuseReporterFilter',
-    '#abuseAssignedFilter', '#abuseDateStart', '#abuseDateEnd', '#abuseHasAttachmentFilter',
-    '#abuseActionRequiredFilter',
-  ].forEach(selector => $(selector)?.addEventListener('input', renderBoard));
-  ['#abuseStatusFilter', '#abusePriorityFilter', '#abuseReporterFilter', '#abuseAssignedFilter']
+    '#abuseStatusFilter', '#abusePriorityFilter', '#abuseReporterFilter', '#abuseAssignedFilter',
+    '#abuseDateStart', '#abuseDateEnd', '#abuseHasAttachmentFilter', '#abuseActionRequiredFilter',
+  ]
     .forEach(selector => $(selector)?.addEventListener('change', renderBoard));
 
   syncExportFilters();
