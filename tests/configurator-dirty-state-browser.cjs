@@ -64,16 +64,12 @@ const catalog = { tax_rate: 0.11, tax_revision: 1, items: [
     assert.equal(await page.locator('[data-quantity]').inputValue(), '2');
     assert.equal(await page.locator('[data-total="grand_total"]').textContent(), totalBeforeReload);
     assert.equal(await dirty(), false);
-    page.once('dialog', dialog => dialog.accept());
-    await page.locator('[data-clear-configuration]').click();
-    assert.equal(await page.evaluate(() => localStorage.getItem('tracs:sales-configurator:draft:v1')), null);
-    assert.equal(await page.locator('[data-item]').inputValue(), '0');
-    assert.equal(await dirty(), false);
-    await page.locator('[data-period]').selectOption('annual'); assert.equal(await dirty(), true);
+    assert.equal(await page.locator('[data-clear-configuration]').count(), 0);
+    await page.locator('[data-nodes]').fill('2'); assert.equal(await dirty(), true);
     await page.locator('[data-test-navigation]').click();
     await page.locator('.tracs-unsaved-dialog-overlay:not(.hidden)').getByRole('button', { name: 'Keep Editing' }).click();
     assert.equal(new URL(page.url()).pathname, '/configurator.php');
-    await page.locator('[data-period]').selectOption('monthly'); assert.equal(await dirty(), false);
+    await page.locator('[data-nodes]').fill('1'); assert.equal(await dirty(), false);
     await page.locator('[data-add]').click(); assert.equal(await dirty(), true);
     await page.locator('[data-remove]').last().click(); assert.equal(await dirty(), false);
     await page.locator('[data-open-master]').click(); assert.equal(await dirty(), false);
@@ -97,6 +93,6 @@ const catalog = { tax_rate: 0.11, tax_revision: 1, items: [
     await editor.getByRole('button', { name: 'Save Item' }).click();
     await editor.waitFor({ state: 'hidden' }); assert.equal(await dirty(), false);
     assert.deepEqual(errors, []);
-    console.log('PASS: configurator draft restore/clear, copy specs, hidden banner, navigation protection, period/row revert, dialog dirty handling, and item save.');
+    console.log('PASS: configurator draft restore, copy specs, hidden banner, navigation protection, field/row revert, dialog dirty handling, and item save.');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

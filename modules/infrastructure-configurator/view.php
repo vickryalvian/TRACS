@@ -15,7 +15,7 @@ tracs_deny_direct_script_access(__FILE__);
    <div class="sales-workspace">
     <section class="sales-builder" aria-label="Configuration items">
      <div class="sales-builder-head"><h2 data-configuration-title>Configuration</h2><button type="button" class="btn sales-copy-specs" data-copy-specs disabled title="Copy Specs" aria-label="Copy Specs"><i data-lucide="copy" class="icon-sm"></i></button></div>
-     <div data-lines></div><button type="button" class="btn" data-add disabled><i data-lucide="plus" class="icon-sm"></i>Add Item</button> <button type="button" class="btn" data-add-custom disabled><i data-lucide="square-pen" class="icon-sm"></i>Add Custom Item</button> <button type="button" class="btn" data-clear-configuration disabled>Clear Configuration</button>
+     <div data-lines></div><button type="button" class="btn" data-add disabled><i data-lucide="plus" class="icon-sm"></i>Add Item</button> <button type="button" class="btn" data-add-custom disabled><i data-lucide="square-pen" class="icon-sm"></i>Add Custom Item</button>
     </section>
     <aside class="sales-totals" aria-label="Calculation totals">
      <label class="sales-field">Quantity / Nodes<input class="form-input" data-nodes type="number" min="1" max="10000" step="1" value="1" required></label>

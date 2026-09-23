@@ -72,10 +72,6 @@
     draftTimer = setTimeout(persistDraft, 250);
   }
 
-  function clearPersistedDraft() {
-    clearTimeout(draftTimer);
-    try { localStorage.removeItem(draftKey); } catch (_) {}
-  }
   function captureDialog(dialog) {
     const guard = window.TRACSUnsavedChanges;
     if (!dialog || !guard) return;
@@ -166,7 +162,6 @@
     $('[data-configuration-title]').textContent = service.value ? `Custom ${service.value}` : 'Configuration';
     $('[data-add]').disabled = loading || !cats.length || lines.length >= 100;
     $('[data-add-custom]').disabled = loading || !cats.length || lines.length >= 100;
-    $('[data-clear-configuration]').disabled = loading || !catalog;
     $('[data-lines]').innerHTML = lines.map((line, index) => {
       const item = selected(line);
       const options = available().filter((option) => option.category === line.category);
@@ -220,25 +215,6 @@
     } catch (_) {
       window.showToast?.('Unable to copy specifications. Please try again.', 'error', { sourceElement: button, context: 'page' });
     }
-  }
-
-  async function clearConfiguration() {
-    const confirmed = window.tracsConfirm
-      ? await window.tracsConfirm({ title: 'Clear configuration?', message: 'This clears the current working configuration and its local draft. Saved Templates are not affected.', confirmText: 'Clear Configuration', destructive: true })
-      : window.confirm('Clear the current configuration? Saved Templates are not affected.');
-    if (!confirmed) return;
-    clearPersistedDraft();
-    service.selectedIndex = 0;
-    setPeriods('monthly');
-    nodes.value = 1;
-    marginMode.value = 'percentage';
-    marginValue.max = '1000';
-    marginValue.value = 30;
-    $('[data-margin-value-label]').textContent = 'Margin (%)';
-    resetLines();
-    lastDraft = JSON.stringify(configurationState());
-    window.TRACSUnsavedChanges?.markSaved($('#sales-calculator'));
-    window.showToast?.('Configuration cleared', 'success', { context: 'page' });
   }
 
   function display(totals) {
@@ -502,7 +478,6 @@
   $('#sales-calculator').addEventListener('input', () => queueMicrotask(() => { syncCopyAction(); scheduleDraftSave(); }));
   $('#sales-calculator').addEventListener('change', () => queueMicrotask(() => { syncCopyAction(); scheduleDraftSave(); }));
   $('[data-copy-specs]').addEventListener('click', (event) => copySpecifications(event.currentTarget));
-  $('[data-clear-configuration]').addEventListener('click', clearConfiguration);
   $('[data-refresh]').addEventListener('click', () => refresh(true));
   ['input', 'change', 'click'].forEach(type => root.addEventListener(type, () => queueMicrotask(() => window.TRACSUnsavedChanges?.refresh())));
   document.addEventListener('tracs:before-unsaved-leave', persistDraft);
