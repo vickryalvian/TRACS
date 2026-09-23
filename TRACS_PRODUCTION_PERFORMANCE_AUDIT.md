@@ -17,7 +17,17 @@ The first production-safe batch has been deployed:
 - PHP-FPM now records requests exceeding two seconds in a dedicated rotated slow log.
 - PHP's redundant in-request file-session garbage collection is disabled for the FPM pool. The existing `phpsessionclean.timer` remains active every 30 minutes.
 - The deployed Client bundle already matched the locally validated debounce, abort, and lifecycle-refresh coalescing build, so no bundle replacement was necessary.
-- A reviewed retention-index migration and bounded prune command were added locally. The command is dry-run by default and refuses to delete without an explicit retention period, the required index, and `--execute`.
+- A reviewed retention-index migration and bounded prune command were deployed but not executed. The command is dry-run by default and refuses to delete without an explicit retention period, the required index, and `--execute`.
+
+Immediate transfer measurements with gzip enabled:
+
+| Asset | Before | After | Reduction |
+|---|---:|---:|---:|
+| `tracs.css` | 352,652 bytes | 66,736 bytes | 81.1% |
+| `tracs.js` | 352,126 bytes | 86,449 bytes | 75.4% |
+| Client entry | 92,361 bytes | 24,051 bytes | 74.0% |
+
+The initial timing-log sample contained 65 requests with 4.1 ms average Nginx request time and 34 ms maximum. This sample is mainly deployment verification traffic and is not an authenticated workload baseline.
 
 Production rollback backup: `/opt/tracs/backups/performance-quick-wins-20260923-084344/`.
 

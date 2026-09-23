@@ -3,13 +3,14 @@
 ## Production Performance Quick Wins (2026-09-23)
 
 - Production: https://tracs.vickry.id, `/opt/tracs` on `103.82.93.75`.
-- Release: `2da6586`, branch `codex/infrastructure-sales-configurator-overhaul`.
-- Deployed `core/notifications.php` plus reviewed Nginx, PHP-FPM pool, logrotate, and environment configuration. No database migration or data deletion was performed.
+- Releases: `2da6586` for runtime logging and `a235f72` for inactive retention tooling, branch `codex/infrastructure-sales-configurator-overhaul`.
+- Deployed `core/notifications.php`, the dry-run retention command and unapplied index migration, plus reviewed Nginx, PHP-FPM pool, logrotate, and environment configuration. No database migration or data deletion was performed.
 - Idle notification scheduler completions and harmless lock skips no longer write database rows. The last idle completion row was recorded at `08:43:43 WIB`; later scheduler cycles produced no new rows.
 - Enabled 2% sanitized request diagnostics, a privacy-minimized Nginx request/upstream timing log, a two-second PHP-FPM slow log, gzip for text/web assets, and one-year immutable caching for versioned static files.
 - Disabled redundant in-request PHP session garbage collection; the active 30-minute `phpsessionclean.timer` remains authoritative.
 - Backup: `/opt/tracs/backups/performance-quick-wins-20260923-084344/`, including the application file, `.env`, Nginx configuration, PHP-FPM pool, and logrotate configuration.
 - Validation: PHP, Nginx, PHP-FPM, and logrotate configuration checks passed; Nginx and PHP-FPM reloaded; Nginx, PHP-FPM, MariaDB, and the notification timer are active. CSS/JS returned gzip and immutable caching, login remained no-store, root/login/API health checks returned expected `302`/`200`/`401`, database ping passed, and a controlled request emitted a sanitized performance record.
+- Immediate gzip measurements reduced `tracs.css` from 352,652 to 66,736 transferred bytes, `tracs.js` from 352,126 to 86,449 bytes, and the Client entry from 92,361 to 24,051 bytes. The first 65 timing-log requests averaged 4.1 ms with a 34 ms maximum; this was deployment traffic, not an authenticated workload baseline.
 - Verification caught a temporary `.env` group change caused by an in-place edit. Ownership was corrected to `vickry:www-data` with mode `640` before completion. Future `.env` edits must preserve that group.
 
 ## Dirty-State / Unsaved-Changes Deployment (2026-09-14)
