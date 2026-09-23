@@ -3,7 +3,25 @@
 **Audit date:** 2026-09-22  
 **Production baseline:** `https://tracs.vickry.id`, `/opt/tracs` on `103.82.93.75`  
 **Audit mode:** Read-only production inspection plus deployed-source review  
-**Implementation status:** No production changes were made by this audit
+**Implementation status:** P0/P1 quick wins deployed on 2026-09-23; historical retention and list-query redesign remain gated
+
+## Implementation Update: 2026-09-23
+
+The first production-safe batch has been deployed:
+
+- Idle notification scheduler completions and harmless lock skips no longer write database audit rows. The last idle completion row was written at `2026-09-23 08:43:43 WIB`; repeated scheduler cycles after deployment added no rows.
+- Application request diagnostics are enabled at a 2% sample rate. A controlled request recorded route, status, 0.54 ms PHP duration, two SQL queries, response bytes, and peak memory without query text, request body, cookies, or credentials.
+- Nginx now records a separate privacy-minimized timing log with URI path, status, bytes, total request time, and upstream time. Existing access logging remains intact and the timing log uses the existing daily rotation policy.
+- Nginx now compresses CSS, JavaScript, JSON, XML, SVG, and font responses. Tested CSS and JavaScript returned `Content-Encoding: gzip` and `Vary: Accept-Encoding`.
+- Versioned static files now return one-year immutable browser caching. Dynamic login remained `no-store`.
+- PHP-FPM now records requests exceeding two seconds in a dedicated rotated slow log.
+- PHP's redundant in-request file-session garbage collection is disabled for the FPM pool. The existing `phpsessionclean.timer` remains active every 30 minutes.
+- The deployed Client bundle already matched the locally validated debounce, abort, and lifecycle-refresh coalescing build, so no bundle replacement was necessary.
+- A reviewed retention-index migration and bounded prune command were added locally. The command is dry-run by default and refuses to delete without an explicit retention period, the required index, and `--execute`.
+
+Production rollback backup: `/opt/tracs/backups/performance-quick-wins-20260923-084344/`.
+
+During verification, editing `.env` briefly changed its group and made it unreadable by PHP-FPM. The issue was detected through the error log and immediately corrected to `vickry:www-data` mode `640`; database connectivity, diagnostics, and HTTP health checks then passed. Future environment edits must preserve the `www-data` group.
 
 ## Executive Summary
 
@@ -405,4 +423,3 @@ Functional checks must cover:
 - Table-row values from `information_schema` are approximate for InnoDB except for the bounded checks noted above.
 - The one exact notification-log count was deliberately not repeated because it took about 30 seconds.
 - No production data, schema, service, configuration, cache, or code was changed during this audit.
-
