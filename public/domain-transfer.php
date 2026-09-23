@@ -573,16 +573,14 @@ include 'includes/header.php';
 <div class="topbar">
   <div>
     <div class="page-title">Domain Transfer Log</div>
-    <div class="page-sub">Domain transfer monitoring · CS/Ops team · <?= $stat_total ?> total records</div>
   </div>
 </div>
 
 <!-- ── Stat strip ─────────────────────────────────────────────── -->
-<section class="dt-kpi-overview" aria-labelledby="transferOverviewTitle">
-  <div class="dt-kpi-overview-head" id="transferOverviewTitle">Transfer overview</div>
+<section class="dt-kpi-overview" aria-label="Transfer overview">
   <div class="dt-kpi-overview-body">
     <div class="dt-kpi"><span>Total</span><strong><?= $stat_total ?></strong></div>
-    <div class="dt-kpi"><span>Pending</span><strong><?= $stat_pending ?></strong></div>
+    <div class="dt-kpi"><span>Pending Transfer</span><strong><?= $stat_pending ?></strong></div>
     <div class="dt-kpi"><span>Completed</span><strong><?= $stat_done ?></strong></div>
     <div class="dt-kpi<?= $stat_error > 0 ? ' is-alert' : '' ?>"><span>Error / Problem</span><strong><?= $stat_error ?></strong></div>
     <div class="dt-kpi"><span>Cancelled</span><strong><?= $stat_cancelled ?></strong></div>
@@ -625,12 +623,14 @@ include 'includes/header.php';
        class="filter-tab <?= $filter_status === 'all' ? 'active' : '' ?>"
        <?= $filter_status === 'all' ? 'aria-current="page"' : '' ?>>All</a>
     <?php
-    $tab_statuses = [
+    $primary_statuses = [
         'done'                => 'Done',
         'pending'              => 'Pending',
         'pending transfer'    => 'Pending Transfer',
         'locked'              => 'Locked',
         'error epp code'      => 'Error EPP',
+    ];
+    $more_statuses = [
         'move domain'         => 'Move',
         'cancelled'           => 'Cancelled',
         'retransferred'       => 'Retransferred',
@@ -638,11 +638,21 @@ include 'includes/header.php';
         'pending verification'=> 'Verification',
         'renew period'        => 'Renew',
     ];
-    foreach ($tab_statuses as $k => $l): ?>
+    foreach ($primary_statuses as $k => $l): ?>
     <a href="<?= esc(dt_query(['s' => $k, 'p' => null])) ?>"
        class="filter-tab <?= $filter_status === $k ? 'active' : '' ?>"
        <?= $filter_status === $k ? 'aria-current="page"' : '' ?>><?= esc($l) ?></a>
     <?php endforeach; ?>
+    <details class="dt-status-more">
+      <summary class="filter-tab <?= array_key_exists($filter_status, $more_statuses) ? 'active' : '' ?>">More<i data-lucide="chevron-down" class="icon-xs" aria-hidden="true"></i></summary>
+      <div class="dt-status-more-menu">
+        <?php foreach ($more_statuses as $k => $l): ?>
+        <a href="<?= esc(dt_query(['s' => $k, 'p' => null])) ?>"
+           class="filter-tab <?= $filter_status === $k ? 'active' : '' ?>"
+           <?= $filter_status === $k ? 'aria-current="page"' : '' ?>><?= esc($l) ?></a>
+        <?php endforeach; ?>
+      </div>
+    </details>
   </nav>
 
 </div>
