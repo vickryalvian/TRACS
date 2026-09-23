@@ -202,6 +202,8 @@
       document.addEventListener('pointerdown', this.boundDocumentClick);
       window.addEventListener('resize', this.boundViewport);
       window.addEventListener('scroll', this.boundViewport, true);
+      window.visualViewport?.addEventListener('resize', this.boundViewport);
+      window.visualViewport?.addEventListener('scroll', this.boundViewport);
     }
 
     escape(value) {
@@ -545,20 +547,33 @@
       if (!this.popup || this.popup.hidden) return;
       const margin = 10;
       const gap = 6;
+      const visualViewport = window.visualViewport;
+      const viewportLeft = visualViewport?.offsetLeft || 0;
+      const viewportTop = visualViewport?.offsetTop || 0;
+      const viewportWidth = visualViewport?.width || document.documentElement.clientWidth;
+      const viewportHeight = visualViewport?.height || document.documentElement.clientHeight;
+      const viewportRight = viewportLeft + viewportWidth;
+      const viewportBottom = viewportTop + viewportHeight;
+      this.popup.style.maxWidth = `${Math.max(0, viewportWidth - (margin * 2))}px`;
+      this.popup.style.maxHeight = `${Math.max(180, viewportHeight - (margin * 2))}px`;
+      this.popup.style.right = 'auto';
+      this.popup.style.bottom = 'auto';
       const triggerRect = this.trigger.getBoundingClientRect();
       const popupRect = this.popup.getBoundingClientRect();
-      const viewportWidth = document.documentElement.clientWidth;
-      const viewportHeight = document.documentElement.clientHeight;
-      let left = triggerRect.left;
-      if (left + popupRect.width > viewportWidth - margin) left = viewportWidth - popupRect.width - margin;
-      left = Math.max(margin, left);
-      const spaceBelow = viewportHeight - triggerRect.bottom - margin;
-      const placeAbove = popupRect.height > spaceBelow && triggerRect.top > spaceBelow;
+      const leftAligned = triggerRect.left;
+      const rightAligned = triggerRect.right - popupRect.width;
+      const fitsToRight = leftAligned + popupRect.width <= viewportRight - margin;
+      const fitsToLeft = rightAligned >= viewportLeft + margin;
+      let left = fitsToRight || !fitsToLeft ? leftAligned : rightAligned;
+      left = Math.max(viewportLeft + margin, Math.min(left, viewportRight - popupRect.width - margin));
+      const spaceBelow = viewportBottom - triggerRect.bottom - margin;
+      const spaceAbove = triggerRect.top - viewportTop - margin;
+      const placeAbove = popupRect.height > spaceBelow && spaceAbove > spaceBelow;
       let top = placeAbove ? triggerRect.top - popupRect.height - gap : triggerRect.bottom + gap;
-      top = Math.max(margin, Math.min(top, viewportHeight - popupRect.height - margin));
+      top = Math.max(viewportTop + margin, Math.min(top, viewportBottom - popupRect.height - margin));
+      this.popup.dataset.placement = placeAbove ? 'top' : 'bottom';
       this.popup.style.left = `${Math.round(left)}px`;
       this.popup.style.top = `${Math.round(top)}px`;
-      this.popup.style.maxHeight = `${Math.max(180, viewportHeight - (margin * 2))}px`;
     }
 
     destroy() {
@@ -566,6 +581,8 @@
       document.removeEventListener('pointerdown', this.boundDocumentClick);
       window.removeEventListener('resize', this.boundViewport);
       window.removeEventListener('scroll', this.boundViewport, true);
+      window.visualViewport?.removeEventListener('resize', this.boundViewport);
+      window.visualViewport?.removeEventListener('scroll', this.boundViewport);
       this.popup?.remove();
       delete this.root._tracsDateRangePicker;
     }

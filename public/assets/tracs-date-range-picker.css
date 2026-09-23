@@ -66,7 +66,9 @@
   --tracs-date-range-accent-soft: var(--tracs-calendar-accent-soft, var(--blue-lt));
   position: fixed;
   z-index: 12500;
+  box-sizing: border-box;
   width: min(304px, calc(100vw - var(--modal-padding) - var(--modal-padding)));
+  max-width: calc(100vw - 20px);
   max-height: calc(100dvh - var(--modal-padding) - var(--modal-padding));
   overflow: auto;
   overscroll-behavior: contain;
@@ -87,6 +89,7 @@
 
 .tracs-date-range-popup.is-custom {
   width: min(676px, calc(100vw - 20px));
+  max-width: calc(100vw - 20px);
   overflow: auto;
 }
 

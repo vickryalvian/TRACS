@@ -578,72 +578,26 @@ include 'includes/header.php';
 </div>
 
 <!-- ── Stat strip ─────────────────────────────────────────────── -->
-<div class="stat-strip">
-  <div class="stat-card blue">
-    <div class="stat-glow"></div>
-    <div class="stat-num"><?= $stat_total ?></div>
-    <div class="stat-label">Total Transfers</div>
+<section class="dt-kpi-overview" aria-labelledby="transferOverviewTitle">
+  <div class="dt-kpi-overview-head" id="transferOverviewTitle">Transfer overview</div>
+  <div class="dt-kpi-overview-body">
+    <div class="dt-kpi"><span>Total</span><strong><?= $stat_total ?></strong></div>
+    <div class="dt-kpi"><span>Pending</span><strong><?= $stat_pending ?></strong></div>
+    <div class="dt-kpi"><span>Completed</span><strong><?= $stat_done ?></strong></div>
+    <div class="dt-kpi<?= $stat_error > 0 ? ' is-alert' : '' ?>"><span>Error / Problem</span><strong><?= $stat_error ?></strong></div>
+    <div class="dt-kpi"><span>Cancelled</span><strong><?= $stat_cancelled ?></strong></div>
   </div>
-  <div class="stat-card amber">
-    <div class="stat-glow"></div>
-    <div class="stat-num"><?= $stat_pending ?></div>
-    <div class="stat-label">Pending Transfer</div>
-  </div>
-  <div class="stat-card green">
-    <div class="stat-glow"></div>
-    <div class="stat-num"><?= $stat_done ?></div>
-    <div class="stat-label">Completed</div>
-  </div>
-  <div class="stat-card red">
-    <div class="stat-glow"></div>
-    <div class="stat-num"><?= $stat_error ?></div>
-    <div class="stat-label">Error / Problem</div>
-  </div>
-  <div class="stat-card" style="--card-accent:var(--tx3)">
-    <div class="stat-glow"></div>
-    <div class="stat-num"><?= $stat_cancelled ?></div>
-    <div class="stat-label">Cancelled</div>
-  </div>
-</div>
+</section>
 
 <!-- ── Filter & Search bar ───────────────────────────────────── -->
-<div class="filter-search-row">
-
-  <!-- Status filter tabs -->
-  <div class="filter-bar">
-    <a href="<?= esc(dt_query(['s' => 'all', 'p' => null])) ?>"
-       class="filter-tab <?= $filter_status === 'all' ? 'active' : '' ?>">All</a>
-    <?php
-    $tab_statuses = [
-        'done'                => 'Done',
-        'pending'              => 'Pending',
-        'pending transfer'    => 'Pending Transfer',
-        'locked'              => 'Locked',
-        'error epp code'      => 'Error EPP',
-        'move domain'         => 'Move',
-        'cancelled'           => 'Cancelled',
-        'retransferred'       => 'Retransferred',
-        'transferred away'    => 'Transferred Away',
-        'pending verification'=> 'Verification',
-        'renew period'        => 'Renew',
-    ];
-    foreach ($tab_statuses as $k => $l): ?>
-    <a href="<?= esc(dt_query(['s' => $k, 'p' => null])) ?>"
-       class="filter-tab <?= $filter_status === $k ? 'active' : '' ?>"><?= esc($l) ?></a>
-    <?php endforeach; ?>
-  </div>
-
-</div>
-
-<!-- ── Second filter row: search + date range + reset ────────── -->
-<div class="filter-search-row filter-search-row-mt">
-
-  <!-- Search -->
-  <form method="get" class="search-form-wrap">
+<section class="dt-filter-toolbar" aria-label="Filter domain transfers">
+<div class="filter-search-row filter-search-row-mt dt-filter-primary">
+  <form method="get" class="search-form-wrap dt-filter-search-form">
     <input type="hidden" name="s" value="<?= esc($filter_status) ?>">
     <i data-lucide="search" class="search-ic icon-sm"></i>
-    <input type="text" name="q" class="search-input"
-           placeholder="Search domain, transfer status, registrar, or notes"
+    <input type="search" name="q" class="search-input"
+           aria-label="Search domain transfers"
+           placeholder="Search domain, status, registrar, or notes"
            value="<?= esc($q) ?>">
     <?=tracs_date_range_picker([
       'id' => 'domainTransferDateRange',
@@ -660,8 +614,40 @@ include 'includes/header.php';
     <a href="?" class="btn btn-ghost btn-reset btn-sm">Reset</a>
     <?php endif; ?>
   </form>
+</div>
 
-</div><!-- /filter row -->
+<div class="filter-search-row dt-status-filter">
+
+  <!-- Status filter tabs -->
+  <span class="dt-status-filter-label">Status</span>
+  <nav class="filter-bar" aria-label="Transfer status">
+    <a href="<?= esc(dt_query(['s' => 'all', 'p' => null])) ?>"
+       class="filter-tab <?= $filter_status === 'all' ? 'active' : '' ?>"
+       <?= $filter_status === 'all' ? 'aria-current="page"' : '' ?>>All</a>
+    <?php
+    $tab_statuses = [
+        'done'                => 'Done',
+        'pending'              => 'Pending',
+        'pending transfer'    => 'Pending Transfer',
+        'locked'              => 'Locked',
+        'error epp code'      => 'Error EPP',
+        'move domain'         => 'Move',
+        'cancelled'           => 'Cancelled',
+        'retransferred'       => 'Retransferred',
+        'transferred away'    => 'Transferred Away',
+        'pending verification'=> 'Verification',
+        'renew period'        => 'Renew',
+    ];
+    foreach ($tab_statuses as $k => $l): ?>
+    <a href="<?= esc(dt_query(['s' => $k, 'p' => null])) ?>"
+       class="filter-tab <?= $filter_status === $k ? 'active' : '' ?>"
+       <?= $filter_status === $k ? 'aria-current="page"' : '' ?>><?= esc($l) ?></a>
+    <?php endforeach; ?>
+  </nav>
+
+</div>
+
+</section>
 
 <!-- ── Domain Transfer Table ────────────────────────────────── -->
 <div class="panel panel-mt">

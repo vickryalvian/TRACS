@@ -9104,6 +9104,116 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
    DOMAIN TRANSFER PAGE — Specific Styles
 ═══════════════════════════════════════════════ */
 
+.dt-kpi-overview {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 136px minmax(0, 1fr);
+  border: 1px solid var(--bd1);
+  border-radius: var(--r2);
+  background: var(--s1);
+  overflow: hidden;
+}
+.dt-kpi-overview-head {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  border-right: 1px solid var(--bd1);
+  color: var(--tx3);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .09em;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+.dt-kpi-overview-body {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+.dt-kpi {
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 3px;
+  min-height: 58px;
+  padding: 8px 14px;
+  border-left: 1px solid var(--bd1);
+}
+.dt-kpi:first-child { border-left: 0; }
+.dt-kpi span {
+  overflow: hidden;
+  color: var(--tx3);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.dt-kpi strong {
+  color: var(--tx1);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.05;
+}
+.dt-kpi.is-alert strong { color: var(--red); }
+
+.dt-filter-toolbar {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--bd1);
+  border-radius: var(--r2);
+  background: var(--s1);
+}
+.dt-filter-search-form {
+  width: 100%;
+  max-width: 780px;
+  gap: 8px;
+}
+.dt-filter-toolbar .dt-filter-primary .dt-filter-search-form .search-input {
+  min-width: 220px;
+  max-width: 520px;
+  flex: 1 1 360px;
+}
+.dt-filter-toolbar .dt-filter-primary .dt-filter-search-form .domain-transfer-date-range {
+  width: 176px;
+  min-width: 0;
+  flex: 0 0 176px;
+}
+.dt-filter-toolbar .dt-filter-primary .dt-filter-search-form .domain-transfer-date-range .tracs-date-range-trigger {
+  min-width: 0;
+}
+.dt-status-filter {
+  min-width: 0;
+  gap: 9px;
+  padding-top: 8px;
+  border-top: 1px solid var(--bd1);
+}
+.dt-status-filter-label {
+  flex: 0 0 auto;
+  color: var(--tx4);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+.dt-filter-toolbar .dt-status-filter .filter-bar {
+  min-width: 0;
+  gap: 4px;
+}
+.dt-filter-toolbar .dt-status-filter .filter-tab {
+  min-height: 28px;
+  padding: 0 8px;
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
 /* Domain name cell */
 .dt-domain-name {
   font-family: var(--mono);
@@ -9348,6 +9458,47 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
 }
 @media (max-width: 800px) {
   .dt-inline-grid { grid-template-columns: repeat(2, 1fr) }
+  .dt-kpi-overview { grid-template-columns: 112px minmax(0, 1fr); }
+  .dt-kpi { padding-inline: 10px; }
+  .dt-kpi span {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+  .dt-filter-search-form { max-width: none; }
+  .dt-status-filter { align-items: flex-start; }
+}
+@media (max-width: 620px) {
+  .dt-kpi-overview { grid-template-columns: 1fr; }
+  .dt-kpi-overview-head {
+    min-height: 34px;
+    border-right: 0;
+    border-bottom: 1px solid var(--bd1);
+  }
+  .dt-kpi-overview-body { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dt-kpi {
+    min-height: 54px;
+    border-top: 1px solid var(--bd1);
+  }
+  .dt-kpi:nth-child(-n+2) { border-top: 0; }
+  .dt-kpi:nth-child(odd) { border-left: 0; }
+  .dt-filter-search-form { align-items: stretch; flex-wrap: wrap; }
+  .dt-filter-toolbar .dt-filter-primary .dt-filter-search-form .search-input {
+    min-width: 100%;
+    max-width: none;
+    flex-basis: 100%;
+  }
+  .dt-filter-toolbar .dt-filter-primary .dt-filter-search-form .domain-transfer-date-range {
+    width: auto;
+    flex: 1 1 210px;
+  }
+  .dt-filter-toolbar .dt-filter-primary .dt-filter-search-form .domain-transfer-date-range .tracs-date-range-trigger,
+  .dt-filter-search-form .btn { min-height: 44px; }
+  .dt-status-filter {
+    display: grid;
+    gap: 7px;
+  }
+  .dt-filter-toolbar .dt-status-filter .filter-tab { min-height: 44px; }
 }
 
 /* ═══════════════════════════════════════════════
