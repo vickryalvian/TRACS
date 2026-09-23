@@ -54,8 +54,8 @@ const catalog = { tax_rate: 0.11, tax_revision: 1, items: [
     });
     assert.deepEqual(await removeButton.evaluate(element => {
       const style = getComputedStyle(element);
-      return [style.width, style.height, style.paddingLeft, style.paddingRight, style.color];
-    }), ['36px', '36px', '10px', '10px', mutedColor]);
+      return [style.width, style.height, style.paddingLeft, style.paddingRight, style.marginLeft, style.borderLeftWidth, style.color];
+    }), ['36px', '36px', '10px', '10px', '0px', '0px', mutedColor]);
     const destructiveColor = await page.evaluate(() => {
       const probe = document.createElement('span');
       probe.style.color = 'var(--red)';
