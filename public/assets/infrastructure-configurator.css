@@ -19,8 +19,7 @@
 .sales-builder { min-width: 0; }
 .sales-builder-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 24px; }
 .sales-builder-head h2 { margin: 0; }
-.sales-builder-utilities { display: flex; align-items: center; justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
-.infra-configurator-page .sales-builder-utilities .btn { min-height: 32px; padding: 6px 9px; }
+.infra-configurator-page .sales-copy-specs { flex: 0 0 auto; width: 32px; min-height: 32px; padding: 6px; justify-content: center; }
 .sales-line { display: grid; grid-template-columns: minmax(105px, .7fr) minmax(0, 2fr) 180px 36px; gap: 10px; align-items: start; border-bottom: 1px solid var(--bd1); padding: 14px 0; }
 .sales-price-cell { display: grid; grid-template-columns: minmax(0, 1fr) 30px; align-items: end; gap: 6px; }
 .sales-price-cell .sales-price { grid-column: 1 / -1; padding: 0; font-size: 11px; }
@@ -154,7 +153,5 @@
  .sales-dialog-head-actions { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
  .sales-master-filters > .btn { width: 100%; }
  .sales-tax-form { min-width: 0; }
- .sales-builder-head { align-items: flex-start; flex-direction: column; }
- .sales-builder-utilities { justify-content: flex-start; width: 100%; }
- .infra-configurator-page .sales-builder-utilities .btn { min-height: 44px; }
+ .infra-configurator-page .sales-copy-specs { width: 44px; min-height: 44px; }
 }
