@@ -9149,7 +9149,7 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
 
 .dt-filter-toolbar {
   min-width: 0;
-  width: min(100%, 1230px);
+  width: 100%;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -9160,16 +9160,21 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
   background: var(--s1);
 }
 .dt-filter-toolbar .dt-filter-primary .dt-filter-search-form {
-  width: auto;
-  max-width: 700px;
-  flex: 0 1 680px;
+  width: 100%;
+  max-width: none;
+  flex: 1 1 auto;
   gap: 8px;
+}
+.dt-filter-primary {
+  min-width: 0;
+  flex: 1 1 360px;
+  max-width: 820px;
 }
 .dt-filter-toolbar .dt-filter-primary .dt-filter-search-form .search-input {
   width: auto;
   min-width: 220px;
-  max-width: 520px;
-  flex: 1 1 360px;
+  max-width: none;
+  flex: 1 1 260px;
 }
 .dt-filter-toolbar .dt-filter-primary .dt-filter-search-form .domain-transfer-date-range {
   width: 176px;
@@ -9180,7 +9185,7 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
   min-width: 0;
 }
 .dt-status-filter {
-  min-width: 520px;
+  min-width: 0;
   flex: 0 1 auto;
   gap: 9px;
 }
@@ -9202,6 +9207,18 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
   padding: 0 8px;
   font-size: 10.5px;
   white-space: nowrap;
+}
+.dt-filter-toolbar .dt-filter-reset {
+  width: var(--toolbar-h);
+  min-width: var(--toolbar-h);
+  height: var(--toolbar-h);
+  margin-left: auto;
+  padding: 0;
+  flex: 0 0 auto;
+}
+.dt-filter-toolbar .dt-filter-reset .icon-sm {
+  width: 14px;
+  height: 14px;
 }
 .dt-status-more { position: relative; }
 .dt-status-more > summary { list-style: none; }
@@ -9481,6 +9498,7 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
     white-space: normal;
   }
   .dt-filter-toolbar { width: 100%; }
+  .dt-filter-primary { max-width: none; }
   .dt-filter-search-form { max-width: none; }
   .dt-status-filter { align-items: flex-start; }
 }
@@ -9508,6 +9526,9 @@ body.case-drag-active .case-card-grip { cursor: grabbing; }
     min-width: 0;
     display: grid;
     gap: 7px;
+  }
+  .dt-filter-toolbar .dt-filter-reset {
+    margin-left: 0;
   }
   .dt-filter-toolbar .dt-status-filter .filter-tab { min-height: 44px; }
 }

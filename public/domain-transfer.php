@@ -608,9 +608,6 @@ include 'includes/header.php';
       'class' => 'domain-transfer-date-range',
       'auto_submit' => true,
     ])?>
-    <?php if ($q || $date_from || $date_to || $filter_status !== 'all'): ?>
-    <a href="?" class="btn btn-ghost btn-reset btn-sm">Reset</a>
-    <?php endif; ?>
   </form>
 </div>
 
@@ -656,6 +653,12 @@ include 'includes/header.php';
   </nav>
 
 </div>
+
+<?php if ($q || $date_from || $date_to || $filter_status !== 'all'): ?>
+<a href="?" class="btn btn-ghost btn-reset btn-sm btn-icon dt-filter-reset" title="Reset filters" aria-label="Reset filters">
+  <i data-lucide="rotate-ccw" class="icon-sm" aria-hidden="true"></i>
+</a>
+<?php endif; ?>
 
 </section>
 
