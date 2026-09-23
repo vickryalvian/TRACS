@@ -43,7 +43,45 @@ const catalog = { tax_rate: 0.11, tax_revision: 1, items: [
     await page.locator('[data-service]:not(:disabled)').waitFor();
     const dirty = () => page.evaluate(() => TRACSUnsavedChanges.isDirty());
     assert.equal(await dirty(), false);
+    const removeButton = page.locator('.sales-remove').first();
+    const mutedColor = await page.evaluate(() => {
+      const probe = document.createElement('span');
+      probe.style.color = 'var(--tx3)';
+      document.body.appendChild(probe);
+      const color = getComputedStyle(probe).color;
+      probe.remove();
+      return color;
+    });
+    assert.deepEqual(await removeButton.evaluate(element => {
+      const style = getComputedStyle(element);
+      return [style.width, style.height, style.paddingLeft, style.paddingRight, style.color];
+    }), ['36px', '36px', '10px', '10px', mutedColor]);
+    const destructiveColor = await page.evaluate(() => {
+      const probe = document.createElement('span');
+      probe.style.color = 'var(--red)';
+      document.body.appendChild(probe);
+      const color = getComputedStyle(probe).color;
+      probe.remove();
+      return color;
+    });
+    await removeButton.hover();
+    await page.waitForFunction(color => getComputedStyle(document.querySelector('.sales-remove')).color === color, destructiveColor);
+    assert.equal(await removeButton.evaluate(element => getComputedStyle(element).color), destructiveColor);
     await page.locator('[data-item]').selectOption('1');
+    const editButton = page.locator('[data-edit-price]').first();
+    const activeColor = await page.evaluate(() => {
+      const probe = document.createElement('span');
+      probe.style.color = 'var(--tx1)';
+      document.body.appendChild(probe);
+      const color = getComputedStyle(probe).color;
+      probe.remove();
+      return color;
+    });
+    assert.equal(await editButton.evaluate(element => getComputedStyle(element).color), mutedColor);
+    assert.equal(Math.round((await editButton.boundingBox()).y), Math.round((await removeButton.boundingBox()).y));
+    await editButton.hover();
+    await page.waitForFunction(color => getComputedStyle(document.querySelector('[data-edit-price]')).color === color, activeColor);
+    assert.equal(await editButton.evaluate(element => getComputedStyle(element).color), activeColor);
     await page.locator('[data-add-custom]').click();
     await page.locator('[data-custom-name]').fill('Custom support');
     await page.locator('[data-quantity]').fill('2');
