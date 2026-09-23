@@ -196,10 +196,11 @@
   }
 
   function syncUi() {
-    const dirty = isDirty();
+    const dirtyElements = connectedDirtyElements();
+    const dirty = dirtyElements.length > 0;
     const scope = dirtyScope();
     const warningBar = ensureBar(scope);
-    warningBar.hidden = !dirty;
+    warningBar.hidden = !dirty || dirtyElements.every(control => control.closest?.('[data-unsaved-hide-bar]'));
     const saveButton = warningBar.querySelector('[data-unsaved-save]');
     if (saveButton) saveButton.hidden = !scope?.save;
     document.documentElement.classList.toggle('tracs-has-unsaved-changes', dirty);
@@ -370,6 +371,7 @@
       showSave: false
     });
     if (choice === 'leave') {
+      document.dispatchEvent(new CustomEvent('tracs:before-unsaved-leave', { detail: { root } }));
       discard(root);
       markSaved(root);
       if (!options.modal) allowNextUnload = true;
@@ -585,6 +587,7 @@
 
   window.addEventListener('beforeunload', event => {
     if (allowNextUnload || !isDirty()) return;
+    document.dispatchEvent(new CustomEvent('tracs:before-unsaved-leave'));
     event.preventDefault();
     event.returnValue = '';
   });

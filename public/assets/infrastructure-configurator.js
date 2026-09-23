@@ -24,6 +24,10 @@
   let loading = false;
   let templates = [];
   let templateBusy = false;
+  const draftKey = 'tracs:sales-configurator:draft:v1';
+  let draftTimer;
+  let draftReady = false;
+  let lastDraft = '';
   let masterSort = { field: 'order', dir: 'asc' };
   const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const activeItems = () => (catalog?.items || []).filter((item) => item.active);
@@ -34,7 +38,44 @@
   const icons = () => window.lucide?.createIcons();
   const trackedDialogs = new WeakSet();
   let configurationTracked = false;
-  const configurationState = () => ({ service: service.value, period: period.value, nodes: Number(nodes.value), marginMode: marginMode.value, marginValue: Number(marginValue.value), lines: lines.map(line => ({ ...line, quantity: Number(line.quantity), ...(line.override_price != null ? { override_price: Number(line.override_price) } : {}), draft: priceDrafts.has(line) && Number(priceDrafts.get(line)) !== Number(unitPrice(line)) ? Number(priceDrafts.get(line)) : null })) });
+  const configurationState = () => ({
+    service: service.value,
+    period: period.value,
+    nodes: Number(nodes.value),
+    marginMode: marginMode.value,
+    marginValue: Number(marginValue.value),
+    lines: lines.map((line) => ({
+      ...(line.custom ? { custom: true } : {}),
+      id: Number(line.id) || 0,
+      category: line.category,
+      ...(line.custom ? { name: line.name } : {}),
+      quantity: Number(line.quantity),
+      ...(line.override_price != null ? { override_price: line.override_price === '' ? '' : Number(line.override_price) } : {})
+    }))
+  });
+
+  function readDraft() {
+    try { return JSON.parse(localStorage.getItem(draftKey) || 'null'); }
+    catch (_) { return null; }
+  }
+
+  function persistDraft() {
+    if (!draftReady || !catalog) return;
+    const serialized = JSON.stringify(configurationState());
+    if (serialized === lastDraft) return;
+    try { localStorage.setItem(draftKey, serialized); lastDraft = serialized; }
+    catch (_) { /* Draft persistence is best-effort when browser storage is unavailable. */ }
+  }
+
+  function scheduleDraftSave() {
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(persistDraft, 250);
+  }
+
+  function clearPersistedDraft() {
+    clearTimeout(draftTimer);
+    try { localStorage.removeItem(draftKey); } catch (_) {}
+  }
   function captureDialog(dialog) {
     const guard = window.TRACSUnsavedChanges;
     if (!dialog || !guard) return;
@@ -73,6 +114,45 @@
     fill(period, Object.entries(labels).filter(([key]) => activeItems().some((item) => item.service_type === service.value && item.billing_period === key)), value);
   }
 
+  function restoreDraft() {
+    const draft = readDraft();
+    if (!draft || typeof draft !== 'object' || !Array.isArray(draft.lines)) return false;
+    if (!Array.from(service.options).some((option) => option.value === draft.service)) return false;
+    service.value = draft.service;
+    setPeriods(draft.period);
+    if (!Array.from(period.options).some((option) => option.value === draft.period)) return false;
+    period.value = draft.period;
+    const count = Number(draft.nodes);
+    nodes.value = Number.isInteger(count) && count >= 1 && count <= 10000 ? count : 1;
+    marginMode.value = draft.marginMode === 'amount' ? 'amount' : 'percentage';
+    marginValue.max = marginMode.value === 'amount' ? '1000000000000' : '1000';
+    const margin = Number(draft.marginValue);
+    marginValue.value = Number.isFinite(margin) && margin >= 0 && margin <= Number(marginValue.max) ? margin : 30;
+    $('[data-margin-value-label]').textContent = marginMode.value === 'amount' ? 'Margin (Rp, total)' : 'Margin (%)';
+    const cats = categories();
+    lines = draft.lines.slice(0, 100).flatMap((raw) => {
+      if (!raw || typeof raw !== 'object') return [];
+      const custom = raw.custom === true;
+      const category = String(raw.category ?? '').slice(0, 100);
+      if (!custom && !cats.includes(category)) return [];
+      const quantity = Number(raw.quantity);
+      const line = {
+        ...(custom ? { custom: true } : {}),
+        id: custom ? 0 : Number(raw.id) || 0,
+        category,
+        ...(custom ? { name: String(raw.name ?? '').slice(0, 500) } : {}),
+        quantity: Number.isInteger(quantity) && quantity >= 1 && quantity <= 100000 ? quantity : 1
+      };
+      if (!custom && line.id && !available().some((item) => item.id === line.id && item.category === category)) line.id = 0;
+      if (Object.prototype.hasOwnProperty.call(raw, 'override_price')) {
+        const price = raw.override_price === '' ? '' : Number(raw.override_price);
+        if (price === '' || Number.isFinite(price) && price >= 0 && price <= 1e12) line.override_price = price;
+      }
+      return [line];
+    });
+    return true;
+  }
+
   function resetLines() {
     const cats = categories();
     const initial = ['CPU', 'RAM', 'Storage'].filter((category) => cats.includes(category));
@@ -86,6 +166,7 @@
     $('[data-configuration-title]').textContent = service.value ? `Custom ${service.value}` : 'Configuration';
     $('[data-add]').disabled = loading || !cats.length || lines.length >= 100;
     $('[data-add-custom]').disabled = loading || !cats.length || lines.length >= 100;
+    $('[data-clear-configuration]').disabled = loading || !catalog;
     $('[data-lines]').innerHTML = lines.map((line, index) => {
       const item = selected(line);
       const options = available().filter((option) => option.category === line.category);
@@ -101,7 +182,63 @@
         ${item && (item.name.length > 45 || item.description) ? `<div class="sales-specification">${esc(item.name)}${item.description ? '\n' + esc(item.description) : ''}</div>` : ''}
       </div>`;
     }).join('');
+    syncCopyAction();
     icons();
+  }
+
+  function syncCopyAction() {
+    $('[data-copy-specs]').disabled = loading || !specificationText();
+  }
+
+  function specificationText() {
+    return lines.flatMap((line) => {
+      const item = selected(line);
+      const category = String(line.category || '').trim();
+      const name = String(item?.name || '').trim();
+      const quantity = Number(line.quantity);
+      if (!category || !name || !Number.isInteger(quantity) || quantity < 1) return [];
+      return [`${category}: ${quantity > 1 ? `${quantity} x ` : ''}${name}`];
+    }).join('\n');
+  }
+
+  async function copySpecifications(button) {
+    const text = specificationText();
+    if (!text) return;
+    try {
+      if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
+      else {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        if (!document.execCommand('copy')) throw new Error('Copy failed');
+        textarea.remove();
+      }
+      window.showToast?.('Specifications copied', 'success', { sourceElement: button, context: 'page' });
+    } catch (_) {
+      window.showToast?.('Unable to copy specifications. Please try again.', 'error', { sourceElement: button, context: 'page' });
+    }
+  }
+
+  async function clearConfiguration() {
+    const confirmed = window.tracsConfirm
+      ? await window.tracsConfirm({ title: 'Clear configuration?', message: 'This clears the current working configuration and its local draft. Saved Templates are not affected.', confirmText: 'Clear Configuration', destructive: true })
+      : window.confirm('Clear the current configuration? Saved Templates are not affected.');
+    if (!confirmed) return;
+    clearPersistedDraft();
+    service.selectedIndex = 0;
+    setPeriods('monthly');
+    nodes.value = 1;
+    marginMode.value = 'percentage';
+    marginValue.max = '1000';
+    marginValue.value = 30;
+    $('[data-margin-value-label]').textContent = 'Margin (%)';
+    resetLines();
+    lastDraft = JSON.stringify(configurationState());
+    window.TRACSUnsavedChanges?.markSaved($('#sales-calculator'));
+    window.showToast?.('Configuration cleared', 'success', { context: 'page' });
   }
 
   function display(totals) {
@@ -239,12 +376,17 @@
     const firstLoad = !catalog;
     const oldService = service.value;
     const oldPeriod = period.value;
+    let restored = false;
     catalog = data;
     fill(service, [...new Set(activeItems().map((item) => item.service_type))].map((value) => [value, value]), oldService);
     setPeriods(oldPeriod);
     $('[data-tax-label]').textContent = `${Number((catalog.tax_rate * 100).toFixed(4))}%`;
     renderTaxSetting();
-    if (firstLoad || service.value !== oldService || period.value !== oldPeriod) resetLines();
+    if (firstLoad) {
+      restored = restoreDraft();
+      if (restored) { renderLines(); calculate(); }
+      else resetLines();
+    } else if (service.value !== oldService || period.value !== oldPeriod) resetLines();
     else { renderLines(); calculate(); }
     renderMaster();
     if (firstLoad && !configurationTracked && window.TRACSUnsavedChanges) {
@@ -254,6 +396,10 @@
         marginMode.value = state.marginMode; marginValue.value = state.marginValue;
         lines = state.lines.map(({ draft, ...line }) => line); renderLines(); calculate();
       } });
+    }
+    if (firstLoad) {
+      draftReady = true;
+      lastDraft = restored ? JSON.stringify(configurationState()) : '';
     }
     status.textContent = activeItems().length ? '' : 'No active items. Contact your Pricing Matrix administrator.';
   }
@@ -318,30 +464,30 @@
         }
         priceDrafts.delete(line);
       }
-      renderLines(); calculate();
+      renderLines(); calculate(); scheduleDraftSave();
       $(`[data-line="${index}"] [data-price], [data-line="${index}"] [data-edit-price], [data-line="${index}"] [data-reset-price]`)?.focus(); return;
     }
     const reset = event.target.closest('[data-reset-price]');
     if (reset) {
       const index = Number(reset.closest('[data-line]').dataset.line);
       delete lines[index].override_price;
-      renderLines(); calculate(); $(`[data-line="${index}"] [data-edit-price]`)?.focus(); return;
+      renderLines(); calculate(); scheduleDraftSave(); $(`[data-line="${index}"] [data-edit-price]`)?.focus(); return;
     }
     const button = event.target.closest('[data-remove]');
     if (!button) return;
     lines.splice(Number(button.closest('[data-line]').dataset.line), 1);
-    renderLines(); calculate(); $('[data-add]').focus();
+    renderLines(); calculate(); scheduleDraftSave(); $('[data-add]').focus();
   });
   $('[data-add]').addEventListener('click', () => {
     if (!categories().length || lines.length >= 100) return;
     lines.push({ category: categories().includes('Storage') ? 'Storage' : categories()[0], id: 0, quantity: 1 });
-    renderLines(); calculate(); $('[data-lines]').lastElementChild.querySelector('[data-item]').focus();
+    renderLines(); calculate(); scheduleDraftSave(); $('[data-lines]').lastElementChild.querySelector('[data-item]').focus();
   });
   service.addEventListener('change', () => { setPeriods('monthly'); resetLines(); });
   $('[data-add-custom]').addEventListener('click', () => {
     if (!categories().length || lines.length >= 100) return;
     lines.push({ custom: true, id: 0, category: 'Custom', name: '', override_price: '', quantity: 1 });
-    renderLines(); calculate(); $('[data-lines]').lastElementChild.querySelector('[data-custom-name]').focus();
+    renderLines(); calculate(); scheduleDraftSave(); $('[data-lines]').lastElementChild.querySelector('[data-custom-name]').focus();
   });
   period.addEventListener('change', resetLines);
   nodes.addEventListener('input', calculate);
@@ -353,8 +499,13 @@
     $('[data-margin-value-label]').textContent = amount ? 'Margin (Rp, total)' : 'Margin (%)';
     calculate();
   });
+  $('#sales-calculator').addEventListener('input', () => queueMicrotask(() => { syncCopyAction(); scheduleDraftSave(); }));
+  $('#sales-calculator').addEventListener('change', () => queueMicrotask(() => { syncCopyAction(); scheduleDraftSave(); }));
+  $('[data-copy-specs]').addEventListener('click', (event) => copySpecifications(event.currentTarget));
+  $('[data-clear-configuration]').addEventListener('click', clearConfiguration);
   $('[data-refresh]').addEventListener('click', () => refresh(true));
   ['input', 'change', 'click'].forEach(type => root.addEventListener(type, () => queueMicrotask(() => window.TRACSUnsavedChanges?.refresh())));
+  document.addEventListener('tracs:before-unsaved-leave', persistDraft);
   root.querySelectorAll('dialog').forEach(dialog => dialog.addEventListener('cancel', event => { event.preventDefault(); closeDialog(dialog); }));
   window.addEventListener('pageshow', (event) => { if (event.persisted) refresh(); });
   const masterDialog = $('[data-master-dialog]');
@@ -592,6 +743,7 @@
       lines = JSON.parse(JSON.stringify(config.lines));
       $('[data-template-name]').value = template.name;
       renderLines(); calculate();
+      scheduleDraftSave();
       window.TRACSUnsavedChanges?.markSaved($('#sales-calculator'));
       window.TRACSUnsavedChanges?.markSaved(templateDialog);
       templateDialog?.close();

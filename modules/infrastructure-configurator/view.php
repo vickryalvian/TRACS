@@ -3,7 +3,7 @@ require_once __DIR__ . '/../../core/security/direct_access.php';
 tracs_deny_direct_script_access(__FILE__);
 ?>
 <main class="main">
- <div class="main-inner infra-configurator-page" data-sales-configurator data-unsaved-ignore>
+ <div class="main-inner infra-configurator-page" data-sales-configurator data-unsaved-ignore data-unsaved-hide-bar>
   <div class="topbar"><div class="topbar-left"><div class="page-title">Sales Configurator</div></div><div class="topbar-right sales-actions"><button class="btn" type="button" data-open-templates><i data-lucide="files" class="icon-sm"></i>Templates</button><?php if ($can_manage): ?><button class="btn" type="button" data-open-master><i data-lucide="database" class="icon-sm"></i>Pricing Matrix</button><?php endif; ?><button class="btn sales-refresh" type="button" data-refresh title="Refresh prices" aria-label="Refresh prices"><i data-lucide="refresh-cw" class="icon-sm"></i></button></div></div>
   <p class="sales-status" data-status role="status">Loading Pricing Matrix...</p>
   <noscript><p class="empty">JavaScript is required to use the calculator.</p></noscript>
@@ -13,7 +13,10 @@ tracs_deny_direct_script_access(__FILE__);
     <label class="sales-field">Billing Period<select class="form-select" data-period disabled></select></label>
    </div>
    <div class="sales-workspace">
-    <section class="sales-builder" aria-label="Configuration items"><h2 data-configuration-title>Configuration</h2><div data-lines></div><button type="button" class="btn" data-add disabled><i data-lucide="plus" class="icon-sm"></i>Add Item</button> <button type="button" class="btn" data-add-custom disabled><i data-lucide="square-pen" class="icon-sm"></i>Add Custom Item</button></section>
+    <section class="sales-builder" aria-label="Configuration items">
+     <div class="sales-builder-head"><h2 data-configuration-title>Configuration</h2><div class="sales-builder-utilities"><button type="button" class="btn" data-copy-specs disabled><i data-lucide="copy" class="icon-sm"></i>Copy Specs</button><button type="button" class="btn" data-clear-configuration disabled>Clear Configuration</button></div></div>
+     <div data-lines></div><button type="button" class="btn" data-add disabled><i data-lucide="plus" class="icon-sm"></i>Add Item</button> <button type="button" class="btn" data-add-custom disabled><i data-lucide="square-pen" class="icon-sm"></i>Add Custom Item</button>
+    </section>
     <aside class="sales-totals" aria-label="Calculation totals">
      <label class="sales-field">Quantity / Nodes<input class="form-input" data-nodes type="number" min="1" max="10000" step="1" value="1" required></label>
      <div class="sales-margin-controls">
