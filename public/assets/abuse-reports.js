@@ -1383,11 +1383,13 @@
     }
     const listEdit = event.target.closest('[data-abuse-list-edit]');
     if (listEdit) {
+      cancelScheduledPreview();
       toggleListEditor(toId(listEdit.dataset.abuseListEdit));
       return;
     }
     const listEditCancel = event.target.closest('[data-abuse-list-edit-cancel]');
     if (listEditCancel) {
+      cancelScheduledPreview();
       toggleListEditor(toId(listEditCancel.dataset.abuseListEditCancel), false);
       return;
     }
