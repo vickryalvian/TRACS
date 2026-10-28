@@ -33,6 +33,13 @@ abuse_performance_assert(str_contains($script, "root.addEventListener('focusin'"
 abuse_performance_assert(str_contains($script, 'function actionIcon(kind)'), 'Expected lightweight inline SVG action icons.');
 abuse_performance_assert(str_contains($script, "icons($('#abuseListBody'))"), 'Expected list redraw icon refreshes to target the table body.');
 abuse_performance_assert(str_contains($script, "icons($('#abuseBoardWrap'))"), 'Expected board redraw icon refreshes to target the active board.');
+abuse_performance_assert(str_contains($script, 'const renderedRevision = { board: -1, list: -1 };'), 'Expected separate board and list render caches.');
+abuse_performance_assert(str_contains($script, 'if (renderedRevision[activeView] === renderRevision) return;'), 'Expected unchanged views to skip filtering, DOM reconstruction, and icon refresh.');
+abuse_performance_assert(str_contains($script, 'renderBoard({ preserveRevision: !searchPending });'), 'Expected view switches to reuse clean DOM while applying pending search changes.');
+abuse_performance_assert(
+    preg_match('/function updateReportInState\(report\).*?renderRevision \+= 1;/s', $script) === 1,
+    'Expected report updates to invalidate cached views.'
+);
 abuse_performance_assert(
     preg_match('/public function getReports\(\): array \{(.*?)public function getReportById/s', $model, $listQuery) === 1
         && !str_contains($listQuery[1], 'SELECT r.*')

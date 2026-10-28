@@ -93,6 +93,9 @@
     listEditingId: 0,
     inlineSaving: new Set(),
   };
+  let renderRevision = 0;
+  let searchRenderTimer = 0;
+  const renderedRevision = { board: -1, list: -1 };
 
   try {
     const savedView = localStorage.getItem(viewStorageKey);
@@ -269,6 +272,7 @@
     const idx = state.reports.findIndex(item => item.id === normalized.id);
     if (idx >= 0) state.reports[idx] = { ...state.reports[idx], ...normalized };
     else state.reports.unshift(normalized);
+    renderRevision += 1;
     return normalized;
   }
 
@@ -631,7 +635,24 @@
     summary?.classList.toggle('is-active', active > 0);
   }
 
-  function renderBoard() {
+  function renderBoard({ preserveRevision = false } = {}) {
+    if (searchRenderTimer) {
+      window.clearTimeout(searchRenderTimer);
+      searchRenderTimer = 0;
+    }
+    if (!preserveRevision) renderRevision += 1;
+
+    const activeView = state.view;
+    $('#abuseBoardWrap') && ($('#abuseBoardWrap').hidden = activeView !== 'board');
+    $('#abuseListWrap') && ($('#abuseListWrap').hidden = activeView !== 'list');
+    $$('[data-abuse-view]', root).forEach(button => {
+      const active = button.dataset.abuseView === activeView;
+      button.classList.toggle('is-active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+
+    if (renderedRevision[activeView] === renderRevision) return;
+
     const filters = currentFilters();
     const visible = state.reports.filter(report => matchesFilters(report, filters));
     const grouped = Object.fromEntries(stages.map(stage => [stage, []]));
@@ -647,15 +668,7 @@
 
     $('#abusePageSummary') && ($('#abusePageSummary').textContent = `${visible.length} shown · ${summary.open} open · ${summary.critical} critical · ${summary.actionRequired} action required · ${resolvedToday} resolved today`);
     renderMoreFilterCount(filters);
-    $('#abuseBoardWrap') && ($('#abuseBoardWrap').hidden = state.view !== 'board');
-    $('#abuseListWrap') && ($('#abuseListWrap').hidden = state.view !== 'list');
-    $$('[data-abuse-view]', root).forEach(button => {
-      const active = button.dataset.abuseView === state.view;
-      button.classList.toggle('is-active', active);
-      button.setAttribute('aria-pressed', active ? 'true' : 'false');
-    });
-
-    if (state.view === 'board') {
+    if (activeView === 'board') {
       stages.forEach(stage => {
         const column = $(`[data-abuse-column="${stage}"]`, root);
         const list = $(`[data-abuse-dropzone="${stage}"]`, root);
@@ -669,7 +682,8 @@
     } else {
       renderList(visible);
     }
-    if (state.view === 'list') {
+    renderedRevision[activeView] = renderRevision;
+    if (activeView === 'list') {
       icons($('#abuseListBody'));
       $$('[data-abuse-sort]', root).forEach(button => icons(button));
     } else {
@@ -1392,9 +1406,12 @@
     }
     const view = event.target.closest('[data-abuse-view]');
     if (view) {
-      state.view = view.dataset.abuseView === 'list' ? 'list' : 'board';
+      const nextView = view.dataset.abuseView === 'list' ? 'list' : 'board';
+      if (state.view === nextView) return;
+      const searchPending = Boolean(searchRenderTimer);
+      state.view = nextView;
       persistView();
-      renderBoard();
+      renderBoard({ preserveRevision: !searchPending });
       return;
     }
     const sort = event.target.closest('[data-abuse-sort]');
@@ -1624,7 +1641,6 @@
   $('#abuseAdvancedFields')?.addEventListener('toggle', event => {
     sessionStorage.setItem('tracsAbuseAdvancedOpen', event.currentTarget.open ? '1' : '0');
   });
-  let searchRenderTimer = 0;
   $('#abuseSearchInput')?.addEventListener('input', () => {
     window.clearTimeout(searchRenderTimer);
     searchRenderTimer = window.setTimeout(renderBoard, 160);
