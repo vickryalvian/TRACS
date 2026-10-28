@@ -299,15 +299,37 @@ class AbuseReportModel {
 
     public function getReports(): array {
         $sql = "
-            SELECT r.*,
+            SELECT r.id,
+                   r.report_number,
+                   r.title,
+                   r.report_type,
+                   r.status,
+                   r.priority,
+                   r.affected_domain,
+                   r.affected_ip,
+                   r.reporter,
+                   r.reporter_contact,
+                   r.customer_name,
+                   r.customer_reference,
+                   r.ticket_status,
+                   r.assigned_user_id,
+                   r.assigned_staff_name,
+                   r.description,
+                   r.tags,
+                   CASE WHEN NULLIF(TRIM(r.nameserver_snapshot), '') IS NULL THEN 0 ELSE 1 END AS nameserver_saved,
+                   r.sla_due_at,
+                   r.waiting_started_at,
+                   r.waiting_hours,
+                   r.waiting_until,
+                   r.board_order,
+                   r.created_at,
+                   r.updated_at,
                    COALESCE(NULLIF(au.name,''), au.email, r.assigned_staff_name, '') AS assigned_staff,
-                   COALESCE(NULLIF(cu.name,''), cu.email, r.created_by_name, 'System') AS creator_name,
                    COALESCE(ev.evidence_count, 0) AS evidence_count,
                    le.created_at AS last_activity_at,
                    le.event_type AS last_activity_type
             FROM tracs_abuse_reports r
             LEFT JOIN tracs_users au ON au.id = r.assigned_user_id
-            LEFT JOIN tracs_users cu ON cu.id = r.created_by
             LEFT JOIN (
                 SELECT report_id, COUNT(*) AS evidence_count
                 FROM tracs_abuse_report_evidence
@@ -1070,7 +1092,9 @@ class AbuseReportModel {
         $row['evidence_count'] = (int)($row['evidence_count'] ?? 0);
         $row['ticket_status'] = self::normalizeTicketStatus($row['ticket_status'] ?? 'not_sent');
         $row['ticket_sent'] = $row['ticket_status'] === 'sent';
-        $row['nameserver_saved'] = trim((string)($row['nameserver_snapshot'] ?? '')) !== '';
+        $row['nameserver_saved'] = array_key_exists('nameserver_saved', $row)
+            ? (bool)$row['nameserver_saved']
+            : trim((string)($row['nameserver_snapshot'] ?? '')) !== '';
         $row['waiting_started_at'] = $waitingStarted;
         $row['waiting_hours'] = $waitingHours;
         $row['waiting_until'] = $waitingUntil;

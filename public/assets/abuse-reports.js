@@ -112,13 +112,21 @@
     }
   };
   let iconRefreshPending = false;
-  const icons = () => {
+  let iconsReady = false;
+  const pendingIconScopes = new Set();
+  const icons = (scope = root) => {
+    if (!iconsReady || !scope) return;
+    pendingIconScopes.add(scope);
     if (iconRefreshPending) return;
     iconRefreshPending = true;
     const refresh = () => {
       iconRefreshPending = false;
-      if (typeof window.tracsRefreshIcons === 'function') window.tracsRefreshIcons(root);
-      else window.lucide?.createIcons?.();
+      const scopes = Array.from(pendingIconScopes);
+      pendingIconScopes.clear();
+      scopes.forEach(node => {
+        if (typeof window.tracsRefreshIcons === 'function') window.tracsRefreshIcons(node);
+        else window.lucide?.createIcons?.({ nodes: Array.from(node.querySelectorAll('[data-lucide]')) });
+      });
     };
     if (typeof window.requestIdleCallback === 'function') {
       window.requestIdleCallback(refresh, { timeout: 200 });
@@ -366,8 +374,14 @@
     const ref = report.report_number || `#${report.id}`;
     return `
       <button type="button" class="${esc(className)}" data-abuse-delete="${report.id}" title="Delete ${esc(ref)}" aria-label="Delete ${esc(ref)}">
-        <i data-lucide="trash-2" class="icon-sm"></i>
+        ${actionIcon('delete')}
       </button>`;
+  }
+
+  function actionIcon(kind) {
+    return kind === 'edit'
+      ? '<svg class="lucide icon-sm" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg>'
+      : '<svg class="lucide icon-sm" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m19 6-1 14H6L5 6"/><path d="M10 11v5M14 11v5"/></svg>';
   }
 
   function renderUrgencyBadge(report) {
@@ -464,11 +478,12 @@
     .join('');
   const statusSelectOptions = selected => selectOptions(Object.fromEntries(statuses.map(status => [status, statusLabels[status] || eventLabel(status)])), selected);
 
-  function renderListSelect(report, field, label, value, options, modifier = '') {
+  function renderListSelect(report, field, label, value, modifier = '') {
+    const selected = report[field] ?? '';
     return `
       <span class="abuse-list-select ${modifier}" title="Click to change ${esc(label.toLowerCase())}">
         <span class="abuse-list-select-value">${esc(value)}</span>
-        <select data-tracs-dropdown="off" data-abuse-list-field="${esc(field)}" data-abuse-id="${report.id}" aria-label="${esc(label)} for ${esc(report.report_number)}">${options}</select>
+        <select data-tracs-dropdown="off" data-abuse-list-field="${esc(field)}" data-abuse-id="${report.id}" aria-label="${esc(label)} for ${esc(report.report_number)}"><option value="${esc(selected)}" selected>${esc(value)}</option></select>
       </span>`;
   }
 
@@ -487,6 +502,24 @@
     if (selected) values.add(String(selected));
     return `<option value="" ${selected ? '' : 'selected'}>Unknown reporter</option>`
       + Array.from(values).sort().map(value => `<option value="${esc(value)}" ${value === selected ? 'selected' : ''}>${esc(value)}</option>`).join('');
+  }
+
+  function hydrateListSelect(select) {
+    if (select.dataset.abuseOptionsReady === '1') return;
+    const reportId = toId(select.dataset.abuseId);
+    const field = select.dataset.abuseListField;
+    const report = state.reports.find(item => toId(item.id) === reportId);
+    if (!report) return;
+    const selected = String(field === 'reporter' ? String(report.reporter || '').trim() : (report[field] ?? ''));
+    let options = '';
+    if (field === 'priority') options = selectOptions(priorityLabels, selected);
+    else if (field === 'status') options = statusSelectOptions(selected);
+    else if (field === 'assigned_user_id') options = assigneeOptions(selected);
+    else if (field === 'reporter') options = reporterOptions(String(report.reporter || '').trim());
+    if (!options) return;
+    select.innerHTML = options;
+    select.value = selected;
+    select.dataset.abuseOptionsReady = '1';
   }
 
   function renderListEditor(report) {
@@ -519,7 +552,7 @@
         <tr class="abuse-list-row ${urgent ? 'is-overdue' : ''}" data-abuse-row data-abuse-id="${report.id}">
           <td><span class="abuse-list-age"><strong>${esc(stageText)}</strong><small>stage</small></span></td>
           <td>${state.canManage
-            ? renderListSelect(report, 'priority', 'Priority', priorityLabels[report.priority] || report.priority, selectOptions(priorityLabels, report.priority), `is-priority is-${esc(report.priority)}`)
+            ? renderListSelect(report, 'priority', 'Priority', priorityLabels[report.priority] || report.priority, `is-priority is-${esc(report.priority)}`)
             : `<span class="abuse-list-priority is-${esc(report.priority)}">${esc(priorityLabels[report.priority] || report.priority)}</span>`}</td>
           <td>
             <div class="abuse-list-report">
@@ -531,19 +564,19 @@
           <td>
             <div class="abuse-list-status">
               ${state.canManage
-                ? renderListSelect(report, 'status', 'Status', report.workflow_label || statusLabels[report.workflow_stage] || report.status_label, statusSelectOptions(report.status), `is-status is-${esc(report.workflow_stage)}`)
+                ? renderListSelect(report, 'status', 'Status', report.workflow_label || statusLabels[report.workflow_stage] || report.status_label, `is-status is-${esc(report.workflow_stage)}`)
                 : `<span class="abuse-list-status-text is-${esc(report.workflow_stage)}">${esc(report.workflow_label || statusLabels[report.workflow_stage] || report.status_label)}</span>`}
               ${renderUrgencyBadge(report)}
             </div>
           </td>
           <td>${state.canManage
-            ? renderListSelect(report, 'assigned_user_id', 'Assignee', report.assigned_staff || 'Unassigned', assigneeOptions(report.assigned_user_id), report.assigned_staff ? '' : 'is-muted')
+            ? renderListSelect(report, 'assigned_user_id', 'Assignee', report.assigned_staff || 'Unassigned', report.assigned_staff ? '' : 'is-muted')
             : report.assigned_staff ? renderAssignee(report) : '<span class="abuse-list-muted">Unassigned</span>'}</td>
           <td>${state.canManage
-            ? renderListSelect(report, 'reporter', 'Reporter', report.reporter || 'Unknown reporter', reporterOptions(String(report.reporter || '').trim()), report.reporter ? '' : 'is-muted')
+            ? renderListSelect(report, 'reporter', 'Reporter', report.reporter || 'Unknown reporter', report.reporter ? '' : 'is-muted')
             : `<span class="${report.reporter ? '' : 'abuse-list-muted'}">${esc(report.reporter || 'Unknown reporter')}</span>`}</td>
           <td>${Number(report.evidence_count || 0)}</td>
-          <td><div class="abuse-list-actions">${state.canManage ? `<button type="button" class="abuse-list-edit-toggle" data-abuse-list-edit="${report.id}" aria-expanded="${state.listEditingId === report.id ? 'true' : 'false'}" title="Edit report details" aria-label="Edit report details"><i data-lucide="pencil" class="icon-sm" aria-hidden="true"></i></button>` : ''}${renderDeleteButton(report, 'abuse-list-delete-toggle')}</div></td>
+          <td><div class="abuse-list-actions">${state.canManage ? `<button type="button" class="abuse-list-edit-toggle" data-abuse-list-edit="${report.id}" aria-expanded="${state.listEditingId === report.id ? 'true' : 'false'}" title="Edit report details" aria-label="Edit report details">${actionIcon('edit')}</button>` : ''}${renderDeleteButton(report, 'abuse-list-delete-toggle')}</div></td>
         </tr>${state.canManage && state.listEditingId === report.id ? renderListEditor(report) : ''}`;
     }).join('') : '<tr><td colspan="8"><div class="abuse-empty-column">No reports match the current filters</div></td></tr>';
     syncListSortHeaders();
@@ -636,7 +669,12 @@
     } else {
       renderList(visible);
     }
-    icons();
+    if (state.view === 'list') {
+      icons($('#abuseListBody'));
+      $$('[data-abuse-sort]', root).forEach(button => icons(button));
+    } else {
+      icons($('#abuseBoardWrap'));
+    }
   }
 
   function setDetailVisible(visible) {
@@ -1118,18 +1156,25 @@
   function renderEvidence(items) {
     const host = $('#abuseEvidenceGrid');
     if (!host) return;
-    host.innerHTML = items.length ? items.map(item => `
-      <article class="abuse-evidence-item">
-        <a class="abuse-evidence-preview" href="${esc(item.download_url || '#')}" target="_blank" rel="noopener">
-          ${item.preview_url ? `<img src="${esc(item.preview_url)}" alt="">` : `<i data-lucide="file-text"></i>`}
-        </a>
-        <div class="abuse-evidence-meta">
-          <strong>${esc(item.original_filename || 'Evidence')}</strong>
-          <span>${esc(item.evidence_type || 'other')} · ${esc(formatBytes(item.file_size))}</span>
-          <span>${esc(formatDate(item.created_at))}</span>
-        </div>
-      </article>
-    `).join('') : '<div class="abuse-empty-column">No evidence uploaded</div>';
+    host.innerHTML = items.length ? items.map(item => {
+      const fileName = item.original_filename || 'Evidence';
+      const evidenceType = item.evidence_type || 'evidence';
+      const previewAlt = item.preview_url ? `Preview of ${fileName}` : '';
+      const previewLabel = `Open ${evidenceType} attachment: ${fileName}`;
+
+      return `
+        <article class="abuse-evidence-item">
+          <a class="abuse-evidence-preview" href="${esc(item.download_url || '#')}" target="_blank" rel="noopener" aria-label="${esc(previewLabel)}">
+            ${item.preview_url ? `<img src="${esc(item.preview_url)}" alt="${esc(previewAlt)}">` : `<i data-lucide="file-text" aria-hidden="true"></i>`}
+          </a>
+          <div class="abuse-evidence-meta">
+            <strong>${esc(fileName)}</strong>
+            <span>${esc(evidenceType)} · ${esc(formatBytes(item.file_size))}</span>
+            <span>${esc(formatDate(item.created_at))}</span>
+          </div>
+        </article>
+      `;
+    }).join('') : '<div class="abuse-empty-column">No evidence uploaded</div>';
     icons();
   }
 
@@ -1550,6 +1595,14 @@
     cancelScheduledPreview();
     updateListFields(toId(control.dataset.abuseId), { [control.dataset.abuseListField]: control.value }, `list_${control.dataset.abuseListField}`);
   });
+  root.addEventListener('pointerdown', event => {
+    const select = event.target.closest('select[data-abuse-list-field]');
+    if (select) hydrateListSelect(select);
+  });
+  root.addEventListener('focusin', event => {
+    const select = event.target.closest('select[data-abuse-list-field]');
+    if (select) hydrateListSelect(select);
+  });
   root.addEventListener('submit', event => {
     const form = event.target.closest('[data-abuse-list-editor-form]');
     if (!form) return;
@@ -1586,4 +1639,5 @@
   renderBoard();
   if (state.selectedId) openReport(state.selectedId);
   window.openAbuseReport = openReport;
+  iconsReady = true;
 })();
