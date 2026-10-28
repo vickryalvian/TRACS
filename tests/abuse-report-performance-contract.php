@@ -26,6 +26,10 @@ abuse_performance_assert(
 abuse_performance_assert(str_contains($script, 'requestIdleCallback(refresh, { timeout: 200 })'), 'Expected icon refresh work to be deferred and coalesced.');
 abuse_performance_assert(str_contains($script, 'window.setTimeout(renderBoard, 160)'), 'Expected search rendering to be debounced.');
 abuse_performance_assert(str_contains($script, 'state.listEditingId === report.id ? renderListEditor(report)'), 'Expected only the active list editor to be rendered.');
+abuse_performance_assert(
+    preg_match('/<tr class="abuse-list-edit-row" data-abuse-list-edit-row="\$\{report\.id\}" hidden>/', $script) !== 1,
+    'The active abuse report editor row must not retain the hidden attribute.'
+);
 abuse_performance_assert(str_contains($style, 'content-visibility: auto'), 'Expected off-screen abuse cards to skip layout and paint work where supported.');
 
 echo "TRACS abuse report performance contract passed.\n";

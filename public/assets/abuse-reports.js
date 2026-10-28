@@ -491,7 +491,7 @@
 
   function renderListEditor(report) {
     return `
-      <tr class="abuse-list-edit-row" data-abuse-list-edit-row="${report.id}" hidden>
+      <tr class="abuse-list-edit-row" data-abuse-list-edit-row="${report.id}">
         <td colspan="8">
           <form class="abuse-list-editor-form" data-abuse-list-editor-form data-abuse-id="${report.id}">
             <label><span>Title</span><input class="form-input" name="title" maxlength="220" value="${esc(report.title || '')}" required></label>
@@ -543,7 +543,7 @@
             ? renderListSelect(report, 'reporter', 'Reporter', report.reporter || 'Unknown reporter', reporterOptions(String(report.reporter || '').trim()), report.reporter ? '' : 'is-muted')
             : `<span class="${report.reporter ? '' : 'abuse-list-muted'}">${esc(report.reporter || 'Unknown reporter')}</span>`}</td>
           <td>${Number(report.evidence_count || 0)}</td>
-          <td><div class="abuse-list-actions">${state.canManage ? `<button type="button" class="abuse-list-edit-toggle" data-abuse-list-edit="${report.id}" aria-expanded="false" title="Edit report details" aria-label="Edit report details"><i data-lucide="pencil" class="icon-sm"></i></button>` : ''}${renderDeleteButton(report, 'abuse-list-delete-toggle')}</div></td>
+          <td><div class="abuse-list-actions">${state.canManage ? `<button type="button" class="abuse-list-edit-toggle" data-abuse-list-edit="${report.id}" aria-expanded="${state.listEditingId === report.id ? 'true' : 'false'}" title="Edit report details" aria-label="Edit report details"><i data-lucide="pencil" class="icon-sm" aria-hidden="true"></i></button>` : ''}${renderDeleteButton(report, 'abuse-list-delete-toggle')}</div></td>
         </tr>${state.canManage && state.listEditingId === report.id ? renderListEditor(report) : ''}`;
     }).join('') : '<tr><td colspan="8"><div class="abuse-empty-column">No reports match the current filters</div></td></tr>';
     syncListSortHeaders();
